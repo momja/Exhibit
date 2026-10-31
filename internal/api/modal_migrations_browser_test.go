@@ -98,6 +98,23 @@ func TestTagModalBrowser(t *testing.T) {
 			b.check(`document.querySelector('#tag-edit-modal').open && document.getElementById('tag-edit-error').textContent==='Name is required.'`)
 			b.eval(`document.getElementById('tag-edit-name').value='Graphs'; document.getElementById('tag-edit-save').click()`)
 			b.wait(`!document.getElementById('tag-edit-modal').open && document.querySelector('[data-tag-name="Graphs"]') && document.activeElement.dataset.tagName==='Graphs'`)
+			// A pending mutation blocks every dismissal and another submission.
+			// Failure keeps the working copy and restores the existing buttons.
+			b.eval(open)
+			b.eval(`window.tagAPI=window.apiFetch; window.tagCalls=0; window.apiFetch=(path,options)=> {
+ if (path.startsWith('/api/tags/') && options.method==='PATCH') {
+  tagCalls++; return new Promise(resolve=>window.finishTag=()=>resolve({ok:false,json:async()=>({error:'Please retry'})}));
+ } return tagAPI(path,options);
+}; document.getElementById('tag-edit-name').value='Plots';document.getElementById('tag-edit-save').click()`)
+			b.wait(`tagCalls===1 && document.getElementById('tag-edit-save').disabled`)
+			b.run(chromedp.KeyEvent(kb.Escape))
+			b.eval(`document.getElementById('tag-edit-modal').dispatchEvent(new MouseEvent('click',{bubbles:true,clientX:-1,clientY:-1}));document.getElementById('tag-edit-save').click();document.getElementById('tag-edit-cancel').click()`)
+			b.check(`tagCalls===1 && document.getElementById('tag-edit-modal').open`)
+			b.eval(`finishTag()`)
+			b.wait(`document.getElementById('tag-edit-error').textContent==='Please retry' && !document.getElementById('tag-edit-save').disabled`)
+			b.check(`document.getElementById('tag-edit-name').value==='Plots' && document.getElementById('tag-edit-modal').open`)
+			b.eval(`window.apiFetch=tagAPI;document.getElementById('tag-edit-save').click()`)
+			b.wait(`!document.getElementById('tag-edit-modal').open && document.activeElement.dataset.tagName==='Plots'`)
 			// Removing/reconnecting the native dialog releases the top layer and listeners.
 			b.eval(open)
 			b.eval(`window.savedDialog=document.getElementById('tag-edit-modal');window.savedParent=savedDialog.parentElement;savedDialog.remove()`)

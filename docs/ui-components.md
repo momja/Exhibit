@@ -167,42 +167,64 @@ with `exhibit:artifacts-changed`.
 
 ## Native modal dialogs
 
-The registered `modal` controller wraps native `<dialog>`, which supplies the
-top layer and inert background. The controller wraps Tab/Shift+Tab between its
-enabled fields, keeping focus in the dialog at both boundaries. Duplicate is its first
-consumer. Keep the dialog root outside a region whose htmx refresh should
-preserve its form state. Compose the feature's named Go partial with shared
-`.modal-dialog` styling and these actions:
+The registered `modal` controller connects the dialog module in `modal.js`.
+Native `<dialog>` supplies the top layer and inert background. Keep the root
+outside any htmx region whose refresh must preserve its working copy. Feature
+Go partials own native fields and labels; `.modal-dialog` supplies visual defaults.
+No lifecycle action list is needed:
 
 ```html
-<dialog class="modal-dialog" aria-labelledby="example-title"
-  data-controller="modal"
-  data-action="exhibit:modal-open->modal#open exhibit:modal-close->modal#dismiss cancel->modal#cancel click->modal#backdrop keydown->modal#wrapFocus">
+<dialog class="modal-dialog" aria-labelledby="example-title" data-controller="modal">
   <h2 id="example-title">Edit example</h2>
-  <input aria-label="Name" data-modal-target="initialFocus">
-  <button type="button" data-action="modal#dismiss">Cancel</button>
+  <input aria-label="Name" autofocus>
+  <button type="button" data-modal-dismiss>Cancel</button>
 </dialog>
 ```
 
-Feature code dispatches `exhibit:modal-open` on that dialog with
-`detail.trigger` set to the visible return-focus element. The controller opens
-it and focuses `initialFocus` when present. A feature can then select its text.
-Dispatch `exhibit:modal-close` after a successful save. Escape, backdrop clicks,
-Cancel, and programmatic close requests all emit the same cancellable
-`modal:before-close` event. Features call `event.preventDefault()` while a save
-must not be dismissed. Dialog padding is part of the dialog, not its backdrop.
+Import `modalFor` from `./modal.js` and keep its stable handle:
 
-After accepted dismissal, the controller closes the dialog, restores focus to
-the trigger if it is still connected, and emits `modal:closed`. Features own
-error feedback, uncertain-request reconciliation, API calls, and refresh
-events. Duplicate focuses the new card title after its successful htmx refresh;
-it does not try to refocus the old removed trigger. Focus restoration is
-synchronous, so an earlier queued native `close` event cannot steal focus from
-a reopened dialog or refreshed result. Removing the component closes its
-native modal state without dispatching a feature mutation. Stimulus owns its
-action listeners and reconnects it when reinserted.
+```js
+const editor = modalFor(dialog);
+// Populate feature fields, then open with the visible return-focus element.
+editor.show(trigger);
+const saved = await editor.run(async () => {
+  // Validate/send the feature request and display feature errors here.
+  return saveFeature();
+});
+if (saved) editor.close();
+```
 
-Existing feature dialogs retain their implementations until explicitly migrated.
+The interface has three methods and one read-only value:
+
+- `show(trigger)` opens synchronously and returns whether it opened. Native
+  `autofocus` chooses initial focus. Omit the trigger to use the active element.
+  Opening does not depend on Stimulus startup or a document-wide element ID.
+- `close()` returns whether dismissal was accepted. Escape, backdrop, and
+  `data-modal-dismiss` use this same path, including synchronous return focus.
+  Padding remains content. Tab and Shift+Tab wrap between enabled fields.
+- `run(operation)` immediately calls the operation once, blocks duplicate runs
+  and dismissal until its promise settles, and restores each button/fieldset's
+  original disabled state. A native fieldset locks a whole form when needed;
+  ordinary inputs remain editable. No values are reset. Errors propagate to
+  the feature. It returns the operation's result, or `undefined` for a duplicate
+  run or an operation invalidated by removal of the dialog.
+- `pending` is true while that operation is in flight. Use it only when a
+  feature decision must precede the operation, such as a delete confirmation.
+
+Removing the dialog releases native modal state, listeners, pending controls,
+and return focus without a feature event. Reconnecting reuses the same handle;
+an old completion cannot unlock a new operation. The feature still owns any
+network request and its effects; removal does not cancel an API mutation.
+
+Optional feature escape hatches are cancellable `modal:before-close` and
+`modal:closed` events. Use them for domain decisions or cleanup, not generic
+busy handling. Duplicate temporarily retains its own pending-payload controls
+and dismissal guard; its open/close calls already use the handle. No old
+`exhibit:modal-open`/`exhibit:modal-close` event interface is retained.
+
+Features own errors, API calls, refresh events, and focus selection after an
+htmx replacement. They never rebuild server markup. Existing feature dialogs
+retain their implementations until explicitly migrated.
 
 ## Gallery lifecycle and navigation
 
@@ -313,13 +335,13 @@ The screenshots show the real Settings page rendered with that provider stub:
 ## Shared native modal adoption
 
 The tag editor composes `modal` on a stable dialog inside the Tags panel,
-outside `#tags-body`. The feature sends `exhibit:modal-open` with its pencil
-as `detail.trigger`, vetoes dismissal while saving, and sends
-`exhibit:modal-close` after success. After the server-rendered tag body swaps,
-it focuses the replacement pencil or the existing-tag selector after deletion.
-Modal fields are resolved inside the owning panel rather than globally.
+outside `#tags-body`. It populates fields, calls `show(pencil)`, and wraps only
+the tag mutation in `run`. A successful result closes the dialog and emits the
+existing refresh event. After the server-rendered body swaps, the feature
+focuses the replacement pencil or the existing-tag selector after deletion.
+Fields are resolved inside the owning panel rather than globally.
 
-Run `go test ./internal/api -run 'TestTagModalBrowser' -count=1` for native
+Run `go test ./internal/api -run 'Test(ModalInterfaceBrowser|TagModalBrowser)$' -count=1` for native
 focus/Tab, Escape/backdrop, validation, save/htmx, and disconnect/reconnect
 checks. Set `MODAL_SCREENSHOT_DIR="$PWD/docs/screenshots"` to refresh captures.
 

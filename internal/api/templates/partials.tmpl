@@ -38,10 +38,10 @@
 {{/* editTagModal renames, recolors or deletes a tag library-wide; opened
      from the Tags panel's pencils by tags.js. Data: []string (presets). */}}
 {{define "editTagModal"}}<dialog id="tag-edit-modal" class="modal-dialog tag-edit-dialog" aria-labelledby="tag-edit-title"
-  data-controller="modal" data-action="exhibit:modal-open->modal#open exhibit:modal-close->modal#dismiss cancel->modal#cancel click->modal#backdrop keydown->modal#wrapFocus">
+  data-controller="modal">
     <h2 id="tag-edit-title">Edit tag</h2>
     <label for="tag-edit-name">Name</label>
-    <input type="text" id="tag-edit-name" maxlength="60" data-modal-target="initialFocus">
+    <input type="text" id="tag-edit-name" maxlength="60" autofocus>
     <label>Color</label>
     {{template "colorSwatches" .}}
     <div class="color-custom-row">
@@ -52,7 +52,7 @@
     <div class="modal-actions">
       <button type="button" class="btn btn-danger" id="tag-edit-delete"><i class="ph ph-trash"></i> Delete</button>
       <span class="spacer"></span>
-      <button type="button" class="btn btn-sec" id="tag-edit-cancel" data-action="modal#dismiss">Cancel</button>
+      <button type="button" class="btn btn-sec" id="tag-edit-cancel" data-modal-dismiss>Cancel</button>
       <button type="button" class="btn" id="tag-edit-save"><i class="ph ph-check"></i> Save</button>
     </div>
 </dialog>{{end}}

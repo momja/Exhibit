@@ -278,3 +278,16 @@ export function recordingApi(responses = []) {
   };
   return { apiFetch: record("apiFetch"), apiStateFetch: record("apiStateFetch"), calls };
 }
+
+// Native-dialog stand-in for feature transactions. Browser tests cover actual
+// top-layer behavior, focus traversal, and Stimulus connection/removal.
+export function nativeDialog(page, dialog, controls = []) {
+  Object.assign(dialog, {
+    open: false, isConnected: true, ownerDocument: page.document,
+    showModal() { this.open = true; },
+    close() { this.open = false; }
+  });
+  const query = dialog.querySelectorAll;
+  dialog.querySelectorAll = selector => selector === 'button, fieldset' ? controls : query(selector);
+  return dialog;
+}

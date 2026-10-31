@@ -4,6 +4,7 @@
  * survives the swap.
  */
 import { apiFetch } from './api-module.js';
+import { modalFor } from './modal.js';
 
 (function() {
   const panel = document.getElementById('tags-panel');
@@ -124,7 +125,7 @@ import { apiFetch } from './api-module.js';
 
   const modal = byId('tag-edit-modal');
   let editingTagID = null;
-  let busy = false;
+  const editor = modalFor(modal);
   let focusTagID = null;
   panel.addEventListener('htmx:after:swap', () => {
     if (!focusTagID || modal.open) return;
@@ -132,41 +133,31 @@ import { apiFetch } from './api-module.js';
     (pencil || byId('tag-add-select')).focus();
     focusTagID = null;
   });
-  modal.addEventListener('modal:before-close', event => { if (busy) event.preventDefault(); });
-  modal.addEventListener('modal:closed', () => { editingTagID = null; });
 
   async function mutateTag(method, body, failure) {
-    if (busy || !editingTagID) return;
-    busy = true;
+    if (!modal.open) return;
     const tagID = editingTagID;
-    const buttons = [...modal.querySelectorAll('button')];
-    buttons.forEach(button => { button.disabled = true; });
-    try {
+    const saved = await editor.run(async () => {
       const response = await apiFetch('/api/tags/' + encodeURIComponent(tagID), {
         method, ...(body ? { body: JSON.stringify(body) } : {})
       }).catch(() => null);
-      if (!response?.ok) { setError('tag-edit-error', await errorOf(response, failure)); return; }
-      busy = false;
+      if (!response?.ok) { setError('tag-edit-error', await errorOf(response, failure)); return false; }
+      return true;
+    });
+    if (saved) {
       focusTagID = tagID;
-      closeEditModal();
+      editor.close();
       changed();
-    } finally {
-      busy = false;
-      buttons.forEach(button => { button.disabled = false; });
     }
   }
 
   function openEditModal(tagID, name, hex, trigger) {
-    if (busy || modal.open) return;
+    if (modal.open) return;
     editingTagID = tagID;
     byId('tag-edit-name').value = name;
     setColor('tag-edit', modal, hex);
     setError('tag-edit-error', '');
-    modal.dispatchEvent(new CustomEvent('exhibit:modal-open', { detail: { trigger } }));
-  }
-
-  function closeEditModal() {
-    modal.dispatchEvent(new CustomEvent('exhibit:modal-close'));
+    editor.show(trigger);
   }
 
   async function saveTag() {
@@ -176,7 +167,7 @@ import { apiFetch } from './api-module.js';
   }
 
   async function deleteTag() {
-    if (busy) return;
+    if (editor.pending) return;
     const name = byId('tag-edit-name').value;
     if (!confirm('Delete tag "' + name + '"? It will be removed from every artifact. This cannot be undone.')) return;
     return mutateTag('DELETE', null, 'Failed to delete tag.');

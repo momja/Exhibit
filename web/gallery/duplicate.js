@@ -1,5 +1,6 @@
 import { eventScope } from './event-scope.js';
 import { apiFetch } from './api-module.js';
+import { modalFor } from './modal.js';
 
 // getRandomValues also works on self-hosted HTTP installations where browsers
 // withhold randomUUID. Keep one identity for every retry of a modal submission.
@@ -16,6 +17,7 @@ export function initializeDuplication(root) {
   if (!dialog) return;
   const events = eventScope();
   let connected = true;
+  const modal = modalFor(dialog);
   const form = dialog.querySelector('form');
   const title = form.elements.title;
   const share = form.elements.copy_share_settings;
@@ -51,7 +53,7 @@ export function initializeDuplication(root) {
     status.textContent = '';
     submit.textContent = 'Duplicate artifact';
     controls();
-    dialog.dispatchEvent(new CustomEvent('exhibit:modal-open', { detail: { trigger: event.detail.trigger } }));
+    modal.show(event.detail.trigger);
     title.select();
   });
   events.on(form, 'submit', async event => {
@@ -90,7 +92,7 @@ export function initializeDuplication(root) {
       newArtifactID = artifact.id;
       pending = undefined;
       busy = false;
-      dialog.dispatchEvent(new CustomEvent('exhibit:modal-close'));
+      modal.close();
       root.dispatchEvent(new CustomEvent('exhibit:artifacts-changed', { bubbles: true }));
     } catch {
       if (!connected) return;

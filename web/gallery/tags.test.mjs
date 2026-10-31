@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadPageScript, recordingApi } from "./testdom.mjs";
+import { loadPageScript, recordingApi, nativeDialog } from "./testdom.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const TAGS_JS = path.join(here, "../../internal/api/assets/gallery/tags.js");
@@ -28,10 +28,7 @@ async function loadTags({ responses = [], initial = {}, confirmed = true } = {})
     ...initial
   });
   page.byId('tags-panel').querySelector = selector => page.byId(selector.slice(1));
-  const dialog = page.byId('tag-edit-modal');
-  // Feature tests observe the shared event boundary; Chromium tests own lifecycle.
-  dialog.addEventListener('exhibit:modal-open', () => { dialog.open = true; });
-  dialog.addEventListener('exhibit:modal-close', () => { dialog.open = false; dialog.dispatchEvent({ type: 'modal:closed' }); });
+  nativeDialog(page, page.byId('tag-edit-modal'), ['tag-edit-save', 'tag-edit-delete', 'tag-edit-cancel'].map(page.byId));
   page.window.apiFetch = api.apiFetch;
   await page.loadModule(TAGS_JS);
   page.window.location.reload = () => { reloads++; };

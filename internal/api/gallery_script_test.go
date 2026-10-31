@@ -50,6 +50,7 @@ func TestGalleryPageScriptSuite(t *testing.T) {
 		"state-import.test.mjs",
 		"share.test.mjs",
 		"tags.test.mjs",
+		"modal.test.mjs",
 		"agent.net.test.mjs",
 		"session-preparation.test.mjs",
 		"agent.preparation.test.mjs",
