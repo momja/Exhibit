@@ -470,3 +470,30 @@ func TestClipboardModalBrowser(t *testing.T) {
 		})
 	}
 }
+
+func TestLinkModalBrowser(t *testing.T) {
+	for _, width := range []int64{1280, 390} {
+		t.Run(fmt.Sprint(width), func(t *testing.T) {
+			b, _ := newPermissionViewer(t, width, false)
+			report := `permissionReport({__avNavigate:true,url:'https://example.test/report'})`
+			b.dialogCycle("#link-modal", report, "#link-block")
+			b.eval(report)
+			b.capture("Exh-d0np", width)
+			b.eval(`window.tabs=[];window.open=()=>{const tab={opener:window,location:null,closed:false,close(){this.closed=true}};tabs.push(tab);return tab};window.savedFetch=window.fetch;window.fetch=(url,opts)=>opts?.method==='PATCH'?new Promise(resolve=>window.finishLink=(ok=true)=>resolve(new Response('{}',{status:ok?200:503}))):savedFetch(url,opts)`)
+			b.run(chromedp.Click(chromedp.CSS(`#link-allow`)))
+			b.wait(`document.getElementById('link-block').disabled`)
+			b.run(chromedp.KeyEvent(kb.Escape))
+			b.check(`document.getElementById('link-modal').open && tabs.length===1 && tabs[0].opener===null`)
+			b.eval(`permissionReport({__avNavigate:true,url:'https://other.example.test/'})`)
+			b.check(`document.getElementById('link-host').textContent==='example.test'`)
+			b.eval(`finishLink(false)`)
+			b.wait(`!document.getElementById('link-block').disabled`)
+			b.check(`tabs[0].closed && document.getElementById('link-modal').open && document.querySelector('#link-modal [data-permission-status]').textContent.includes('link')`)
+			b.run(chromedp.Click(chromedp.CSS(`#link-allow`)))
+			b.wait(`tabs.length===2`)
+			b.eval(`finishLink()`)
+			b.wait(`!document.getElementById('link-modal').open`)
+			b.check(`tabs[1].location==='https://example.test/report' && document.activeElement===document.querySelector('iframe')`)
+		})
+	}
+}

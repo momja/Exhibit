@@ -553,7 +553,16 @@ document.getElementById('clip-allow').addEventListener('click', async function()
 // first-request confirmation (av-e3sj), naming the destination host, and open
 // nothing until the user allows.
 let pendingLink = null;
-let linkAllowPending = false;
+const linkDialog = document.getElementById('link-modal');
+linkDialog.addEventListener('modal:before-close', event => { if (pendingLink?.saving) event.preventDefault(); });
+for (const event of ['modal:closed', 'modal:disconnected']) linkDialog.addEventListener(event, () => {
+  pendingLink?.tab?.close();
+  pendingLink = null;
+});
+document.addEventListener('exhibit:preview-reloaded', () => {
+  if (pendingLink) pendingLink.saving = false;
+  closeLinkModal();
+});
 
 window.addEventListener('message', function(e) {
   const d = e.data;
@@ -573,20 +582,20 @@ window.addEventListener('message', function(e) {
   }
   // Not ours to approve: the destination is dropped, which is what a denial
   // does and what the sandbox did before the bridge existed.
-  if (!mayApprove()) return;
-  pendingLink = { url: url.href, host: url.hostname };
+  if (!mayApprove() || !linkDialog.isConnected || pendingLink?.saving) return;
+  closeLinkModal();
+  pendingLink = { url: url.href, host: url.hostname, frame, generation: previewGeneration };
   document.getElementById('link-host').textContent = url.hostname;
-  document.getElementById('link-modal').hidden = false;
-  // Move focus into the dialog so keyboard users land on the decision rather
-  // than on whatever sat behind the overlay.
-  document.getElementById('link-block').focus();
+  linkDialog.querySelector('[data-permission-status]').textContent = '';
+  for (const id of ['link-block', 'link-allow']) document.getElementById(id).disabled = false;
+  linkDialog.dispatchEvent(new CustomEvent('exhibit:modal-open', { detail: { trigger: frame } }));
 });
 
 // Persists the first-use grant, then lets the caller open the pending URL. The
 // viewer is read-only (av-hwx2) — like downloads/clipboard, it only grants on
 // the artifact's first attempt; the revoke control lives on the Edit page.
-async function setLinksApproved(approved) {
-  if (!(await setCapabilityApproved('links_approved', approved, 'link'))) return false;
+async function setLinksApproved(approved, request) {
+  if (!(await setCapabilityApproved('links_approved', approved, 'link', () => pendingLink === request && currentPreviewRequest(request)))) return false;
   linksApproved = approved;
   return true;
 }
@@ -594,35 +603,32 @@ async function setLinksApproved(approved) {
 // Denial just drops the destination and the artifact keeps running — nothing is
 // persisted, mirroring downloads (denial drops, approval persists).
 function closeLinkModal() {
-  // While an Allow request is in flight, dismissal must not invalidate the
-  // transaction: the allow handler re-verifies pendingLink is still the same
-  // link after the PATCH and skips opening if anything changed.
-  if (linkAllowPending) return;
-  document.getElementById('link-modal').hidden = true;
-  pendingLink = null;
-  // Hand focus back to the artifact so keyboard users return where they were.
-  const frame = document.querySelector('iframe');
-  if (frame) frame.focus();
+  linkDialog.dispatchEvent(new CustomEvent('exhibit:modal-close'));
 }
 
-document.getElementById('link-block').addEventListener('click', closeLinkModal);
-document.getElementById('link-modal').addEventListener('click', function(e) {
-  if (e.target.id === 'link-modal') closeLinkModal();
-});
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape' && !document.getElementById('link-modal').hidden) closeLinkModal();
-});
 document.getElementById('link-allow').addEventListener('click', async function() {
   const link = pendingLink;
-  linkAllowPending = true;
-  const ok = await setLinksApproved(true);
-  linkAllowPending = false;
-  // Only settle the transaction if the pending destination is still the one
-  // the user approved — a dismissal or a newer link must not be overridden by
-  // opening this URL after the fact.
-  if (!ok || pendingLink !== link) return;
+  if (!link || link.saving) return;
+  // Claim the popup in the click gesture and sever its opener before any
+  // external code runs. On failure/staleness the unused blank tab is closed.
+  let tab;
+  try { tab = window.open('', '_blank'); if (tab) tab.opener = null; }
+  catch { tab?.close(); tab = null; }
+  if (!tab) {
+    linkDialog.querySelector('[data-permission-status]').textContent = 'Your browser blocked the new tab. Allow popups and try again.';
+    return;
+  }
+  link.tab = tab;
+  link.saving = true;
+  for (const id of ['link-block', 'link-allow']) document.getElementById(id).disabled = true;
+  const ok = await setLinksApproved(true, link);
+  link.saving = false;
+  if (pendingLink !== link || !currentPreviewRequest(link)) { tab.close(); return; }
+  for (const id of ['link-block', 'link-allow']) document.getElementById(id).disabled = false;
+  if (!ok || tab.closed) { tab.close(); link.tab = null; return; }
+  tab.location = link.url;
+  link.tab = null;
   closeLinkModal();
-  if (link) window.open(link.url, '_blank', 'noopener');
 });
 
 // Camera / microphone gate (av-mv3k): the only capability here that is decided

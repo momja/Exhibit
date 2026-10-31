@@ -43,6 +43,7 @@ async function refetchWith(body) {
   const netDialog = permissionDialog(page, 'net-modal');
   permissionDialog(page, 'dl-modal');
   permissionDialog(page, 'clip-modal');
+  permissionDialog(page, 'link-modal');
   await page.loadModule(path.join(ASSETS, 'detail.js'));
   await page.window.refetchSource();
   const status = page.byId("al-status");

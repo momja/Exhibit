@@ -521,3 +521,14 @@ Clipboard retains a request-specific Allow guard through both the grant write
 and the browser operation. Block/Escape stay live; a late operation cannot send
 a second reply after denial. This differs deliberately from shared `pending`,
 which locks every dismissal.
+
+External-link permission uses the shared modal, with a guard on every close
+path while approval is pending. The selected destination is immutable during
+that request. Allow claims a blank tab in the click gesture, severs its opener,
+and navigates only after persistence; failures and stale requests close the
+placeholder. Block/Escape/backdrop record no denial. Initial focus is Block;
+closing restores the artifact frame. `TestLinkModalBrowser` checks delayed
+approval, refusal/retry, destination stability and opener isolation.
+
+[External link desktop](screenshots/Exh-d0np/1280.png) ·
+[External link phone](screenshots/Exh-d0np/390.png)
