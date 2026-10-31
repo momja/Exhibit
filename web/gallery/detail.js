@@ -1,3 +1,4 @@
+import { modalFor } from './modal.js';
 import { apiFetch, apiStateFetch } from './api-module.js';
 import { networkPrompt } from './network-prompt.js';
 /* Artifact detail (viewer) page script. Served from the app origin at
@@ -359,6 +360,7 @@ networkPrompt.announceTo(document.querySelector('iframe'));
 // from its security settings. Denial just drops the bytes; the artifact keeps running.
 let pendingDownload = null;
 const downloadDialog = document.getElementById('dl-modal');
+const downloadModal = modalFor(downloadDialog);
 for (const event of ['modal:closed', 'modal:disconnected']) downloadDialog.addEventListener(event, () => { pendingDownload = null; });
 document.addEventListener('exhibit:preview-reloaded', closeDownloadModal);
 
@@ -384,7 +386,7 @@ window.addEventListener('message', function(e) {
   if (!downloadDialog.isConnected) { pendingDownload = null; return; }
   document.getElementById('dl-allow').disabled = false;
   downloadDialog.querySelector('[data-permission-status]').textContent = '';
-  downloadDialog.dispatchEvent(new CustomEvent('exhibit:modal-open', { detail: { trigger: frame } }));
+  downloadModal.show(frame);
 });
 
 // Reconstructs the transferred bytes as a Blob and downloads it via an
@@ -432,7 +434,7 @@ async function setDownloadsApproved(approved, request) {
 
 function closeDownloadModal() {
   pendingDownload = null;
-  downloadDialog.dispatchEvent(new CustomEvent('exhibit:modal-close'));
+  downloadModal.close();
 }
 
 document.getElementById('dl-allow').addEventListener('click', async function() {

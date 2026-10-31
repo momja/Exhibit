@@ -140,14 +140,14 @@
 {{if .Share}}{{template "sharePanel" .}}{{end}}
 
 <dialog id="dl-modal" class="modal-dialog" aria-labelledby="dl-title"
-  data-controller="modal" data-action="exhibit:modal-open->modal#open exhibit:modal-close->modal#dismiss cancel->modal#cancel click->modal#backdrop keydown->modal#wrapFocus">
+  data-controller="modal">
     <h2 id="dl-title">Allow downloads?</h2>
     <p><strong>{{.Title}}</strong> wants to download <code id="dl-filename"></code>.</p>
     <p>Allowing lets this artifact save files to your device from now on. You can revoke this at any time from its security settings.</p>
     <p data-permission-status role="status" aria-live="polite"></p>
     <div class="modal-actions">
       <span class="spacer"></span>
-      <button type="button" class="btn btn-sec" id="dl-block" data-modal-target="initialFocus" data-action="modal#dismiss">Block</button>
+      <button type="button" class="btn btn-sec" id="dl-block" autofocus data-modal-dismiss>Block</button>
       <button type="button" class="btn" id="dl-allow"><i class="ph ph-download-simple"></i> Allow downloads</button>
     </div>
 </dialog>
