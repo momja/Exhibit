@@ -66,6 +66,7 @@ export default class UnsavedChangesController extends Controller {
   async saveAndLeave() {
     if (this.modal.pending) return;
     const saved = await this.modal.run(saveEditorChanges);
+    if (saved === undefined) return; // The dialog was removed during this save.
     if (saved) this.leave();
     else {
       this.modal.close();
