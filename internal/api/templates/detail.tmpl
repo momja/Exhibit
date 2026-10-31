@@ -189,14 +189,14 @@
      the point: an "Allow" that silently did nothing here would be the worst
      available answer. */}}
 <dialog id="media-modal" class="modal-dialog" aria-labelledby="media-title"
-  data-controller="modal" data-action="exhibit:modal-open->modal#open exhibit:modal-close->modal#dismiss cancel->modal#cancel click->modal#backdrop keydown->modal#wrapFocus">
+  data-controller="modal">
     <h2 id="media-title">Allow device access?</h2>
     <p><strong>{{.Title}}</strong> wants to use <span id="media-devices">your camera</span>.</p>
     <p>Browsers cannot give a capture device to this embedded preview, so allowing opens the artifact in its own tab, where it can use the device. Your browser will ask for its own permission there. The approval is remembered for this artifact and can be revoked at any time from its security settings.</p>
     <p data-permission-status role="status" aria-live="polite"></p>
     <div class="modal-actions">
       <span class="spacer"></span>
-      <button type="button" class="btn btn-sec" id="media-block" data-modal-target="initialFocus" data-action="modal#dismiss">Block</button>
+      <button type="button" class="btn btn-sec" id="media-block" autofocus data-modal-dismiss>Block</button>
       <button type="button" class="btn" id="media-allow"><i id="media-icon" class="ph ph-camera"></i> Allow and open</button>
     </div>
 </dialog>

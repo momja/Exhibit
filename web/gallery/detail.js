@@ -647,6 +647,7 @@ document.getElementById('link-allow').addEventListener('click', async function()
 // coming.
 let pendingMedia = null;
 const mediaDialog = document.getElementById('media-modal');
+const mediaModal = modalFor(mediaDialog);
 function denyPendingMedia() {
   const req = pendingMedia;
   pendingMedia = null;
@@ -655,7 +656,7 @@ function denyPendingMedia() {
 for (const event of ['modal:closed', 'modal:disconnected']) mediaDialog.addEventListener(event, denyPendingMedia);
 document.addEventListener('exhibit:preview-reloaded', () => {
   pendingMedia = null;
-  mediaDialog.dispatchEvent(new CustomEvent('exhibit:modal-close'));
+  mediaModal.close();
 });
 
 // Prose for the devices a request named, for the prompt.
@@ -704,7 +705,7 @@ window.addEventListener('message', function(e) {
   document.getElementById('media-devices').textContent = mediaDeviceLabel(req);
   document.getElementById('media-icon').className = req.video ? 'ph ph-camera' : 'ph ph-microphone';
   mediaDialog.querySelector('[data-permission-status]').textContent = '';
-  mediaDialog.dispatchEvent(new CustomEvent('exhibit:modal-open', { detail: { trigger: frame } }));
+  mediaModal.show(frame);
 });
 
 // Settles one pending getUserMedia inside the frame. targetOrigin is '*'
@@ -742,7 +743,7 @@ document.getElementById('media-allow').addEventListener('click', async function(
   req.confirming = false;
   if (!opened || pendingMedia !== req || !currentPreviewRequest(req)) return;
   pendingMedia = null;
-  mediaDialog.dispatchEvent(new CustomEvent('exhibit:modal-close'));
+  mediaModal.close();
   replyMedia(req, false,
     'Capture devices are unavailable in the embedded preview; the artifact was opened directly',
     'NotSupportedError');
