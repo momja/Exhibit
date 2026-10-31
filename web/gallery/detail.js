@@ -460,6 +460,7 @@ document.getElementById('dl-allow').addEventListener('click', async function() {
 // promise so the artifact sees a normal DOMException.
 let pendingClip = null;
 const clipDialog = document.getElementById('clip-modal');
+const clipModal = modalFor(clipDialog);
 function denyPendingClip() {
   const req = pendingClip;
   pendingClip = null;
@@ -468,7 +469,7 @@ function denyPendingClip() {
 for (const event of ['modal:closed', 'modal:disconnected']) clipDialog.addEventListener(event, denyPendingClip);
 document.addEventListener('exhibit:preview-reloaded', () => {
   pendingClip = null;
-  clipDialog.dispatchEvent(new CustomEvent('exhibit:modal-close'));
+  clipModal.close();
 });
 
 window.addEventListener('message', function(e) {
@@ -485,12 +486,12 @@ window.addEventListener('message', function(e) {
   if (!mayApprove() || !clipDialog.isConnected) { replyClip(req, false, undefined, 'Clipboard access denied'); return; }
   if (pendingClip?.id === req.id && currentPreviewRequest(pendingClip)) return;
   denyPendingClip();
-  if (clipDialog.open) clipDialog.dispatchEvent(new CustomEvent('exhibit:modal-close'));
+  if (clipDialog.open) clipModal.close();
   pendingClip = req;
   document.getElementById('clip-direction').textContent = op === 'read' ? 'read' : 'write to';
   document.getElementById('clip-allow').disabled = false;
   clipDialog.querySelector('[data-permission-status]').textContent = '';
-  clipDialog.dispatchEvent(new CustomEvent('exhibit:modal-open', { detail: { trigger: frame } }));
+  clipModal.show(frame);
 });
 
 // Posts a clipboard result back into the sandbox frame. targetOrigin is '*'
@@ -539,7 +540,7 @@ document.getElementById('clip-allow').addEventListener('click', async function()
   const result = await operation;
   if (pendingClip !== req || !currentPreviewRequest(req)) return;
   pendingClip = null;
-  clipDialog.dispatchEvent(new CustomEvent('exhibit:modal-close'));
+  clipModal.close();
   replyClip(req, result.ok, result.text, result.error);
 });
 

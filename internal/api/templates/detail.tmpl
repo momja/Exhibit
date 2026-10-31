@@ -153,14 +153,14 @@
 </dialog>
 
 <dialog id="clip-modal" class="modal-dialog" aria-labelledby="clip-title"
-  data-controller="modal" data-action="exhibit:modal-open->modal#open exhibit:modal-close->modal#dismiss cancel->modal#cancel click->modal#backdrop keydown->modal#wrapFocus">
+  data-controller="modal">
     <h2 id="clip-title">Allow clipboard access?</h2>
     <p><strong>{{.Title}}</strong> wants to <span id="clip-direction">use</span> your clipboard.</p>
     <p>Allowing lets this artifact read and write your clipboard from now on. You can revoke this at any time from its security settings.</p>
     <p data-permission-status role="status" aria-live="polite"></p>
     <div class="modal-actions">
       <span class="spacer"></span>
-      <button type="button" class="btn btn-sec" id="clip-block" data-modal-target="initialFocus" data-action="modal#dismiss">Block</button>
+      <button type="button" class="btn btn-sec" id="clip-block" autofocus data-modal-dismiss>Block</button>
       <button type="button" class="btn" id="clip-allow"><i class="ph ph-clipboard-text"></i> Allow clipboard</button>
     </div>
 </dialog>
