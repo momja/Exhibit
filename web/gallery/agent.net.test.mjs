@@ -14,7 +14,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadPageScript, recordingApi, observeModal } from "./testdom.mjs";
+import { loadPageScript, recordingApi, permissionDialog } from "./testdom.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ASSETS = path.join(here, "../../internal/api/assets/gallery");
@@ -43,7 +43,7 @@ async function loadAgent({ responses = [], artifact = { id: ID, title: "Artifact
     "net-modal": { open: false },
     "key-modal": { hidden: true }
   });
-  observeModal(page, 'net-modal');
+  permissionDialog(page, 'net-modal');
   const bindings = await page.loadModule(path.join(ASSETS, 'agent.js'),
     ['ensureSession', 'handleAgentEvent']);
   Object.assign(page.context, page.window, bindings);

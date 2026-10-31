@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
-import { loadPageScript, recordingApi, observeModal } from './testdom.mjs';
+import { loadPageScript, recordingApi, permissionDialog } from './testdom.mjs';
 
 const assets = new URL('../../internal/api/assets/gallery/', import.meta.url);
 const asset = (name) => fileURLToPath(new URL(name, assets));
@@ -31,7 +31,7 @@ async function load({ artifact = 'art-1', viewer = '1', store = storage(), block
     'capability-warning-banner', 'origin-blocked-banner', 'direct-open-modal'
   ].map((id) => [id, { hidden: true }])));
   page.byId('direct-open-modal').dataset = { artifact, viewer, openUrl: openURL };
-  observeModal(page, 'net-modal');
+  permissionDialog(page, 'net-modal');
   await page.loadModule(asset('detail.js'));
   await page.loadModule(asset('direct-open.js'));
   const trigger = page.byId('direct-open-toolbar');

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
-import { loadPageScript, observeModal } from './testdom.mjs';
+import { loadPageScript, permissionDialog } from './testdom.mjs';
 const asset = name => fileURLToPath(new URL('../../internal/api/assets/gallery/' + name, import.meta.url));
 const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
 const json = body => ({ok: true, status: 201, json: async () => body});

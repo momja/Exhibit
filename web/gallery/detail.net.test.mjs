@@ -15,7 +15,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadPageScript, recordingApi, observeModal } from "./testdom.mjs";
+import { loadPageScript, recordingApi, permissionDialog } from "./testdom.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ASSETS = path.join(here, "../../internal/api/assets/gallery");
@@ -66,8 +66,7 @@ async function loadDetail({ readOnly = false, responses = [], headline = "" } = 
   // the listener the #capability-cluster target stands in for here.
   page.document.body.addEventListener("exhibit:capabilities-changed",
     (e) => capabilitiesChanged.push(e.type));
-  const netDialog = observeModal(page, 'net-modal');
-  page.byId('net-once').addEventListener('click', () => netDialog.dispatchEvent({type:'exhibit:modal-close'}));
+  const netDialog = permissionDialog(page, 'net-modal');
   await page.loadModule(path.join(ASSETS, 'detail.js'));
   return { ...page, api, capabilitiesChanged };
 }
@@ -186,7 +185,7 @@ test("shared dismissal dismisses the prompt", async () => {
   const { byId, api, postFromFrame, pressKey } = await loadDetail();
 
   await postFromFrame(report("https://cdn.example.com"));
-  byId("net-modal").dispatchEvent({type:"exhibit:modal-close"});
+  byId("net-modal").dispatchEvent(new Event('cancel', { cancelable: true }));
 
   assert.equal(byId("net-modal").open, false);
   assert.deepEqual(originCalls(api), []);
@@ -224,7 +223,7 @@ test("a dismissal during the block write is not thrown away by the write finishi
   await postFromFrame(report("https://b.example.com"));
 
   const written = byId("net-never").click();
-  byId("net-modal").dispatchEvent({type:"exhibit:modal-close"});
+  byId("net-modal").dispatchEvent(new Event('cancel', { cancelable: true }));
   assert.equal(byId("net-origin").textContent, "https://b.example.com");
   await written;
 

@@ -9,7 +9,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadPageScript, recordingApi, nativeDialog } from "./testdom.mjs";
+import { loadPageScript, recordingApi, nativeDialog, permissionDialog } from "./testdom.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ASSETS = path.join(here, "../../internal/api/assets/gallery");
@@ -29,6 +29,7 @@ async function loadAgent({ artifact = null } = {}) {
     alert: () => {}, confirm: () => true
   }, { "net-modal": { hidden: true }, "key-modal": { hidden: true } });
   nativeDialog(page, page.byId('key-modal'));
+  permissionDialog(page, 'net-modal');
   const bindings = await page.loadModule(path.join(ASSETS, 'agent.js'),
     ['ensureSession', 'handleAgentEvent', 'refreshPreview', 'resumeConversation', 'setStreaming', 'viewingVersion']);
   Object.assign(page.context, page.window, bindings);
@@ -90,6 +91,7 @@ async function boot(responses) {
     alert: () => {}, confirm: () => true
   }, { "net-modal": { hidden: true }, "key-modal": { hidden: true } });
   nativeDialog(page, page.byId('key-modal'));
+  permissionDialog(page, 'net-modal');
   const bindings = await page.loadModule(path.join(ASSETS, 'agent.js'),
     ['ensureSession', 'handleAgentEvent', 'refreshPreview', 'resumeConversation', 'setStreaming', 'viewingVersion']);
   Object.assign(page.context, page.window, bindings);

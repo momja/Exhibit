@@ -416,7 +416,7 @@
      come out of the artifact's own blocked request and must never be
      interpolated as markup here. */}}
 {{define "networkPrompt"}}<dialog id="net-modal" class="modal-dialog modal-wide" aria-labelledby="net-title"
-  data-controller="modal" data-action="exhibit:modal-open->modal#open exhibit:modal-close->modal#dismiss cancel->modal#cancel click->modal#backdrop keydown->modal#wrapFocus">
+  data-controller="modal">
     <h2 id="net-title">Allow network access?</h2>
     <p>This artifact tried to contact <code id="net-origin"></code> and was blocked.</p>
     <p class="text-sm muted" id="net-directive"></p>
@@ -424,7 +424,7 @@
     <div class="modal-actions">
       <button type="button" class="btn btn-sec" id="net-never">Don't ask again</button>
       <span class="spacer"></span>
-      <button type="button" class="btn btn-sec" id="net-once" data-modal-target="initialFocus" data-action="modal#dismiss">Block once</button>
+      <button type="button" class="btn btn-sec" id="net-once" autofocus data-modal-dismiss>Block once</button>
       <button type="button" class="btn" id="net-allow"><i class="ph ph-globe-hemisphere-west"></i> Allow origin</button>
     </div>
 </dialog>{{end}}

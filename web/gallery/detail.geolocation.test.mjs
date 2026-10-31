@@ -15,7 +15,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadPageScript, recordingApi, observeModal } from "./testdom.mjs";
+import { loadPageScript, recordingApi, permissionDialog } from "./testdom.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ASSETS = path.join(here, "../../internal/api/assets/gallery");
@@ -72,8 +72,7 @@ async function loadDetail({ readOnly = false, approvals = {}, responses = [] } =
       return null;
     }
   }, HIDDEN);
-  const netDialog = observeModal(page, 'net-modal');
-  page.byId('net-once').addEventListener('click', () => netDialog.dispatchEvent({type:'exhibit:modal-close'}));
+  const netDialog = permissionDialog(page, 'net-modal');
   await page.loadModule(path.join(ASSETS, 'detail.js'));
   await page.loadModule(path.join(ASSETS, "direct-open.js"));
   return { ...page, api, tabs, opened };

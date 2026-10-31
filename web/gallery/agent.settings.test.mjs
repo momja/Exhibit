@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
-import { loadPageScript, nativeDialog } from './testdom.mjs';
+import { loadPageScript, nativeDialog, permissionDialog } from './testdom.mjs';
 
 const asset = name => fileURLToPath(new URL('../../internal/api/assets/gallery/' + name, import.meta.url));
 const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
@@ -23,6 +23,7 @@ async function settingsPage(saved, byok = true) {
     CustomEvent: class { constructor(type, options) { this.type = type; Object.assign(this, options); } },
   }, {'key-modal': {hidden: true}, 'net-modal': {hidden: true}});
   nativeDialog(page, page.byId('key-modal'));
+  permissionDialog(page, 'net-modal');
   await page.loadModule(asset('agent.js'));
   await flush();
   return {...page, calls};

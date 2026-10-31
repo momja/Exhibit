@@ -38,6 +38,7 @@
  * load from a page that has not adopted it yet.
  */
 import { apiFetch } from './api-module.js';
+import { modalFor } from './modal.js';
 
 
 // Every dismissal path and every answer runs through one install, so a page
@@ -49,6 +50,7 @@ export const networkPrompt = {
     const modal = document.getElementById('net-modal');
     if (!modal || installed) return;
     installed = true;
+    const prompt = modalFor(modal);
 
     const frame = opts.frame;
     const artifactId = opts.artifactId;
@@ -69,7 +71,7 @@ export const networkPrompt = {
     // queue is empty. Every dismissal path goes through here, so "next" and
     // "close" are one behaviour rather than two that can disagree.
     function close() {
-      modal.dispatchEvent(new CustomEvent('exhibit:modal-close'));
+      prompt.close();
     }
     function showNext() {
       pending = queue.shift() || null;
@@ -80,7 +82,7 @@ export const networkPrompt = {
       document.getElementById('net-directive').textContent = pending.directive ? 'Blocked by ' + pending.directive : '';
       document.getElementById('net-never').disabled = false;
       document.getElementById('net-allow').disabled = false;
-      modal.dispatchEvent(new CustomEvent('exhibit:modal-open', { detail: { trigger: frame() } }));
+      prompt.show(frame());
     }
     modal.addEventListener('modal:closed', showNext);
     modal.addEventListener('modal:disconnected', () => { pending = null; queue.length = 0; });
