@@ -36,6 +36,7 @@ async function load({ artifact = 'art-1', viewer = '1', store = storage(), block
   permissionDialog(page, 'clip-modal');
   permissionDialog(page, 'link-modal');
   permissionDialog(page, 'media-modal');
+  permissionDialog(page, 'geo-modal');
   await page.loadModule(asset('detail.js'));
   page.byId('direct-open-modal').open=false;
   page.byId('direct-open-modal').showModal = () => { page.byId('direct-open-modal').open=true; };
@@ -208,7 +209,7 @@ for (const [kind, request] of [
     assert.deepEqual(page.api.calls, []);
     page.pressKey('Escape');
     await allowing;
-    assert.equal(kind === 'media' ? page.byId(`${kind}-modal`).open : !page.byId(`${kind}-modal`).hidden, true);
+    assert.equal(page.byId(`${kind}-modal`).open, true);
     assert.equal(page.document.activeElement, page.byId(`${kind}-allow`));
     assert.equal(page.tabs.length, 0);
     assert.deepEqual(page.api.calls, []);
@@ -217,7 +218,7 @@ for (const [kind, request] of [
     await retrying;
     assert.equal(page.tabs.length, 1);
     assert.equal(page.tabs[0].location, page.openURL);
-    assert.equal(kind === 'media' ? page.byId(`${kind}-modal`).open : !page.byId(`${kind}-modal`).hidden, false);
+    assert.equal(page.byId(`${kind}-modal`).open, false);
   });
 }
 

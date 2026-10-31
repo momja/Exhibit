@@ -528,3 +528,28 @@ func TestMediaModalBrowser(t *testing.T) {
 		})
 	}
 }
+
+func TestLocationModalBrowser(t *testing.T) {
+	for _, width := range []int64{1280, 390} {
+		t.Run(fmt.Sprint(width), func(t *testing.T) {
+			b, _ := newPermissionViewer(t, width, false)
+			report := `permissionReport({__avGeolocation:true,id:1})`
+			b.dialogCycle("#geo-modal", report, "#geo-block")
+			b.eval(report)
+			b.capture("Exh-7hh4", width)
+			b.run(chromedp.Click(chromedp.CSS(`#geo-allow`)))
+			b.wait(`document.getElementById('direct-open-modal').open`)
+			b.run(chromedp.KeyEvent(kb.Escape))
+			b.wait(`!document.getElementById('direct-open-modal').open`)
+			b.check(`document.getElementById('geo-modal').open && document.activeElement.id==='geo-allow'`)
+			b.eval(`permissionReplies=[];window.tabs=[];window.open=()=>{const tab={opener:window,location:null,closed:false,close(){this.closed=true}};tabs.push(tab);return tab};permissionReport({__avGeolocation:true,id:2})`)
+			b.wait(`permissionReplies.length===1`)
+			b.check(`permissionReplies[0].id===1 && permissionReplies[0].error==='User denied Geolocation'`)
+			b.run(chromedp.Click(chromedp.CSS(`#geo-allow`)))
+			b.wait(`document.getElementById('direct-open-modal').open`)
+			b.run(chromedp.Click(chromedp.CSS(`#direct-open-confirm`)))
+			b.wait(`permissionReplies.length===2`)
+			b.check(`permissionReplies[1].id===2 && !permissionReplies[1].banner && tabs[0].opener===null && !document.getElementById('geo-modal').open`)
+		})
+	}
+}

@@ -544,3 +544,14 @@ and nested Escape/focus without acquiring real devices.
 
 [Device permission desktop](screenshots/Exh-w432/1280.png) ·
 [Device permission phone](screenshots/Exh-w432/390.png)
+
+Location consent is another shared-modal consumer. The feature owns
+`geolocation_approved`, direct-open continuation, matching denial/unsupported
+replies and frame-generation guards. Cancelling the nested direct-open dialog
+returns to location consent; replacing a pending location call settles the old
+one. No browser geolocation grant is spent by these tests.
+`TestLocationModalBrowser` checks both widths, native dismissal, displacement,
+and the successful continuation through direct-open.
+
+[Location desktop](screenshots/Exh-7hh4/1280.png) ·
+[Location phone](screenshots/Exh-7hh4/390.png)
