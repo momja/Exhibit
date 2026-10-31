@@ -7,94 +7,71 @@ ingest, state, sharing, and render flows a client uses.
 
 Unless noted otherwise, API routes require an authenticated session or
 `Authorization: Bearer <token>`. An agent's bearer token is accepted only within
-its scope (see Agent, below). Share links, OAuth discovery, registration and code
-exchange have their own access rules described here.
+its scope (see Agent grants and MCP, below). Share links, OAuth discovery,
+registration and code exchange have their own access rules described here.
 
-## External-agent credentials
+## Agent grants and MCP
+
+External agents use owner-issued **library grants**. The core owns their
+issuance, authorization and revocation; the optional `exhibit-mcp` service
+translates MCP tools into calls to the ordinary HTTP API. OAuth and pasted tokens
+issue the same kind of grant, so neither connection method has a second set of
+write rules (Exh-l2xj, Exh-q6xo, Exh-rhlq).
+
+### Library grants
 
 ```
 GET    /api/agent-grants             List the owner's connections: {"grants": [...]}
-POST   /api/agent-grants             Issue {"label": "My agent"} → {"grant": {...}, "token": "exgrant_..."}
+POST   /api/agent-grants             Issue {"label": "My agent"} → {"grant": {...}, "token": "exgrant_..."} (201)
 DELETE /api/agent-grants/:grantID    Revoke a connection (204; foreign/missing id: 404)
 GET    /api/agent/credential         Describe the authenticated agent credential
 ```
 
-Management requires a signed-in session. Only on instances with no configured
-login may the operator use the service token (or no credential when authentication
-is off). Agent credentials cannot manage connections. Labels are trimmed and
-truncated to 100 Unicode characters, defaulting to `External agent`. Each grant
-contains `id`, `label`, `client` (empty for a pasted token), `created_at`, and
-nullable `last_used_at`. Only the issue response returns the token; the database
-stores its SHA-256 digest. Grants have no expiry. Revocation and disabled owners
-cause the next bearer request to return 401.
+Management requires a signed-in session. On an instance with no configured login,
+the operator may use the service token, or no credential when authentication is
+off; public read-only visitors and agent credentials cannot manage connections.
+Labels are trimmed and truncated to 100 Unicode characters, defaulting to
+`External agent`. Each grant contains `id`, `label`, `client` (empty for a pasted
+token), `created_at`, and nullable `last_used_at`. Last use is recorded at most
+once per minute. Only the issue response returns the token; `agent_grants` stores
+its SHA-256 digest. Grants have no expiry. Revocation and disabled owners cause
+the next bearer request to return 401 (Exh-l2xj).
 
-Issuing a token requires `MCP_URL` on the core. When it is unset,
-`POST /api/agent-grants` returns 404, including for malformed request bodies.
-`GET` and `DELETE` remain available so existing connections can be listed and
-revoked. Settings hides Connected agents when the owner has no grants; existing
-grants appear for revocation only, with a note that MCP is not enabled.
+Issuance requires `MCP_URL` on the core. When it is unset,
+`POST /api/agent-grants` returns 404, including for malformed bodies; `GET` and
+`DELETE` remain available to list and revoke existing connections. The same
+setting enables the OAuth routes below and the connection UI in **Settings →
+Connected agents**. It never mounts an MCP transport in the core (Exh-uhvu).
 
-A persisted token can list/search/create and get/patch any artifact **owned by**
-its owner, read and write its widget, read (never write or erase) its saved
-state, and read asset metadata.
-Artifacts shared with that owner and other owners' artifacts return 404. All
-other protected routes are refused, including artifact deletion, shares/grants,
-origins, versions/restore, tags/collections, duplicate, refetch, imports/exports,
-account/admin, pages and partials. Existing restrictions on agent PATCH fields,
-including `share_state_mode`, and revision preconditions still apply. Versions
-carry the grant label as message and `grant:<id>` as session with `origin=agent`.
+A library grant can list/search/create artifacts, get/patch artifacts **owned by
+its owner**, read and write their widgets, read their saved state, and read asset
+metadata. Incoming shares and other owners' artifacts return 404. The route
+allowlist refuses everything else: state writes and erasure, artifact deletion,
+shares/grants, origin-decision routes, versions/restore, tags/collections,
+duplicate, refetch, imports/exports, account/admin, pages and partials. Saved data
+is read-only because its ordinary mutations do not create restorable versions;
+source and widget changes do (Exh-l2xj).
+
+Ordinary API validation, quotas and revision preconditions still apply. Agent
+PATCH cannot set `share_state_mode`; it **can** set `network_allowlist` and
+capability approval fields, as Pi can. No MCP tool exposes those fields; the
+absence of an approval tool is not a field-level API restriction. Versions take
+`origin=agent`, the grant label as `message`, and `grant:<id>` as `session_id`
+from the resolved grant, never from the caller's claimed provenance. See
+[Conditional source and widget saves](#conditional-source-and-widget-saves-av-n0gl)
+and `security.md` §5.
 
 `GET /api/agent/credential` returns
-`{"scope":"library","grant_id":"…","label":"…"}` for these credentials, or
-`{"scope":"artifact","artifact_id":"…"}` for Pi credentials (empty artifact id
-while creating). Ordinary owner credentials receive 403. Pi credentials otherwise
-retain their one-artifact scope and process lifetime.
-
-### Remote MCP service
-
-`exhibit-mcp` exposes Streamable HTTP at the path of `MCP_PUBLIC_URL`
-(normally `/mcp`), in a separate process. The core always returns 404 at `/mcp`.
-Setting the core's optional `MCP_URL` enables OAuth and token issuance, and displays the
-remote Claude Code command and HTTP JSON configuration after issuance in
-Settings. Deployment and proxy routing are described in
-[deployment.md §5.3](deployment.md#53-optional-remote-mcp-service).
-
-Every MCP request requires `Authorization: Bearer <library grant>` and verifies
-it through `GET /api/agent/credential`; cookies, Pi credentials and `AUTH_TOKEN`
-cannot authenticate it. Revocation applies to the next request, and an unavailable
-core produces 503 rather than admitting a request. Sessions are bound to the
-grant id. A supplied `Origin` must match `MCP_PUBLIC_URL`'s origin (otherwise
-403); absent Origin is accepted. Bodies are bounded by `MAX_REQUEST_BODY_BYTES`
-(32 MiB default). Tools call the ordinary API with that same bearer, preserving
-owner scope, revisions and agent version provenance. The service's `GET /healthz`
-is an unauthenticated process-health check, not a core-readiness check.
-
-The service also exposes unauthenticated RFC 9728 metadata:
-
-```
-GET /.well-known/oauth-protected-resource/mcp
-GET /.well-known/oauth-protected-resource
-```
-
-For a custom endpoint path, append that path to
-`/.well-known/oauth-protected-resource` in place of `/mcp`; the bare form always
-remains available. Both routes serve metadata only on GET and permit cross-origin
-reads. OPTIONS preflight requests return 204; other methods return 405.
-The JSON contains `resource: MCP_PUBLIC_URL`,
-`authorization_servers: [EXHIBIT_PUBLIC_URL]`, `bearer_methods_supported: ["header"]`,
-and `resource_name: "Exhibit"`. `EXHIBIT_PUBLIC_URL` is the core's public
-`APP_ORIGIN` and defaults to `EXHIBIT_URL`; configure it explicitly when the
-service reaches the core at an internal address.
-
-Every 401 includes `WWW-Authenticate: Bearer resource_metadata="<metadata URL>"`,
-where the metadata URL uses `MCP_PUBLIC_URL`'s origin and the path-inserted form.
-A presented invalid token also adds `error="invalid_token"`. A core outage returns
-503 without that challenge. Protected-resource discovery is served by the MCP
-service; authorization-server discovery and the OAuth flow stay on the core.
+`{"scope":"library","grant_id":"…","label":"…"}` for a library grant, or
+`{"scope":"artifact","artifact_id":"…"}` for a Pi credential (empty artifact id
+while creating). Ordinary owner credentials receive 403. Pi retains its
+one-artifact scope and process lifetime; a library grant survives a core restart
+until the owner revokes it (Exh-l2xj).
 
 ### Built-in OAuth authorization server
 
-These core routes exist only when `MCP_URL` is set; otherwise they return 404:
+These routes belong to the core and exist only when `MCP_URL` is set; otherwise
+they return 404 (Exh-rhlq):
 
 ```
 GET  /.well-known/oauth-authorization-server    RFC 8414 metadata
@@ -106,34 +83,100 @@ POST /oauth/token                             Exchange an authorization code
 
 Metadata names `APP_ORIGIN` as issuer and advertises the authorization-code grant,
 PKCE `S256`, public clients (`token_endpoint_auth_method: none`) and the RFC 9207
-`iss` authorization-response parameter. Registration accepts `client_name` and
-one to five `redirect_uris`: HTTPS, loopback HTTP or native private-use schemes,
-without fragments. The signed `exclient_…` client id carries the registration; no
-client secret or client row is created. Loopback redirects may vary their port.
+`iss` authorization-response parameter. Registration accepts JSON with
+`client_name` and one to five `redirect_uris`: HTTPS, loopback HTTP or native
+private-use schemes, without fragments or credentials. The signed `exclient_…`
+client id carries the registration; no client secret or client row is created.
+Registration is open, so the displayed client name is its claim, not a verified
+identity. Loopback redirects may vary their port. Hosts must be ASCII: register
+valid punycode for an internationalized hostname. DNS hosts are checked with the
+IDNA Registration profile; Unicode input and control/format characters (including
+those encoded in punycode) are rejected. Consent displays the ASCII destination.
+`client_name` rejects control and Unicode format characters; names are isolated
+from surrounding text on consent and in Settings. Each redirect is limited to
+2048 Unicode characters and 8192 bytes. Registration also rejects metadata whose
+encoded client id exceeds 16 KiB (`400 invalid_client_metadata`); authorization
+and exchange enforce the same client-id cap so registered IDs fit the core's
+64 KiB request-line/header budget.
 
-Authorization requires `response_type=code`, the registered `client_id` and
-`redirect_uri`, `code_challenge`, `code_challenge_method=S256`, and
-`resource` exactly equal to `MCP_URL`. Optional `state` is returned unchanged.
-The existing local, OIDC or Clerk login returns the person to the full consent
-URL. A session may approve, or the operator on a no-login instance; public
-visitors and agent credentials cannot. Consent names the client and redirect
-host and grants the owner's whole library, with no artifact picker. It allows
-searching, creating, reading and editing artifacts and widgets and reading saved
-data; sharing, deletion and saved-data changes remain forbidden. Denial returns
-`access_denied` to the registered redirect.
+All three OAuth POST endpoints cap bodies at 64 KiB before JSON/form parsing,
+including chunked bodies; an overrun returns `413`. A smaller configured
+`MAX_REQUEST_BODY_BYTES` still applies.
 
-The token endpoint accepts an URL-encoded form with `grant_type=authorization_code`,
+Authorization requires `response_type=code`, the registered `client_id`,
+`code_challenge`, `code_challenge_method=S256`, and exactly one `resource` equal
+to `MCP_URL`. Send a registered `redirect_uri`; it may be omitted only when the
+client registered exactly one. Optional `state` is returned unchanged. The
+existing local, OIDC or Clerk login returns the person to the full consent URL.
+A session may approve, or the operator on a no-login instance; public visitors
+and agent credentials cannot. Consent names the client and redirect host and
+approves the owner's whole library, with no artifact picker. Submit the same
+parameters plus `decision=allow` to approve, or `decision=deny` to decline.
+Only approval (an authorization code) and an explicit denial (`access_denied`)
+redirect to the client. Validation errors, including unsupported response types,
+missing PKCE, invalid resources and missing/unknown decisions, render locally
+with `400`; open registration does not make an error redirect trustworthy.
+Consent cannot be framed, and cross-origin submissions are refused.
+
+The token endpoint accepts a URL-encoded form with `grant_type=authorization_code`,
 `code`, `client_id` (also accepted as the Basic username), `redirect_uri`,
-`code_verifier`, and the same `resource`. Codes are single-use, expire after five
-minutes and are held in memory (at most 1024 pending codes); a restart discards
-them. Exchange refuses a session-issued code if its approving account has been
-deleted or disabled. A wrong or missing resource is refused with `invalid_target`.
-The response is `{"access_token":"exgrant_…","token_type":"Bearer"}`, with no expiry or
-refresh token. It is an ordinary persisted library grant with both `label` and
-`client` set to the client name, listed and revoked in **Settings → Connected
-agents**. Revocation makes the next MCP request fail.
+`code_verifier`, and the same `resource`. The code binds the approving owner,
+client, redirect URI, PKCE challenge and resource. Codes are single-use, expire
+after five minutes and are held in memory (at most 16 pending codes per owner
+and 1024 globally); a restart discards them. Reaching the per-owner limit renders
+a local `429` error page. Exchanging or expiring a code frees its slot. Exchange refuses a session-issued code if its approving account
+has been deleted or disabled. A wrong or missing resource is refused with
+`invalid_target`.
+
+The response is `{"access_token":"exgrant_…","token_type":"Bearer"}`, with no
+expiry or refresh token. It is an ordinary library grant with both `label` and
+`client` set to the client name. List and revoke it through the grant routes or
+**Settings → Connected agents**; there is no separate OAuth revocation route.
 
 Screenshot: [Library consent](screenshots/Exh-rhlq/01-consent.png).
+
+### Remote MCP service
+
+The separate `exhibit-mcp` process serves Streamable HTTP at the path of
+`MCP_PUBLIC_URL`, normally `/mcp`. The core always returns 404 at `/mcp`. The
+service holds no database or credential of its own: every MCP request supplies
+`Authorization: Bearer <library grant>`, checked through the core's
+`GET /api/agent/credential`, and tools call that same core with that same bearer
+(Exh-uhvu). For the tool contract, see `agent.md`; for environment and proxy
+routing, see [deployment.md §5.3](deployment.md#53-optional-remote-mcp-service).
+
+```
+POST, GET, DELETE /mcp                                  Streamable HTTP (bearer required)
+GET               /.well-known/oauth-protected-resource/mcp
+GET               /.well-known/oauth-protected-resource
+GET               /healthz                              Process health, unauthenticated
+```
+
+Cookies, Pi credentials and `AUTH_TOKEN` cannot authenticate MCP. Sessions are
+bound to the grant id; even a continuation checks the grant again, so revocation
+applies to the next request. An unavailable core produces 503 rather than
+admitting the request. A supplied `Origin` must match `MCP_PUBLIC_URL`'s origin
+(otherwise 403); absent Origin is accepted. Bodies are bounded by
+`MAX_REQUEST_BODY_BYTES` (32 MiB default). `/healthz` reports process health,
+not core readiness.
+
+Protected-resource metadata is public RFC 9728 discovery (Exh-354p). For a custom
+endpoint path, append that path to `/.well-known/oauth-protected-resource` in
+place of `/mcp`; the bare form also remains available. Both metadata routes
+permit cross-origin GETs and answer OPTIONS with 204; other methods return 405.
+Their JSON contains `resource: MCP_PUBLIC_URL`,
+`authorization_servers: [EXHIBIT_PUBLIC_URL]`, `bearer_methods_supported: ["header"]`,
+and `resource_name: "Exhibit"`. `EXHIBIT_PUBLIC_URL` must name the core's public
+`APP_ORIGIN`. It defaults to `EXHIBIT_URL`, so set it explicitly when the service
+reaches the core at an internal address. `MCP_PUBLIC_URL` and the core's `MCP_URL`
+must name the same endpoint: it is the resource the authorization code binds.
+
+Every MCP 401 includes
+`WWW-Authenticate: Bearer resource_metadata="<metadata URL>"`, using
+`MCP_PUBLIC_URL`'s origin and the path-inserted metadata URL. A presented invalid
+token also adds `error="invalid_token"`. A core outage returns 503 without that
+challenge. Protected-resource discovery stays on this service;
+authorization-server discovery and the OAuth flow stay on the core.
 
 ## Artifacts
 
@@ -368,7 +411,7 @@ version or its source is no longer stored; `404` for an unknown version or an
 artifact that is not yours. The allowlist and capability approvals are not
 versioned and are not touched.
 
-Both routes are owner-only and unavailable to an agent session's credential.
+Both routes are owner-only and unavailable to Pi credentials or library grants.
 
 ## Network origin decisions
 
@@ -400,8 +443,9 @@ verbatim into a CSP header. On `DELETE` it travels as a query parameter rather
 than a path segment, because an origin is arbitrary caller-supplied text and a
 path segment is resolved by the URL parser before the request is sent.
 
-An agent-session credential cannot reach these routes at all: approving an
-artifact's own network egress is a decision reserved for a person.
+Pi credentials and library grants cannot reach these origin-decision routes.
+Their artifact PATCH route still accepts `network_allowlist`, however; MCP tools
+expose no approval field. See **Agent grants and MCP** above for that boundary.
 
 ## State (cross-device sync)
 

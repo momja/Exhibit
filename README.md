@@ -77,6 +77,28 @@ token, which is fine locally. Set `AUTH_TOKEN` and the origins before exposing i
 to a network — see [docs/deployment.md](./docs/deployment.md) for the full
 configuration reference.
 
+## Use your own agent
+
+When your operator enables MCP, you can connect an external agent to your own
+library from **Settings → Connected agents**. The panel shows the endpoint address
+and a ready-to-run Claude Code command before you issue any token. Copy the
+command, or replace `<MCP_URL>` below with the address shown there:
+
+```bash
+claude mcp add --transport http exhibit <MCP_URL>
+```
+
+Then run `/mcp` in Claude Code, choose **Authenticate**, and approve the connection
+in your browser. Other MCP clients connect to the same URL and sign in the same
+way. You approve access to your whole library; revoke the connection any time in
+Settings. As a fallback, use **For clients without browser sign-in** in Connected
+agents to issue a copy-once token and configure an `Authorization: Bearer` header
+(Exh-17a5).
+
+See [External agents (MCP)](./docs/agent.md#external-agents-mcp) for tools and
+limits. Operators enable the optional service using
+[the deployment guide](./docs/deployment.md#53-optional-remote-mcp-service).
+
 ## Building
 
 ```bash
@@ -136,23 +158,26 @@ events. Logs are structured text via `log/slog` to stdout.
 
 ```
 cmd/
-  server/     main entry point
-  mockllm/    serves internal/mockllm as a standalone process
+  server/        main entry point
+  exhibit-mcp/   Optional remote MCP service
+  mockllm/       serves internal/mockllm as a standalone process
 internal/
-  agent/      Pi sidecar session manager + exhibit tools extension (ext/exhibit.ts)
-  agentscope/ Per-session agent credentials the API resolves to one artifact
-  api/        HTTP handlers, router, middleware, gallery + agent chat pages
-  blob/       Blob store interface + filesystem implementation
-  color/      Brand color constants
-  mockllm/    Deterministic OpenAI-compatible stand-in LLM for agent tests
-  render/     Render surface handler (CSP, state inlining, render preamble + snippet injection)
-  scanner/    Ingest scanner (extracts network origins from HTML, base-aware)
-  secrets/    AES-GCM sealing for BYO agent API keys
-  snapshot/   URL-ingest asset vendoring (bounded fetch, HTML/CSS inlining, <base href>)
-  store/      Store interface, SQLite implementation, migrations
+  agent/         Pi sidecar session manager + exhibit tools extension (ext/exhibit.ts)
+  agentguidance/ Artifact and widget instructions shared by Pi and MCP
+  agentscope/    Pi session credentials and persisted library-grant token helpers
+  api/           HTTP handlers, router, middleware, gallery + agent chat pages
+  blob/          Blob store interface + filesystem implementation
+  color/         Brand color constants
+  mcpserver/     MCP tools and Streamable HTTP transport; writes use the core API
+  mockllm/       Deterministic OpenAI-compatible stand-in LLM for agent tests
+  render/        Render surface handler (CSP, state inlining, render preamble + snippet injection)
+  scanner/       Ingest scanner (extracts network origins from HTML, base-aware)
+  secrets/       AES-GCM sealing for BYO agent API keys
+  snapshot/      URL-ingest asset vendoring (bounded fetch, HTML/CSS inlining, <base href>)
+  store/         Store interface, SQLite implementation, migrations
 web/          Build-time asset workspaces (see docs/build_assets.md)
-  editor/     CodeMirror editor bundle (esbuild)
-  icons/      Phosphor Icons vendoring
+  editor/        CodeMirror editor bundle (esbuild)
+  icons/         Phosphor Icons vendoring
 scripts/
   build-assets.sh  Builds web/* workspaces into internal/api/assets/
 ```

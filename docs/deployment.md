@@ -51,16 +51,16 @@ Env vars, all optional except `AUTH_TOKEN`.
 | `AUTH_TOKEN` | `dev-token` | API bearer token — **change this** |
 | `APP_ORIGIN` | `http://localhost:8080` | Public URL of the gallery/API |
 | `RENDER_ORIGIN` | `http://localhost:8081` | Public URL of the artifact renderer (must differ from `APP_ORIGIN` — see [why](./architecture.md#4-trust-boundaries)) |
-| `MCP_URL` | *(unset)* | Public URL of the optional MCP service; enables the core OAuth authorization server, token issuance and remote configurations in Settings → Connected agents. Unset disables OAuth and issuance and hides the section unless grants remain for revocation. This does not start the MCP service; see [§5.3](#53-optional-remote-mcp-service) |
+| `MCP_URL` | *(unset)* | Public URL of the optional MCP service; enables the core OAuth authorization server and shows the copyable address and Claude Code command in Settings → Connected agents, with token issuance as the fallback for clients without browser sign-in. Unset disables OAuth and issuance and hides the section unless grants remain for revocation. This does not start the MCP service; see [§5.3](#53-optional-remote-mcp-service) |
 | `DATA_DIR` | `./data` | Where the SQLite DB lives, and the artifact bodies too unless `BLOB_S3_BUCKET` is set |
 | `ADDR` | `:8080` | App listen address |
 | `RENDER_ADDR` | `:8081` | Render listen address |
 | `SINGLE_LISTENER` | `false` | Serve both origins from `ADDR` alone, choosing between them by the request's `Host` header. For platforms whose proxy routes by port and cannot map two hostnames to two ports (Fly.io); see [§5.1](#51-one-port-two-hostnames). Accepts `true`/`1`/`yes`/`on`. `RENDER_ADDR` is unused when it is on |
-| `MAX_REQUEST_BODY_BYTES` | `33554432` (32 MiB) | The largest request body any route accepts, in bytes. A bigger one is refused `413` before it is read. The default fits a snapshot that vendored a wasm runtime, exported and pasted back, with room to spare. A write peaks at about ten times its size in memory, so lower it on a small machine. Anything but a positive number is a **startup failure**; there is no value that turns the limit off |
+| `MAX_REQUEST_BODY_BYTES` | `33554432` (32 MiB) | The global request-body ceiling, in bytes. OAuth POST endpoints additionally cap bodies at 64 KiB before parsing. A bigger one is refused `413` before it is read. The default fits a snapshot that vendored a wasm runtime, exported and pasted back, with room to spare. A write peaks at about ten times its size in memory, so lower it on a small machine. Anything but a positive number is a **startup failure**; there is no value that turns the limit off |
 | `LOG_LEVEL` / `DEBUG` | `info` | `debug`/`info`/`warn`/`error`; `DEBUG=1` forces debug |
 | `PI_BIN` | `pi` | Path to the AI agent executable. The Docker image ships pinned Pi Bolt under `pi` and `pi-bolt`; source installs may set an absolute path or `pi-bolt` |
 | `AGENT_THINKING_LEVEL` | `medium` | Thinking baseline: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`. Hosted/platform sessions use only this setting. BYOK owners may override it on the API-key page. Invalid values fail startup; Pi adjusts valid levels to the model's capabilities |
-| `EXHIBIT_SECRET` | auto | Encrypts stored agent API keys; auto-generated if unset |
+| `EXHIBIT_SECRET` | auto | Encrypts stored agent API keys and derives the OAuth client-ID signing key; auto-generated if unset |
 | `AGENT_API_KEY` | *(unset)* | The instance's **own** provider key for the AI agent. Unset = bring-your-own-key, the default and what every existing instance does. Set = platform mode; read [§4.1](#41-letting-the-instance-supply-the-agent-key-platform-mode) before you set it |
 | `AGENT_PROVIDER` | *(unset)* | Which provider `AGENT_API_KEY` belongs to — `anthropic`, `openai`, `google`, `openrouter`, `opencode-go`. **Required** when the key is set; missing or unrecognized is a startup failure, not a surprise at the first session |
 | `AGENT_MODEL` | *(unset)* | Model for platform-mode sessions. Optional — empty lets Pi select its authenticated default using the configured credential. Your choice, and never shown to users |
@@ -798,8 +798,13 @@ client_max_body_size 32m;
 ```
 
 Exhibit also bounds the connection itself: 10 seconds to send the request
-headers, 64 KiB of them at most, and 5 minutes to send the whole request. The
-last is what a 32 MiB upload needs on a slow (~1 Mbit/s) uplink. Responses have
+headers, 64 KiB for the request line and headers together, and 5 minutes to send
+the whole request. OAuth client ids are capped at 16 KiB at registration and use
+to leave room for authorization parameters in that header budget; configure the
+proxy to accept the authorization URLs your clients use. OAuth registration,
+token and consent POSTs also enforce a 64 KiB body cap (`413` on overrun), even
+when the global upload limit is higher. The 5-minute timeout is what a 32 MiB
+upload needs on a slow (~1 Mbit/s) uplink. Responses have
 no time limit, because the AI agent streams its replies over a connection that
 stays open as long as the chat page does.
 
@@ -941,30 +946,18 @@ and none of the files.
 
 ### 5.3 Optional remote MCP service
 
-`exhibit-mcp` lets a remote agent connect to a person's library over
-Streamable HTTP. It runs beside the core and reaches it only through the HTTP
-API. It has no database, no operator token and no secrets of its own: each
-request supplies a library grant issued through OAuth consent or in
-**Settings → Connected agents**.
-The service verifies that bearer with the core on every request, so revocation
-takes effect on the next request. Cookies, Pi tokens and `AUTH_TOKEN` are not
-accepted. A core outage refuses requests with 503. Authentication failures return
-401 with a `WWW-Authenticate` header pointing clients to the service's OAuth
-protected-resource metadata. Discovery names the core's public origin as the
-authorization server. With `MCP_URL` set, that core serves
-`/.well-known/oauth-authorization-server`, `/oauth/register`, `/oauth/authorize`
-and `/oauth/token`. OAuth clients register, send the person through the existing
-local, OIDC or Clerk login (or directly to consent on a no-login instance), and
-receive a library grant after approval. It has no expiry or refresh token and
-stays listed in Settings until revoked, just like a pasted token.
+`exhibit-mcp` connects a person's own agent to their library over Streamable
+HTTP. It is an optional satellite, with no database, operator token or secrets
+of its own. Every request carries the caller's library grant and is checked
+with the core; revocation takes effect on the next request. The core never
+serves `/mcp`, even with `MCP_URL` set (Exh-uhvu).
 
-The image ships both `/server` and `/exhibit-mcp` from the same revision. The
-Compose `mcp` profile selects the second entrypoint; keeping one release image
-avoids maintaining a second image and version pairing for this small binary.
-The MCP process does not start Pi or mount the core's data volume. Run
-`exhibit-mcp` without arguments to start the service. The core always returns
-404 at `/mcp`, even if `MCP_URL` is set; the reverse proxy routes that path to
-the separate service.
+The release image contains both `/server` and `/exhibit-mcp` from the same
+revision. Compose's `mcp` profile runs the second entrypoint as a separate
+process, without Pi or the core's data volume. Outside Compose, run
+`exhibit-mcp` without arguments with the environment below.
+
+#### Configure and start it
 
 Configure the service separately from the core:
 
@@ -988,11 +981,14 @@ Without `MCP_URL`, the instance offers no MCP connection:
 `/.well-known/oauth-authorization-server` return 404, and Connected agents is hidden for owners
 with no live grants. Existing grants remain visible for revocation only, with
 a note that MCP is not enabled; listing and revoking grants continue to work.
+To take the endpoint offline too, stop the `mcp` service and remove its proxy
+route. Unsetting the core's URL does not revoke existing grants (Exh-uhvu).
 
 For example, set these in Compose's `.env`:
 
 ```bash
 APP_ORIGIN=https://exhibit.example.com
+RENDER_ORIGIN=https://artifacts.example.com
 EXHIBIT_PUBLIC_URL=https://exhibit.example.com
 MCP_URL=https://exhibit.example.com/mcp
 MCP_PUBLIC_URL=https://exhibit.example.com/mcp
@@ -1009,16 +1005,24 @@ Compose. It does not contact the core or require a credential. MCP sessions live
 in memory and expire after 30 minutes idle; restarting the service requires
 clients to reconnect.
 
-The service exposes RFC 9728 protected-resource metadata without authentication
-at `/.well-known/oauth-protected-resource/mcp` and
-`/.well-known/oauth-protected-resource`. Both serve metadata only on GET and
-permit cross-origin reads for browser clients. OPTIONS preflight requests return
-204; other methods return 405. The document names `MCP_PUBLIC_URL` as
-`resource`, `[EXHIBIT_PUBLIC_URL]` as `authorization_servers`, `["header"]` as
-`bearer_methods_supported`, and `"Exhibit"` as `resource_name`. Every 401 challenge
-links to the path-inserted form on the public service origin; a presented invalid
-token also adds `error="invalid_token"`. An unavailable core remains a 503, without
-an authentication challenge.
+With `MCP_URL` set, **Settings → Connected agents** shows the endpoint address and
+Claude Code command up front, along with browser sign-in instructions. Other
+MCP clients use that same URL and sign-in flow.
+
+The core supplies OAuth for local, OIDC and Clerk logins; no separate
+authorization server is needed. Clients register without operator setup, then
+the person signs in and approves their whole library. Authorization uses PKCE
+S256 and binds the request to `MCP_URL`. The result is a library grant named
+after the client, with no expiry or refresh token, listed and revocable in
+**Settings → Connected agents**. Clients without browser sign-in can issue a
+copy-once token under **For clients without browser sign-in** in that same panel;
+issuing it reveals header-based remote configurations (Exh-rhlq).
+
+There is no new OAuth secret to configure. Client registrations are signed with
+a key derived from the core's `EXHIBIT_SECRET`; keep that secret stable so clients
+can reuse their registrations after a restart. Rotating it requires clients to
+register again, but does not revoke grants already issued. Pending authorization
+codes live in memory and must be requested again after a core restart (Exh-rhlq).
 
 #### Route a public path to the service
 
@@ -1028,9 +1032,11 @@ path**, and keep the remaining app routes on port 8080. Route the bare discovery
 path there too if you want to expose that fallback. The examples include both
 forms. Keep `/oauth/*` and `/.well-known/oauth-authorization-server` routed to
 the **core**, including when MCP uses a separate hostname. Discovery, registration
-and token exchange must be reachable by clients without an existing browser
-session; consent uses the instance's login. Preserve Authorization and allow streamed responses. For Caddy, with the
-proxy running on the same host:
+and token exchange must be reachable without proxy authentication or an existing
+browser session; consent uses the instance's login. The MCP endpoint must accept
+the client's bearer without a proxy login too. Preserve Authorization and allow
+streamed responses (Exh-354p, Exh-rhlq). For Caddy, with the proxy running on the
+same host:
 
 ```caddyfile
 exhibit.example.com {
@@ -1083,10 +1089,49 @@ Alternatively, dedicate a hostname such as `mcp.example.com` to port 8090 and
 set `MCP_URL` and `MCP_PUBLIC_URL` to `https://mcp.example.com/mcp`; keep
 `EXHIBIT_PUBLIC_URL` equal to the core's public `APP_ORIGIN`. A whole-host reverse
 proxy then handles `/mcp` and discovery paths together. Keep this hostname separate
-from the artifact renderer. With the service reachable, point an OAuth-capable
-client at `MCP_URL` and approve its library access in the browser. Alternatively,
-issue a grant in Settings and use the displayed Claude Code command or HTTP JSON
-configuration in the client.
+from the artifact renderer.
+
+#### Verify the public endpoint
+
+For the same-host example above, run these checks from a machine that can reach
+the public URLs:
+
+```bash
+curl -fsS https://exhibit.example.com/.well-known/oauth-protected-resource/mcp
+curl -fsS https://exhibit.example.com/.well-known/oauth-authorization-server
+curl -i https://exhibit.example.com/mcp
+```
+
+The first document must name `https://exhibit.example.com/mcp` as `resource`
+and `https://exhibit.example.com` in `authorization_servers`. The second must
+name the core's public `/oauth/register`, `/oauth/authorize` and `/oauth/token`
+endpoints. The last request must return **401**, with `WWW-Authenticate` pointing
+to the first document. A 404 means the proxy sent the request to the wrong
+process or path; a login page means a proxy is intercepting it.
+
+To check the path through to the core, issue a temporary token in Connected
+agents and run this in Bash, pasting it at the hidden prompt:
+
+```bash
+read -rsp 'Agent token: ' EXHIBIT_AGENT_TOKEN
+curl -i https://exhibit.example.com/mcp \
+  -H "Authorization: Bearer $EXHIBIT_AGENT_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"deployment-check","version":"1"}}}'
+unset EXHIBIT_AGENT_TOKEN
+```
+
+Expect **200** and an MCP initialization result. Revoke the temporary connection
+after checking. A rejected grant returns 401 with `error="invalid_token"` in the
+challenge; cookies, Pi credentials and `AUTH_TOKEN` are never accepted. A core
+outage returns 503, not an authentication challenge. The process-health check
+alone cannot verify this path (Exh-354p).
+
+Users can now follow [External agents (MCP)](./agent.md#external-agents-mcp) to
+connect through OAuth or a pasted token. The
+[API reference](./api.md#agent-grants-and-mcp) records the discovery and endpoint
+contracts.
 
 ## 6. Backups (optional)
 

