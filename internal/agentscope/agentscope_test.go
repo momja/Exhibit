@@ -94,3 +94,27 @@ func TestGrantIsSafeForConcurrentUse(t *testing.T) {
 	wg.Wait()
 	assert.Equal(t, "artifact-a", g.Scope().ArtifactID)
 }
+
+func TestPersistedTokensDigestStablyAndNeverMatchSessionTokens(t *testing.T) {
+	tok, digest, err := NewPersistedToken()
+	require.NoError(t, err)
+	assert.True(t, IsPersistedToken(tok))
+	assert.Equal(t, digest, PersistedTokenDigest(tok))
+	assert.NotContains(t, digest, strings.TrimPrefix(tok, "exgrant_"), "the digest does not reveal the token")
+
+	other, _, err := NewPersistedToken()
+	require.NoError(t, err)
+	assert.NotEqual(t, tok, other)
+
+	session, err := NewRegistry().Issue(1, "a", "")
+	require.NoError(t, err)
+	assert.False(t, IsPersistedToken(session.Token()))
+}
+
+func TestPersistedGrantIsBoundAndCannotBeRebound(t *testing.T) {
+	g := Persisted(7, "artifact-a", "grant:1", "Claude Code")
+	g.BindArtifact("artifact-b")
+	assert.Equal(t, Scope{OwnerID: 7, ArtifactID: "artifact-a"}, g.Scope())
+	assert.Equal(t, "grant:1", g.SessionID())
+	assert.Equal(t, "Claude Code", g.Prompt())
+}

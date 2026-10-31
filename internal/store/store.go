@@ -744,6 +744,19 @@ type Store interface {
 	// missing ids and links owned by someone else return ErrNotFound.
 	DeleteShare(ctx context.Context, ownerID int64, id string) error
 
+	// --- Agent grants (Exh-l2xj) -------------------------------------------
+	// Owner-issued credentials for agents outside the server, each over one
+	// artifact. Only a digest of the token is stored (agent_grants.go). The
+	// three owner-scoped methods answer ErrNotFound for another owner's
+	// artifact, like a missing one.
+	CreateAgentGrant(ctx context.Context, ownerID int64, artifactID, label, tokenHash string) (*AgentGrant, error)
+	ListAgentGrants(ctx context.Context, ownerID int64, artifactID string) ([]AgentGrant, error)
+	DeleteAgentGrant(ctx context.Context, ownerID int64, artifactID, grantID string) error
+	// ResolveAgentGrant maps a token digest to its grant, or (nil, nil). It
+	// runs before any owner is known, like GetSession, and refuses a grant
+	// whose owner's account is disabled.
+	ResolveAgentGrant(ctx context.Context, tokenHash string) (*AgentGrant, error)
+
 	// --- Storage accounting (av-fw1b) ----------------------------------
 	// How many bytes an owner is holding. A length is recorded where the
 	// bytes are written; the total is derived on read by joining those

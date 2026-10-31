@@ -27,8 +27,10 @@ const defaultOwnerID int64 = 1
 //     logout immediate.
 //  2. The static bearer token — the API/CLI credential, and the only
 //     credential a single-user instance has. Full authority, every route.
-//  3. An agent session's scoped token (agentscope, av-e0yj): authority over
-//     exactly the artifact that session was opened against, and nothing else.
+//  3. An agent's scoped token (agentscope, av-e0yj): authority over exactly
+//     one artifact, and nothing else. Either a Pi session's, minted for the
+//     life of its subprocess, or an owner-issued grant for an agent outside
+//     the server (Exh-l2xj), persisted until revoked.
 //     Agent sessions are steered by text Exhibit does not author, so their
 //     credential is deny-by-default and checked here rather than trusted to
 //     the tools the model calls.
@@ -78,22 +80,21 @@ func (ro *Router) authMiddleware(next http.Handler) http.Handler {
 		}
 
 		if g := ro.resolveAgentGrant(token); g != nil {
-			scope := g.Scope()
-			if !agentScopeAllows(scope, r.Method, r.URL.EscapedPath()) {
-				slog.WarnContext(r.Context(), "agent credential refused outside its scope",
-					slog.String("method", r.Method),
-					slog.String("path", r.URL.Path),
-					slog.String("scoped_artifact_id", scope.ArtifactID),
-				)
-				writeError(w, http.StatusForbidden,
-					"this agent session may only act on the artifact it was opened against")
-				return
-			}
-			// The grant knows whose session this is, and every owner-scoped
-			// Store call downstream depends on it — resolved here, on the
-			// Principal, rather than deferred to ownerMiddleware.
-			ctx := withPrincipal(r.Context(), Principal{OwnerID: scope.OwnerID, Kind: PrincipalAgentGrant, Grant: g})
-			next.ServeHTTP(w, r.WithContext(ctx))
+			serveAgentGrant(w, r, g, next)
+			return
+		}
+
+		// An owner-issued grant for an agent outside the server (Exh-l2xj).
+		// It resolves to the same kind of Grant as a Pi session's and takes
+		// the same path from here on, so it is held to exactly the same
+		// allowlist.
+		g, err := ro.resolvePersistedGrant(r, token)
+		if err != nil {
+			serverError(w, r, "resolve agent grant", err)
+			return
+		}
+		if g != nil {
+			serveAgentGrant(w, r, g, next)
 			return
 		}
 
@@ -207,6 +208,52 @@ func (ro *Router) resolveAgentGrant(token string) *agentscope.Grant {
 		return nil
 	}
 	return ro.cfg.AgentCredentials.Resolve(token)
+}
+
+// resolvePersistedGrant looks up an owner-issued agent grant by its token's
+// digest (Exh-l2xj), or returns nil. A value without the grant prefix cannot
+// be one, so it costs no query.
+//
+// The version provenance is fixed here, from the row: the session id names
+// the grant, and the label the owner gave it is the message. Nothing the
+// agent sends can change either.
+func (ro *Router) resolvePersistedGrant(r *http.Request, token string) (*agentscope.Grant, error) {
+	if !agentscope.IsPersistedToken(token) {
+		return nil, nil
+	}
+	row, err := ro.cfg.Store.ResolveAgentGrant(r.Context(), agentscope.PersistedTokenDigest(token))
+	if err != nil || row == nil {
+		return nil, err
+	}
+	return agentscope.Persisted(row.OwnerID, row.ArtifactID, persistedGrantSessionID(row.ID), row.Label), nil
+}
+
+// persistedGrantSessionID is the session id an owner-issued grant's versions
+// record. The prefix keeps it from ever naming a Pi conversation's
+// transcript.
+func persistedGrantSessionID(grantID string) string {
+	return "grant:" + grantID
+}
+
+// serveAgentGrant admits a request made with an agent credential, of either
+// kind, if agentScopeAllows its route, and refuses it otherwise.
+func serveAgentGrant(w http.ResponseWriter, r *http.Request, g *agentscope.Grant, next http.Handler) {
+	scope := g.Scope()
+	if !agentScopeAllows(scope, r.Method, r.URL.EscapedPath()) {
+		slog.WarnContext(r.Context(), "agent credential refused outside its scope",
+			slog.String("method", r.Method),
+			slog.String("path", r.URL.Path),
+			slog.String("scoped_artifact_id", scope.ArtifactID),
+		)
+		writeError(w, http.StatusForbidden,
+			"this agent credential may only act on the artifact it was issued for")
+		return
+	}
+	// The grant knows whose credential this is, and every owner-scoped
+	// Store call downstream depends on it — resolved here, on the
+	// Principal, rather than deferred to ownerMiddleware.
+	ctx := withPrincipal(r.Context(), Principal{OwnerID: scope.OwnerID, Kind: PrincipalAgentGrant, Grant: g})
+	next.ServeHTTP(w, r.WithContext(ctx))
 }
 
 // agentSubResources are the sub-paths of an artifact an agent session may

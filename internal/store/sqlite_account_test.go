@@ -105,6 +105,11 @@ var accountTables = map[string]accountTable{
 	// account, which is a row on somebody else's artifact and therefore the
 	// second place a person's data lives outside their own library. Only
 	// artifact_state's trigger otherwise reaches that far.
+	// An agent grant is authority over one artifact, so it goes with the
+	// artifact. owner_id is not a foreign key (single-user instances have no
+	// users row), which is why the residue names the artifact.
+	"agent_grants": {reachCascade, "cascades from artifacts(id); a grant names exactly one artifact (Exh-l2xj)",
+		"SELECT COUNT(*) FROM agent_grants WHERE artifact_id = '" + deletedArtifact + "' OR owner_id = ?1"},
 	"share_links": {reachCascade, "cascades from artifacts(id) for the links of this library",
 		"SELECT COUNT(*) FROM share_links WHERE artifact_id = '" + deletedArtifact + "'"},
 	"share_grants": {reachCascade,
@@ -288,6 +293,9 @@ func seedEverything(t *testing.T, s *SQLiteStore) accountFixture {
 			ContentType: "application/wasm",
 			SizeBytes:   4,
 		}})
+	require.NoError(t, err)
+
+	_, err = s.CreateAgentGrant(ctx, member.ID, deletedArtifact, "Claude Code", "member-grant-digest")
 	require.NoError(t, err)
 
 	_, err = s.CommitVersion(ctx, member.ID, deletedArtifact, VersionChange{})

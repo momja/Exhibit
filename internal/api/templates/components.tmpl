@@ -105,6 +105,7 @@
   {{if not .ReadOnly}}
   <a href="/artifacts/{{.ID}}/edit"><i class="ph ph-pencil-simple" aria-hidden="true"></i> Edit</a>
   <a href="/agent?artifact={{.ID}}"><i class="ph ph-robot" aria-hidden="true"></i> Modify with agent</a>
+  {{if .CanConnectAgents}}<button type="button" id="agent-grants-open"><i class="ph ph-plugs-connected" aria-hidden="true"></i> Connect your own agent</button>{{end}}
   {{/* The portable copy (av-vnkt): one file with every stored payload folded
        back in, depending on no origin and no running instance. A plain link,
        because the response is an attachment — no JS, and it works from the

@@ -131,6 +131,10 @@ var appOriginGETOwnerScope = []pageOwnerRoute{
 	// must not be able to read off somebody's library.
 	{route: "/partials/share-panel", ownerScoped: true,
 		ownPath: "/partials/share-panel?artifact={id}", foreignPath: "/partials/share-panel?artifact={id}"},
+	// The External agents panel (Exh-l2xj): who holds a credential over the
+	// artifact, which is the owner's and nobody else's.
+	{route: "/partials/agent-grants", ownerScoped: true,
+		ownPath: "/partials/agent-grants?artifact={id}", foreignPath: "/partials/agent-grants?artifact={id}"},
 	// An earlier version of an artifact (av-vw7r). History holds what the live
 	// document never shows — code since rewritten, data since cleared — so it is
 	// the most private thing a fragment can carry: another tenant gets the 404 a
@@ -193,6 +197,7 @@ var appOriginGETOwnerScope = []pageOwnerRoute{
 	{route: "/api/artifacts/{artifactID}/origins", why: "API group, covered by owner_scope_test.go"},
 	{route: "/api/artifacts/{artifactID}/widget", why: "API group, covered by owner_scope_test.go"},
 	{route: "/api/artifacts/{artifactID}/shares", why: "API group, covered by owner_scope_test.go"},
+	{route: "/api/artifacts/{artifactID}/agent-grants", why: "API group, covered by agentgrants_test.go"},
 	{route: "/api/artifacts/{artifactID}/versions", why: "API group, covered by owner_scope_test.go"},
 	{route: "/api/artifacts/{artifactID}/transcripts", why: "API group, covered by owner_scope_test.go"},
 	{route: "/api/artifacts/{artifactID}/transcripts/{sessionID}", why: "API group, covered by owner_scope_test.go"},

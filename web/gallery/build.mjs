@@ -32,6 +32,8 @@ const files = [
   // The owner's share panel (av-6xjd) — an island on the detail page, loaded
   // only where the panel renders, which is only for the artifact's owner.
   "share.js",
+  // The owner's External agents panel (Exh-l2xj), on the same terms.
+  "agent-grants.js",
   "state-api.js",
   // The runtime network-permission prompt (av-kmwj, av-6xvs), shared by the
   // detail viewer and the agent chat's preview pane. Listed before both, since

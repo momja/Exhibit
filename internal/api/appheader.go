@@ -102,12 +102,16 @@ func authPageHeader(title string) appHeaderView {
 type floatingHeaderView struct {
 	ID, Title, Created, SourceURL string
 	ReadOnly, CanShare            bool
-	Capability                    capabilityView
+	// CanConnectAgents offers the External agents panel (Exh-l2xj), on the
+	// same terms as CanShare: only where the page rendered it.
+	CanConnectAgents bool
+	Capability       capabilityView
 }
 
-func artifactHeader(a *store.Artifact, readOnly, canShare bool) appHeaderView {
+func artifactHeader(a *store.Artifact, readOnly, canShare, canConnectAgents bool) appHeaderView {
 	return appHeaderView{Floating: &floatingHeaderView{
 		ID: a.ID, Title: a.Title, Created: a.CreatedAt.Format("Jan 2, 2006 15:04"), SourceURL: a.SourceURL,
-		ReadOnly: readOnly, CanShare: canShare, Capability: newCapabilityView(a, !readOnly),
+		ReadOnly: readOnly, CanShare: canShare, CanConnectAgents: canConnectAgents,
+		Capability: newCapabilityView(a, !readOnly),
 	}}
 }

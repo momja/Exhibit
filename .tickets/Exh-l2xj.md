@@ -1,6 +1,6 @@
 ---
 id: Exh-l2xj
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-10-27T18:33:48Z
@@ -26,3 +26,9 @@ Durable counterpart to agentscope's process-lifetime grants, so an agent outside
 
 A minted token can GET/PATCH its artifact and its state/widget/assets per agentScopeAllows and nothing else; revoking it makes the next request 401; another owner's artifact id is 404; tokens are stored hashed; tests cover each refused route.
 
+
+## Notes
+
+**2026-10-30T04:21:44Z**
+
+Expiry decision: no expires_at column. A grant lives until revoked, matching shares (av-8ipt); the External agents list on the artifact page is what keeps a forgotten one visible. Minting is allowed for a session, or for the page credential of an instance with no login (the static token or none), never an agent or recipient. A disabled owner's grants stop resolving without being deleted. Screenshot: docs/screenshots/Exh-l2xj/01-external-agents.png

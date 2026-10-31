@@ -51,6 +51,7 @@ ph-monitor
 ph-palette
 ph-paper-plane-right
 ph-pencil-simple
+ph-plugs-connected
 ph-plus
 ph-prohibit
 ph-robot

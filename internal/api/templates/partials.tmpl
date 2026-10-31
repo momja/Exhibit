@@ -403,6 +403,57 @@
 </div>{{end}}
 
 
+{{/* agentGrantsPanel is the owner's External agents modal on the artifact
+     detail page (Exh-l2xj): the credentials handed to agents outside the
+     server, each over this one artifact. Rendered only when
+     detailPageData.AgentGrants is non-nil, which is only for the owner, on
+     the share panel's terms.
+
+     The token shown after issuing lives in #agent-grant-issued, outside the
+     swapped #agent-grants-body, so the refresh that lists the new grant does
+     not erase the one copy of its token the owner will ever see. */}}
+{{define "agentGrantsPanel"}}<div id="agent-grants-panel" class="modal-overlay" hidden>
+  <div class="modal agent-grants-modal" role="dialog" aria-modal="true" aria-labelledby="agent-grants-title">
+    <h2 id="agent-grants-title"><i class="ph ph-plugs-connected"></i> External Agents</h2>
+    <p class="text-sm muted">Let an agent of your own, like Claude Code or Cursor, edit this artifact. A token reaches this artifact's source, widget and saved data, and nothing else in your library. It cannot change what the artifact may reach on the network.</p>
+    <div id="agent-grant-issued" hidden>
+      <p class="text-sm"><strong>Copy this token now.</strong> It is shown once and cannot be recovered; revoke it and issue another if it is lost.</p>
+      <div class="share-link-row">
+        <input type="text" id="agent-grant-token" class="field" readonly aria-label="New agent token">
+        <button type="button" class="btn btn-sm btn-sec" id="agent-grant-copy"><i class="ph ph-copy"></i> Copy</button>
+      </div>
+    </div>
+    <div id="agent-grants-body"
+         hx-get="/partials/agent-grants?artifact={{.ID}}"
+         hx-trigger="exhibit:agent-grants-changed from:body"
+         hx-swap="innerHTML">{{template "agentGrantsPanelBody" .AgentGrants}}</div>
+    <div class="modal-actions">
+      <span id="agent-grants-status" class="text-sm muted" role="status" aria-live="polite"></span>
+      <button type="button" class="btn btn-sec" id="agent-grants-close">Done</button>
+    </div>
+  </div>
+</div>{{end}}
+
+{{/* agentGrantsPanelBody is the swappable half: the issue form and the live
+     grants. The same partial serves the page render and
+     /partials/agent-grants, so a label (owner-typed text) is escaped by
+     html/template in one place. Data: agentGrantsPanelView (agentgrants.go). */}}
+{{define "agentGrantsPanelBody"}}<div class="agent-grants" data-artifact-id="{{.ArtifactID}}">
+  {{if .MayIssue}}<form class="share-add" id="agent-grant-form" method="post" action="/api/artifacts/{{.ArtifactID}}/agent-grants">
+    <input type="text" id="agent-grant-label" name="label" class="field" maxlength="100" placeholder="Name it, e.g. Claude Code on my laptop" autocomplete="off" data-1p-ignore data-bwignore="true" data-lpignore="true" data-protonpass-ignore="true" aria-label="Agent name">
+    <button type="submit" class="btn btn-sm" id="agent-grant-issue"><i class="ph ph-key"></i> Issue token</button>
+  </form>{{else}}<p class="text-sm muted">Sign in to issue a token.</p>{{end}}
+  <ul class="share-grants" id="agent-grants-list">
+    {{range .Grants}}<li class="share-grant" data-grant-id="{{.ID}}">
+      <span class="share-grant-name">{{.Label}}</span>
+      <span class="text-sm muted">issued {{.Created}}, {{.LastUsed}}</span>
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-sm btn-sec" data-action="revoke-agent-grant" data-grant-id="{{.ID}}" aria-label="Revoke {{.Label}}"><i class="ph ph-x"></i> Revoke</button>
+    </li>{{end}}
+  </ul>
+  <p class="text-sm muted" id="agent-grants-empty"{{if .Grants}} hidden{{end}}>No agent holds a token for this artifact.</p>
+</div>{{end}}
+
 {{/* A static data-flow glyph: Phosphor people and databases joined by lines.
      The radio label contains it, so it introduces no second interaction. */}}
 {{define "stateModeGlyph"}}<span class="state-mode-glyph" aria-hidden="true">

@@ -107,6 +107,8 @@ var writeRoutes = []struct {
 	{"DELETE", "/api/account", false},
 	{"POST", "/api/shares/", true},
 	{"DELETE", "/api/shares/{shareID}", false},
+	{"POST", "/api/artifacts/{artifactID}/agent-grants", true},
+	{"DELETE", "/api/artifacts/{artifactID}/agent-grants/{grantID}", false},
 	{"POST", "/auth/local", true},
 	{"POST", "/auth/logout", false},
 }
