@@ -554,13 +554,13 @@ document.getElementById('clip-allow').addEventListener('click', async function()
 // nothing until the user allows.
 let pendingLink = null;
 const linkDialog = document.getElementById('link-modal');
-linkDialog.addEventListener('modal:before-close', event => { if (pendingLink?.saving) event.preventDefault(); });
+const linkModal = modalFor(linkDialog);
 for (const event of ['modal:closed', 'modal:disconnected']) linkDialog.addEventListener(event, () => {
   pendingLink?.tab?.close();
   pendingLink = null;
 });
 document.addEventListener('exhibit:preview-reloaded', () => {
-  if (pendingLink) pendingLink.saving = false;
+  linkModal.pending = false;
   closeLinkModal();
 });
 
@@ -582,13 +582,12 @@ window.addEventListener('message', function(e) {
   }
   // Not ours to approve: the destination is dropped, which is what a denial
   // does and what the sandbox did before the bridge existed.
-  if (!mayApprove() || !linkDialog.isConnected || pendingLink?.saving) return;
+  if (!mayApprove() || !linkDialog.isConnected || linkModal.pending) return;
   closeLinkModal();
   pendingLink = { url: url.href, host: url.hostname, frame, generation: previewGeneration };
   document.getElementById('link-host').textContent = url.hostname;
   linkDialog.querySelector('[data-permission-status]').textContent = '';
-  for (const id of ['link-block', 'link-allow']) document.getElementById(id).disabled = false;
-  linkDialog.dispatchEvent(new CustomEvent('exhibit:modal-open', { detail: { trigger: frame } }));
+  linkModal.show(frame);
 });
 
 // Persists the first-use grant, then lets the caller open the pending URL. The
@@ -603,32 +602,30 @@ async function setLinksApproved(approved, request) {
 // Denial just drops the destination and the artifact keeps running — nothing is
 // persisted, mirroring downloads (denial drops, approval persists).
 function closeLinkModal() {
-  linkDialog.dispatchEvent(new CustomEvent('exhibit:modal-close'));
+  linkModal.close();
 }
 
 document.getElementById('link-allow').addEventListener('click', async function() {
   const link = pendingLink;
-  if (!link || link.saving) return;
-  // Claim the popup in the click gesture and sever its opener before any
-  // external code runs. On failure/staleness the unused blank tab is closed.
-  let tab;
-  try { tab = window.open('', '_blank'); if (tab) tab.opener = null; }
-  catch { tab?.close(); tab = null; }
-  if (!tab) {
-    linkDialog.querySelector('[data-permission-status]').textContent = 'Your browser blocked the new tab. Allow popups and try again.';
-    return;
-  }
-  link.tab = tab;
-  link.saving = true;
-  for (const id of ['link-block', 'link-allow']) document.getElementById(id).disabled = true;
-  const ok = await setLinksApproved(true, link);
-  link.saving = false;
-  if (pendingLink !== link || !currentPreviewRequest(link)) { tab.close(); return; }
-  for (const id of ['link-block', 'link-allow']) document.getElementById(id).disabled = false;
-  if (!ok || tab.closed) { tab.close(); link.tab = null; return; }
-  tab.location = link.url;
-  link.tab = null;
-  closeLinkModal();
+  if (!link) return;
+  const opened = await linkModal.run(async () => {
+    // run starts synchronously: claim and isolate the placeholder in the click.
+    let tab;
+    try { tab = window.open('', '_blank'); if (tab) tab.opener = null; }
+    catch { tab?.close(); tab = null; }
+    if (!tab) {
+      linkDialog.querySelector('[data-permission-status]').textContent = 'Your browser blocked the new tab. Allow popups and try again.';
+      return false;
+    }
+    link.tab = tab;
+    const ok = await setLinksApproved(true, link);
+    if (pendingLink !== link || !currentPreviewRequest(link)) { tab.close(); return false; }
+    if (!ok || tab.closed) { tab.close(); link.tab = null; return false; }
+    tab.location = link.url;
+    link.tab = null;
+    return true;
+  });
+  if (opened) closeLinkModal();
 });
 
 // Camera / microphone gate (av-mv3k): the only capability here that is decided

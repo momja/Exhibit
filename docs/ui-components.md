@@ -522,8 +522,8 @@ and the browser operation. Block/Escape stay live; a late operation cannot send
 a second reply after denial. This differs deliberately from shared `pending`,
 which locks every dismissal.
 
-External-link permission uses the shared modal, with a guard on every close
-path while approval is pending. The selected destination is immutable during
+External-link permission uses `run` to lock buttons and every dismissal while
+approval is pending, with no feature busy flag or control loop. The selected destination is immutable during
 that request. Allow claims a blank tab in the click gesture, severs its opener,
 and navigates only after persistence; failures and stale requests close the
 placeholder. Block/Escape/backdrop record no denial. Initial focus is Block;

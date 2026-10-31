@@ -166,13 +166,13 @@
 </dialog>
 
 <dialog id="link-modal" class="modal-dialog" aria-labelledby="link-title"
-  data-controller="modal" data-action="exhibit:modal-open->modal#open exhibit:modal-close->modal#dismiss cancel->modal#cancel click->modal#backdrop keydown->modal#wrapFocus">
+  data-controller="modal">
     <h2 id="link-title">Allow opening links?</h2>
     <p>You are opening a link to <code id="link-host">example.com</code>. Exhibit cannot verify the safety of external sites. Make sure you trust this destination before allowing links. You can revoke this at any time from its security settings.</p>
     <p data-permission-status role="status" aria-live="polite"></p>
     <div class="modal-actions">
       <span class="spacer"></span>
-      <button type="button" class="btn btn-sec" id="link-block" data-modal-target="initialFocus" data-action="modal#dismiss">Block</button>
+      <button type="button" class="btn btn-sec" id="link-block" autofocus data-modal-dismiss>Block</button>
       <button type="button" class="btn" id="link-allow"><i class="ph ph-arrow-square-out"></i> Allow links</button>
     </div>
 </dialog>
