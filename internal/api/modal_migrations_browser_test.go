@@ -288,6 +288,7 @@ func TestAdminEntitlementModalBrowser(t *testing.T) {
 			}
 			b.eval(`window.savedFetch=window.fetch;window.fetch=(url,opts)=>opts?.method==='PATCH'?new Promise(resolve=>window.finishEntitlement=()=>resolve(new Response('Not authorized',{status:403}))):savedFetch(url,opts);document.getElementById('entitlement-storage').value='';document.getElementById('entitlement-save').click()`)
 			b.wait(`document.getElementById('entitlement-cancel').disabled`)
+			b.check(`document.getElementById('entitlement-plan').matches(':disabled') && document.getElementById('entitlement-storage').matches(':disabled')`)
 			b.run(chromedp.KeyEvent(kb.Escape))
 			b.check(`document.getElementById('entitlement-dialog').open`)
 			b.eval(`finishEntitlement()`)

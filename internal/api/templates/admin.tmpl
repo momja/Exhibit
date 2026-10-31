@@ -157,11 +157,12 @@
      account back on the instance default"), are not three unrelated questions.
      Native <dialog>, so the focus trap and the Escape key are the browser's. */}}
 <dialog id="entitlement-dialog" class="modal-dialog settings-dialog" aria-labelledby="entitlement-title"
-  data-controller="modal" data-action="exhibit:modal-open->modal#open exhibit:modal-close->modal#dismiss cancel->modal#cancel click->modal#backdrop keydown->modal#wrapFocus">
-  <form class="settings-form">
+  data-controller="modal">
+  <form>
+  <fieldset class="settings-form modal-fields">
     <h3 id="entitlement-title" class="settings-h3">Entitlement for <span id="entitlement-who"></span></h3>
     <label class="settings-label" for="entitlement-plan">Plan</label>
-    <input class="field" type="text" id="entitlement-plan" data-modal-target="initialFocus" autocomplete="off" spellcheck="false" placeholder="A label — leave empty for the instance default">
+    <input class="field" type="text" id="entitlement-plan" autofocus autocomplete="off" spellcheck="false" placeholder="A label — leave empty for the instance default">
     <label class="settings-label" for="entitlement-storage">Storage limit (bytes)</label>
     {{/* type="text", deliberately, with inputmode for the numeric keypad on a
          phone. An <input type="number"> sanitizes its own value: anything that
@@ -181,10 +182,11 @@
          you typed", which needs what you typed still on screen. */}}
     <p id="entitlement-error" class="settings-dialog-error" hidden></p>
     <div class="settings-foot">
-      <button class="btn btn-sec" type="button" id="entitlement-cancel" data-action="modal#dismiss">Cancel</button>
+      <button class="btn btn-sec" type="button" id="entitlement-cancel" data-modal-dismiss>Cancel</button>
       <span class="spacer"></span>
       <button class="btn" type="submit" id="entitlement-save"><i class="ph ph-check"></i> Save entitlement</button>
     </div>
+  </fieldset>
   </form>
 </dialog>
 

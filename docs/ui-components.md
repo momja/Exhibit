@@ -439,7 +439,7 @@ heading typography, and base padding come from the shared dialog.
 Admin entitlements use the shared modal with the invoking account button as
 return focus and Plan as initial focus. The feature parses raw text as exact,
 safe whole bytes (blank is `null`); it retains fields on authorization/network
-failure and vetoes dismissal while saving. The form submits through the native
+failure. `run` locks buttons and the native fieldset while saving. The form submits through the native
 ES module. `TestAdminEntitlementModalBrowser` checks malformed and blank input,
 server refusal, pending Escape, and account-specific return focus.
 
