@@ -60,8 +60,12 @@ window.ready = true;
 	b.run(chromedp.KeyEvent(kb.Escape))
 	b.eval(`dialogs[0].dispatchEvent(new MouseEvent('click', {bubbles:true,clientX:-1,clientY:-1})); dialogs[0].querySelector('[data-modal-dismiss]').click(); first.close()`)
 	b.check(`dialogs[0].open`)
+	// A feature can replace content while its operation is pending. Focus stays
+	// inside on settlement, without a feature-specific swap/focus callback.
+	b.eval(`{ const input=dialogs[0].querySelector('input'); input.replaceWith(input.cloneNode(true)); }`)
 	b.eval(`finish('saved')`)
 	b.wait(`!first.pending`)
+	b.check(`document.activeElement===dialogs[0].querySelector('input')`)
 	b.check(`!dialogs[0].querySelector('button:last-child').disabled && dialogs[0].querySelector('button[disabled]').textContent==='Unavailable' && dialogs[0].querySelector('input').value==='unsaved'`)
 	b.eval(`first.run(() => { throw Error('feature error'); }).catch(error => window.failure = error.message)`)
 	b.wait(`window.failure==='feature error' && !first.pending`)

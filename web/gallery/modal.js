@@ -95,7 +95,11 @@ class Modal {
     if (!this.operation) return;
     this.restoreControls();
     this.operation = null;
-
+    // A pending form may have replaced its focused element.
+    if (this.element.open && !this.element.contains(this.element.ownerDocument.activeElement)) {
+      this.element.querySelector('[autofocus]')?.focus();
+      if (!this.element.contains(this.element.ownerDocument.activeElement)) this.element.focus();
+    }
   }
 
   async run(callback) {

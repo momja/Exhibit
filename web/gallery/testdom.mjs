@@ -284,6 +284,7 @@ export function recordingApi(responses = []) {
 export function nativeDialog(page, dialog, controls = []) {
   Object.assign(dialog, {
     open: false, isConnected: true, ownerDocument: page.document,
+    contains: () => true,
     showModal() { this.open = true; },
     close() { this.open = false; }
   });

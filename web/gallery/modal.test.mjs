@@ -102,3 +102,16 @@ test('two handles have independent pending state and feature-specific dismissal 
   });
   assert.equal(p.dialog.open, true);
 });
+
+test('replacing focused content during a pending operation restores focus inside the open dialog', async () => {
+  const p = await fixture();
+  const field = p.byId('replacement');
+  p.dialog.querySelector = selector => selector === '[autofocus]' ? field : null;
+  p.dialog.contains = element => element === field || element === p.dialog;
+  p.modal.show();
+  await p.modal.run(async () => { p.byId('outside').focus(); });
+  assert.equal(p.document.activeElement, field);
+  p.dialog.querySelector = () => null;
+  await p.modal.run(async () => { p.byId('outside').focus(); });
+  assert.equal(p.document.activeElement, p.dialog, 'no surviving field falls back to the dialog');
+});
