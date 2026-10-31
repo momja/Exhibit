@@ -180,14 +180,15 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
 </div>{{end}}
 
 
-{{define "agentGrantsPanel"}}<section class="card" id="agent-grants-panel" aria-labelledby="agent-grants-heading">
+{{define "agentGrantsPanel"}}<section class="card" id="agent-grants-panel"{{if .MCPURL}} data-mcp-url="{{.MCPURL}}"{{end}} aria-labelledby="agent-grants-heading">
   <h3 class="settings-h3" id="agent-grants-heading"><i class="ph ph-robot" aria-hidden="true"></i> Connected agents</h3>
-  <p class="settings-copy">Connect your own agent to find, create and edit artifacts in your library. Each connection stays active until you revoke it.</p>
+  {{if .MCPURL}}<p class="settings-copy">Connect your own agent to find, create and edit artifacts in your library. Each connection stays active until you revoke it.</p>
+  {{else}}<p class="settings-copy">MCP is not enabled on this instance.</p>{{end}}
   <div id="agent-grants-body" class="agent-grants-list"
        hx-get="/partials/agent-grants" hx-headers="{{.RefreshHeaders}}"
        hx-trigger="exhibit:agent-grants-changed from:body"
        hx-swap="innerHTML">{{template "agentGrantsPanelBody" .}}</div>
-  <form id="agent-grant-form" class="settings-form agent-grant-form">
+  {{if .MCPURL}}<form id="agent-grant-form" class="settings-form agent-grant-form">
     <label class="settings-label" for="agent-grant-label">Connection label</label>
     <div class="agent-grant-create">
       <input class="field" id="agent-grant-label" name="label" maxlength="100" placeholder="External agent" autocomplete="off">
@@ -204,8 +205,13 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
       <input class="field agent-grant-token" id="agent-grant-token" readonly autocomplete="off" spellcheck="false">
       <button class="btn btn-sec" id="agent-grant-copy" type="button"><i class="ph ph-copy" aria-hidden="true"></i> Copy token</button>
     </div>
+    <p class="settings-copy settings-note">Add the remote connection to Claude Code:</p>
+    <pre class="agent-grant-command"><code id="agent-grant-remote-command"></code></pre>
+    <p class="settings-copy settings-note">Or configure another client as a remote MCP server:</p>
+    <pre class="agent-grant-command"><code id="agent-grant-remote-config"></code></pre>
     <button class="btn btn-sec" id="agent-grant-dismiss" type="button">Done</button>
   </div>
+  {{end}}
   <p class="settings-status" id="agent-grants-status" role="status" aria-live="polite" hidden></p>
 </section>{{end}}
 

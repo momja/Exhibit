@@ -16,7 +16,7 @@ async function load(responses = []) {
     apiFetch: api.apiFetch,
     navigator: { clipboard: { writeText: async (text) => { copied.push(text); } } }
   }, {
-    'agent-grants-panel': { dataset: {} },
+    'agent-grants-panel': { dataset: { mcpUrl: 'https://agents.example.test/mcp' } },
     'agent-grant-issued': { hidden: true },
     'agent-grant-label': { value: '' }
   });
@@ -94,4 +94,32 @@ test('failed requests show an error and release controls after refresh failures'
   await page.panel.dispatchEvent({ type: 'htmx:error', target: page.byId('agent-grants-body') });
   assert.equal(page.byId('agent-grant-issue').disabled, false);
   assert.match(page.byId('agent-grants-status').textContent, /could not refresh/);
+});
+
+test('remote config uses the configured endpoint and clears every copy of the secret', async () => {
+  const page = await load([issued('g-1', 'exgrant_secret')]);
+  page.panel.dataset.mcpUrl = "https://agents.example.test/connector/'$(command)";
+  await page.issue('agent');
+  assert.equal(page.byId('agent-grant-remote-command').textContent,
+    "claude mcp add --transport http exhibit 'https://agents.example.test/connector/'\\''$(command)' --header 'Authorization: Bearer exgrant_secret'");
+  assert.deepEqual(JSON.parse(page.byId('agent-grant-remote-config').textContent), {
+    type: 'http', url: page.panel.dataset.mcpUrl,
+    headers: { Authorization: 'Bearer exgrant_secret' }
+  });
+  await page.refresh();
+  await page.dismiss();
+  assert.equal(page.byId('agent-grant-remote-command').textContent, '');
+  assert.equal(page.byId('agent-grant-remote-config').textContent, '');
+});
+
+test('revocation-only panel can revoke and leave without issuing controls', async () => {
+  const page = await load([{ ok: true, status: 204 }]);
+  page.panel.dataset.mcpUrl = '';
+  const getElementById = page.document.getElementById;
+  page.document.getElementById = (id) =>
+    ['agent-grant-token', 'agent-grant-issued', 'agent-grant-form'].includes(id) ? null : getElementById(id);
+  await page.revoke('existing');
+  assert.deepEqual(paths(page.api), ['DELETE /api/agent-grants/existing']);
+  await page.refresh();
+  await page.dispatchOnWindow('pagehide');
 });

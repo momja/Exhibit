@@ -287,6 +287,7 @@ func main() {
 		Blob:                bl,
 		AppOrigin:           appOrigin,
 		RenderOrigin:        renderOrigin,
+		MCPURL:              os.Getenv("MCP_URL"),
 		AuthToken:           authToken,
 		Agent:               agentMgr,
 		AgentCredentials:    agentCreds,

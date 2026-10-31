@@ -10,6 +10,7 @@ import (
 // The account panel lists only the current owner's durable connections.
 // Newly issued grant tokens are never part of a page or fragment response.
 type agentGrantsPanelView struct {
+	MCPURL         string
 	RefreshHeaders string
 	Grants         []agentGrantRowView
 }
@@ -23,12 +24,15 @@ type agentGrantRowView struct {
 }
 
 func (ro *Router) agentGrantsPanel(r *http.Request) (*agentGrantsPanelView, error) {
-	if !ro.mayIssueAgentGrant(r) {
+	if !ro.mayManageAgentGrants(r) {
 		return nil, nil
 	}
 	grants, err := ro.cfg.Store.ListAgentGrants(r.Context(), ownerIDFromCtx(r.Context()))
 	if err != nil {
 		return nil, err
+	}
+	if ro.cfg.MCPURL == "" && len(grants) == 0 {
+		return nil, nil
 	}
 	// The htmx fragment needs the same request-derived authority as apiFetch.
 	// Sessions use their cookie; only a no-login operator page gets the static
@@ -41,7 +45,7 @@ func (ro *Router) agentGrantsPanel(r *http.Request) (*agentGrantsPanelView, erro
 	if err != nil {
 		return nil, err
 	}
-	view := &agentGrantsPanelView{RefreshHeaders: string(encodedHeaders)}
+	view := &agentGrantsPanelView{MCPURL: ro.cfg.MCPURL, RefreshHeaders: string(encodedHeaders)}
 	for _, grant := range grants {
 		row := agentGrantRowView{
 			ID: grant.ID, Label: grant.Label, Client: grant.Client,
@@ -65,7 +69,16 @@ func (ro *Router) agentGrantsPanelPartial(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if view == nil {
-		fragmentNotFound(w)
+		if !ro.mayManageAgentGrants(r) {
+			fragmentNotFound(w)
+			return
+		}
+		// Removing the last grant on a disabled instance removes the entire
+		// section, rather than leaving a stale row after a failed list refresh.
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("HX-Retarget", "#agent-grants-panel")
+		w.Header().Set("HX-Reswap", "outerHTML")
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 	fragment, err := renderPage("agentGrantsPanelBody", view)

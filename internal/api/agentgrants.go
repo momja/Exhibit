@@ -34,8 +34,8 @@ type listAgentGrantsResponse struct {
 	Grants []store.AgentGrant `json:"grants"`
 }
 
-// mayIssueAgentGrant reports whether this request is a person who may hand
-// out authority over their library.
+// mayManageAgentGrants reports whether this request is a person who may
+// manage connections to their library. Issuance also requires MCPURL.
 //
 // A signed-in session may. So may the page credential of an instance with no
 // login, which is the static token or nothing at all: there the person at the
@@ -45,7 +45,7 @@ type listAgentGrantsResponse struct {
 // that person's call, so it is refused. An agent never may: a session steered
 // by text Exhibit did not author must not be able to extend its own reach in
 // time. (agentScopeAllows already refuses it; this says so again here.)
-func (ro *Router) mayIssueAgentGrant(r *http.Request) bool {
+func (ro *Router) mayManageAgentGrants(r *http.Request) bool {
 	p := principalFromCtx(r.Context())
 	if p.ReadOnly {
 		return false
@@ -74,11 +74,15 @@ func normalizeAgentGrantLabel(label string) string {
 }
 
 func (ro *Router) createAgentGrant(w http.ResponseWriter, r *http.Request) {
+	if ro.cfg.MCPURL == "" {
+		http.NotFound(w, r)
+		return
+	}
 	var req createAgentGrantRequest
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	if !ro.mayIssueAgentGrant(r) {
+	if !ro.mayManageAgentGrants(r) {
 		writeError(w, http.StatusForbidden, "agent grants are issued from a signed-in session")
 		return
 	}
@@ -102,7 +106,7 @@ func (ro *Router) createAgentGrant(w http.ResponseWriter, r *http.Request) {
 }
 
 func (ro *Router) listAgentGrants(w http.ResponseWriter, r *http.Request) {
-	if !ro.mayIssueAgentGrant(r) {
+	if !ro.mayManageAgentGrants(r) {
 		writeError(w, http.StatusForbidden, "agent grants require a signed-in session")
 		return
 	}
@@ -117,7 +121,7 @@ func (ro *Router) listAgentGrants(w http.ResponseWriter, r *http.Request) {
 // deleteAgentGrant revokes one grant. The next request made with its token is
 // a 401, because nothing resolves it any more.
 func (ro *Router) deleteAgentGrant(w http.ResponseWriter, r *http.Request) {
-	if !ro.mayIssueAgentGrant(r) {
+	if !ro.mayManageAgentGrants(r) {
 		writeError(w, http.StatusForbidden, "read-only visitor may not mutate")
 		return
 	}

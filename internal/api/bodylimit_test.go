@@ -122,6 +122,7 @@ func bodyLimitRouter(t *testing.T) *Router {
 	cfg := ro.cfg
 	cfg.MaxRequestBodyBytes = testBodyLimit
 	cfg.LocalCredential = newTestCredential(t, "admin", "pw")
+	cfg.MCPURL = "https://agents.example.test/mcp"
 	return NewRouter(cfg)
 }
 

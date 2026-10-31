@@ -40,8 +40,10 @@ COPY . .
 # build — the assets are never served stale.
 COPY --from=assets /app/internal/api/assets/ ./internal/api/assets/
 
-# Build the server binary
+# Build both entrypoints from the same source revision. The optional MCP service
+# starts with plain exhibit-mcp; the core server carries no MCP transport.
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /bin/server ./cmd/server
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /bin/exhibit-mcp ./cmd/exhibit-mcp
 
 # --- Native Pi download stage ---
 # Pi Bolt 1.0.8 contains Pi 1.4.0. Pin the version AND release-archive hashes;
@@ -93,6 +95,7 @@ RUN ln -s /opt/pi-bolt/pi /usr/local/bin/pi \
 	&& pi --version
 
 COPY --from=builder /bin/server /server
+COPY --from=builder /bin/exhibit-mcp /exhibit-mcp
 
 # Data volume for SQLite and blob storage
 VOLUME ["/data"]
@@ -101,6 +104,6 @@ ENV DATA_DIR=/data
 ENV ADDR=:8080
 ENV RENDER_ADDR=:8081
 
-EXPOSE 8080 8081
+EXPOSE 8080 8081 8090
 
 ENTRYPOINT ["/server"]
