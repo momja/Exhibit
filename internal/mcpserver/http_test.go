@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/modelcontextprotocol/go-sdk/oauthex"
 	"github.com/momja/Exhibit/internal/agentscope"
 	"github.com/momja/Exhibit/internal/api"
 	"github.com/momja/Exhibit/internal/blob"
@@ -227,8 +228,9 @@ func TestRemoteMCPSessionIsBoundToGrantAndRevocationIsImmediate(t *testing.T) {
 	f.request(t, "DELETE", "/api/agent-grants/"+grant.Grant.ID, nil, http.StatusNoContent, nil)
 	headers.Set("Authorization", "Bearer "+grant.Token)
 	for _, method := range []string{"POST", "GET", "DELETE"} {
-		status, _, body = remoteRequest(t, service.URL+"/mcp", method, message, headers)
+		status, responseHeaders, body := remoteRequest(t, service.URL+"/mcp", method, message, headers)
 		require.Equal(t, http.StatusUnauthorized, status, body)
+		assert.Equal(t, `Bearer resource_metadata="http://mcp.test/.well-known/oauth-protected-resource/mcp", error="invalid_token"`, responseHeaders.Get("WWW-Authenticate"))
 	}
 	_, err := session.ListTools(context.Background(), nil)
 	require.Error(t, err)
@@ -276,8 +278,9 @@ func TestRemoteMCPDoesNotAdmitWhenCoreCannotVerify(t *testing.T) {
 			require.NoError(t, err)
 			service := httptest.NewServer(handler)
 			defer service.Close()
-			status, _, body := remoteRequest(t, service.URL+"/mcp", "POST", initializeMessage, http.Header{"Authorization": {"Bearer exgrant_test"}})
+			status, headers, body := remoteRequest(t, service.URL+"/mcp", "POST", initializeMessage, http.Header{"Authorization": {"Bearer exgrant_test"}})
 			assert.Equal(t, http.StatusServiceUnavailable, status, body)
+			assert.Empty(t, headers.Get("WWW-Authenticate"))
 		})
 	}
 }
@@ -317,4 +320,155 @@ func TestRemoteMCPPublicOriginUsesBrowserCanonicalForm(t *testing.T) {
 		status, _, body := remoteRequest(t, service.URL+"/mcp", "POST", initializeMessage, http.Header{"Authorization": {"Bearer " + grant.Token}, "Origin": {tc.origin}})
 		require.Equal(t, tc.status, status, body)
 	}
+}
+
+func TestRemoteMCPProtectedResourceMetadata(t *testing.T) {
+	for _, tc := range []struct {
+		name, publicURL, resource, endpoint string
+	}{
+		{"default", "", mcpserver.DefaultPublicURL, "/mcp"},
+		{"explicit", "https://mcp.example.test/mcp", "https://mcp.example.test/mcp", "/mcp"},
+		{"omitted path", "https://mcp.example.test", "https://mcp.example.test/mcp", "/mcp"},
+		{"custom path and port", "https://mcp.example.test:9443/agent/connect", "https://mcp.example.test:9443/agent/connect", "/agent/connect"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// Discovery must work without contacting a running core or presenting a grant.
+			handler, err := mcpserver.NewHTTPHandler(mcpserver.HTTPConfig{
+				BaseURL: "http://core.internal:8080", ExhibitPublicURL: "https://exhibit.example.test",
+				PublicURL: tc.publicURL,
+			})
+			require.NoError(t, err)
+			service := httptest.NewServer(handler)
+			defer service.Close()
+			for _, path := range []string{"/.well-known/oauth-protected-resource" + tc.endpoint, "/.well-known/oauth-protected-resource"} {
+				status, headers, body := remoteRequest(t, service.URL+path, "GET", "", http.Header{"Origin": {"https://client.example.test"}})
+				require.Equal(t, http.StatusOK, status, body)
+				assert.Equal(t, "application/json", headers.Get("Content-Type"))
+				assert.Equal(t, "*", headers.Get("Access-Control-Allow-Origin"))
+				assert.Empty(t, headers.Get("WWW-Authenticate"))
+				var metadata oauthex.ProtectedResourceMetadata
+				require.NoError(t, json.Unmarshal([]byte(body), &metadata))
+				assert.Equal(t, tc.resource, metadata.Resource)
+				assert.Equal(t, []string{"https://exhibit.example.test"}, metadata.AuthorizationServers)
+				assert.Equal(t, []string{"header"}, metadata.BearerMethodsSupported)
+				assert.Equal(t, "Exhibit", metadata.ResourceName)
+
+				for _, method := range []string{"HEAD", "POST", "PUT", "PATCH", "DELETE"} {
+					status, _, body := remoteRequest(t, service.URL+path, method, "", nil)
+					assert.Equal(t, http.StatusMethodNotAllowed, status, "%s %s: %s", method, path, body)
+				}
+				status, headers, body = remoteRequest(t, service.URL+path, "OPTIONS", "", http.Header{
+					"Origin": {"https://client.example.test"}, "Access-Control-Request-Method": {"GET"},
+					"Access-Control-Request-Headers": {"Content-Type"},
+				})
+				assert.Equal(t, http.StatusNoContent, status, body)
+				assert.Equal(t, "*", headers.Get("Access-Control-Allow-Origin"))
+				assert.Equal(t, "GET, OPTIONS", headers.Get("Access-Control-Allow-Methods"))
+				assert.Equal(t, "Content-Type", headers.Get("Access-Control-Allow-Headers"))
+			}
+		})
+	}
+}
+
+func TestRemoteMCPOAuthChallenges(t *testing.T) {
+	f := newRemoteFixture(t)
+	pi, err := f.registry.Issue(1, "artifact", "discovery-pi")
+	require.NoError(t, err)
+	revoked := f.grant(t, "revoked discovery grant")
+	f.request(t, "DELETE", "/api/agent-grants/"+revoked.Grant.ID, nil, http.StatusNoContent, nil)
+	for _, endpoint := range []struct{ origin, path string }{
+		{"https://mcp.example.test", "/mcp"},
+		{"https://mcp.example.test:9443", "/agent/connect"},
+	} {
+		handler, err := mcpserver.NewHTTPHandler(mcpserver.HTTPConfig{BaseURL: f.core.URL, PublicURL: endpoint.origin + endpoint.path})
+		require.NoError(t, err)
+		service := httptest.NewServer(handler)
+		t.Cleanup(service.Close)
+		for _, tc := range []struct {
+			name         string
+			headers      http.Header
+			invalidToken bool
+		}{
+			{"missing", nil, false},
+			{"empty", http.Header{"Authorization": {""}}, false},
+			{"cookie only", http.Header{"Cookie": {"exhibit_session=ignored"}}, false},
+			{"missing bearer value", http.Header{"Authorization": {"Bearer"}}, true},
+			{"wrong scheme", http.Header{"Authorization": {"Basic abc"}}, true},
+			{"extra fields", http.Header{"Authorization": {"Bearer first second"}}, true},
+			{"duplicate headers", http.Header{"Authorization": {"Bearer first", "Bearer second"}}, true},
+			{"invalid", http.Header{"Authorization": {"Bearer exgrant_unknown"}}, true},
+			{"revoked", http.Header{"Authorization": {"Bearer " + revoked.Token}}, true},
+			{"operator", http.Header{"Authorization": {"Bearer " + remoteOperatorToken}}, true},
+			{"non-library", http.Header{"Authorization": {"Bearer " + pi.Token()}}, true},
+		} {
+			t.Run(endpoint.path+"/"+tc.name, func(t *testing.T) {
+				status, headers, body := remoteRequest(t, service.URL+endpoint.path, "POST", initializeMessage, tc.headers)
+				require.Equal(t, http.StatusUnauthorized, status, body)
+				challenge := `Bearer resource_metadata="` + endpoint.origin + "/.well-known/oauth-protected-resource" + endpoint.path + `"`
+				if tc.invalidToken {
+					challenge += `, error="invalid_token"`
+				}
+				assert.Equal(t, []string{challenge}, headers.Values("WWW-Authenticate"))
+			})
+		}
+	}
+}
+
+func TestRemoteMCPExhibitPublicURL(t *testing.T) {
+	for _, tc := range []struct{ name, baseURL, publicURL, issuer string }{
+		{"default to core address", "https://core.example.test:8443", "", "https://core.example.test:8443"},
+		{"public override", "http://core.internal:8080", "https://exhibit.example.test", "https://exhibit.example.test"},
+		{"trailing slash", "http://core.internal:8080", "https://exhibit.example.test/", "https://exhibit.example.test"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			handler, err := mcpserver.NewHTTPHandler(mcpserver.HTTPConfig{BaseURL: tc.baseURL, ExhibitPublicURL: tc.publicURL})
+			require.NoError(t, err)
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, httptest.NewRequest("GET", "/.well-known/oauth-protected-resource/mcp", nil))
+			require.Equal(t, http.StatusOK, response.Code)
+			var metadata oauthex.ProtectedResourceMetadata
+			require.NoError(t, json.Unmarshal(response.Body.Bytes(), &metadata))
+			assert.Equal(t, []string{tc.issuer}, metadata.AuthorizationServers)
+		})
+	}
+	for _, publicURL := range []string{
+		"/relative", "exhibit.example.test", "ftp://exhibit.example.test", "https:///missing-host",
+		"https://user:password@exhibit.example.test", "https://exhibit.example.test/oauth",
+		"https://exhibit.example.test/?query=1", "https://exhibit.example.test?", "https://exhibit.example.test#fragment", "https://exhibit.example.test#",
+	} {
+		t.Run(publicURL, func(t *testing.T) {
+			_, err := mcpserver.NewHTTPHandler(mcpserver.HTTPConfig{BaseURL: "http://core.internal:8080", ExhibitPublicURL: publicURL})
+			require.ErrorContains(t, err, "EXHIBIT_PUBLIC_URL")
+		})
+	}
+	_, err := mcpserver.NewHTTPHandler(mcpserver.HTTPConfig{BaseURL: "https://core.example.test/api"})
+	require.ErrorContains(t, err, "EXHIBIT_PUBLIC_URL", "the default issuer must also be an origin")
+}
+
+func TestRemoteMCPSDKDiscoversAuthorizationServer(t *testing.T) {
+	service := httptest.NewUnstartedServer(nil)
+	defer service.Close()
+	endpoint := "http://" + service.Listener.Addr().String() + "/agent/connect"
+	handler, err := mcpserver.NewHTTPHandler(mcpserver.HTTPConfig{
+		BaseURL: "http://core.internal:8080", ExhibitPublicURL: "https://exhibit.example.test",
+		PublicURL: endpoint,
+	})
+	require.NoError(t, err)
+	service.Config.Handler = handler
+	service.Start()
+
+	status, headers, body := remoteRequest(t, endpoint, "POST", initializeMessage, nil)
+	require.Equal(t, http.StatusUnauthorized, status, body)
+	challenges, err := oauthex.ParseWWWAuthenticate(headers.Values("WWW-Authenticate"))
+	require.NoError(t, err)
+	require.Len(t, challenges, 1)
+	assert.Equal(t, "bearer", challenges[0].Scheme)
+	metadataURL := challenges[0].Params["resource_metadata"]
+	require.Equal(t, service.URL+"/.well-known/oauth-protected-resource/agent/connect", metadataURL)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	metadata, err := oauthex.GetProtectedResourceMetadata(ctx, metadataURL, endpoint, service.Client())
+	require.NoError(t, err)
+	assert.Equal(t, []string{"https://exhibit.example.test"}, metadata.AuthorizationServers)
+	// Authorization-server discovery and consent belong to the next story.
 }

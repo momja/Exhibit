@@ -11,27 +11,44 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/modelcontextprotocol/go-sdk/oauthex"
 )
 
 const DefaultMaxRequestBodyBytes int64 = 32 << 20
 const DefaultPublicURL = "http://localhost:8090/mcp"
 
+// RFC 9728 inserts the endpoint path after this well-known prefix.
+const protectedResourcePath = "/.well-known/oauth-protected-resource"
+
 // HTTPConfig separates the core API address from the service's public address.
 // The service has no credential of its own; each session carries its caller's.
 type HTTPConfig struct {
 	BaseURL             string
+	ExhibitPublicURL    string // Core APP_ORIGIN (OAuth issuer), defaulting to BaseURL.
 	PublicURL           string
 	Version             string
 	MaxRequestBodyBytes int64
 }
 
-// NewHTTPHandler serves Streamable HTTP at PublicURL's path and GET /healthz.
+// NewHTTPHandler serves Streamable HTTP at PublicURL's path, public OAuth
+// resource metadata, and GET /healthz.
 // Authentication is checked against the core on every request, including session
 // continuations. Tools then use the same bearer over the ordinary HTTP API.
 func NewHTTPHandler(cfg HTTPConfig) (http.Handler, error) {
 	if _, err := serviceURL(cfg.BaseURL); err != nil {
 		return nil, fmt.Errorf("EXHIBIT_URL: %w", err)
 	}
+	if cfg.ExhibitPublicURL == "" {
+		cfg.ExhibitPublicURL = cfg.BaseURL
+	}
+	issuer, err := serviceURL(cfg.ExhibitPublicURL)
+	if err != nil {
+		return nil, fmt.Errorf("EXHIBIT_PUBLIC_URL: %w", err)
+	}
+	if issuer.Path != "" && issuer.Path != "/" {
+		return nil, fmt.Errorf("EXHIBIT_PUBLIC_URL: must be an origin without a path")
+	}
+	issuer.Path, issuer.RawPath = "", ""
 	if cfg.PublicURL == "" {
 		cfg.PublicURL = DefaultPublicURL
 	}
@@ -42,11 +59,34 @@ func NewHTTPHandler(cfg HTTPConfig) (http.Handler, error) {
 	endpoint := public.Path
 	if endpoint == "" {
 		endpoint = "/mcp"
+		public.Path = endpoint
 	}
-	if endpoint == "/healthz" {
-		return nil, fmt.Errorf("MCP_PUBLIC_URL: /healthz is reserved")
+	if endpoint == "/healthz" || endpoint == protectedResourcePath || strings.HasPrefix(endpoint, protectedResourcePath+"/") {
+		return nil, fmt.Errorf("MCP_PUBLIC_URL: endpoint path is reserved")
 	}
 	publicOrigin := canonicalOrigin(public)
+	metadataURL := *public
+	metadataURL.Path = protectedResourcePath + endpoint
+	if public.RawPath != "" {
+		metadataURL.RawPath = protectedResourcePath + public.RawPath
+	}
+	metadata := auth.ProtectedResourceMetadataHandler(&oauthex.ProtectedResourceMetadata{
+		Resource:               public.String(),
+		AuthorizationServers:   []string{issuer.String()},
+		BearerMethodsSupported: []string{"header"},
+		ResourceName:           "Exhibit",
+	})
+	unauthorized := func(w http.ResponseWriter, r *http.Request, message string) {
+		challenge := fmt.Sprintf("Bearer resource_metadata=%q", metadataURL.String())
+		for _, value := range r.Header.Values("Authorization") {
+			if strings.TrimSpace(value) != "" {
+				challenge += `, error="invalid_token"`
+				break
+			}
+		}
+		w.Header().Set("WWW-Authenticate", challenge)
+		http.Error(w, message, http.StatusUnauthorized)
+	}
 	if cfg.MaxRequestBodyBytes == 0 {
 		cfg.MaxRequestBodyBytes = DefaultMaxRequestBodyBytes
 	}
@@ -69,6 +109,11 @@ func NewHTTPHandler(cfg HTTPConfig) (http.Handler, error) {
 		DisableLocalhostProtection: true,
 	})
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Discovery is public, including to browser clients on other origins.
+		if r.URL.Path == protectedResourcePath || r.URL.Path == metadataURL.Path {
+			metadata.ServeHTTP(w, r)
+			return
+		}
 		if r.URL.Path == "/healthz" && r.Method == http.MethodGet {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte("ok\n"))
@@ -84,16 +129,16 @@ func NewHTTPHandler(cfg HTTPConfig) (http.Handler, error) {
 		}
 		token := requestBearer(r)
 		if token == "" {
-			http.Error(w, "a bearer token is required", http.StatusUnauthorized)
+			unauthorized(w, r, "a bearer token is required")
 			return
 		}
 		credential, status := verifyLibraryCredential(r.Context(), &HTTPAPI{BaseURL: cfg.BaseURL, Token: token, Client: verifierClient})
 		if status != 0 {
-			message := "invalid or non-library agent credential"
-			if status == http.StatusServiceUnavailable {
-				message = "Exhibit credential verification is unavailable"
+			if status == http.StatusUnauthorized {
+				unauthorized(w, r, "invalid or non-library agent credential")
+			} else {
+				http.Error(w, "Exhibit credential verification is unavailable", status)
 			}
-			http.Error(w, message, status)
 			return
 		}
 		if r.ContentLength > cfg.MaxRequestBodyBytes {
@@ -105,7 +150,7 @@ func NewHTTPHandler(cfg HTTPConfig) (http.Handler, error) {
 		// generic verifier-error 500. No request can reach the stream without it.
 		auth.RequireBearerToken(func(context.Context, string, *http.Request) (*auth.TokenInfo, error) {
 			return &auth.TokenInfo{UserID: "grant:" + credential}, nil
-		}, &auth.RequireBearerTokenOptions{AllowMissingExpiration: true})(stream).ServeHTTP(w, r)
+		}, &auth.RequireBearerTokenOptions{AllowMissingExpiration: true, ResourceMetadataURL: metadataURL.String()})(stream).ServeHTTP(w, r)
 	}), nil
 }
 
@@ -120,6 +165,9 @@ func requestBearer(r *http.Request) string {
 	return fields[1]
 }
 
+// Every accepted token is a library grant verified by the core, never locally.
+// The core's authorization server (the next story) only issues grants for MCP_URL
+// as resource; this service does not introduce a separate token-validity policy.
 func verifyLibraryCredential(ctx context.Context, api *HTTPAPI) (string, int) {
 	response, err := api.Do(ctx, http.MethodGet, "/api/agent/credential", nil)
 	if err != nil {
