@@ -532,13 +532,13 @@ document.getElementById('clip-allow').addEventListener('click', async function()
   req.saving = true;
   document.getElementById('clip-allow').disabled = true;
   const operation = clipboardResult(req);
-  const saved = await setClipboardApproved(true, req);
+  // Keep this exact request exclusive until both persistence and the browser
+  // operation settle. Dismissal stays live and invalidates its eventual reply.
+  const [saved, result] = await Promise.all([setClipboardApproved(true, req), operation]);
   req.saving = false;
   if (pendingClip !== req || !currentPreviewRequest(req)) return;
   document.getElementById('clip-allow').disabled = false;
   if (!saved) return;
-  const result = await operation;
-  if (pendingClip !== req || !currentPreviewRequest(req)) return;
   pendingClip = null;
   clipModal.close();
   replyClip(req, result.ok, result.text, result.error);

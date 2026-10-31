@@ -516,3 +516,8 @@ through the sandbox frame; it never reads the operator's clipboard.
 
 [Clipboard desktop](screenshots/Exh-3917/1280.png) ·
 [Clipboard phone](screenshots/Exh-3917/390.png)
+
+Clipboard retains a request-specific Allow guard through both the grant write
+and the browser operation. Block/Escape stay live; a late operation cannot send
+a second reply after denial. This differs deliberately from shared `pending`,
+which locks every dismissal.
