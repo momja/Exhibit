@@ -66,6 +66,7 @@ async function loadDetail({ readOnly = false, responses = [], headline = "" } = 
   permissionDialog(page, 'dl-modal');
   permissionDialog(page, 'clip-modal');
   permissionDialog(page, 'link-modal');
+  permissionDialog(page, 'media-modal');
   await page.loadModule(path.join(ASSETS, 'detail.js'));
   return { ...page, api, capabilitiesChanged };
 }

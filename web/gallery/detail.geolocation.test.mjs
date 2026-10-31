@@ -76,7 +76,11 @@ async function loadDetail({ readOnly = false, approvals = {}, responses = [] } =
   permissionDialog(page, 'dl-modal');
   permissionDialog(page, 'clip-modal');
   permissionDialog(page, 'link-modal');
+  permissionDialog(page, 'media-modal');
   await page.loadModule(path.join(ASSETS, 'detail.js'));
+  page.byId('direct-open-modal').open=false;
+  page.byId('direct-open-modal').showModal = () => { page.byId('direct-open-modal').open=true; };
+  page.byId('direct-open-modal').close = () => { page.byId('direct-open-modal').open=false; };
   await page.loadModule(path.join(ASSETS, "direct-open.js"));
   return { ...page, api, tabs, opened };
 }
@@ -249,7 +253,7 @@ test("the camera gate's Allow still persists, opens the render, and answers", as
   const { byId, frame, api, tabs, postFromFrame } = await loadDetail();
 
   await postFromFrame({ __avMedia: true, artifactId: ID, id: "m1", video: true, audio: false });
-  assert.equal(byId("media-modal").hidden, false);
+  assert.equal(byId("media-modal").open, true);
   const allowing = byId("media-allow").click();
   await byId("direct-open-confirm").click();
   await allowing;
@@ -260,5 +264,5 @@ test("the camera gate's Allow still persists, opens the render, and answers", as
   const [reply] = frame.contentWindow.posted.filter((m) => m.__avMediaResult);
   assert.equal(reply.id, "m1");
   assert.equal(reply.name, "NotSupportedError");
-  assert.equal(byId("media-modal").hidden, true);
+  assert.equal(byId("media-modal").open, false);
 });

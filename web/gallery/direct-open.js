@@ -15,12 +15,12 @@ function remembered(preferenceKey) {
 }
 
 function show(message = '') {
-  if (modal.hidden) {
+  if (!modal.open) {
     background = [...document.body.children]
       .filter((element) => element !== modal && !element.inert);
     for (const element of background) element.inert = true;
   }
-  modal.hidden = false;
+  if (!modal.open) modal.showModal();
   status.textContent = message;
   status.hidden = !message;
   confirm.disabled = false;
@@ -32,7 +32,7 @@ function finish(opened) {
   const request = pending;
   pending = null;
   if (!opened && request.tab) request.tab.close();
-  modal.hidden = true;
+  if (modal.open) modal.close();
   for (const element of background) element.inert = false;
   background = [];
   remember.checked = false;
@@ -133,7 +133,7 @@ modal.addEventListener('click', (event) => {
 // Capture Escape before the underlying capability dialog handles it. Keep
 // keyboard navigation inside this dialog while its decision is on screen.
 document.addEventListener('keydown', (event) => {
-  if (modal.hidden) return;
+  if (!modal.open) return;
   if (event.key === 'Escape') {
     event.preventDefault();
     event.stopImmediatePropagation();

@@ -35,7 +35,11 @@ async function load({ artifact = 'art-1', viewer = '1', store = storage(), block
   permissionDialog(page, 'dl-modal');
   permissionDialog(page, 'clip-modal');
   permissionDialog(page, 'link-modal');
+  permissionDialog(page, 'media-modal');
   await page.loadModule(asset('detail.js'));
+  page.byId('direct-open-modal').open=false;
+  page.byId('direct-open-modal').showModal = () => { page.byId('direct-open-modal').open=true; };
+  page.byId('direct-open-modal').close = () => { page.byId('direct-open-modal').open=false; };
   await page.loadModule(asset('direct-open.js'));
   const trigger = page.byId('direct-open-toolbar');
   const prompt = page.byId('direct-open-modal');
@@ -50,7 +54,7 @@ test('both toolbar and capability banner ask before opening exactly one isolated
   for (const trigger of [page.trigger, page.byId('direct-open-banner')]) {
     const before = page.tabs.length;
     await trigger.click();
-    assert.equal(page.prompt.hidden, false);
+    assert.equal(page.prompt.open, true);
     assert.equal(page.document.activeElement, page.cancel);
     assert.equal(page.checkbox.checked, false);
     assert.equal(page.tabs.length, before);
@@ -59,7 +63,7 @@ test('both toolbar and capability banner ask before opening exactly one isolated
     assert.deepEqual(page.tabs.at(-1).args, ['', '_blank']);
     assert.equal(page.tabs.at(-1).opener, null);
     assert.equal(page.tabs.at(-1).location, page.openURL);
-    assert.equal(page.prompt.hidden, true);
+    assert.equal(page.prompt.open, false);
   }
   assert.equal(page.store.values.size, 0, 'unchecked confirmation re-prompts');
   assert.deepEqual(page.api.calls, [], 'opening is not an artifact mutation');
@@ -73,13 +77,13 @@ for (const dismiss of ['cancel', 'escape', 'backdrop']) {
     if (dismiss === 'cancel') await page.cancel.click();
     if (dismiss === 'escape') page.pressKey('Escape');
     if (dismiss === 'backdrop') await page.prompt.click();
-    assert.equal(page.prompt.hidden, true);
+    assert.equal(page.prompt.open, false);
     assert.equal(page.document.activeElement, page.trigger);
     assert.equal(page.checkbox.checked, false);
     assert.equal(page.tabs.length, 0);
     assert.equal(page.store.values.size, 0);
     await page.trigger.click();
-    assert.equal(page.prompt.hidden, false);
+    assert.equal(page.prompt.open, true);
     assert.equal(page.checkbox.checked, false);
   });
 }
@@ -88,7 +92,7 @@ test('dialog content clicks do not dismiss; keyboard focus wraps inside the moda
   const page = await load();
   await page.trigger.click();
   await page.prompt.click(page.checkbox);
-  assert.equal(page.prompt.hidden, false);
+  assert.equal(page.prompt.open, true);
   page.confirm.focus();
   page.pressKey('Tab');
   assert.equal(page.document.activeElement, page.checkbox);
@@ -150,13 +154,13 @@ test('only checked confirmation persists, including for read-only recipients, ac
   assert.deepEqual(first.api.calls, []);
   for (const page of [first, await load({ store, readOnly: true })]) {
     await page.trigger.click();
-    assert.equal(page.prompt.hidden, true);
+    assert.equal(page.prompt.open, false);
     assert.equal(page.tabs.at(-1).location, page.openURL);
   }
   for (const options of [{ artifact: 'art-2' }, { viewer: '2' }, { viewer: 'anonymous' }]) {
     const other = await load({ store, ...options });
     await other.trigger.click();
-    assert.equal(other.prompt.hidden, false, 'another artifact/viewer still asks');
+    assert.equal(other.prompt.open, true, 'another artifact/viewer still asks');
     assert.equal(other.tabs.length, 0);
   }
 });
@@ -173,7 +177,7 @@ for (const failure of ['getItem', 'setItem']) {
     assert.equal(page.tabs[0].location, page.openURL);
     const reload = await load({ store });
     await reload.trigger.click();
-    assert.equal(reload.prompt.hidden, false);
+    assert.equal(reload.prompt.open, true);
   });
 }
 
@@ -183,7 +187,7 @@ test('blocked popups leave a retryable dialog, make one attempt, and do not reme
   page.checkbox.checked = true;
   await page.confirm.click();
   assert.equal(page.tabs.length, 1);
-  assert.equal(page.prompt.hidden, false);
+  assert.equal(page.prompt.open, true);
   assert.match(page.byId('direct-open-status').textContent, /blocked/);
   assert.equal(page.confirm.disabled, false);
   assert.equal(page.store.values.size, 0);
@@ -199,12 +203,12 @@ for (const [kind, request] of [
     await page.postFromFrame({ ...request, artifactId: 'art-1' });
     page.byId(`${kind}-allow`).focus();
     const allowing = page.byId(`${kind}-allow`).click();
-    assert.equal(page.prompt.hidden, false);
+    assert.equal(page.prompt.open, true);
     assert.equal(page.tabs.length, 0);
     assert.deepEqual(page.api.calls, []);
     page.pressKey('Escape');
     await allowing;
-    assert.equal(page.byId(`${kind}-modal`).hidden, false);
+    assert.equal(kind === 'media' ? page.byId(`${kind}-modal`).open : !page.byId(`${kind}-modal`).hidden, true);
     assert.equal(page.document.activeElement, page.byId(`${kind}-allow`));
     assert.equal(page.tabs.length, 0);
     assert.deepEqual(page.api.calls, []);
@@ -213,14 +217,14 @@ for (const [kind, request] of [
     await retrying;
     assert.equal(page.tabs.length, 1);
     assert.equal(page.tabs[0].location, page.openURL);
-    assert.equal(page.byId(`${kind}-modal`).hidden, true);
+    assert.equal(kind === 'media' ? page.byId(`${kind}-modal`).open : !page.byId(`${kind}-modal`).hidden, false);
   });
 }
 
 test('frame reloads bypass the gate and never create a tab', async () => {
   const page = await load();
   await page.byId('state-changed-reload').click();
-  assert.equal(page.prompt.hidden, true);
+  assert.equal(page.prompt.open, false);
   assert.equal(page.tabs.length, 0);
   assert.ok(page.frame.src.startsWith(page.openURL + '?r='));
 });
@@ -239,7 +243,7 @@ test('agent opens after creation and swaps use current artifact and share detail
   const store = storage();
   const page = await load({ artifact: '', store });
   const trigger = await clickAgentOpen(page, 'created');
-  assert.equal(page.prompt.hidden, false);
+  assert.equal(page.prompt.open, true);
   await page.cancel.click();
   assert.equal(page.document.activeElement, trigger);
   assert.equal(page.tabs.length, 0);
@@ -249,12 +253,12 @@ test('agent opens after creation and swaps use current artifact and share detail
   assert.equal(page.tabs.at(-1).location, '/artifacts/created/open');
   assert.equal(page.tabs.at(-1).opener, null);
   await clickAgentOpen(page, 'created');
-  assert.equal(page.prompt.hidden, true, 'replacement button uses remembered choice');
+  assert.equal(page.prompt.open, false, 'replacement button uses remembered choice');
   const detail = await load({ artifact: 'created', store });
   await detail.trigger.click();
-  assert.equal(detail.prompt.hidden, true, 'detail shares the agent preference');
+  assert.equal(detail.prompt.open, false, 'detail shares the agent preference');
   await clickAgentOpen(page, 'different');
-  assert.equal(page.prompt.hidden, false, 'different artifact still asks');
+  assert.equal(page.prompt.open, true, 'different artifact still asks');
   page.checkbox.checked = true;
   // Even if the preview changes while asking, confirm the artifact named by
   // the clicked control and never remember its choice against the next one.
@@ -262,7 +266,7 @@ test('agent opens after creation and swaps use current artifact and share detail
   await page.confirm.click();
   assert.equal(page.tabs.at(-1).location, '/artifacts/different/open');
   await clickAgentOpen(page, 'next');
-  assert.equal(page.prompt.hidden, false);
+  assert.equal(page.prompt.open, true);
 });
 
 test('agent uses a choice remembered from detail and restores focus after a preview swap', async () => {
@@ -273,7 +277,7 @@ test('agent uses a choice remembered from detail and restores focus after a prev
   await detail.confirm.click();
   const agent = await load({ artifact: '', store });
   await clickAgentOpen(agent, 'art-1');
-  assert.equal(agent.prompt.hidden, true);
+  assert.equal(agent.prompt.open, false);
   assert.equal(agent.tabs.at(-1).location, detail.openURL);
   const old = await clickAgentOpen(agent, 'other');
   old.isConnected = false;

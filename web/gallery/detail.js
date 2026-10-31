@@ -646,6 +646,17 @@ document.getElementById('link-allow').addEventListener('click', async function()
 // getUserMedia rejects promptly rather than hanging on a stream that is never
 // coming.
 let pendingMedia = null;
+const mediaDialog = document.getElementById('media-modal');
+function denyPendingMedia() {
+  const req = pendingMedia;
+  pendingMedia = null;
+  if (req) replyMedia(req, false, 'Permission denied', 'NotAllowedError');
+}
+for (const event of ['modal:closed', 'modal:disconnected']) mediaDialog.addEventListener(event, denyPendingMedia);
+document.addEventListener('exhibit:preview-reloaded', () => {
+  pendingMedia = null;
+  mediaDialog.dispatchEvent(new CustomEvent('exhibit:modal-close'));
+});
 
 // Prose for the devices a request named, for the prompt.
 function mediaDeviceLabel(req) {
@@ -658,7 +669,7 @@ window.addEventListener('message', function(e) {
   if (!d || d.__avMedia !== true || d.artifactId !== ID) return;
   const frame = document.querySelector('iframe');
   if (!frame || e.source !== frame.contentWindow) return;
-  const req = { id: String(d.id), audio: !!d.audio, video: !!d.video };
+  const req = { id: String(d.id), audio: !!d.audio, video: !!d.video, frame, generation: previewGeneration };
   if (!req.audio && !req.video) return;
   // Approved means approved for every device this request named: a camera-only
   // grant must still prompt when the artifact later asks for the microphone.
@@ -667,7 +678,7 @@ window.addEventListener('message', function(e) {
     // Nothing to decide — the grant is already there, it just cannot be spent
     // in this frame. Ask the frame to raise the banner, which offers the
     // top-level render, and settle the call.
-    replyMedia(req.id, true, 'Capture devices are unavailable in the embedded preview; open the artifact directly',
+    replyMedia(req, true, 'Capture devices are unavailable in the embedded preview; open the artifact directly',
       'NotSupportedError');
     return;
   }
@@ -680,20 +691,20 @@ window.addEventListener('message', function(e) {
   // its own permission on the machine the camera is attached to. That second
   // gate is why an approved artifact is not a device grant, and why nothing
   // here needs to say more than "no".
-  if (!mayApprove()) {
-    replyMedia(req.id, false, 'Permission denied', 'NotAllowedError');
+  if (!mayApprove() || !mediaDialog.isConnected) {
+    replyMedia(req, false, 'Permission denied', 'NotAllowedError');
     return;
   }
   // A second request arriving while the prompt is open displaces the first, so
   // settle the one being displaced rather than leaving its getUserMedia promise
   // pending forever — an artifact that never settles looks like a hang, which is
   // the failure mode this gate exists to remove.
-  if (pendingMedia) replyMedia(pendingMedia.id, false, 'Permission denied', 'NotAllowedError');
+  if (pendingMedia) replyMedia(pendingMedia, false, 'Permission denied', 'NotAllowedError');
   pendingMedia = req;
   document.getElementById('media-devices').textContent = mediaDeviceLabel(req);
   document.getElementById('media-icon').className = req.video ? 'ph ph-camera' : 'ph ph-microphone';
-  document.getElementById('media-modal').hidden = false;
-  document.getElementById('media-block').focus();
+  mediaDialog.querySelector('[data-permission-status]').textContent = '';
+  mediaDialog.dispatchEvent(new CustomEvent('exhibit:modal-open', { detail: { trigger: frame } }));
 });
 
 // Settles one pending getUserMedia inside the frame. targetOrigin is '*'
@@ -701,11 +712,11 @@ window.addEventListener('message', function(e) {
 // unsupported-capability banner (the frame owns that channel, so there is one
 // path to it rather than two); every reply is a rejection, since there is no
 // stream to return.
-function replyMedia(id, banner, error, name) {
-  const frame = document.querySelector('iframe');
-  if (!frame) return;
+function replyMedia(req, banner, error, name) {
+  if (!currentPreviewRequest(req)) return;
+  const frame = req.frame;
   frame.contentWindow.postMessage(
-    { __avMediaResult: true, id: id, ok: false, banner: banner, error: error, name: name }, '*'
+    { __avMediaResult: true, id: req.id, ok: false, banner: banner, error: error, name: name }, '*'
   );
 }
 
@@ -713,45 +724,26 @@ function replyMedia(id, banner, error, name) {
 // a dictation tool approved for a microphone never comes away with a camera.
 async function setMediaApproved(req) {
   if (req.video && !cameraApproved) {
-    if (!(await setCapabilityApproved('camera_approved', true, 'camera'))) return false;
+    if (!(await setCapabilityApproved('camera_approved', true, 'camera', () => pendingMedia === req && currentPreviewRequest(req)))) return false;
     cameraApproved = true;
   }
   if (req.audio && !microphoneApproved) {
-    if (!(await setCapabilityApproved('microphone_approved', true, 'microphone'))) return false;
+    if (!(await setCapabilityApproved('microphone_approved', true, 'microphone', () => pendingMedia === req && currentPreviewRequest(req)))) return false;
     microphoneApproved = true;
   }
   return true;
 }
 
-// deny=true settles the pending call so the artifact's getUserMedia rejects
-// with the DOMException a blocked call throws, instead of hanging.
-function closeMediaModal(deny) {
-  document.getElementById('media-modal').hidden = true;
-  if (deny && pendingMedia) replyMedia(pendingMedia.id, false, 'Permission denied', 'NotAllowedError');
-  pendingMedia = null;
-  const frame = document.querySelector('iframe');
-  if (frame) frame.focus();
-}
-
-document.getElementById('media-block').addEventListener('click', function() { closeMediaModal(true); });
-document.getElementById('media-modal').addEventListener('click', function(e) {
-  if (e.target.id === 'media-modal') closeMediaModal(true);
-});
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape' && !document.getElementById('media-modal').hidden) closeMediaModal(true);
-});
 document.getElementById('media-allow').addEventListener('click', async function() {
   const req = pendingMedia;
-  if (!req) return;
-  // Only settle the transaction if the pending request is still the one the
-  // user approved — a dismissal or a newer request must not be answered by
-  // opening a tab for this one after the fact.
-  if (!(await approveAndOpenDirectly(() => setMediaApproved(req), () => pendingMedia === req))) return;
-  document.getElementById('media-modal').hidden = true;
+  if (!req || req.confirming) return;
+  req.confirming = true;
+  const opened = await approveAndOpenDirectly(() => setMediaApproved(req), () => pendingMedia === req && currentPreviewRequest(req), document.getElementById('media-allow'));
+  req.confirming = false;
+  if (!opened || pendingMedia !== req || !currentPreviewRequest(req)) return;
   pendingMedia = null;
-  document.querySelector('iframe')?.focus();
-  // No banner: the user is already looking at the place the grant works.
-  replyMedia(req.id, false,
+  mediaDialog.dispatchEvent(new CustomEvent('exhibit:modal-close'));
+  replyMedia(req, false,
     'Capture devices are unavailable in the embedded preview; the artifact was opened directly',
     'NotSupportedError');
 });
@@ -759,10 +751,10 @@ document.getElementById('media-allow').addEventListener('click', async function(
 // Both capability gates request the same app-origin confirmation as the
 // toolbar and banner. The module owns the user gesture, placeholder tab and
 // browser preference; this legacy script retains the capability transaction.
-function approveAndOpenDirectly(approve, stillPending) {
+function approveAndOpenDirectly(approve, stillPending, trigger) {
   return new Promise(function (resolve) {
     document.dispatchEvent(new CustomEvent('exhibit:open-directly', {
-      detail: { approve, stillPending, resolve }
+      detail: { approve, stillPending, trigger, resolve }
     }));
   });
 }

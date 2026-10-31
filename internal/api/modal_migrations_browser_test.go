@@ -498,3 +498,32 @@ func TestLinkModalBrowser(t *testing.T) {
 		})
 	}
 }
+
+func TestMediaModalBrowser(t *testing.T) {
+	for _, width := range []int64{1280, 390} {
+		t.Run(fmt.Sprint(width), func(t *testing.T) {
+			b, _ := newPermissionViewer(t, width, false)
+			report := `permissionReport({__avMedia:true,id:'camera',video:true,audio:false})`
+			b.dialogCycle("#media-modal", report, "#media-block")
+			b.eval(report)
+			b.capture("Exh-w432", width)
+			b.run(chromedp.Click(chromedp.CSS(`#media-allow`)))
+			b.wait(`document.getElementById('direct-open-modal').open`)
+			b.run(chromedp.KeyEvent(kb.Escape))
+			b.wait(`!document.getElementById('direct-open-modal').open`)
+			b.check(`document.getElementById('media-modal').open && document.activeElement.id==='media-allow'`)
+			b.eval(`window.tabs=[];window.writes=[];window.open=()=>{const tab={opener:window,location:null,closed:false,close(){this.closed=true}};tabs.push(tab);return tab};window.savedFetch=window.fetch;window.fetch=(url,opts)=>{if(opts?.method==='PATCH')writes.push(JSON.parse(opts.body));return savedFetch(url,opts)};permissionReplies=[]`)
+			b.run(chromedp.Click(chromedp.CSS(`#media-allow`)))
+			b.wait(`document.getElementById('direct-open-modal').open`)
+			b.run(chromedp.Click(chromedp.CSS(`#direct-open-confirm`)))
+			b.wait(`permissionReplies.length===1`)
+			b.check(`writes.length===1 && writes[0].camera_approved===true && permissionReplies[0].id==='camera' && permissionReplies[0].name==='NotSupportedError' && tabs[0].opener===null && !document.getElementById('media-modal').open`)
+			b.eval(`permissionReport({__avMedia:true,id:'mic',audio:true,video:false})`)
+			b.wait(`document.getElementById('media-modal').open`)
+			b.check(`document.getElementById('media-devices').textContent==='your microphone' && document.getElementById('media-icon').classList.contains('ph-microphone')`)
+			b.run(chromedp.KeyEvent(kb.Escape))
+			b.wait(`permissionReplies.length===2`)
+			b.check(`permissionReplies[1].id==='mic' && permissionReplies[1].name==='NotAllowedError'`)
+		})
+	}
+}
