@@ -19,7 +19,6 @@ function initializeSharePanel() {
   let needsRefresh = false;
   let recipients = '';
   let composing = false;
-  let focusAfterRefresh = '';
   let mutationStatus = '';
   const disclosureState = new Map();
   let peopleScrollTop = 0;
@@ -55,8 +54,10 @@ function initializeSharePanel() {
     dialog.pending = false;
     // A failed refresh leaves stale settings locked, but Done becomes usable.
     byId('share-body').disabled = needsRefresh;
-    if (!needsRefresh && panel.open && focusAfterRefresh) byId(focusAfterRefresh)?.focus();
-    focusAfterRefresh = '';
+    if (panel.open) {
+      const focus = needsRefresh ? null : byId('share-add-input');
+      (focus || byId('share-close')).focus();
+    }
   }
 
   panel.addEventListener('modal:closed', () => {
@@ -80,10 +81,9 @@ function initializeSharePanel() {
   }
   const post = (body) => request('/api/shares', { method: 'POST', body: JSON.stringify(body) });
 
-  async function mutate(operation, failureMessage, focus = '') {
+  async function mutate(operation, failureMessage) {
     if (dialog.pending || needsRefresh) return;
     dialog.pending = true;
-    focusAfterRefresh = focus;
     status('Saving changes…');
     try {
       const message = await operation();
@@ -139,7 +139,7 @@ function initializeSharePanel() {
       }
       recipients = unresolved.join(', ');
       return errors.length ? 'Check these names: ' + errors.join('; ') + '.' : '';
-    }, 'Could not grant access. Your names are still in the field; try again.', 'share-add-input');
+    }, 'Could not grant access. Your names are still in the field; try again.');
   });
 
   panel.addEventListener('change', function(e) {
@@ -237,7 +237,6 @@ function initializeSharePanel() {
       // An error fragment has no settings to restore or recipient field.
       recipients = '';
       composing = false;
-      focusAfterRefresh = 'share-close';
       mutationStatus = '';
       status('');
       finishRefresh();

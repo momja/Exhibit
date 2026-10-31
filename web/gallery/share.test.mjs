@@ -55,6 +55,7 @@ async function loadShare({ link = '', stateMode = 'own', responses = [] } = {}) 
   const people = { scrollTop: 0 };
   panel.querySelector = (selector) => selector === '.share-people-list' ? people
     : selector === '.share-cols' ? { dataset: { artifactId: ID } }
+    : selector === '[autofocus]' ? page.document.getElementById('share-add-input')
     : selector.startsWith('#') ? page.document.getElementById(selector.slice(1)) : null;
   const click = (id, icon = false) => {
     const button = page.byId(id);
@@ -105,8 +106,12 @@ async function loadShare({ link = '', stateMode = 'own', responses = [] } = {}) 
     page.byId('share-widget-details').open = false;
     page.byId('state-how-it-works').open = false;
     people.scrollTop = 0;
+    // Swapping the focused working copy moves native focus out of the panel.
+    panel.contains = element => [panel, page.byId('share-add-input'), page.byId('share-close')].includes(element);
+    page.byId('outside').focus();
     await panel.dispatchEvent({ type: 'htmx:after:swap', target: page.byId('share-body') });
     await settle();
+    panel.contains = () => true;
   };
   const refreshError = async (status = 500) => {
     let prevented = false;
@@ -355,6 +360,7 @@ test('a missing-artifact fragment replaces stale controls and Done remains usabl
   page.document.getElementById = (id) => absent.has(id) ? null : page.byId(id);
   page.panel.querySelectorAll = () => [];
   page.panel.querySelector = selector => selector === '#share-state-mode' ? null
+    : selector === '[autofocus]' ? page.document.getElementById('share-add-input')
     : selector.startsWith('#') ? page.document.getElementById(selector.slice(1)) : null;
   await page.panel.dispatchEvent({ type: 'htmx:after:swap', target: page.byId('share-body') });
   await page.settle();

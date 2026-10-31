@@ -170,6 +170,7 @@ func TestShareModalBrowser(t *testing.T) {
 			b.eval(`document.getElementById('share-add-input').value='unfinished';document.getElementById('share-add-input').dispatchEvent(new Event('input',{bubbles:true})); document.getElementById('state-how-it-works').open=true;document.getElementById('share-state-shared').click()`)
 			b.wait(`document.getElementById('share-state-mode').dataset.savedMode==='shared' && !document.getElementById('share-close').disabled`)
 			b.check(`document.getElementById('share-panel').open && document.getElementById('share-add-input').value==='unfinished' && document.getElementById('state-how-it-works').open`)
+			b.check(`document.getElementById('share-panel').contains(document.activeElement)`)
 			b.eval(`document.getElementById('share-close').click()`)
 			b.wait(`!document.getElementById('share-panel').open`)
 			// Short-window content, including Done, remains reachable by scrolling.

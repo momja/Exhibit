@@ -66,7 +66,7 @@ document.getElementById('share-close').click();document.getElementById('share-ad
 	b.wait(`document.getElementById('share-close').disabled && document.getElementById('share-status').textContent.includes('Changes saved')`)
 	failed <- 500
 	b.wait(`!document.getElementById('share-close').disabled && document.getElementById('share-status').textContent.includes('could not refresh')`)
-	b.check(`document.getElementById('share-body').disabled && document.getElementById('share-add-input').value==='typo'`)
+	b.check(`document.getElementById('share-body').disabled && document.getElementById('share-add-input').value==='typo' && document.activeElement.id==='share-close'`)
 	b.eval(`document.getElementById('share-link-toggle').checked=false;document.getElementById('share-link-toggle').dispatchEvent(new Event('change',{bubbles:true}))`)
 	b.check(`shareCalls.length===2`)
 	b.eval(`document.getElementById('share-close').click();document.getElementById('share-open').click()`)
