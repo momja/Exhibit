@@ -3,18 +3,20 @@
  * that refresh so a second action cannot use an obsolete share id or mode.
  */
 import { apiFetch } from './api-module.js';
+import { modalFor } from './modal.js';
 
 function initializeSharePanel() {
   const panel = document.getElementById('share-panel');
   if (!panel) return;
+  const dialog = modalFor(panel);
   const artifactID = panel.querySelector('.share-cols').dataset.artifactId;
-  const byId = (id) => document.getElementById(id);
+  const byId = (id) => panel.querySelector('#' + id);
   const readSaved = () => ({
     mode: byId('share-state-mode').dataset.savedMode,
     linkID: byId('share-link-toggle').dataset.shareId || ''
   });
   let saved = readSaved();
-  let busy = false;
+  let finishRefresh;
   let needsRefresh = false;
   let recipients = '';
   let composing = false;
@@ -25,13 +27,6 @@ function initializeSharePanel() {
 
   function status(message) {
     byId('share-status').textContent = message;
-  }
-
-  function controls() {
-    panel.querySelectorAll('#share-body input, #share-body button').forEach((control) => {
-      control.disabled = busy || needsRefresh;
-    });
-    byId('share-close').disabled = busy;
   }
 
   function restoreFields() {
@@ -50,23 +45,32 @@ function initializeSharePanel() {
     });
   }
 
-  function refresh() {
-    rememberDisclosures();
-    needsRefresh = true;
-    busy = true;
-    controls();
-    document.body.dispatchEvent(new CustomEvent('exhibit:shares-changed'));
+  async function refresh(operation) {
+    const completed = await dialog.run(async () => {
+      if (operation) await operation();
+      rememberDisclosures();
+      needsRefresh = true;
+      await new Promise(resolve => {
+        finishRefresh = resolve;
+        document.body.dispatchEvent(new CustomEvent('exhibit:shares-changed'));
+      });
+      return true;
+    });
+    if (!completed) return;
+    // A failed refresh leaves stale settings locked, but Done becomes usable.
+    byId('share-body').disabled = needsRefresh;
+    if (!needsRefresh && panel.open && focusAfterRefresh) byId(focusAfterRefresh)?.focus();
+    focusAfterRefresh = '';
   }
 
-  panel.addEventListener('modal:before-close', event => { if (busy) event.preventDefault(); });
   panel.addEventListener('modal:closed', () => {
     recipients = '';
     composing = false;
     const input = byId('share-add-input');
     if (input) input.value = '';
   });
-  byId('share-open').addEventListener('click', event => {
-    panel.dispatchEvent(new CustomEvent('exhibit:modal-open', { detail: { trigger: event.currentTarget } }));
+  document.getElementById('share-open').addEventListener('click', event => {
+    dialog.show(event.currentTarget);
     if (needsRefresh) refresh();
     else status('');
   });
@@ -80,24 +84,22 @@ function initializeSharePanel() {
   }
   const post = (body) => request('/api/shares', { method: 'POST', body: JSON.stringify(body) });
 
-  async function mutate(operation, failureMessage, focus = '') {
-    if (busy || needsRefresh) return;
-    busy = true;
+  function mutate(operation, failureMessage, focus = '') {
+    if (dialog.pending || needsRefresh) return;
     focusAfterRefresh = focus;
-    controls();
-    status('Saving changes…');
-    try {
-      const message = await operation();
-      mutationStatus = message || '✓ Changes saved';
+    return refresh(async () => {
+      status('Saving changes…');
+      try {
+        const message = await operation();
+        mutationStatus = message || '✓ Changes saved';
+      } catch (error) {
+        mutationStatus = failureMessage;
+        // Even a failed bulk grant may have saved some names before its error.
+        // Reconcile with the server and retain the input for a safe retry.
+        restoreFields();
+      }
       status(mutationStatus);
-    } catch (error) {
-      mutationStatus = failureMessage;
-      status(mutationStatus);
-      // Even a failed bulk grant may have saved some names before its error.
-      // Reconcile with the server and retain the input for a safe retry.
-      restoreFields();
-    }
-    refresh();
+    });
   }
 
   // The single text field uses native implicit form submission: desktop Enter
@@ -114,14 +116,14 @@ function initializeSharePanel() {
         (composing || e.isComposing || e.keyCode === 229)) e.preventDefault();
   });
   panel.addEventListener('input', function(e) {
-    if (e.target.id !== 'share-add-input' || busy || needsRefresh) return;
+    if (e.target.id !== 'share-add-input' || dialog.pending || needsRefresh) return;
     recipients = e.target.value;
     status('');
   });
   panel.addEventListener('submit', function(e) {
     if (e.target.id !== 'share-add-form') return;
     e.preventDefault();
-    if (composing || busy || needsRefresh) return;
+    if (composing || dialog.pending || needsRefresh) return;
     recipients = byId('share-add-input').value;
     const names = [...new Map(recipients.split(/[,\n]+/).map((name) => name.trim())
       .filter(Boolean).map((name) => [name.toLowerCase(), name])).values()];
@@ -145,7 +147,7 @@ function initializeSharePanel() {
   });
 
   panel.addEventListener('change', function(e) {
-    if (busy || needsRefresh) {
+    if (dialog.pending || needsRefresh) {
       restoreFields();
       return;
     }
@@ -188,7 +190,7 @@ function initializeSharePanel() {
   }
 
   panel.addEventListener('click', function(e) {
-    if (busy || needsRefresh) return;
+    if (dialog.pending || needsRefresh) return;
     const target = e.target;
     const revoke = target.closest ? target.closest('[data-action="revoke"]') : null;
     if (revoke) {
@@ -214,9 +216,9 @@ function initializeSharePanel() {
   // retry the GET without replaying the mutation. A 404 replaces stale controls
   // with the server's missing-artifact notice.
   function refreshFailed() {
-    busy = false;
     needsRefresh = true;
-    controls();
+    finishRefresh?.();
+    finishRefresh = null;
     status('The sharing panel could not refresh. Close and reopen it to retry.');
   }
   panel.addEventListener('htmx:after:request', function(e) {
@@ -235,17 +237,16 @@ function initializeSharePanel() {
   });
   panel.addEventListener('htmx:after:swap', function(e) {
     if (e.target.id !== 'share-body') return;
-    busy = false;
     needsRefresh = false;
     if (!byId('share-state-mode')) {
       // An error fragment has no settings to restore or recipient field.
       recipients = '';
       composing = false;
-      focusAfterRefresh = '';
+      focusAfterRefresh = 'share-close';
       mutationStatus = '';
       status('');
-      controls();
-      if (panel.open) byId('share-close').focus();
+      finishRefresh?.();
+      finishRefresh = null;
       return;
     }
     saved = readSaved();
@@ -257,9 +258,8 @@ function initializeSharePanel() {
     }
     const people = panel.querySelector('.share-people-list');
     if (people) people.scrollTop = peopleScrollTop;
-    controls();
-    if (panel.open && focusAfterRefresh) byId(focusAfterRefresh).focus();
-    focusAfterRefresh = '';
+    finishRefresh?.();
+    finishRefresh = null;
   });
 }
 

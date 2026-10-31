@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadPageScript, recordingApi } from './testdom.mjs';
+import { loadPageScript, recordingApi, nativeDialog } from './testdom.mjs';
 
 const SHARE_JS = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../internal/api/assets/gallery/share.js');
 const ID = 'art-1';
@@ -32,40 +32,54 @@ async function loadShare({ link = '', stateMode = 'own', responses = [] } = {}) 
   });
   page.document.body.addEventListener('exhibit:shares-changed', () => events.push('changed'));
   const panel = page.byId('share-panel');
-  panel.addEventListener('exhibit:modal-open', () => { panel.open = true; });
+  // Real DOM events do not await async handlers. Let requests settle while
+  // the feature's promise continues to wait for the separately driven swap.
+  const errors = [];
+  const settle = async () => {
+    await new Promise(resolve => setTimeout(resolve, 0));
+    if (errors.length) throw errors.shift();
+  };
+  const dispatch = (element, event) => {
+    element.dispatchEvent(event).catch(error => errors.push(error));
+    return settle();
+  };
   const controls = ['share-add-input', 'share-state-own', 'share-state-shared', 'share-link-toggle', 'share-link-replace']
     .map(page.byId);
-  panel.querySelectorAll = () => controls;
+  const body = page.byId('share-body');
+  body.disabled = false;
+  page.byId('share-close').disabled = false;
+  panel.querySelectorAll = () => [body, page.byId('share-close')];
+  nativeDialog(page, panel, [body, page.byId('share-close')]);
+  panel.open = true;
+  page.byId('share-open').isConnected = true;
   const people = { scrollTop: 0 };
   panel.querySelector = (selector) => selector === '.share-people-list' ? people
-    : selector === '.share-cols' ? { dataset: { artifactId: ID } } : null;
+    : selector === '.share-cols' ? { dataset: { artifactId: ID } }
+    : selector.startsWith('#') ? page.document.getElementById(selector.slice(1)) : null;
   const click = (id, icon = false) => {
     const button = page.byId(id);
     const target = icon ? { closest: () => button } : Object.assign(button, { closest: () => button });
-    if (id === 'share-close') {
-      const event = new Event('modal:before-close', { cancelable: true });
-      return panel.dispatchEvent(event).then(() => {
-        if (!event.defaultPrevented) { panel.open = false; return panel.dispatchEvent({type:'modal:closed'}); }
-      });
-    }
-    if (id === 'share-open') return button.dispatchEvent({ type: 'click', target: button, currentTarget: button });
+    if (id === 'share-close') return dispatch(panel, { type: 'click', target: {
+      closest: selector => selector === '[data-modal-dismiss]' ? button : null
+    } });
+    if (id === 'share-open') return dispatch(button, { type: 'click', target: button, currentTarget: button });
     target.closest = (selector) => selector === 'button' ? button : null;
-    return panel.dispatchEvent({ type: 'click', target });
+    return dispatch(panel, { type: 'click', target });
   };
   const mode = (value) => {
     page.byId('share-state-own').checked = value === 'own';
     page.byId('share-state-shared').checked = value === 'shared';
-    return panel.dispatchEvent({ type: 'change', target: { name: 'share-state-mode', value } });
+    return dispatch(panel, { type: 'change', target: { name: 'share-state-mode', value } });
   };
   const linkOn = (checked) => {
     page.byId('share-link-toggle').checked = checked;
-    return panel.dispatchEvent({ type: 'change', target: page.byId('share-link-toggle') });
+    return dispatch(panel, { type: 'change', target: page.byId('share-link-toggle') });
   };
   const names = (value) => {
     page.byId('share-add-input').value = value;
-    return panel.dispatchEvent({ type: 'input', target: page.byId('share-add-input') });
+    return dispatch(panel, { type: 'input', target: page.byId('share-add-input') });
   };
-  const submit = () => panel.dispatchEvent({ type: 'submit', target: page.byId('share-add-form'), preventDefault() {} });
+  const submit = () => dispatch(panel, { type: 'submit', target: page.byId('share-add-form'), preventDefault() {} });
   const enter = async (options = {}) => {
     let prevented = false;
     await panel.dispatchEvent({ type: 'keydown', key: 'Enter', target: page.byId('share-add-input'),
@@ -74,7 +88,7 @@ async function loadShare({ link = '', stateMode = 'own', responses = [] } = {}) 
     if (!prevented) await submit();
   };
   const composition = (type) => panel.dispatchEvent({ type, target: page.byId('share-add-input') });
-  const revoke = (recipientId) => panel.dispatchEvent({ type: 'click', target: {
+  const revoke = (recipientId) => dispatch(panel, { type: 'click', target: {
     closest: (selector) => selector === '[data-action="revoke"]' ? { dataset: { recipientId } } : null
   } });
   const refresh = async (saved = {}) => {
@@ -91,17 +105,19 @@ async function loadShare({ link = '', stateMode = 'own', responses = [] } = {}) 
     page.byId('share-widget-details').open = false;
     page.byId('state-how-it-works').open = false;
     people.scrollTop = 0;
-    return panel.dispatchEvent({ type: 'htmx:after:swap', target: page.byId('share-body') });
+    await panel.dispatchEvent({ type: 'htmx:after:swap', target: page.byId('share-body') });
+    await settle();
   };
   const refreshError = async (status = 500) => {
     let prevented = false;
     await panel.dispatchEvent({ type: 'htmx:after:request', target: page.byId('share-body'),
       detail: { ctx: { response: { status } } }, preventDefault() { prevented = true; } });
+    await settle();
     return prevented;
   };
   await page.loadModule(SHARE_JS);
   return { ...page, panel, api, events, copied, controls, people, click, mode, linkOn, names, enter, submit,
-    composition, revoke, refresh, refreshError };
+    composition, revoke, refresh, refreshError, settle };
 }
 
 test('Enter grants immediately; only htmx replaces the saved guest list', async () => {
@@ -115,10 +131,10 @@ test('Enter grants immediately; only htmx replaces the saved guest list', async 
   assert.deepEqual(page.events, ['changed']);
   assert.equal(page.byId('share-panel').open, true);
   assert.equal(page.byId('share-status').textContent, '✓ Changes saved');
-  assert.equal(page.byId('share-add-input').disabled, true);
+  assert.equal(page.byId('share-body').disabled, true);
   await page.refresh();
   assert.equal(page.byId('share-add-input').value, '');
-  assert.equal(page.byId('share-add-input').disabled, false);
+  assert.equal(page.byId('share-body').disabled, false);
   assert.equal(page.byId('share-add-input').focused, true);
   assert.strictEqual(page.byId('share-grants').children[0], serverRow);
 });
@@ -259,20 +275,21 @@ test('refresh failure preserves controls and reopening retries only the fragment
   assert.equal(await page.refreshError(), true, 'v4 error response must not replace the usable panel');
   assert.match(page.byId('share-status').textContent, /Close and reopen/);
   assert.equal(page.byId('share-close').disabled, false);
-  assert.equal(page.byId('share-link-toggle').disabled, true);
+  assert.equal(page.byId('share-body').disabled, true);
   await page.linkOn(false);
   await page.click('share-close');
   await page.click('share-open');
   assert.deepEqual(page.events, ['changed', 'changed']);
   assert.equal(page.api.calls.length, 1);
   await page.refresh({ link: 'public' });
-  assert.equal(page.byId('share-link-toggle').disabled, false);
+  assert.equal(page.byId('share-body').disabled, false);
 });
 
 test('network refresh errors also permit closing and retrying', async () => {
   const page = await loadShare();
   await page.mode('shared');
   await page.panel.dispatchEvent({ type: 'htmx:error', target: page.byId('share-body') });
+  await page.settle();
   assert.match(page.byId('share-status').textContent, /could not refresh/);
   await page.click('share-close');
   assert.equal(page.byId('share-panel').open, false);
@@ -337,8 +354,10 @@ test('a missing-artifact fragment replaces stale controls and Done remains usabl
     'share-add-input', 'share-link-toggle', 'state-how-it-works', 'share-widget-details']);
   page.document.getElementById = (id) => absent.has(id) ? null : page.byId(id);
   page.panel.querySelectorAll = () => [];
-  page.panel.querySelector = () => null;
+  page.panel.querySelector = selector => selector === '#share-state-mode' ? null
+    : selector.startsWith('#') ? page.document.getElementById(selector.slice(1)) : null;
   await page.panel.dispatchEvent({ type: 'htmx:after:swap', target: page.byId('share-body') });
+  await page.settle();
   assert.equal(page.byId('share-close').disabled, false);
   assert.equal(page.byId('share-close').focused, true);
   assert.equal(page.byId('share-status').textContent, '');

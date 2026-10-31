@@ -373,12 +373,16 @@ checks. Set `MODAL_SCREENSHOT_DIR="$PWD/docs/screenshots"` to refresh captures.
 [Tag editor desktop](screenshots/Exh-p3ah/1280.png) ·
 [Tag editor phone](screenshots/Exh-p3ah/390.png)
 
-Sharing uses the same controller on `#share-panel`; htmx replaces only its
-body. The sharing feature vetoes all close paths through `modal:before-close`
-until the mutation and reconciliation finish. Refresh errors release dismissal
-so reopening retries the fragment. Input/IME, disclosure and list scroll state
-remain feature-owned. Native dialog scrolling keeps Done reachable in short
+Sharing uses the same handle on `#share-panel`; htmx replaces only its body.
+Its native `#share-body` fieldset locks all settings as one working copy.
+`run` wraps a mutation plus a feature-owned promise that settles on the htmx
+swap or refresh failure. No second busy flag or dismissal guard is needed.
+After a failed refresh, the fieldset stays disabled because the settings are
+stale; Done is usable and reopening retries only the fragment. Input/IME,
+disclosure and list scroll state remain feature-owned. Native dialog scrolling keeps Done reachable in short
 windows. `TestShareModalBrowser` checks both viewport sizes and real swaps.
+`TestShareModalTransactionsBrowser` covers partial success, pending guards,
+failed/lost refresh recovery, stale link IDs, and reconnecting the feature root.
 
 [Sharing desktop](screenshots/Exh-9xfp/1280.png) ·
 [Sharing phone](screenshots/Exh-9xfp/390.png)

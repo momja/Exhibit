@@ -8,6 +8,7 @@ const required = new Set([
   'TestTagModalBrowser',
   'TestModalInterfaceBrowser',
   'TestShareModalBrowser',
+  'TestShareModalTransactionsBrowser',
 ]);
 for (const line of readFileSync(new URL('./artifacts/go-tests.jsonl', import.meta.url), 'utf8').split('\n').filter(Boolean)) {
   const event = JSON.parse(line);
