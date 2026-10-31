@@ -160,7 +160,7 @@ test("shared dismissal is a Block", async () => {
   const { byId, frame, pressKey, postFromFrame } = await loadDetail();
 
   await postFromFrame(geoRequest(1));
-  byId("geo-modal").dispatchEvent({type:"exhibit:modal-close"});
+  byId("geo-modal").dispatchEvent(new Event('cancel', { cancelable: true }));
 
   assert.equal(byId("geo-modal").open, false);
   assert.equal(answers(frame).length, 1);

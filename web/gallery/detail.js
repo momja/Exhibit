@@ -776,6 +776,7 @@ function approveAndOpenDirectly(approve, stillPending, trigger) {
 // could mistake a new request for the one the user approved.
 let pendingGeolocation = null;
 const geoDialog = document.getElementById('geo-modal');
+const geoModal = modalFor(geoDialog);
 function denyPendingGeolocation() {
   const req = pendingGeolocation;
   pendingGeolocation = null;
@@ -784,7 +785,7 @@ function denyPendingGeolocation() {
 for (const event of ['modal:closed', 'modal:disconnected']) geoDialog.addEventListener(event, denyPendingGeolocation);
 document.addEventListener('exhibit:preview-reloaded', () => {
   pendingGeolocation = null;
-  geoDialog.dispatchEvent(new CustomEvent('exhibit:modal-close'));
+  geoModal.close();
 });
 
 window.addEventListener('message', function(e) {
@@ -814,7 +815,7 @@ window.addEventListener('message', function(e) {
   if (pendingGeolocation) replyGeolocation(pendingGeolocation, false, 'User denied Geolocation');
   pendingGeolocation = req;
   geoDialog.querySelector('[data-permission-status]').textContent = '';
-  geoDialog.dispatchEvent(new CustomEvent('exhibit:modal-open', { detail: { trigger: frame } }));
+  geoModal.show(frame);
 });
 
 // Settles one pending geolocation request inside the frame, which then runs
@@ -841,7 +842,7 @@ document.getElementById('geo-allow').addEventListener('click', async function() 
   req.confirming = false;
   if (!opened || pendingGeolocation !== req || !currentPreviewRequest(req)) return;
   pendingGeolocation = null;
-  geoDialog.dispatchEvent(new CustomEvent('exhibit:modal-close'));
+  geoModal.close();
   replyGeolocation(req, false, 'Location is unavailable in the embedded preview; the artifact was opened directly');
 });
 

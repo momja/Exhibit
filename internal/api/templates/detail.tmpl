@@ -210,14 +210,14 @@
      lives in security.md §4: that delegation would spend the library's own
      location permission on the artifact's behalf. */}}
 <dialog id="geo-modal" class="modal-dialog" aria-labelledby="geo-title"
-  data-controller="modal" data-action="exhibit:modal-open->modal#open exhibit:modal-close->modal#dismiss cancel->modal#cancel click->modal#backdrop keydown->modal#wrapFocus">
+  data-controller="modal">
     <h2 id="geo-title">Allow location access?</h2>
     <p><strong>{{.Title}}</strong> wants to know your location.</p>
     <p>The embedded preview does not share your location with artifacts, so allowing opens the artifact in its own tab, where it can ask for it. Your browser will ask for its own permission there. The approval is remembered for this artifact and can be revoked at any time from its security settings.</p>
     <p data-permission-status role="status" aria-live="polite"></p>
     <div class="modal-actions">
       <span class="spacer"></span>
-      <button type="button" class="btn btn-sec" id="geo-block" data-modal-target="initialFocus" data-action="modal#dismiss">Block</button>
+      <button type="button" class="btn btn-sec" id="geo-block" autofocus data-modal-dismiss>Block</button>
       <button type="button" class="btn" id="geo-allow"><i class="ph ph-map-pin"></i> Allow and open</button>
     </div>
 </dialog>
