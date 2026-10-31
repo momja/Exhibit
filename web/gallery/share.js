@@ -58,28 +58,17 @@ function initializeSharePanel() {
     document.body.dispatchEvent(new CustomEvent('exhibit:shares-changed'));
   }
 
-  function close() {
-    if (busy) return;
+  panel.addEventListener('modal:before-close', event => { if (busy) event.preventDefault(); });
+  panel.addEventListener('modal:closed', () => {
     recipients = '';
     composing = false;
     const input = byId('share-add-input');
     if (input) input.value = '';
-    panel.hidden = true;
-    byId('share-open').focus();
-  }
-
-  byId('share-open').addEventListener('click', function() {
-    panel.hidden = false;
-    if (needsRefresh) refresh();
-    else {
-      status('');
-      (byId('share-add-input') || byId('share-close')).focus();
-    }
   });
-  byId('share-close').addEventListener('click', close);
-  panel.addEventListener('click', function(e) { if (e.target === panel) close(); });
-  document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape' && !panel.hidden) close();
+  byId('share-open').addEventListener('click', event => {
+    panel.dispatchEvent(new CustomEvent('exhibit:modal-open', { detail: { trigger: event.currentTarget } }));
+    if (needsRefresh) refresh();
+    else status('');
   });
 
   async function request(path, options) {
@@ -256,7 +245,7 @@ function initializeSharePanel() {
       mutationStatus = '';
       status('');
       controls();
-      if (!panel.hidden) byId('share-close').focus();
+      if (panel.open) byId('share-close').focus();
       return;
     }
     saved = readSaved();
@@ -269,7 +258,7 @@ function initializeSharePanel() {
     const people = panel.querySelector('.share-people-list');
     if (people) people.scrollTop = peopleScrollTop;
     controls();
-    if (!panel.hidden && focusAfterRefresh) byId(focusAfterRefresh).focus();
+    if (panel.open && focusAfterRefresh) byId(focusAfterRefresh).focus();
     focusAfterRefresh = '';
   });
 }

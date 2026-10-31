@@ -150,3 +150,34 @@ func TestTagModalBrowser(t *testing.T) {
 		})
 	}
 }
+
+func TestShareModalBrowser(t *testing.T) {
+	for _, width := range []int64{1280, 390} {
+		t.Run(fmt.Sprint(width), func(t *testing.T) {
+			ro := newTestRouter(t)
+			id := createTestArtifact(t, ro, "Sharing sample")
+			app := httptest.NewServer(ro)
+			defer app.Close()
+			ro.cfg.AppOrigin = app.URL
+			b := newModalBrowser(t, width)
+			b.run(chromedp.Navigate(app.URL + "/artifacts/" + id))
+			b.wait(`document.getElementById('share-open')`)
+			open := `document.getElementById('share-open').click()`
+			b.dialogCycle("#share-panel", open, "#share-add-input")
+			b.check(`document.activeElement.id==='share-open'`)
+			b.eval(open)
+			b.capture("Exh-9xfp", width)
+			b.eval(`document.getElementById('share-add-input').value='unfinished';document.getElementById('share-add-input').dispatchEvent(new Event('input',{bubbles:true})); document.getElementById('state-how-it-works').open=true;document.getElementById('share-state-shared').click()`)
+			b.wait(`document.getElementById('share-state-mode').dataset.savedMode==='shared' && !document.getElementById('share-close').disabled`)
+			b.check(`document.getElementById('share-panel').open && document.getElementById('share-add-input').value==='unfinished' && document.getElementById('state-how-it-works').open`)
+			b.eval(`document.getElementById('share-close').click()`)
+			b.wait(`!document.getElementById('share-panel').open`)
+			// Short-window content, including Done, remains reachable by scrolling.
+			_, err := chromedp.Call(b.ctx, emulation.SetDeviceMetricsOverride, emulation.SetDeviceMetricsOverrideParams{Width: width, Height: 400, DeviceScaleFactor: 1})
+			require.NoError(t, err)
+			b.eval(open)
+			b.eval(`document.getElementById('share-close').scrollIntoView()`)
+			b.check(`document.getElementById('share-close').getBoundingClientRect().bottom<=400 && document.getElementById('share-add-input').value===''`)
+		})
+	}
+}

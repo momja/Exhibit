@@ -19,7 +19,7 @@ async function loadShare({ link = '', stateMode = 'own', responses = [] } = {}) 
     ID: 'unused-page-global', apiFetch: api.apiFetch, CustomEvent,
     navigator: { clipboard: { writeText: async (text) => { copied.push(text); } } }
   }, {
-    'share-panel': { hidden: false },
+    'share-panel': { open: true },
     'share-add-input': { value: '' },
     'share-link-toggle': { dataset: link ? { shareId: link } : {}, checked: !!link },
     'share-state-mode': { dataset: { savedMode: stateMode } },
@@ -32,6 +32,7 @@ async function loadShare({ link = '', stateMode = 'own', responses = [] } = {}) 
   });
   page.document.body.addEventListener('exhibit:shares-changed', () => events.push('changed'));
   const panel = page.byId('share-panel');
+  panel.addEventListener('exhibit:modal-open', () => { panel.open = true; });
   const controls = ['share-add-input', 'share-state-own', 'share-state-shared', 'share-link-toggle', 'share-link-replace']
     .map(page.byId);
   panel.querySelectorAll = () => controls;
@@ -41,7 +42,13 @@ async function loadShare({ link = '', stateMode = 'own', responses = [] } = {}) 
   const click = (id, icon = false) => {
     const button = page.byId(id);
     const target = icon ? { closest: () => button } : Object.assign(button, { closest: () => button });
-    if (['share-close', 'share-open'].includes(id)) return button.dispatchEvent({ type: 'click', target: button });
+    if (id === 'share-close') {
+      const event = new Event('modal:before-close', { cancelable: true });
+      return panel.dispatchEvent(event).then(() => {
+        if (!event.defaultPrevented) { panel.open = false; return panel.dispatchEvent({type:'modal:closed'}); }
+      });
+    }
+    if (id === 'share-open') return button.dispatchEvent({ type: 'click', target: button, currentTarget: button });
     target.closest = (selector) => selector === 'button' ? button : null;
     return panel.dispatchEvent({ type: 'click', target });
   };
@@ -106,7 +113,7 @@ test('Enter grants immediately; only htmx replaces the saved guest list', async 
   assert.deepEqual(paths(page.api), ['POST /api/shares']);
   assert.deepEqual(JSON.parse(page.api.calls[0].body), { artifact_id: ID, recipients: ['alice'] });
   assert.deepEqual(page.events, ['changed']);
-  assert.equal(page.byId('share-panel').hidden, false);
+  assert.equal(page.byId('share-panel').open, true);
   assert.equal(page.byId('share-status').textContent, '✓ Changes saved');
   assert.equal(page.byId('share-add-input').disabled, true);
   await page.refresh();
@@ -179,7 +186,7 @@ test('the mutation lock prevents duplicates both during the API request and befo
   await page.revoke('42');
   await page.click('share-close');
   assert.equal(page.api.calls.length, 1);
-  assert.equal(page.byId('share-panel').hidden, false);
+  assert.equal(page.byId('share-panel').open, true);
   assert.equal(page.byId('share-close').disabled, true);
   resolve(grant('alice'));
   await first;
@@ -268,7 +275,7 @@ test('network refresh errors also permit closing and retrying', async () => {
   await page.panel.dispatchEvent({ type: 'htmx:error', target: page.byId('share-body') });
   assert.match(page.byId('share-status').textContent, /could not refresh/);
   await page.click('share-close');
-  assert.equal(page.byId('share-panel').hidden, true);
+  assert.equal(page.byId('share-panel').open, false);
 });
 
 test('unfinished input, list position, and open disclosures survive a fragment swap', async () => {
@@ -292,24 +299,11 @@ test('Done closes without replaying changes or keeping unsent names for the next
   await page.refresh({ stateMode: 'shared' });
   await page.names('unsent');
   await page.click('share-close');
-  assert.equal(page.byId('share-panel').hidden, true);
-  assert.equal(page.byId('share-open').focused, true);
+  assert.equal(page.byId('share-panel').open, false);
   await page.click('share-open');
   assert.equal(page.byId('share-add-input').value, '');
   assert.equal(page.byId('share-state-shared').checked, true);
   assert.deepEqual(paths(page.api), ['PATCH /api/artifacts/' + ID]);
-});
-
-test('Escape and backdrop close the idle panel; interior clicks keep it open', async () => {
-  const page = await loadShare();
-  await page.click('share-open');
-  page.pressKey('Escape');
-  assert.equal(page.byId('share-panel').hidden, true);
-  await page.click('share-open');
-  await page.panel.dispatchEvent({ type: 'click', target: { id: 'inside' } });
-  assert.equal(page.byId('share-panel').hidden, false);
-  await page.panel.dispatchEvent({ type: 'click', target: page.panel });
-  assert.equal(page.byId('share-panel').hidden, true);
 });
 
 test('both copy controls work when their Phosphor icon is clicked', async () => {
@@ -349,12 +343,12 @@ test('a missing-artifact fragment replaces stale controls and Done remains usabl
   assert.equal(page.byId('share-close').focused, true);
   assert.equal(page.byId('share-status').textContent, '');
   await page.click('share-close');
-  assert.equal(page.panel.hidden, true);
+  assert.equal(page.panel.open, false);
   await page.click('share-open');
-  assert.equal(page.panel.hidden, false);
+  assert.equal(page.panel.open, true);
   assert.deepEqual(page.events, ['changed'], 'reopening a missing artifact must not loop through retries');
-  page.pressKey('Escape');
-  assert.equal(page.panel.hidden, true);
+  await page.click('share-close');
+  assert.equal(page.panel.open, false);
 });
 
 test('concurrent grant and public-link revocations treat DELETE 404 as success', async () => {

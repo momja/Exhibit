@@ -31,10 +31,9 @@ body[data-pip-corner^=t] .pip-notices{top:auto;bottom:0}
 .allowlist code{background:var(--color-code-on-tint);padding:1px 5px;border-radius:3px;font-size:12px}
 .allowlist input{border:1px solid var(--color-border);border-radius:4px;padding:3px 8px;font-size:var(--field-font-size);width:240px;margin:0 6px}
 /* Owner-only sharing controls and static saved-data illustrations. */
-/* Center when the dialog fits; on short windows the backdrop owns scrolling,
-   so the title, content, and Done button remain one reachable surface. */
-#share-panel{align-items:flex-start;overflow-y:auto;padding:16px}
-#share-panel .share-modal{width:560px;max-width:100%;max-height:none;display:flex;flex:0 0 auto;flex-direction:column;margin:auto}
+/* Native top-layer dialog scrolls as one surface on short windows. */
+#share-panel{width:560px;max-height:calc(100dvh - 32px)}
+#share-panel[open]{display:flex;flex-direction:column}
 #share-title{display:flex;align-items:center;gap:8px;margin-bottom:var(--space-6);flex-shrink:0}
 #share-title .ph{flex-shrink:0}
 #share-body{overflow:visible;min-height:0}
@@ -106,7 +105,7 @@ body[data-pip-corner^=t] .pip-notices{top:auto;bottom:0}
 .share-col+.share-col{border-top:1px solid var(--color-hairline);padding-top:16px}
 /* The last guest row already supplies the section divider. */
 .share-col:has(.share-grant)+.share-col{border-top:0;padding-top:0}
-.modal .share-help{margin:0;font-size:12px;line-height:1.5;color:var(--color-ink-soft)}
+.share-modal .share-help{margin:0;font-size:12px;line-height:1.5;color:var(--color-ink-soft)}
 #share-panel .modal-actions{justify-content:flex-end;flex-wrap:nowrap;border-top:1px solid var(--color-hairline);padding-top:14px}
 #share-panel .modal-actions .btn{flex-shrink:0;min-height:36px;justify-content:center}
 #share-panel #share-status{flex:1;min-width:0;color:var(--color-ink-soft);overflow-wrap:anywhere}

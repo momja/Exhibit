@@ -372,3 +372,13 @@ checks. Set `MODAL_SCREENSHOT_DIR="$PWD/docs/screenshots"` to refresh captures.
 
 [Tag editor desktop](screenshots/Exh-p3ah/1280.png) ·
 [Tag editor phone](screenshots/Exh-p3ah/390.png)
+
+Sharing uses the same controller on `#share-panel`; htmx replaces only its
+body. The sharing feature vetoes all close paths through `modal:before-close`
+until the mutation and reconciliation finish. Refresh errors release dismissal
+so reopening retries the fragment. Input/IME, disclosure and list scroll state
+remain feature-owned. Native dialog scrolling keeps Done reachable in short
+windows. `TestShareModalBrowser` checks both viewport sizes and real swaps.
+
+[Sharing desktop](screenshots/Exh-9xfp/1280.png) ·
+[Sharing phone](screenshots/Exh-9xfp/390.png)
