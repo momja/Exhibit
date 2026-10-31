@@ -10,19 +10,18 @@ assignee: Max Omdal
 parent: Exh-17a5
 tags: [agent, mcp, auth, store]
 ---
-# Persisted, owner-issued artifact grants for external agents
+# Persisted, owner-issued library grants for external agents
 
-Durable counterpart to agentscope's process-lifetime grants, so an agent outside the server can hold an (owner, artifact) credential.
+Durable counterpart to agentscope's process-lifetime grants, so an agent outside the server can hold a credential for its owner's library (epic Exh-17a5, revised 2026-10-31).
 
-- New table (next free migration number, see technical_stack.md section 3): hashed token (never stored in clear), owner_id, artifact_id, label, created_at, last_used_at, expires_at (nullable). Cascades with the artifact and the owner; add to the account-deletion table audit.
-- Mint returns the plaintext token exactly once. Owner-only, session-only (not AUTH_TOKEN, not an agent grant, not a recipient).
-- authMiddleware gains a branch after the existing agent grant: a persisted grant resolves to the same agentscope.Scope and goes through agentScopeAllows unchanged. Never bindable to a different artifact; POST /api/artifacts (the unbound create) is not allowed for these.
-- Agent writes record origin=agent; message/session provenance comes from the grant label, not the request.
-- Routes: POST/GET/DELETE /api/artifacts/:id/agent-grants (owner-only, 404 for others). Not in agentSubResources, so a grant cannot mint or revoke grants.
-- UI: an "External agents" section on the artifact page (Go partial + htmx refresh on an exhibit:agent-grants-changed event) showing label, created, last used, revoke. Copy-once token display with the MCP config snippet.
-- Decide expiry default (proposal: none, matching shares; visibility instead of a timer).
+- Table agent_grants (next free migration number, see technical_stack.md section 3): id, token_hash (SHA-256, never stored in clear), owner_id, label, client (the OAuth client name, empty for a pasted token), created_at, last_used_at. No artifact_id. Removed with the owner (account deletion audit); no expiry, matching shares.
+- Mint returns the plaintext token exactly once. Session only (not AUTH_TOKEN unless the instance has no login, not an agent grant, not a recipient).
+- authMiddleware resolves a persisted grant to a library-scoped agentscope.Grant (owner, no artifact). agentScopeAllows gains a library mode: GET /api/artifacts (list/search), POST /api/artifacts (create), GET/PATCH /api/artifacts/:id and the agentSubResources on any artifact the owner owns (owner scoping in the store turns anything else into 404), GET /api/agent/credential. Refused: shares, grants, origins, versions/restore, DELETE of an artifact, tags/collections, account, admin, and every page route. Pi's one-artifact mode is unchanged.
+- PATCH by an agent keeps refusing share_state_mode (existing rule).
+- Agent writes record origin=agent; message is the grant label, session id is grant:<id>.
+- Routes: GET/POST /api/agent-grants, DELETE /api/agent-grants/:id (owner-only; another owner's id is 404). Not reachable by an agent credential.
+- UI: a "Connected agents" section on /profile (Go partial + htmx refresh on exhibit:agent-grants-changed): label, client, created, last used, revoke; copy-once token with the stdio config snippet (and the remote one when MCP_URL is set, story 3). The artifact page's "Connect your own agent" menu item is removed.
 
 ## Acceptance Criteria
 
-A minted token can GET/PATCH its artifact and its state/widget/assets per agentScopeAllows and nothing else; revoking it makes the next request 401; another owner's artifact id is 404; tokens are stored hashed; tests cover each refused route.
-
+A minted token can list/search, create, read and edit any of its owner's artifacts and their state/widget/assets; another owner's artifact is 404; an artifact shared with the owner is 404; shares, grants, origins, versions, deletion, account and admin routes are refused; revoking makes the next request 401; tokens are stored hashed; tests cover each refused route family.

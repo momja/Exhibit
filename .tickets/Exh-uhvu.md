@@ -1,7 +1,7 @@
 ---
 id: Exh-uhvu
-status: open
-deps: [Exh-l2xj]
+status: in_progress
+deps: [Exh-q6xo]
 links: []
 created: 2026-10-27T18:33:48Z
 type: feature
@@ -10,16 +10,15 @@ assignee: Max Omdal
 parent: Exh-17a5
 tags: [agent, mcp, api]
 ---
-# Remote /mcp endpoint with bearer grant token
+# The MCP service: exhibit-mcp serve
 
-Same tool surface as the stdio server, served in-process at APP_ORIGIN/mcp over Streamable HTTP, so clients that only speak remote MCP work without a local binary.
+The remote MCP endpoint as an optional satellite rather than part of the core binary (epic Exh-17a5 Architecture). Operators who do not want MCP run nothing and expose nothing.
 
-- Authenticates only with Authorization: Bearer <persisted grant>. Session cookies and AUTH_TOKEN are refused on /mcp (no ambient browser authority, no CSRF surface).
-- Tool handlers call the same internal handlers/store paths as the HTTP API (or loop back through the router) so the single write path holds; decide which in design.
-- Respect MAX_REQUEST_BODY_BYTES and the server's no-write-timeout listener; check Origin per the MCP transport spec.
-- Share the tool definitions with the stdio server.
+- `exhibit-mcp serve` serves the internal/mcpserver tools over Streamable HTTP. Config: EXHIBIT_URL (how the service reaches the core API, may be internal), MCP_PUBLIC_URL (its own public URL, the OAuth resource), listen address. It holds no database and no secrets.
+- Authenticates only with Authorization: Bearer <grant>; every request's token is verified by GET /api/agent/credential on the core (no caching, so revocation holds on the next request) and forwarded as the API credential for tool calls. The MCP session is bound to the grant id: a different grant cannot continue it. Cookies are never read. Check Origin per the MCP transport spec; bound request bodies.
+- Core: MCP_URL names the service's public URL. Unset means no remote MCP: the panel shows only the stdio config. The core binary no longer contains an MCP transport (remove /mcp, the loopback API, and the go-sdk server dependency from internal/api).
+- Packaging: the Docker image builds exhibit-mcp too (or a second slim image); docker-compose example gains an `mcp` profile; deployment.md shows routing /mcp (path on the app host) or a separate hostname to it.
 
 ## Acceptance Criteria
 
-A remote MCP client with a pasted grant token can edit its artifact; a cookie-only or AUTH_TOKEN request to /mcp is 401.
-
+With the service running and MCP_URL set, a remote MCP client with a pasted grant searches and edits an artifact; without the service the core answers 404 at /mcp and still serves the stdio path; a revoked grant fails its next request; a cookie-only request is 401.
