@@ -62,7 +62,10 @@ async function fixture(respond = async () => Response.json({ id: 'created-copy' 
   page.document.querySelectorAll = () => [root];
   let refreshes = 0;
   search.addEventListener('exhibit:gallery-search', () => refreshes++);
-  await page.loadModule(script);
+  const { initializeGallery } = await page.loadModule(new URL('./gallery.js', 'file://' + script).pathname);
+  const { initializeDuplication } = await page.loadModule(new URL('./duplicate.js', 'file://' + script).pathname);
+  initializeGallery(root);
+  initializeDuplication(root);
   const open = () => root.dispatchEvent({ type: 'exhibit:duplicate', detail: {
     artifactID: 'original-id', title: 'Original <title>', trigger
   } });

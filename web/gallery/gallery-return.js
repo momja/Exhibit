@@ -1,3 +1,5 @@
+import { eventScope } from './event-scope.js';
+
 // Preserve library context as data, never cached markup. The server renders
 // the loaded result count again; this tab restores the matching scroll offset.
 function contextKey(url) {
@@ -8,15 +10,17 @@ function contextKey(url) {
 }
 
 export function initializeGalleryReturn(root) {
+  const events = eventScope();
+  let frame;
   if (new URL(location.href).searchParams.has('visible')) {
     try {
       const saved = JSON.parse(sessionStorage.getItem(contextKey(location.href)));
       if (saved && Date.now() - saved.when < 30 * 60 * 1000) {
-        requestAnimationFrame(() => window.scrollTo(0, saved.scroll));
+        frame = requestAnimationFrame(() => window.scrollTo(0, saved.scroll));
       }
     } catch { /* Storage may be disabled; search and filters still survive. */ }
   }
-  root.addEventListener('click', event => {
+  events.on(root, 'click', event => {
     const link = event.target.closest('a[href]');
     if (!link || !/\/artifacts\/[^/]+\/edit$/.test(new URL(link.href).pathname)) return;
     const destination = new URL(location.href);
@@ -29,4 +33,8 @@ export function initializeGalleryReturn(root) {
       sessionStorage.setItem(contextKey(destination.href), JSON.stringify({when: Date.now(), scroll: window.scrollY}));
     } catch { /* Returning remains an ordinary link when storage is unavailable. */ }
   }, true);
+  return () => {
+    events.disconnect();
+    if (frame !== undefined) cancelAnimationFrame(frame);
+  };
 }

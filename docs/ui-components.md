@@ -204,6 +204,41 @@ action listeners and reconnects it when reinserted.
 
 Existing feature dialogs retain their implementations until explicitly migrated.
 
+## Gallery lifecycle and navigation
+
+The stable `#gallery-shell` uses the registered `gallery` controller. It owns
+space request generations, history restoration and the current search
+connection. Its `space` target is `#gallery-content`, which gets replaced when
+switching My library, Shared with me or Shared by me. The server sends the
+`gallerySpaceContent` partial plus an out-of-band `gallerySearchRegion` update.
+Keep the header and Clerk controller outside both regions.
+
+Each content root uses `gallery-space`. Its connection initializes widget
+visibility, duplication and edit-return behavior; disconnect releases their
+observers, listeners and timers. `event-scope.js` groups explicit listener
+cleanup, including listeners on a stable ancestor. Pending mutations may
+finish on the server after disconnect, but their callbacks cannot refresh or
+focus a different space. The new destination always reloads its data.
+
+The `filter-sheet` controller lives on the shell so header triggers and the
+content dialog share a scope. Its targets may disappear when a space has no
+filters. Search/filter htmx swaps keep the dialog itself while updating its
+options; a full space switch replaces it along with the content.
+
+Run the actual navigation and lifecycle checks with:
+
+```sh
+make assets
+go test ./internal/api -run 'TestGallerySpace(Navigation.*Browser|Fragments|FragmentExpiredSession)$' -count=1
+go test -tags screenshot ./internal/api -run '^TestCaptureGallerySpaceNavigation$' -count=1
+```
+
+The browser suite uses the real htmx, Stimulus and Clerk loader/controller
+against local SDK doubles. It checks document/header/account node identity,
+load/reload/mount counts, history, permissions, duplication, widget remounts,
+request races, failures, modified clicks and no-JS links. Screenshot capture
+uses `shot-scraper` and verifies header identity after a real space click.
+
 ## Unsaved changes
 
 The editor's body uses the registered `unsaved-changes` controller with the

@@ -112,7 +112,9 @@ func TestNegotiatedResponsesCarryVary(t *testing.T) {
 
 			require.Equal(t, http.StatusOK, rec.Code)
 			require.Equal(t, "gzip", rec.Header().Get("Content-Encoding"), "expected this response to be compressed")
-			assert.Contains(t, rec.Header().Get("Vary"), "Accept-Encoding",
+			// Vary may span multiple header fields when a page also negotiates
+			// full versus htmx fragment responses.
+			assert.Contains(t, strings.Join(rec.Header().Values("Vary"), ", "), "Accept-Encoding",
 				"a content-negotiated response must tell caches it varies on the request header")
 		})
 	}

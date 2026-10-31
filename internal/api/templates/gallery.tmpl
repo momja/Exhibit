@@ -14,18 +14,10 @@
 <link rel="stylesheet" href="{{asset "gallery/index.css"}}">
 </head>
 <body>
-<div id="{{.Grid.ID}}" data-gallery{{if .Grid.Filters.Sections}} data-controller="filter-sheet"{{end}}>
+<div id="gallery-shell" data-gallery data-controller="gallery filter-sheet">
 {{template "appHeader" .Header}}
-{{if or .Spaces .Grid.Filters.Sections}}<div class="gallery-layout{{if not .Spaces}} gallery-layout-solo{{end}}">{{template "gallerySpaces" .}}{{end -}}
-<main>{{if .Grid.Title}}<h2 class="gallery-title">{{.Grid.Title}}</h2>{{end}}
-{{/* Cards share their tile, title, status marks, and action menu with every
-     gallery fragment. Card clicks open the viewer; menu actions have their
-     own controls and are handled through delegation after htmx swaps. */}}
-{{template "galleryResults" .Grid}}
-</main>
-{{- if or .Spaces .Grid.Filters.Sections}}</div>{{end}}{{if .Grid.Filters.Sections}}
-{{template "galleryFilterSheet" .Grid}}{{end}}
-{{if not .ReadOnly}}{{template "duplicateDialog" .Grid}}{{end}}
+<p class="gallery-error" data-gallery-navigation-error role="alert" hidden>Couldn’t switch spaces. Try again.</p>
+{{template "gallerySpaceContent" .}}
 </div>
 
 {{/* No CodeMirror island here: the only editor on this page was the ingest
@@ -40,6 +32,8 @@ const TOKEN = {{.Token}};
      the result — page scripts never build an Authorization header. Literal
      template text for the boolean, matching the other bootstrap flags:
      html/template's JS escaper pads a {{value}} boolean with spaces. */ -}}
+{{/* Gallery space switches carry the live ReadOnly decision on gallerySpaceContent.
+     api.js reads it at call time; TOKEN stays valid for this same visitor. */}}
 const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
 </script>
 <script src="{{asset "gallery/api.js"}}"></script>
@@ -49,6 +43,34 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
 <script type="module" src="{{asset "gallery/index.js"}}"></script>
 </body>
 </html>{{end}}
+
+{{/* These regions have one definition for full loads, space switches and
+     history restoration. The header and its Clerk controller never swap. */}}
+{{define "gallerySearchRegion"}}<div id="gallery-search-region">{{template "gallerySearchControls" .}}</div>{{end}}
+{{define "gallerySearchControls"}}
+  <h1 class="app-header-title sr-only">{{if .Title}}{{.Title}}{{else}}Gallery{{end}}</h1>
+  {{template "galleryHeaderSearch" .}}
+{{end}}
+
+{{define "gallerySpaceContent"}}<div id="gallery-content" hx-history-elt data-gallery-target="space" data-gallery-read-only="{{if .ReadOnly}}true{{else}}false{{end}}" data-controller="gallery-space">
+<div id="{{.Grid.ID}}">
+{{if or .Spaces .Grid.Filters.Sections}}<div class="gallery-layout{{if not .Spaces}} gallery-layout-solo{{end}}">{{template "gallerySpaces" .}}{{end -}}
+<main>{{if .Grid.Title}}<h2 class="gallery-title">{{.Grid.Title}}</h2>{{end}}
+{{/* Cards share their tile, title, status marks, and action menu with every
+     gallery fragment. Card clicks open the viewer; menu actions have their
+     own controls and are handled through delegation after htmx swaps. */}}
+{{template "galleryResults" .Grid}}
+</main>
+{{- if or .Spaces .Grid.Filters.Sections}}</div>{{end}}{{if .Grid.Filters.Sections}}
+{{template "galleryFilterSheet" .Grid}}{{end}}
+{{if not .ReadOnly}}{{template "duplicateDialog" .Grid}}{{end}}
+</div>
+</div>{{end}}
+
+{{define "gallerySpaceUpdate"}}<title>{{if .Grid.Title}}{{.Grid.Title}} · {{end}}Exhibit</title>
+{{template "gallerySpaceContent" .}}
+<div hx-swap-oob="outerHTML:#gallery-search-region" id="gallery-search-region">{{template "gallerySearchControls" .Grid}}</div>
+{{end}}
 
 {{define "galleryHeaderSearch"}}
   {{/* Search sits in the app bar beside the logo (av-uvc6) rather than in a

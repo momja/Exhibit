@@ -1,6 +1,6 @@
 ---
 id: Exh-xw54
-status: in_progress
+status: closed
 deps: []
 links: [Exh-j6wa]
 created: 2026-10-31T21:36:17Z
@@ -25,3 +25,13 @@ Start with internal/api/templates/galleryspaces.tmpl, gallery.tmpl, gallerygrid.
 - Fast switching and outstanding search/pagination requests cannot replace the destination with stale results. Authentication failure continues through the existing safe session-expiry path.
 - Focused backend and real-browser checks cover navigation without document/account remounts, history, and post-switch interactions. Update relevant documentation and desktop/mobile screenshots.
 
+
+## Notes
+
+**2026-10-31T22:02:22Z**
+
+Implemented htmx navigation for all three library spaces using shared gallerySpaceContent and search-region partials. The stable gallery shell/header/Clerk root survive space switches and history traversal. Registered gallery/gallery-space controllers coordinate stale requests and release search listeners, timers, widget observers, duplication dialogs and return-link behavior. api.js reads the active server-rendered read-only decision, so an incoming-space bootstrap does not prevent later owner duplication.
+
+Validation: make assets; go test ./... (all pass); focused gallery/shared/action-menu/compression regression suite (pass); Node search/duplication/widget suites (24 pass); go vet ./internal/api (pass); git diff --check (pass). Real Chromium desktop/phone checks cover exact document/header/account/button identity with Clerk load=1, reload=1, mount=1, unmount=0, search/filter/pagination/history, owner duplication from a read-only initial load, widget disposal/remount, delayed responses, rapid switches, failures, modified clicks and native links with app scripts blocked. The real Clerk loader/controller uses a local SDK double; no live hosted account was needed. shot-scraper desktop/phone captures are in docs/screenshots/Exh-xw54 and documented in architecture/ui-components.
+
+Integration: Exh-arf2 and Exh-r6a0 must keep the header/account control outside #gallery-content and #gallery-search-region; only the heading/search/filter trigger belongs in the search region. Clerk/account implementation and the separate Exh-j6wa placeholder ticket were left unchanged. No main edits, merge, push or PR.

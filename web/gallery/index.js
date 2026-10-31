@@ -1,3 +1,3 @@
-import { initializeGalleries } from './gallery.js';
+import { initializeGalleryShortcut } from './gallery.js';
 
-initializeGalleries();
+initializeGalleryShortcut();

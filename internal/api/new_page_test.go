@@ -194,7 +194,7 @@ func TestGalleryIndexHasNoIngestMarkup(t *testing.T) {
 	js := galleryAsset(t, r, "/assets/gallery/index.js")
 	assert.NotContains(t, js, "function ingest(")
 	assert.NotContains(t, js, "function setMode(")
-	assert.Contains(t, js, "initializeGalleries")
+	assert.Contains(t, js, "initializeGalleryShortcut")
 }
 
 // The empty library points at /new rather than at an upload box that is no

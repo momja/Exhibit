@@ -34,6 +34,10 @@ async function loadIndex({ multiple = false } = {}) {
   const second = multiple ? galleryFixture('second-gallery') : null;
   const { root, input, form, clear } = first;
   page.document.querySelectorAll = () => second ? [root, second.root] : [root];
+  const { initializeGallery } = await page.loadModule(path.join(here, '../../internal/api/assets/gallery/gallery.js'));
+  initializeGallery(root);
+  if (second) initializeGallery(second.root);
+  page.document.querySelector = () => root;
   await page.loadModule(INDEX_JS);
 
   // Presses a key the way a browser delivers it: at whatever element has focus,

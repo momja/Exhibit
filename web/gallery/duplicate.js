@@ -1,3 +1,4 @@
+import { eventScope } from './event-scope.js';
 import { apiFetch } from './api-module.js';
 
 // getRandomValues also works on self-hosted HTTP installations where browsers
@@ -13,6 +14,8 @@ function requestID() {
 export function initializeDuplication(root) {
   const dialog = root.querySelector('[data-duplicate-dialog]');
   if (!dialog) return;
+  const events = eventScope();
+  let connected = true;
   const form = dialog.querySelector('form');
   const title = form.elements.title;
   const share = form.elements.copy_share_settings;
@@ -30,15 +33,15 @@ export function initializeDuplication(root) {
     submit.disabled = busy;
     cancel.disabled = busy;
   }
-  dialog.addEventListener('modal:before-close', event => {
+  events.on(dialog, 'modal:before-close', event => {
     if (busy) event.preventDefault();
   });
-  dialog.addEventListener('modal:closed', () => {
+  events.on(dialog, 'modal:closed', () => {
     // An unconfirmed request may already have succeeded. Reconcile when the
     // person closes the modal too, without issuing another mutation.
     if (pending) root.dispatchEvent(new CustomEvent('exhibit:artifacts-changed', { bubbles: true }));
   });
-  root.addEventListener('exhibit:duplicate', event => {
+  events.on(root, 'exhibit:duplicate', event => {
     if (busy || dialog.open) return;
     artifactID = event.detail.artifactID;
     title.value = event.detail.title + ' (copy)';
@@ -51,7 +54,7 @@ export function initializeDuplication(root) {
     dialog.dispatchEvent(new CustomEvent('exhibit:modal-open', { detail: { trigger: event.detail.trigger } }));
     title.select();
   });
-  form.addEventListener('submit', async event => {
+  events.on(form, 'submit', async event => {
     event.preventDefault();
     if (busy) return;
     if (!pending && !title.value.trim()) {
@@ -67,6 +70,7 @@ export function initializeDuplication(root) {
       const response = await apiFetch('/api/artifacts/' + encodeURIComponent(artifactID) + '/duplicate', {
         method: 'POST', body: JSON.stringify(pending)
       });
+      if (!connected) return;
       if (!response?.ok) {
         // A client refusal published nothing. A server/network failure may
         // have committed: preserve the payload and identity for a safe retry.
@@ -81,6 +85,7 @@ export function initializeDuplication(root) {
         return;
       }
       const artifact = await response.json();
+      if (!connected) return;
       if (!artifact?.id) throw Error('missing duplicate result');
       newArtifactID = artifact.id;
       pending = undefined;
@@ -88,14 +93,15 @@ export function initializeDuplication(root) {
       dialog.dispatchEvent(new CustomEvent('exhibit:modal-close'));
       root.dispatchEvent(new CustomEvent('exhibit:artifacts-changed', { bubbles: true }));
     } catch {
+      if (!connected) return;
       status.textContent = 'Could not confirm duplication. Try again to check the saved result.';
       submit.textContent = 'Try again';
     } finally {
       busy = false;
-      controls();
+      if (connected) controls();
     }
   });
-  root.addEventListener('htmx:after:swap', () => {
+  events.on(root.closest('[data-gallery]') || root, 'htmx:after:swap', () => {
     if (!newArtifactID) return;
     const link = root.querySelector('.card-title[href="/artifacts/' + newArtifactID + '"]');
     if (link) {
@@ -103,4 +109,9 @@ export function initializeDuplication(root) {
       newArtifactID = '';
     }
   });
+  return () => {
+    connected = false;
+    events.disconnect();
+    if (dialog.open) dialog.close();
+  };
 }
