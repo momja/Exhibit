@@ -230,7 +230,7 @@ test('a failed preparation can be retried on Send', async () => {
 
 test('saving a different key discards pending startup and the next Send starts fresh', async () => {
  let resolve; let starts = 0;
- const page=await boot(()=>++starts===1 ? new Promise(r=>{resolve=r;}) : json({id:'fresh'}));
+ const page=await boot(()=>++starts===1 ? new Promise(r=>{resolve=r;}) : json({id:'fresh'}), {byok:true});
  await page.type('hello');await page.tick(300);
  page.byId('key-provider').value='openai';page.byId('key-secret').value='new-key';
  await page.window.saveKey();
@@ -253,7 +253,7 @@ test('navigation during a History startup ignores its late response without dele
 
 
 test('old stream callbacks cannot close or reconnect a replacement session', async () => {
- let count=0;const page=await boot(()=>json({id:'s'+(++count)}));
+ let count=0;const page=await boot(()=>json({id:'s'+(++count)}), {byok:true});
  await page.type('first');await page.window.send();
  const old=page.streams[0];
  page.byId('key-provider').value='openai';page.byId('key-secret').value='new-key';await page.window.saveKey();
@@ -408,7 +408,7 @@ test('invalidated History completion and finally cannot unlock a newer pending H
 test('a key reset releases pending History and its late rejection cannot affect a newer resume', async () => {
   let rejectOld;
   const page = await boot(body => body.resume_session_id === 'old-conversation'
-    ? new Promise((_resolve, reject) => { rejectOld = reject; }) : json({id: 'new-conversation'}));
+    ? new Promise((_resolve, reject) => { rejectOld = reject; }) : json({id: 'new-conversation'}), {byok:true});
   await page.type('preserved draft');
   const old = page.resume('old-conversation', 0);
   await flush();
@@ -432,6 +432,7 @@ for (const invalidation of ['navigation', 'key reset']) {
     let sessionCount = 0;
     let promptCount = 0;
     const page = await boot(() => json({id: 'session-' + (++sessionCount)}), {
+      byok: true,
       prompt: () => ++promptCount === 1 ? new Promise(resolve => { finishOld = resolve; })
         : promptCount === 2 ? new Promise(resolve => { finishNew = resolve; }) : json({})
     });
@@ -661,6 +662,7 @@ for (const invalidation of ['navigation', 'key reset']) {
   test(`${invalidation} during rollback detaches the candidate without deleting a sidecar another tab could claim`, async () => {
     let finishRestore;
     const page = await boot(body => json({id: body.resume_session_id || 'fresh'}), {
+      byok: true,
       restore: () => new Promise(resolve => { finishRestore = resolve; })
     });
     await page.type('preserved draft');

@@ -29,6 +29,7 @@ async function loadAgent({ artifact = null } = {}) {
     matchMedia: () => ({ matches: false, addEventListener() {} }),
     alert: () => {}, confirm: () => true
   }, { "net-modal": { hidden: true }, "key-modal": { hidden: true } });
+  page.byId('key-modal').addEventListener('exhibit:modal-open', () => { page.byId('key-modal').open=true; });
   const bindings = await page.loadModule(path.join(ASSETS, 'agent.js'),
     ['ensureSession', 'handleAgentEvent', 'refreshPreview', 'resumeConversation', 'setStreaming', 'viewingVersion']);
   Object.assign(page.context, page.window, bindings);
@@ -89,6 +90,7 @@ async function boot(responses) {
     matchMedia: () => ({ matches: false, addEventListener() {} }),
     alert: () => {}, confirm: () => true
   }, { "net-modal": { hidden: true }, "key-modal": { hidden: true } });
+  page.byId('key-modal').addEventListener('exhibit:modal-open', () => { page.byId('key-modal').open=true; });
   const bindings = await page.loadModule(path.join(ASSETS, 'agent.js'),
     ['ensureSession', 'handleAgentEvent', 'refreshPreview', 'resumeConversation', 'setStreaming', 'viewingVersion']);
   Object.assign(page.context, page.window, bindings);
@@ -247,7 +249,7 @@ test("a refusal to start costs nothing: no rollback, and the pane stays for anot
   assert.equal(posts(page.api, "/restore").length, 0, "nothing was rolled back");
   assert.equal(page.byId("resume-status").textContent, "no API key configured");
   assert.equal(page.byId("pane-chat").classList.contains("history-open"), true);
-  assert.equal(page.byId("key-modal").hidden, false, "a missing key opens the key dialog");
+  assert.equal(page.byId("key-modal").open, true, "a missing key opens the key dialog");
 });
 
 test("a rollback that fails detaches its candidate and says the conversation was not continued", async () => {

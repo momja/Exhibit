@@ -159,16 +159,33 @@ function clearMaskedKey(secret) {
   secret.dataset.masked = 'false';
 }
 
-function openKeyModal() {
-  if (!BYOK) return;
+let keyBusy = false;
+const keyDialog = BYOK ? document.getElementById('key-modal') : null;
+keyDialog?.addEventListener('modal:before-close', event => { if (keyBusy) event.preventDefault(); });
+keyDialog?.addEventListener('modal:closed', () => { clearMaskedKey(document.getElementById('key-secret')); });
+async function keyRequest(method, body) {
+  keyBusy = true;
+  const controls = [...keyDialog.querySelectorAll('input, select, button')];
+  controls.forEach(control => { control.disabled = true; });
+  try {
+    return await apiFetch('/api/agent/key', { method, ...(body ? { body: JSON.stringify(body) } : {}) });
+  } catch {
+    return { ok: false, json: async () => ({ error: 'Could not reach the server. Try again.' }) };
+  } finally {
+    keyBusy = false;
+    controls.forEach(control => { control.disabled = false; });
+  }
+}
+
+function openKeyModal(event) {
+  if (!BYOK || keyBusy || keyDialog.open) return;
   document.getElementById('key-error').hidden = true;
   document.getElementById('key-thinking').value = configuredThinkingLevel;
   const secret = document.getElementById('key-secret');
   if (keyConfigured) { showMaskedKey(secret); } else { clearMaskedKey(secret); }
-  document.getElementById('key-modal').hidden = false;
-  secret.focus();
+  keyDialog.dispatchEvent(new CustomEvent('exhibit:modal-open', { detail: { trigger: event?.currentTarget || document.getElementById('key-btn') } }));
 }
-function closeKeyModal() { document.getElementById('key-modal').hidden = true; }
+function closeKeyModal() { keyDialog?.dispatchEvent(new CustomEvent('exhibit:modal-close')); }
 
 // The masked placeholder is a single unit, not editable text: it can only be
 // cleared in full (Backspace/Delete), never edited in place. Cancel discards
@@ -192,6 +209,7 @@ function closeKeyModal() { document.getElementById('key-modal').hidden = true; }
 })();
 
 async function saveKey() {
+  if (!BYOK || keyBusy) return;
   const provider = document.getElementById('key-provider').value;
   const model = document.getElementById('key-model').value.trim();
   const thinking_level = document.getElementById('key-thinking').value;
@@ -207,7 +225,7 @@ async function saveKey() {
     api_key = secretInput.value.trim();
     if (!api_key) { errEl.textContent = 'Enter the API key.'; errEl.hidden = false; return; }
   }
-  const r = await apiFetch('/api/agent/key', {method:'PUT', body: JSON.stringify({provider, model, api_key, thinking_level})});
+  const r = await keyRequest('PUT', {provider, model, api_key, thinking_level});
   if (!r.ok) {
     const d = await r.json().catch(() => ({}));
     errEl.textContent = d.error || 'Failed to save key.';
@@ -230,8 +248,16 @@ async function saveKey() {
 }
 
 async function deleteKey() {
+  if (!BYOK || keyBusy) return;
   if (!confirm('Remove the stored API key?')) return;
-  await apiFetch('/api/agent/key', {method:'DELETE'});
+  const response = await keyRequest('DELETE');
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    const status = document.getElementById('key-error');
+    status.textContent = error.error || 'Failed to remove key.';
+    status.hidden = false;
+    return;
+  }
   closeKeyModal();
   await refreshKeyStatus();
   resetSession();
@@ -1136,3 +1162,9 @@ function briefToMessage(brief) {
 document.getElementById('key-btn')?.addEventListener('click', openKeyModal);
 Object.assign(window, { openKeyModal, closeKeyModal, providerChanged, saveKey, deleteKey,
   showPane, openHistory, closeHistory, send, stopAgent, toggleSnippet, previewArtifactId });
+
+if (BYOK) {
+  document.getElementById('key-provider')?.addEventListener('change', providerChanged);
+  document.getElementById('key-save')?.addEventListener('click', saveKey);
+  document.getElementById('key-delete')?.addEventListener('click', deleteKey);
+}

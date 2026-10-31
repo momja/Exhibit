@@ -82,13 +82,13 @@
      sandbox and sits on the same app origin, so it has the trusted chrome the
      prompt needs — it simply never had the prompt. */}}
 {{template "networkPrompt"}}
-<div id="key-modal" class="modal-overlay" hidden>
-  <div class="modal" role="dialog" aria-modal="true">
-    <h2>Agent API key</h2>
+<dialog id="key-modal" class="modal-dialog key-dialog" aria-labelledby="key-title"
+  data-controller="modal" data-action="exhibit:modal-open->modal#open exhibit:modal-close->modal#dismiss cancel->modal#cancel click->modal#backdrop keydown->modal#wrapFocus">
+    <h2 id="key-title">Agent API key</h2>
     <p class="note">Bring your own key. It is sent to your Exhibit server once, encrypted there at rest, and used only by the server-side agent — this page never sees it again.</p>
     <div class="current-key" id="current-key" hidden></div>
     <label for="key-provider">Provider</label>
-    <select id="key-provider" onchange="providerChanged()">
+    <select id="key-provider">
       <option value="anthropic">Anthropic</option>
       <option value="openai">OpenAI</option>
       <option value="google">Google Gemini</option>
@@ -112,16 +112,15 @@
     </select>
     <p class="note" id="key-thinking-help">Higher levels can take longer. Available levels depend on the model. Applies to new or resumed conversations.</p>
     <label for="key-secret">API key</label>
-    <input type="password" id="key-secret" placeholder="sk-…" autocomplete="off">
+    <input type="password" id="key-secret" data-modal-target="initialFocus" placeholder="sk-…" autocomplete="off">
     <div id="key-error" class="modal-error" hidden></div>
     <div class="modal-actions">
-      <button type="button" class="btn btn-danger" id="key-delete" onclick="deleteKey()" hidden><i class="ph ph-trash"></i></button>
+      <button type="button" class="btn btn-danger" id="key-delete" hidden><i class="ph ph-trash"></i></button>
       <span class="spacer"></span>
-      <button type="button" class="btn btn-sec" onclick="closeKeyModal()">Cancel</button>
-      <button type="button" class="btn" onclick="saveKey()"><i class="ph ph-check"></i> Save</button>
+      <button type="button" class="btn btn-sec" id="key-cancel" data-action="modal#dismiss">Cancel</button>
+      <button type="button" class="btn" id="key-save"><i class="ph ph-check"></i> Save</button>
     </div>
-  </div>
-</div>
+</dialog>
 {{end}}
 <script>
 const TOKEN = {{.Token}};
@@ -145,6 +144,7 @@ let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
 {{/* components.js carries the widget-tile health watcher (av-fafu); the
      preview pane renders a tile, so it needs it like the gallery does. */}}
 <script src="{{asset "gallery/components.js"}}"></script>
+{{template "componentScripts"}}
 <script type="module" src="{{asset "gallery/agent.js"}}"></script>
 {{template "directOpenPrompt" .DirectOpen}}
 <script type="module" src="{{asset "gallery/direct-open.js"}}"></script>

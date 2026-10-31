@@ -22,6 +22,9 @@ async function settingsPage(saved, byok = true) {
     matchMedia: () => ({matches: false, addEventListener() {}}),
     CustomEvent: class { constructor(type, options) { this.type = type; Object.assign(this, options); } },
   }, {'key-modal': {hidden: true}, 'net-modal': {hidden: true}});
+  const dialog=page.byId('key-modal');
+  dialog.addEventListener('exhibit:modal-open', () => { dialog.open=true; });
+  dialog.addEventListener('exhibit:modal-close', () => { dialog.open=false; dialog.dispatchEvent({type:'modal:closed'}); });
   await page.loadModule(asset('agent.js'));
   await flush();
   return {...page, calls};

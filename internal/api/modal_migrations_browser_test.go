@@ -204,3 +204,31 @@ func TestShareModalBrowser(t *testing.T) {
 		})
 	}
 }
+
+func TestAgentKeyModalBrowser(t *testing.T) {
+	for _, width := range []int64{1280, 390} {
+		t.Run(fmt.Sprint(width), func(t *testing.T) {
+			ro := newTestRouter(t)
+			ro.cfg.MockEnabled = true
+			app := httptest.NewServer(ro)
+			defer app.Close()
+			ro.cfg.AppOrigin = app.URL
+			b := newModalBrowser(t, width)
+			b.run(chromedp.Navigate(app.URL + "/agent"))
+			b.wait(`document.getElementById('key-modal').open`)
+			b.dialogCycle("#key-modal", `document.getElementById('key-btn').click()`, "#key-secret")
+			b.eval(`document.getElementById('key-btn').click()`)
+			b.capture("Exh-uxyy", width)
+			// Delay at the transport boundary to exercise real native dismissal guards.
+			b.eval(`window.savedFetch=window.fetch;window.fetch=(url,options)=>options?.method==='PUT'?new Promise(resolve=>window.finishKey=()=>resolve(new Response('{"error":"Provider unavailable"}',{status:503,headers:{'Content-Type':'application/json'}}))):savedFetch(url,options);document.getElementById('key-secret').value='fixture';document.getElementById('key-save').click()`)
+			b.wait(`document.getElementById('key-cancel').disabled`)
+			b.run(chromedp.KeyEvent(kb.Escape))
+			b.check(`document.getElementById('key-modal').open`)
+			b.eval(`finishKey()`)
+			b.wait(`document.getElementById('key-error').textContent==='Provider unavailable' && !document.getElementById('key-cancel').disabled`)
+			b.eval(`document.getElementById('key-cancel').click()`)
+			b.wait(`!document.getElementById('key-modal').open`)
+			b.check(`document.getElementById('key-secret').value==='' && document.activeElement.id==='key-btn'`)
+		})
+	}
+}
