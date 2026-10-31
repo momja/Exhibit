@@ -53,9 +53,9 @@ func TestMaxRequestBodyBytesFromEnv(t *testing.T) {
 // fails when the router's set and this one differ. So a new write route cannot
 // land without somebody deciding, here, what it does with a body.
 //
-// The limit is the same for all of them, and that is the decision this table
-// records rather than an oversight it hides: limitRequestBody sits on the root
-// of the router, so no route can be registered outside it. The per-route
+// The global limit covers all routes: limitRequestBody sits on the root of
+// the router, so no route can be registered outside it. OAuth POST handlers
+// also apply a smaller 64 KiB cap before parsing. The per-route
 // decision is the one in readsBody: whether the handler reads the body before
 // refusing for any other reason, given the fixtures seedBodyLimitFixtures sets
 // up. Those are the routes where an over-limit body of undeclared length
@@ -109,6 +109,11 @@ var writeRoutes = []struct {
 	{"DELETE", "/api/agent-grants/{grantID}", false},
 	{"POST", "/api/shares/", true},
 	{"DELETE", "/api/shares/{shareID}", false},
+	// OAuth also applies a 64 KiB cap before JSON/form parsing. Consent
+	// requires a session before reading the body; this fixture has none.
+	{"POST", "/oauth/register", true},
+	{"POST", "/oauth/token", true},
+	{"POST", "/oauth/authorize", false},
 	{"POST", "/auth/local", true},
 	{"POST", "/auth/logout", false},
 }
@@ -161,7 +166,7 @@ func TestEveryWriteRouteRefusesAnOversizedBody(t *testing.T) {
 			ro := bodyLimitRouter(t)
 			path := seedBodyLimitFixtures(t, ro).Replace(wr.route)
 			contentType := "application/json"
-			if wr.route == "/auth/local" {
+			if wr.route == "/auth/local" || wr.route == "/oauth/token" {
 				// A form post: ParseForm reads no body of any other type.
 				contentType = "application/x-www-form-urlencoded"
 			}

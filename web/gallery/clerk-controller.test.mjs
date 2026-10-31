@@ -83,3 +83,31 @@ for (const mode of ['signed-in', 'signin', 'signup']) {
     }
   });
 }
+
+for (const mode of ['signin', 'signup', 'already signed in']) {
+  test(`OAuth return URL survives Clerk ${mode}`, async t => {
+    const next = '/oauth/authorize?client_id=exclient_test&state=a%2Bb%26c&resource=https%3A%2F%2Fmcp.test%2Fmcp';
+    const old = { fetch: globalThis.fetch, window: globalThis.window, clerk: globalThis.testClerk };
+    t.after(() => { globalThis.fetch = old.fetch; globalThis.window = old.window; globalThis.testClerk = old.clerk; });
+    let destination, mounted, refreshed = false;
+    globalThis.testClerk = {
+      isSignedIn: mode === 'already signed in',
+      session: { getToken: async () => { refreshed = true; } },
+      mountSignIn: (_element, options) => { mounted = 'signin'; destination = options.forceRedirectUrl; },
+      mountSignUp: (_element, options) => { mounted = 'signup'; destination = options.forceRedirectUrl; },
+    };
+    globalThis.fetch = async (path, options) => {
+      assert.equal(path, '/auth/clerk/ready');
+      assert.equal(options.credentials, 'same-origin');
+      return { ok: true };
+    };
+    globalThis.window = { location: { replace: value => { destination = value; } } };
+    const { default: Controller } = await import(`data:text/javascript,${encodeURIComponent(source)}#oauth-${encodeURIComponent(mode)}`);
+    const controller = new Controller();
+    Object.assign(controller, { element: { isConnected: true }, modeValue: mode === 'signup' ? 'signup' : 'signin', nextValue: next, statusTarget: { textContent: '' }, hasRecoveryTarget: false, mountTarget: {} });
+    await controller.connect();
+    assert.equal(destination, next);
+    if (mode === 'already signed in') assert.equal(refreshed, true);
+    else assert.equal(mounted, mode);
+  });
+}

@@ -108,3 +108,53 @@ func TestAgentGrantsSessionPanelRefreshUsesOnlyItsCookie(t *testing.T) {
 	assert.Contains(t, fragment.Body.String(), "Session connection")
 	assert.NotContains(t, fragment.Body.String(), in.ro.cfg.AuthToken)
 }
+
+func TestAgentGrantsBrowserConnectionInstructionsBeforeIssuing(t *testing.T) {
+	for _, endpoint := range []string{
+		"https://agents.example.test/mcp",
+		"https://agents.example.test/connector/'$(command)?a=1&b=\"<value>\"",
+	} {
+		t.Run(endpoint, func(t *testing.T) {
+			r := newTestRouter(t)
+			r.cfg.MCPURL = endpoint
+			for _, path := range []string{"/settings", "/profile"} {
+				response := doJSON(t, r, http.MethodGet, path, nil)
+				require.Equal(t, http.StatusOK, response.Code)
+				page := response.Body.String()
+				doc, err := html.Parse(strings.NewReader(page))
+				require.NoError(t, err)
+				fields := map[string]string{}
+				var visit func(*html.Node, bool)
+				visit = func(node *html.Node, hidden bool) {
+					attrs := map[string]string{}
+					for _, attr := range node.Attr {
+						attrs[attr.Key] = attr.Val
+						if attr.Key == "hidden" {
+							hidden = true
+						}
+					}
+					if id := attrs["id"]; id == "agent-mcp-url" || id == "agent-mcp-command" {
+						assert.False(t, hidden, "%s must be visible before issuing a token", id)
+						fields[id] = attrs["value"]
+					}
+					for child := node.FirstChild; child != nil; child = child.NextSibling {
+						visit(child, hidden)
+					}
+				}
+				visit(doc, false)
+				assert.Equal(t, endpoint, fields["agent-mcp-url"])
+				assert.Equal(t, "claude mcp add --transport http exhibit '"+strings.ReplaceAll(endpoint, "'", "'\\''")+"'", fields["agent-mcp-command"])
+				for _, text := range []string{
+					`id="agent-mcp-url-copy"`, `id="agent-mcp-command-copy"`,
+					"Then run /mcp in Claude Code, choose Authenticate, and approve the connection in your browser.",
+					"Other MCP clients connect to the same URL and sign in the same way.",
+					"For clients without browser sign-in", "No agents connected yet.",
+				} {
+					assert.Contains(t, page, text)
+				}
+				assert.Less(t, strings.Index(page, `id="agent-mcp-command"`), strings.Index(page, `id="agent-grant-form"`))
+				assert.Contains(t, page, `id="agent-grant-issued" hidden`)
+			}
+		})
+	}
+}

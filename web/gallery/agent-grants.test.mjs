@@ -18,7 +18,9 @@ async function load(responses = []) {
   }, {
     'agent-grants-panel': { dataset: { mcpUrl: 'https://agents.example.test/mcp' } },
     'agent-grant-issued': { hidden: true },
-    'agent-grant-label': { value: '' }
+    'agent-grant-label': { value: '' },
+    'agent-mcp-url': { value: 'https://agents.example.test/mcp' },
+    'agent-mcp-command': { value: "claude mcp add --transport http exhibit 'https://agents.example.test/mcp'" }
   });
   page.document.body.addEventListener('exhibit:agent-grants-changed', () => events.push('changed'));
   const panel = page.byId('agent-grants-panel');
@@ -36,7 +38,7 @@ async function load(responses = []) {
   const dismiss = () => click('#agent-grant-dismiss', page.byId('agent-grant-dismiss'));
   const refresh = () => panel.dispatchEvent({ type: 'htmx:after:swap', target: page.byId('agent-grants-body') });
   await page.loadModule(SCRIPT);
-  return { ...page, api, events, copied, panel, controls, issue, revoke, copy, dismiss, refresh };
+  return { ...page, api, events, copied, panel, controls, issue, revoke, copy, click, dismiss, refresh };
 }
 
 test('issue displays and copies the secret, keeping it through server list refresh', async () => {
@@ -122,4 +124,26 @@ test('revocation-only panel can revoke and leave without issuing controls', asyn
   assert.deepEqual(paths(page.api), ['DELETE /api/agent-grants/existing']);
   await page.refresh();
   await page.dispatchOnWindow('pagehide');
+});
+
+
+test('browser connection details copy before issuing and survive token cleanup', async () => {
+  const page = await load([issued('g-1', 'exgrant_secret')]);
+  const url = page.byId('agent-mcp-url').value;
+  const command = page.byId('agent-mcp-command').value;
+  for (const [id, message] of [['agent-mcp-url', 'URL copied.'], ['agent-mcp-command', 'Command copied.']]) {
+    await page.click('#' + id + '-copy', page.byId(id + '-copy'));
+    assert.equal(page.byId('agent-grants-status').textContent, message);
+  }
+  assert.deepEqual(page.copied, [url, command]);
+  assert.deepEqual(page.api.calls, []);
+  assert.equal(page.byId('agent-grant-issued').hidden, true);
+  await page.issue('fallback');
+  await page.refresh();
+  await page.dismiss();
+  await page.dispatchOnWindow('pagehide');
+  assert.equal(page.byId('agent-mcp-url').value, url);
+  assert.equal(page.byId('agent-mcp-command').value, command);
+  await page.click('#agent-mcp-command-copy', page.byId('agent-mcp-command-copy'));
+  assert.deepEqual(page.copied, [url, command, command]);
 });

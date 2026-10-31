@@ -148,3 +148,51 @@ func TestAgentGrantUseIsRecordedCoarsely(t *testing.T) {
 	require.NoError(t, s.db.QueryRowContext(ctx, "SELECT last_used_at FROM agent_grants WHERE id = ?", g.ID).Scan(&stored))
 	assert.Equal(t, first, stored)
 }
+
+func TestAgentGrantForUserRequiresAnEnabledAccountAtCreation(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	_, err := s.UpsertUser(ctx, "admin", "admin@example.test")
+	require.NoError(t, err)
+	member, err := s.UpsertUser(ctx, "member", "member@example.test")
+	require.NoError(t, err)
+
+	assertRefused := func(ownerID int64, digest string) {
+		t.Helper()
+		grant, err := s.CreateAgentGrantForUser(ctx, ownerID, "OAuth agent", "OAuth agent", digest)
+		require.ErrorIs(t, err, ErrNotFound)
+		assert.Nil(t, grant)
+		resolved, err := s.ResolveAgentGrant(ctx, digest)
+		require.NoError(t, err)
+		assert.Nil(t, resolved)
+	}
+	assertRefused(999, "missing-user")
+	assertRefused(0, "no-owner")
+
+	issued, err := s.CreateAgentGrantForUser(ctx, member.ID, "OAuth agent", "OAuth agent", "enabled-user")
+	require.NoError(t, err)
+	assert.Equal(t, member.ID, issued.OwnerID)
+	assert.Equal(t, "OAuth agent", issued.Label)
+	assert.Equal(t, "OAuth agent", issued.Client)
+	resolved, err := s.ResolveAgentGrant(ctx, "enabled-user")
+	require.NoError(t, err)
+	require.NotNil(t, resolved)
+	assert.Equal(t, issued.ID, resolved.ID)
+
+	require.NoError(t, s.SetUserDisabled(ctx, member.ID, true))
+	assertRefused(member.ID, "disabled-user")
+	require.NoError(t, s.SetUserDisabled(ctx, member.ID, false))
+	resolved, err = s.ResolveAgentGrant(ctx, "disabled-user")
+	require.NoError(t, err)
+	assert.Nil(t, resolved, "re-enabling cannot activate a grant refused during disable")
+
+	_, err = s.DeleteAccount(ctx, member.ID)
+	require.NoError(t, err)
+	assertRefused(member.ID, "deleted-user")
+	grants, err := s.ListAgentGrants(ctx, member.ID)
+	require.NoError(t, err)
+	assert.Empty(t, grants, "an outstanding authorization cannot recreate a deleted account's grant")
+	resolved, err = s.ResolveAgentGrant(ctx, "enabled-user")
+	require.NoError(t, err)
+	assert.Nil(t, resolved, "deletion also removes grants created before it")
+}

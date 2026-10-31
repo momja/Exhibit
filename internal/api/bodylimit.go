@@ -1,8 +1,8 @@
 // Request body limit (av-ombn).
 //
 // Every request the app surface answers carries a body of at most
-// MAX_REQUEST_BODY_BYTES. One number for every route rather than one per
-// route. The routes that matter are the document writes (POST and PATCH of
+// MAX_REQUEST_BODY_BYTES. OAuth additionally caps its small POST bodies at
+// 64 KiB before parsing. The global ceiling sizes document writes (POST and PATCH of
 // an artifact, PUT of a widget, and stored-data imports). JSON and ZIP imports
 // use the same ceiling, including uploads of undeclared length.
 //
@@ -171,4 +171,16 @@ func writeBodyTooLarge(w http.ResponseWriter, limit int64) {
 		Error:      "request body too large: this instance accepts at most " + humanize.Bytes(limit) + " per request",
 		LimitBytes: limit,
 	})
+}
+
+// limitOAuthBody bounds parsing on the small OAuth endpoints even when the
+// operator raises the upload limit. An existing smaller global limit still wins.
+func limitOAuthBody(w http.ResponseWriter, r *http.Request) bool {
+	const limit = 64 << 10
+	if r.ContentLength > limit {
+		writeBodyTooLarge(w, limit)
+		return false
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
+	return true
 }

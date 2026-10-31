@@ -51,7 +51,7 @@ Env vars, all optional except `AUTH_TOKEN`.
 | `AUTH_TOKEN` | `dev-token` | API bearer token — **change this** |
 | `APP_ORIGIN` | `http://localhost:8080` | Public URL of the gallery/API |
 | `RENDER_ORIGIN` | `http://localhost:8081` | Public URL of the artifact renderer (must differ from `APP_ORIGIN` — see [why](./architecture.md#4-trust-boundaries)) |
-| `MCP_URL` | *(unset)* | Public URL of the optional MCP service; enables token issuance and remote configurations in Settings → Connected agents. Unset disables issuance and hides the section unless grants remain for revocation. This does not start a service or register a core route; see [§5.3](#53-optional-remote-mcp-service) |
+| `MCP_URL` | *(unset)* | Public URL of the optional MCP service; enables the core OAuth authorization server, token issuance and remote configurations in Settings → Connected agents. Unset disables OAuth and issuance and hides the section unless grants remain for revocation. This does not start the MCP service; see [§5.3](#53-optional-remote-mcp-service) |
 | `DATA_DIR` | `./data` | Where the SQLite DB lives, and the artifact bodies too unless `BLOB_S3_BUCKET` is set |
 | `ADDR` | `:8080` | App listen address |
 | `RENDER_ADDR` | `:8081` | Render listen address |
@@ -944,14 +944,19 @@ and none of the files.
 `exhibit-mcp` lets a remote agent connect to a person's library over
 Streamable HTTP. It runs beside the core and reaches it only through the HTTP
 API. It has no database, no operator token and no secrets of its own: each
-request supplies a library grant issued in **Settings → Connected agents**.
+request supplies a library grant issued through OAuth consent or in
+**Settings → Connected agents**.
 The service verifies that bearer with the core on every request, so revocation
 takes effect on the next request. Cookies, Pi tokens and `AUTH_TOKEN` are not
 accepted. A core outage refuses requests with 503. Authentication failures return
 401 with a `WWW-Authenticate` header pointing clients to the service's OAuth
 protected-resource metadata. Discovery names the core's public origin as the
-authorization server; the authorization-server endpoints arrive in the next
-story, so connecting still requires a grant from Settings.
+authorization server. With `MCP_URL` set, that core serves
+`/.well-known/oauth-authorization-server`, `/oauth/register`, `/oauth/authorize`
+and `/oauth/token`. OAuth clients register, send the person through the existing
+local, OIDC or Clerk login (or directly to consent on a no-login instance), and
+receive a library grant after approval. It has no expiry or refresh token and
+stays listed in Settings until revoked, just like a pasted token.
 
 The image ships both `/server` and `/exhibit-mcp` from the same revision. The
 Compose `mcp` profile selects the second entrypoint; keeping one release image
@@ -979,7 +984,8 @@ leaving the service default would send clients to that internal address for OAut
 Compose supplies `APP_ORIGIN` (or its local default) unless explicitly overridden.
 
 Without `MCP_URL`, the instance offers no MCP connection:
-`POST /api/agent-grants` returns 404, and Connected agents is hidden for owners
+`POST /api/agent-grants`, `/oauth/*`, and
+`/.well-known/oauth-authorization-server` return 404, and Connected agents is hidden for owners
 with no live grants. Existing grants remain visible for revocation only, with
 a note that MCP is not enabled; listing and revoking grants continue to work.
 
@@ -1020,7 +1026,10 @@ The reverse proxy must send `/mcp` and
 `/.well-known/oauth-protected-resource/mcp` to port 8090 **without stripping the
 path**, and keep the remaining app routes on port 8080. Route the bare discovery
 path there too if you want to expose that fallback. The examples include both
-forms. Preserve Authorization and allow streamed responses. For Caddy, with the
+forms. Keep `/oauth/*` and `/.well-known/oauth-authorization-server` routed to
+the **core**, including when MCP uses a separate hostname. Discovery, registration
+and token exchange must be reachable by clients without an existing browser
+session; consent uses the instance's login. Preserve Authorization and allow streamed responses. For Caddy, with the
 proxy running on the same host:
 
 ```caddyfile
@@ -1074,8 +1083,9 @@ Alternatively, dedicate a hostname such as `mcp.example.com` to port 8090 and
 set `MCP_URL` and `MCP_PUBLIC_URL` to `https://mcp.example.com/mcp`; keep
 `EXHIBIT_PUBLIC_URL` equal to the core's public `APP_ORIGIN`. A whole-host reverse
 proxy then handles `/mcp` and discovery paths together. Keep this hostname separate
-from the artifact renderer. With the service reachable, issue
-a grant in Settings and use the displayed Claude Code command or HTTP JSON
+from the artifact renderer. With the service reachable, point an OAuth-capable
+client at `MCP_URL` and approve its library access in the browser. Alternatively,
+issue a grant in Settings and use the displayed Claude Code command or HTTP JSON
 configuration in the client.
 
 ## 6. Backups (optional)

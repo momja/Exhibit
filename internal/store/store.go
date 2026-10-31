@@ -778,6 +778,9 @@ type Store interface {
 	// Durable credentials for external agents, scoped to the owner's library.
 	// Only token digests enter the store; resolution establishes the owner in auth.
 	CreateAgentGrant(ctx context.Context, ownerID int64, label, client, tokenHash string) (*AgentGrant, error)
+	// CreateAgentGrantForUser atomically requires an existing enabled owner;
+	// missing and disabled users return ErrNotFound.
+	CreateAgentGrantForUser(ctx context.Context, ownerID int64, label, client, tokenHash string) (*AgentGrant, error)
 	ListAgentGrants(ctx context.Context, ownerID int64) ([]AgentGrant, error)
 	DeleteAgentGrant(ctx context.Context, ownerID int64, grantID string) error
 	ResolveAgentGrant(ctx context.Context, tokenHash string) (*AgentGrant, error)

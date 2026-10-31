@@ -52,16 +52,35 @@ func scanAgentGrant(row interface{ Scan(...any) error }) (*AgentGrant, error) {
 // digest used for resolution; the plaintext never reaches this package. Like
 // artifacts.owner_id, this supports the no-login owner without a users row.
 func (s *SQLiteStore) CreateAgentGrant(ctx context.Context, ownerID int64, label, client, tokenHash string) (*AgentGrant, error) {
+	return s.createAgentGrant(ctx, ownerID, label, client, tokenHash, false)
+}
+
+// CreateAgentGrantForUser records a session owner's grant only while that user
+// still exists and is enabled. The check and insert are one statement, so an
+// OAuth code approved before account deletion cannot recreate an orphan grant.
+func (s *SQLiteStore) CreateAgentGrantForUser(ctx context.Context, ownerID int64, label, client, tokenHash string) (*AgentGrant, error) {
+	return s.createAgentGrant(ctx, ownerID, label, client, tokenHash, true)
+}
+
+func (s *SQLiteStore) createAgentGrant(ctx context.Context, ownerID int64, label, client, tokenHash string, requireUser bool) (*AgentGrant, error) {
 	g := &AgentGrant{
 		ID: uuid.New().String(), OwnerID: ownerID, Label: label, Client: client,
 		CreatedAt: time.Now().UTC().Truncate(time.Millisecond),
 	}
-	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO agent_grants (id, token_hash, owner_id, label, client, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
+	query := `INSERT INTO agent_grants (id, token_hash, owner_id, label, client, created_at)
+		SELECT ?1, ?2, ?3, ?4, ?5, ?6`
+	if requireUser {
+		query += ` WHERE EXISTS (SELECT 1 FROM users WHERE id = ?3 AND disabled_at IS NULL)`
+	}
+	result, err := s.db.ExecContext(ctx, query,
 		g.ID, tokenHash, ownerID, label, client, g.CreatedAt.Format(agentGrantTimeLayout))
 	if err != nil {
 		return nil, err
+	}
+	if n, err := result.RowsAffected(); err != nil {
+		return nil, err
+	} else if n == 0 {
+		return nil, ErrNotFound
 	}
 	return g, nil
 }

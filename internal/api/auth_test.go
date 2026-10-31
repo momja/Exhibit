@@ -213,8 +213,7 @@ func TestLoginCreatesUserJustInTimeAndStartsSession(t *testing.T) {
 	flow := cookiesFrom(w)
 	assert.Equal(t, flow[stateCookieName].Value, loc.Query().Get("state"))
 	assert.Equal(t, auth.S256Challenge(flow[verifierCookieName].Value), loc.Query().Get("code_challenge"))
-	assert.Equal(t, "/artifacts/abc", flow[nextCookieName].Value)
-	for _, name := range []string{stateCookieName, verifierCookieName, nextCookieName} {
+	for _, name := range []string{stateCookieName, verifierCookieName} {
 		assert.True(t, flow[name].HttpOnly, name)
 		assert.True(t, flow[name].Secure, name+" on an https app origin")
 		assertCSRFDefence(t, flow[name], name)
@@ -226,7 +225,6 @@ func TestLoginCreatesUserJustInTimeAndStartsSession(t *testing.T) {
 		url.QueryEscape(flow[stateCookieName].Value), nil)
 	cb.AddCookie(flow[stateCookieName])
 	cb.AddCookie(flow[verifierCookieName])
-	cb.AddCookie(flow[nextCookieName])
 	cw := httptest.NewRecorder()
 	ro.ServeHTTP(cw, cb)
 	require.Equal(t, http.StatusFound, cw.Code)
@@ -244,7 +242,7 @@ func TestLoginCreatesUserJustInTimeAndStartsSession(t *testing.T) {
 	// The credential a forged cross-site request would ride (av-ke2m).
 	assertCSRFDefence(t, session, sessionCookieName)
 	// The single-use flow cookies are cleared once redeemed.
-	for _, name := range []string{stateCookieName, verifierCookieName, nextCookieName} {
+	for _, name := range []string{stateCookieName, verifierCookieName} {
 		require.NotNil(t, landed[name], name)
 		assert.Less(t, landed[name].MaxAge, 0, name+" is cleared at the callback")
 	}
@@ -523,26 +521,28 @@ func TestOIDCLoginHonoursNextButOnlyOnThisOrigin(t *testing.T) {
 			ro.ServeHTTP(w, httptest.NewRequest("GET", "/auth/login?next="+url.QueryEscape(tc.next), nil))
 			require.Equal(t, http.StatusFound, w.Code)
 			flow := cookiesFrom(w)
+			state := flow[stateCookieName].Value
+			// The return URL is held server-side, keyed by the login state
+			// (loginreturn.go); an unsafe value is never stored.
+			ro.loginReturns.mu.Lock()
+			pending, stored := ro.loginReturns.pending[state]
+			ro.loginReturns.mu.Unlock()
 			if tc.want == "/" {
-				assert.Nil(t, flow[nextCookieName], "unsafe next must not be stored")
+				assert.False(t, stored, "unsafe next must not be stored")
 			} else {
-				require.NotNil(t, flow[nextCookieName])
-				assert.Equal(t, tc.want, flow[nextCookieName].Value)
+				require.True(t, stored)
+				assert.Equal(t, tc.want, pending.url)
 			}
-			// Check both the issued cookie and an independently supplied one:
-			// the callback must revalidate even a pre-fix or forged value.
-			for _, cookie := range []*http.Cookie{flow[nextCookieName], {Name: nextCookieName, Value: tc.next}} {
-				cb := httptest.NewRequest("GET", "/auth/callback?code=abc&state="+url.QueryEscape(flow[stateCookieName].Value), nil)
-				cb.AddCookie(flow[stateCookieName])
-				cb.AddCookie(flow[verifierCookieName])
-				if cookie != nil {
-					cb.AddCookie(cookie)
-				}
-				cw := httptest.NewRecorder()
-				ro.ServeHTTP(cw, cb)
-				require.Equal(t, http.StatusFound, cw.Code)
-				assert.Equal(t, tc.want, cw.Header().Get("Location"))
-			}
+			// A cookie in the old next-cookie's place, carrying the raw value,
+			// must change nothing: the callback reads only the server's copy.
+			cb := httptest.NewRequest("GET", "/auth/callback?code=abc&state="+url.QueryEscape(state), nil)
+			cb.AddCookie(flow[stateCookieName])
+			cb.AddCookie(flow[verifierCookieName])
+			cb.AddCookie(&http.Cookie{Name: "exhibit_auth_next", Value: tc.next})
+			cw := httptest.NewRecorder()
+			ro.ServeHTTP(cw, cb)
+			require.Equal(t, http.StatusFound, cw.Code)
+			assert.Equal(t, tc.want, cw.Header().Get("Location"))
 		})
 	}
 }

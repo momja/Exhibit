@@ -53,6 +53,8 @@ type pageRoute struct {
 // without a row is a page nobody checked for the leak this file exists to
 // prevent.
 var appOriginGETRoutePaths = []pageRoute{
+	{route: "/.well-known/oauth-authorization-server", path: "/.well-known/oauth-authorization-server"},
+	{route: "/oauth/authorize", path: "/oauth/authorize"},
 	{route: "/shared", path: "/shared"},
 	{route: "/shared-by-me", path: "/shared-by-me"},
 	{route: "/partials/gallery-grid/shared", path: "/partials/gallery-grid/shared"},
@@ -193,6 +195,7 @@ func newPageCredentialRouter(t *testing.T, idp auth.IdentityProvider, opts ...fu
 		AppOrigin:    "https://app.test",
 		RenderOrigin: "https://render.test",
 		AuthToken:    pageCredentialToken,
+		MCPURL:       "https://agents.example.test/mcp",
 		Secrets:      box,
 		Identity:     idp,
 	}

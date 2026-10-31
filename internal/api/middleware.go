@@ -442,6 +442,13 @@ var publicPathPrefixes = []string{
 // own scripts; neither substitutes for the other.
 func (ro *Router) sessionGate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Disabled OAuth routes stay absent even when the login gate would
+		// otherwise send an unknown page through sign-in.
+		if ro.cfg.MCPURL == "" && (r.URL.Path == authServerMetadataPath ||
+			r.URL.Path == oauthRegisterPath || r.URL.Path == oauthAuthorizePath || r.URL.Path == oauthTokenPath) {
+			ro.notFound(w, r)
+			return
+		}
 		// Page routes do not use API authentication. Never let an agent bearer
 		// fall through to the no-login operator page (and its embedded token).
 		token := bearerToken(r)
@@ -488,6 +495,11 @@ func (ro *Router) sessionGate(next http.Handler) http.Handler {
 }
 
 func isPublicPath(path string) bool {
+	// Discovery, registration and code exchange are called by clients before
+	// they hold a credential. Consent remains a session-gated page.
+	if path == authServerMetadataPath || path == oauthRegisterPath || path == oauthTokenPath {
+		return true
+	}
 	for _, prefix := range publicPathPrefixes {
 		if strings.HasPrefix(path, prefix) {
 			return true
