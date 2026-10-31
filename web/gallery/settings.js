@@ -22,6 +22,8 @@
  * change what the *other* rows may do, and reloading is how the page stays
  * one source of truth instead of two.
  */
+import { apiFetch } from './api-module.js';
+
 (function() {
   const status = document.getElementById('admin-status');
 
@@ -116,20 +118,21 @@
   const storageInput = document.getElementById('entitlement-storage');
   const refInput = document.getElementById('entitlement-ref');
   let editing = null;
+  let saving = false;
+  dialog.addEventListener('modal:before-close', event => { if (saving) event.preventDefault(); });
+  dialog.addEventListener('modal:closed', () => { editing = null; });
+
 
   function openEntitlement(button) {
+    if (saving || dialog.open) return;
     editing = {id: button.dataset.userId, name: button.dataset.userName};
     document.getElementById('entitlement-who').textContent = editing.name;
     complain('');
     planInput.value = button.dataset.plan || '';
     storageInput.value = button.dataset.storageLimit || '';
     refInput.value = button.dataset.ref || '';
-    dialog.showModal();
+    dialog.dispatchEvent(new CustomEvent('exhibit:modal-open', { detail: { trigger: button } }));
   }
-
-  document.getElementById('entitlement-cancel').addEventListener('click', function() {
-    dialog.close();
-  });
 
   // storageLimit reads the ceiling field as one of three answers: a number,
   // `null` for "put this account back on the instance default", or the string
@@ -152,7 +155,8 @@
     const raw = storageInput.value.trim();
     if (raw === '') return null;
     if (!/^[0-9]+$/.test(raw)) return 'invalid';
-    return Number(raw);
+    const bytes = Number(raw);
+    return Number.isSafeInteger(bytes) ? bytes : 'invalid';
   }
 
   function complain(message) {
@@ -161,8 +165,9 @@
     box.hidden = !message;
   }
 
-  document.getElementById('entitlement-save').addEventListener('click', function() {
-    if (!editing) return;
+  dialog.querySelector('form').addEventListener('submit', async function(event) {
+    event.preventDefault();
+    if (!editing || saving) return;
     const limit = storageLimit();
     // Not a guard — the server refuses a negative ceiling with a sentence of
     // its own, and this file is a client. It is a courtesy, reported inside
@@ -175,12 +180,26 @@
     complain('');
     const who = editing.name;
     const id = editing.id;
-    dialog.close();
-    patchUser(id, {
-      plan: planInput.value.trim(),
-      storage_limit_bytes: limit,
-      entitlement_ref: refInput.value.trim()
-    }, 'Saving the entitlement for ' + who);
+    saving = true;
+    const controls = [...dialog.querySelectorAll('input, button')];
+    controls.forEach(control => { control.disabled = true; });
+    try {
+      const response = await apiFetch('/api/admin/users/' + encodeURIComponent(id), {
+        method: 'PATCH', body: JSON.stringify({
+          plan: planInput.value.trim(), storage_limit_bytes: limit, entitlement_ref: refInput.value.trim()
+        })
+      });
+      if (!response.ok) { complain(await failureText(response)); return; }
+      saving = false;
+      dialog.dispatchEvent(new CustomEvent('exhibit:modal-close'));
+      say('Saved the entitlement for ' + who, false);
+      window.location.reload();
+    } catch {
+      complain('Could not reach the server. Your fields are kept; try again.');
+    } finally {
+      saving = false;
+      controls.forEach(control => { control.disabled = false; });
+    }
   });
 
   document.getElementById('create-user')?.addEventListener('click', async function() {

@@ -266,3 +266,33 @@ func TestFilterModalBrowser(t *testing.T) {
 		})
 	}
 }
+
+func TestAdminEntitlementModalBrowser(t *testing.T) {
+	for _, width := range []int64{1280, 390} {
+		t.Run(fmt.Sprint(width), func(t *testing.T) {
+			in := newAdminInstance(t)
+			app := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { r.AddCookie(in.adminCookie); in.ro.ServeHTTP(w, r) }))
+			defer app.Close()
+			in.ro.cfg.AppOrigin = app.URL
+			b := newModalBrowser(t, width)
+			b.run(chromedp.Navigate(app.URL + "/admin/users"))
+			b.wait(`document.querySelector('[data-action="entitlement"]')`)
+			open := `document.querySelector('[data-action="entitlement"]').click()`
+			b.dialogCycle("#entitlement-dialog", open, "#entitlement-plan")
+			b.check(`document.activeElement.dataset.action==='entitlement'`)
+			b.eval(open)
+			b.capture("Exh-b98w", width)
+			for _, bad := range []string{"12e", "-", "5,000", "1.5", "9007199254740992"} {
+				b.eval(fmt.Sprintf(`document.getElementById('entitlement-storage').value=%q;document.getElementById('entitlement-save').click()`, bad))
+				b.check(`document.getElementById('entitlement-dialog').open && !document.getElementById('entitlement-error').hidden`)
+			}
+			b.eval(`window.savedFetch=window.fetch;window.fetch=(url,opts)=>opts?.method==='PATCH'?new Promise(resolve=>window.finishEntitlement=()=>resolve(new Response('Not authorized',{status:403}))):savedFetch(url,opts);document.getElementById('entitlement-storage').value='';document.getElementById('entitlement-save').click()`)
+			b.wait(`document.getElementById('entitlement-cancel').disabled`)
+			b.run(chromedp.KeyEvent(kb.Escape))
+			b.check(`document.getElementById('entitlement-dialog').open`)
+			b.eval(`finishEntitlement()`)
+			b.wait(`document.getElementById('entitlement-error').textContent==='Not authorized'`)
+			b.check(`document.getElementById('entitlement-dialog').open && document.getElementById('entitlement-storage').value===''`)
+		})
+	}
+}

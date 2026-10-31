@@ -93,7 +93,7 @@
      Keeping them current is that system's job; a list nobody can produce is a
      discrepancy nobody can find. */}}
 <div class="card">
-  <h3 class="settings-h3">Entitlements</h3>
+  <h3 id="entitlement-title" class="settings-h3">Entitlements</h3>
   {{if .Entitlements.Enforced}}
   <p class="muted text-sm">Limits are switched on for this instance. An account with no entitlement of its own is on the default: <strong>{{.DefaultStorageLimit}}</strong>{{if .Entitlements.DefaultPlan}}, plan <strong>{{.Entitlements.DefaultPlan}}</strong>{{end}}.</p>
   {{else}}
@@ -156,11 +156,12 @@
      three related values, one of which has a meaningful empty state ("put this
      account back on the instance default"), are not three unrelated questions.
      Native <dialog>, so the focus trap and the Escape key are the browser's. */}}
-<dialog id="entitlement-dialog" class="settings-dialog">
-  <form method="dialog" class="settings-form">
-    <h3 class="settings-h3">Entitlement for <span id="entitlement-who"></span></h3>
+<dialog id="entitlement-dialog" class="modal-dialog settings-dialog" aria-labelledby="entitlement-title"
+  data-controller="modal" data-action="exhibit:modal-open->modal#open exhibit:modal-close->modal#dismiss cancel->modal#cancel click->modal#backdrop keydown->modal#wrapFocus">
+  <form class="settings-form">
+    <h3 id="entitlement-title" class="settings-h3">Entitlement for <span id="entitlement-who"></span></h3>
     <label class="settings-label" for="entitlement-plan">Plan</label>
-    <input class="field" type="text" id="entitlement-plan" autocomplete="off" spellcheck="false" placeholder="A label — leave empty for the instance default">
+    <input class="field" type="text" id="entitlement-plan" data-modal-target="initialFocus" autocomplete="off" spellcheck="false" placeholder="A label — leave empty for the instance default">
     <label class="settings-label" for="entitlement-storage">Storage limit (bytes)</label>
     {{/* type="text", deliberately, with inputmode for the numeric keypad on a
          phone. An <input type="number"> sanitizes its own value: anything that
@@ -180,9 +181,9 @@
          you typed", which needs what you typed still on screen. */}}
     <p id="entitlement-error" class="settings-dialog-error" hidden></p>
     <div class="settings-foot">
-      <button class="btn btn-sec" type="button" id="entitlement-cancel">Cancel</button>
+      <button class="btn btn-sec" type="button" id="entitlement-cancel" data-action="modal#dismiss">Cancel</button>
       <span class="spacer"></span>
-      <button class="btn" type="button" id="entitlement-save"><i class="ph ph-check"></i> Save entitlement</button>
+      <button class="btn" type="submit" id="entitlement-save"><i class="ph ph-check"></i> Save entitlement</button>
     </div>
   </form>
 </dialog>
@@ -199,6 +200,7 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
 const SELF_ID = {{.SelfID}};
 </script>
 <script src="{{asset "gallery/api.js"}}"></script>
-<script src="{{asset "gallery/settings.js"}}"></script>
+{{template "componentScripts"}}
+<script type="module" src="{{asset "gallery/settings.js"}}"></script>
 </body>
 </html>{{end}}

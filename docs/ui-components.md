@@ -435,3 +435,13 @@ heading typography, and base padding come from the shared dialog.
 
 [Filters desktop](screenshots/Exh-gynk/1280.png) ·
 [Filters phone](screenshots/Exh-gynk/390.png)
+
+Admin entitlements use the shared modal with the invoking account button as
+return focus and Plan as initial focus. The feature parses raw text as exact,
+safe whole bytes (blank is `null`); it retains fields on authorization/network
+failure and vetoes dismissal while saving. The form submits through the native
+ES module. `TestAdminEntitlementModalBrowser` checks malformed and blank input,
+server refusal, pending Escape, and account-specific return focus.
+
+[Entitlement desktop](screenshots/Exh-b98w/1280.png) ·
+[Entitlement phone](screenshots/Exh-b98w/390.png)
