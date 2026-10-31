@@ -72,10 +72,10 @@
 {{if gt (len .Filters.Chips) 1}}<a class="gallery-filter-clear" href="{{.Filters.ClearPageURL}}" hx-get="{{.Filters.ClearFragmentURL}}" data-gallery-filter>Clear all</a>{{end}}
 </div>{{end}}{{end}}
 
-{{define "galleryFilterSheet"}}<dialog id="{{.ID}}-filter-sheet" class="modal-dialog gallery-filter-sheet" data-filter-sheet-target="dialog" data-controller="modal" data-action="exhibit:modal-open->modal#open exhibit:modal-close->modal#dismiss cancel->modal#cancel click->modal#backdrop keydown->modal#wrapFocus" aria-labelledby="{{.ID}}-filter-title">
-<div class="gallery-filter-heading"><h2 id="{{.ID}}-filter-title">Filters</h2><button class="btn btn-sec icon-btn" type="button" data-modal-target="initialFocus" data-action="modal#dismiss" aria-label="Close filters"><i class="ph ph-x" aria-hidden="true"></i></button></div>
+{{define "galleryFilterSheet"}}<dialog id="{{.ID}}-filter-sheet" class="modal-dialog gallery-filter-sheet" data-filter-sheet-target="dialog" data-controller="modal" aria-labelledby="{{.ID}}-filter-title">
+<div class="gallery-filter-heading"><h2 id="{{.ID}}-filter-title">Filters</h2><button class="btn btn-sec icon-btn" type="button" autofocus data-modal-dismiss aria-label="Close filters"><i class="ph ph-x" aria-hidden="true"></i></button></div>
 <div id="{{.ID}}-sheet-filters" hx-target:inherited="#{{.ID}}-results" hx-swap:inherited="innerHTML" hx-sync:inherited="#{{.ID}}:replace" hx-include:inherited="#{{.ID}}-search [name=q]">{{template "galleryFilterOptions" .}}</div>
-<button class="btn btn-sec gallery-filter-done" type="button" data-action="modal#dismiss">Done</button>
+<button class="btn btn-sec gallery-filter-done" type="button" data-modal-dismiss>Done</button>
 </dialog>{{end}}
 
 {{/* Successful first-page htmx responses refresh external filter controls
