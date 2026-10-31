@@ -48,10 +48,14 @@ on most systems:
 | Tool | Version | Why |
 |------|---------|-----|
 | [Go](https://go.dev/dl/) | 1.25+ | Compiles the server. |
-| [Node.js](https://nodejs.org/) + npm | 22+ | Bundles assets (such as [CodeMirror](https://codemirror.net/), [Phosphor](https://phosphoricons.com/)) at build time via `make assets`, and runs `pi` at runtime. |
-| [`pi`](https://github.com/earendil-works/pi) | see `PI_VERSION` in the `Dockerfile` | The AI agent harness the server spawns per chat session. Requires Node ≥22.19.0. Install with `npm install -g --engine-strict @earendil-works/pi-coding-agent@<PI_VERSION>`. Without it the server starts but every agent feature fails. |
+| [Node.js](https://nodejs.org/) + npm | 22+ | Bundles assets (such as [CodeMirror](https://codemirror.net/), [Phosphor](https://phosphoricons.com/)) at build time via `make assets`. |
+| [Pi Bolt](https://github.com/opensec-git/Pi-Bolt) | see `PI_BOLT_VERSION` in the `Dockerfile` | Native Pi agent spawned per chat session; no Node runtime required. Install the matching release and set `PI_BIN=pi-bolt` if it is not named `pi`. The Docker image supplies both names. Without it the server starts but every agent feature fails. |
 
 `make` is also required.
+
+The image pins Pi Bolt **1.0.8** (Pi **1.4.0**) and verifies its release archive.
+For source installs and the agent integration tests, follow
+[Pi runtime compatibility](docs/agent.md#pi-runtime-compatibility).
 
 Optional:
 

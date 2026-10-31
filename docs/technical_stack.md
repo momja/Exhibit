@@ -31,7 +31,7 @@ safety" (§12).
 | Partial re-render | **htmx** — self-hosted / embedded on app origin, no CDN (§9) | hand-rolled fetch-and-swap helper |
 | Reusable UI behavior | **Stimulus** — self-hosted ES module, Go partials own markup (§9) | explicit component initialization in vanilla JS |
 | Response compression | `chi` `middleware.Compress` — gzip, explicit type allowlist | brotli (better ratio, new dependency) |
-| Agent harness | **Pi** (`pi --mode rpc` sidecar per session; TS tools extension; keys AES-GCM at rest; per-session scoped API credentials; `internal/mockllm` for tests) | Claude Agent SDK (heavier, vendor-tied) |
+| Agent harness | **Pi Bolt 1.0.8 / Pi 1.4.0** (native `pi --mode rpc` sidecar per session; runtime-loaded TS tools extension; keys AES-GCM at rest; per-session scoped API credentials; `internal/mockllm` for tests) | Claude Agent SDK (heavier, vendor-tied) |
 | Icons | **Phosphor Icons** — self-hosted / embedded on app origin, no CDN (§9) | Lucide / Heroicons |
 | Hosted login | Clerk Go SDK + ClerkJS / Clerk UI from the application Frontend API domain; enabled only by Clerk configuration | Replacing self-hosted login |
 | Login (optional) | Generic OIDC via discovery — `coreos/go-oidc/v3` + `golang.org/x/oauth2`, exchanged once for our own session (§10) | auth at the operator's proxy (also supported); vendor SDK (rejected) |
@@ -654,8 +654,10 @@ and replaces any need for a CLI tool.
 ## 12. Deployment
 
 **Image:** multi-stage Docker build — build with the Go toolchain (and Node only to
-bundle CodeMirror/gallery JS), copy the single binary + embedded assets into
-`distroless`/`scratch`. One small image, one process.
+bundle frontend assets), then copy the server and the checksum-pinned Pi Bolt
+release into Debian bookworm-slim. Pi Bolt requires glibc; the final image has
+CA certificates and no Node/npm. Each agent conversation runs a native Pi
+subprocess with Exhibit's runtime-loaded TypeScript extensions.
 
 **TLS / reverse proxy: the operator's, not ours.** We don't ship or require a proxy.
 The service serves plain HTTP on a bound port; whatever sits in front (Caddy, Traefik,
@@ -726,8 +728,8 @@ Turso/libSQL territory and a larger commitment — out of scope for the default 
 
 ## 13. Build-time vs runtime dependencies
 
-- **Runtime (shipped):** the Go binary + embedded assets, SQLite (embedded), Node and
-  the pinned `pi` agent harness (the image's runtime base, §1 "Agent harness"), and a
+- **Runtime (shipped):** the Go binary + embedded assets, SQLite (embedded), the
+  pinned native Pi Bolt release and glibc (§1 "Agent harness"), CA certificates, and a
   mounted data volume. That's the whole product surface.
 - **Runtime (operator-supplied, optional):** a TLS-terminating proxy of their choice,
   Litestream + an S3-compatible bucket (or MinIO) for backup, a Chromium thumbnail

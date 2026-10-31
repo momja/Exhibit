@@ -5,10 +5,8 @@
 # which go:embed serves. It runs the same scripts/build-assets.sh that
 # `make assets` uses and discovers workspaces automatically, so adding a new
 # asset never means editing this Dockerfile. The output is not committed to git;
-# it is produced fresh on every image build. The runtime image below carries
-# only the built bytes from this stage — it does end up with its own Node
-# install too, but that's for the `pi` agent sidecar (see below), unrelated
-# to asset building.
+# it is produced fresh on every image build. The runtime image carries only
+# the built bytes from this stage; Node is not needed by the native Pi sidecar.
 FROM node:22-bookworm-slim AS assets
 
 # python3 + fonttools/brotli for the Phosphor subset step (web/icons/build.mjs,
@@ -45,36 +43,54 @@ COPY --from=assets /app/internal/api/assets/ ./internal/api/assets/
 # Build the server binary
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /bin/server ./cmd/server
 
-# --- Runtime stage ---
-# Node-based (not distroless): the agent surface (docs/agent.md) spawns `pi`
-# — Mario Zechner's pi-mono agent harness — as a subprocess of the server
-# itself, so it must live in this image. Pi is npm-only (no standalone
-# binary) and its bin script is a `#!/usr/bin/env node` shebang, which needs
-# a real userland (node + env) that distroless/static doesn't provide. The
-# server itself stays a static Go binary; only the agent surface pulls in
-# this larger base. The agent is part of the product, so every image ships
-# `pi`; there is no agent-free build.
-FROM node:22-bookworm-slim
+# --- Native Pi download stage ---
+# Pi Bolt 1.0.8 contains Pi 1.4.0. Pin the version AND release-archive hashes;
+# update them together after the real-Pi agent/API compatibility suites pass.
+# amd64 uses the baseline build so the image does not require AVX2. Both builds
+# have JIT off; Exhibit loads its unchanged TypeScript extensions at runtime.
+FROM debian:bookworm-slim AS pi-bolt
 
-# Pi is pinned (av-2yws): metering reads Pi's usage-event shape, and the
-# usage-policy guardrail (av-gust) depends on how its extension hooks behave
-# (an `input` handler returning `handled` skips the model). An unpinned
-# upgrade could change either with nothing failing.
-# Conversations are kept as Pi's own session file and later resumed from it
-# (av-y7td, av-b4yh), so that file's format, `--session`, the working-directory
-# check Pi makes on resume, and the `agent_settled` event are part of the same
-# contract.
-# Bump deliberately and run `go test ./internal/api` (with `pi` on PATH — the
-# agent pipeline tests, Guardrail and the conversation tests among them)
-# against it.
-# Pi 1.3.0 requires Node >=22.19.0. The Node 22 runtime above supplies it;
-# engine-strict below makes an incompatible base fail the image build.
-ARG PI_VERSION=1.3.0
+ARG TARGETARCH
+ARG PI_BOLT_VERSION=1.0.8
+
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends ca-certificates curl xz-utils \
+	&& rm -rf /var/lib/apt/lists/*
+
+RUN set -eu; \
+	pi_bolt_arch="${TARGETARCH:-$(dpkg --print-architecture)}"; \
+	case "$pi_bolt_arch" in \
+		amd64) pi_bolt_archive=pi-bolt-linux-x64-baseline; \
+			pi_bolt_sha256=098816ee9fd2adaa7ae67bfa5061741e0f4b54863a810e4957523b671840f765 ;; \
+		arm64) pi_bolt_archive=pi-bolt-linux-arm64; \
+			pi_bolt_sha256=f530486723c7ab9004aca51f6f9494b95861fba7287c05ae8804647d63077de1 ;; \
+		*) echo "Unsupported Pi Bolt architecture: $pi_bolt_arch" >&2; exit 1 ;; \
+	esac; \
+	curl --fail --show-error --location --retry 3 \
+		"https://github.com/opensec-git/Pi-Bolt/releases/download/bolt-v${PI_BOLT_VERSION}/${pi_bolt_archive}.tar.xz" \
+		-o /tmp/pi-bolt.tar.xz; \
+	echo "$pi_bolt_sha256  /tmp/pi-bolt.tar.xz" | sha256sum --check --strict; \
+	mkdir -p /opt/pi-bolt; \
+	tar -xJf /tmp/pi-bolt.tar.xz -C /opt/pi-bolt --strip-components=1; \
+	rm /tmp/pi-bolt.tar.xz
+
+# --- Runtime stage ---
+# The server is static Go; Pi Bolt supplies the native agent plus its adjacent
+# assets, native helpers and license notices. A glibc userland is required, but
+# Node, npm and the download tools stay in the build stages.
+FROM debian:bookworm-slim AS runtime
 
 RUN apt-get update \
 	&& apt-get install -y --no-install-recommends ca-certificates \
-	&& rm -rf /var/lib/apt/lists/* \
-	&& npm install -g --ignore-scripts --engine-strict @earendil-works/pi-coding-agent@${PI_VERSION}
+	&& rm -rf /var/lib/apt/lists/*
+
+COPY --from=pi-bolt /opt/pi-bolt/ /opt/pi-bolt/
+
+# Keep the server's default PI_BIN=pi and expose the upstream name for source
+# installs and diagnostics. Do not run self-update inside a pinned image.
+RUN ln -s /opt/pi-bolt/pi /usr/local/bin/pi \
+	&& ln -s /opt/pi-bolt/pi /usr/local/bin/pi-bolt \
+	&& pi --version
 
 COPY --from=builder /bin/server /server
 
