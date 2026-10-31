@@ -194,7 +194,7 @@ const saved = await editor.run(async () => {
 if (saved) editor.close();
 ```
 
-The interface has three methods and one read-only value:
+The interface has three methods and one read/write value:
 
 - `show(trigger)` opens synchronously and returns whether it opened. Native
   `autofocus` chooses initial focus. Omit the trigger to use the active element.
@@ -208,8 +208,9 @@ The interface has three methods and one read-only value:
   ordinary inputs remain editable. No values are reset. Errors propagate to
   the feature. It returns the operation's result, or `undefined` for a duplicate
   run or an operation invalidated by removal of the dialog.
-- `pending` is true while that operation is in flight. Use it only when a
-  feature decision must precede the operation, such as a delete confirmation.
+- `pending` reads the shared lock. Set it to `true` when event-driven work
+  starts and `false` from its existing completion/failure handlers. `run` owns
+  the same lock for promise-based work.
 
 Removing the dialog releases native modal state, listeners, pending controls,
 and return focus without a feature event. Reconnecting reuses the same handle;
