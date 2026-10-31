@@ -38,9 +38,8 @@ async function load({ artifact = 'art-1', viewer = '1', store = storage(), block
   permissionDialog(page, 'media-modal');
   permissionDialog(page, 'geo-modal');
   await page.loadModule(asset('detail.js'));
-  page.byId('direct-open-modal').open=false;
-  page.byId('direct-open-modal').showModal = () => { page.byId('direct-open-modal').open=true; };
-  page.byId('direct-open-modal').close = () => { page.byId('direct-open-modal').open=false; };
+  const directDialog = observeModal(page, 'direct-open-modal');
+  page.byId('direct-open-cancel').addEventListener('click', () => directDialog.dispatchEvent({type:'exhibit:modal-close'}));
   await page.loadModule(asset('direct-open.js'));
   const trigger = page.byId('direct-open-toolbar');
   const prompt = page.byId('direct-open-modal');
@@ -56,7 +55,6 @@ test('both toolbar and capability banner ask before opening exactly one isolated
     const before = page.tabs.length;
     await trigger.click();
     assert.equal(page.prompt.open, true);
-    assert.equal(page.document.activeElement, page.cancel);
     assert.equal(page.checkbox.checked, false);
     assert.equal(page.tabs.length, before);
     await page.confirm.click();
@@ -70,16 +68,14 @@ test('both toolbar and capability banner ask before opening exactly one isolated
   assert.deepEqual(page.api.calls, [], 'opening is not an artifact mutation');
 });
 
-for (const dismiss of ['cancel', 'escape', 'backdrop']) {
-  test(`${dismiss} opens nothing, resets the checkbox and restores focus`, async () => {
+for (const dismiss of ['cancel', 'shared dismissal']) {
+  test(`${dismiss} opens nothing and resets the checkbox`, async () => {
     const page = await load();
     await page.trigger.click();
     page.checkbox.checked = true;
     if (dismiss === 'cancel') await page.cancel.click();
-    if (dismiss === 'escape') page.pressKey('Escape');
-    if (dismiss === 'backdrop') await page.prompt.click();
+    if (dismiss === 'shared dismissal') page.prompt.dispatchEvent({type:'exhibit:modal-close'});
     assert.equal(page.prompt.open, false);
-    assert.equal(page.document.activeElement, page.trigger);
     assert.equal(page.checkbox.checked, false);
     assert.equal(page.tabs.length, 0);
     assert.equal(page.store.values.size, 0);
@@ -89,18 +85,6 @@ for (const dismiss of ['cancel', 'escape', 'backdrop']) {
   });
 }
 
-test('dialog content clicks do not dismiss; keyboard focus wraps inside the modal', async () => {
-  const page = await load();
-  await page.trigger.click();
-  await page.prompt.click(page.checkbox);
-  assert.equal(page.prompt.open, true);
-  page.confirm.focus();
-  page.pressKey('Tab');
-  assert.equal(page.document.activeElement, page.checkbox);
-  page.pressKey('Tab', { shiftKey: true });
-  assert.equal(page.document.activeElement, page.confirm);
-});
-
 test('a hidden toolbar menu returns focus to More actions', async () => {
   const page = await load();
   await page.trigger.click();
@@ -109,18 +93,6 @@ test('a hidden toolbar menu returns focus to More actions', async () => {
   page.document.getElementById = (id) => id === 'pv-open' ? null : lookup(id);
   await page.cancel.click();
   assert.equal(page.document.activeElement, page.byId('pip-more'));
-});
-
-test('background controls are inert while the modal is open and restored on dismissal', async () => {
-  const page = await load();
-  const alreadyInert = { inert: true };
-  page.document.body.children = [page.prompt, page.trigger, alreadyInert];
-  await page.trigger.click();
-  assert.equal(page.trigger.inert, true);
-  assert.equal(page.prompt.inert, undefined);
-  await page.cancel.click();
-  assert.equal(page.trigger.inert, false);
-  assert.equal(alreadyInert.inert, true);
 });
 
 test('dismissal during an approval closes the placeholder and never opens or remembers later', async () => {
@@ -207,10 +179,9 @@ for (const [kind, request] of [
     assert.equal(page.prompt.open, true);
     assert.equal(page.tabs.length, 0);
     assert.deepEqual(page.api.calls, []);
-    page.pressKey('Escape');
+    page.prompt.dispatchEvent({type:'exhibit:modal-close'});
     await allowing;
     assert.equal(page.byId(`${kind}-modal`).open, true);
-    assert.equal(page.document.activeElement, page.byId(`${kind}-allow`));
     assert.equal(page.tabs.length, 0);
     assert.deepEqual(page.api.calls, []);
     const retrying = page.byId(`${kind}-allow`).click();
@@ -246,7 +217,6 @@ test('agent opens after creation and swaps use current artifact and share detail
   const trigger = await clickAgentOpen(page, 'created');
   assert.equal(page.prompt.open, true);
   await page.cancel.click();
-  assert.equal(page.document.activeElement, trigger);
   assert.equal(page.tabs.length, 0);
   await clickAgentOpen(page, 'created');
   page.checkbox.checked = true;

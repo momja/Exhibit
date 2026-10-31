@@ -79,9 +79,8 @@ async function loadDetail({ readOnly = false, approvals = {}, responses = [] } =
   permissionDialog(page, 'media-modal');
   permissionDialog(page, 'geo-modal');
   await page.loadModule(path.join(ASSETS, 'detail.js'));
-  page.byId('direct-open-modal').open=false;
-  page.byId('direct-open-modal').showModal = () => { page.byId('direct-open-modal').open=true; };
-  page.byId('direct-open-modal').close = () => { page.byId('direct-open-modal').open=false; };
+  const directDialog = observeModal(page, 'direct-open-modal');
+  page.byId('direct-open-cancel').addEventListener('click', () => directDialog.dispatchEvent({type:'exhibit:modal-close'}));
   await page.loadModule(path.join(ASSETS, "direct-open.js"));
   return { ...page, api, tabs, opened };
 }

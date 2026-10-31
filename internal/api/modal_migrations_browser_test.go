@@ -554,3 +554,85 @@ func TestLocationModalBrowser(t *testing.T) {
 		})
 	}
 }
+
+func TestDirectOpenModalBrowser(t *testing.T) {
+	for _, agent := range []bool{false, true} {
+		for _, width := range []int64{1280, 390} {
+			t.Run(fmt.Sprintf("agent=%t/%d", agent, width), func(t *testing.T) {
+				b, _ := newPermissionViewer(t, width, agent)
+				trigger := "#direct-open-toolbar"
+				if agent {
+					trigger = "#pv-open"
+				}
+				open := `document.querySelector('` + trigger + `').click()`
+				b.dialogCycle("#direct-open-modal", open, "#direct-open-cancel")
+				b.eval(open)
+				b.capture("Exh-sqny", width)
+				b.check(`document.documentElement.scrollWidth<=innerWidth && !document.querySelector('body > [inert]')`)
+				// Explicit content clicks keep the dialog open; only outside bounds dismiss.
+				b.eval(`document.getElementById('direct-open-title').click()`)
+				b.check(`document.getElementById('direct-open-modal').open`)
+				b.eval(`window.tabs=[];window.blockPopup=true;window.open=()=>{if(blockPopup)return null;const tab={opener:window,closed:false,location:null,close(){this.closed=true}};tabs.push(tab);return tab}`)
+				b.run(chromedp.Click(chromedp.CSS(`#direct-open-confirm`)))
+				b.wait(`document.getElementById('direct-open-status').textContent.includes('blocked')`)
+				b.check(`document.getElementById('direct-open-modal').open`)
+				b.eval(`blockPopup=false;document.getElementById('direct-open-remember').checked=true`)
+				b.run(chromedp.Click(chromedp.CSS(`#direct-open-confirm`)))
+				b.wait(`!document.getElementById('direct-open-modal').open`)
+				b.check(`tabs.length===1 && tabs[0].opener===null && tabs[0].location.includes('/open')`)
+				b.eval(open)
+				b.wait(`tabs.length===2`)
+				b.check(`!document.getElementById('direct-open-modal').open`)
+			})
+		}
+	}
+}
+
+func TestPermissionModalStackBrowser(t *testing.T) {
+	b, _ := newPermissionViewer(t, 390, false)
+	b.eval(`permissionReport({__avDownload:true,filename:'queued.txt',bytes:new ArrayBuffer(1)});permissionReport({__avClipboard:true,id:'top',op:'read'})`)
+	b.wait(`document.getElementById('dl-modal').open && document.getElementById('clip-modal').open`)
+	b.run(chromedp.KeyEvent(kb.Escape))
+	b.wait(`!document.getElementById('clip-modal').open`)
+	b.check(`document.getElementById('dl-modal').open && document.getElementById('dl-modal').contains(document.activeElement)`)
+	b.run(chromedp.KeyEvent(kb.Escape))
+	b.wait(`!document.getElementById('dl-modal').open`)
+	b.check(`document.activeElement===document.querySelector('iframe')`)
+	// Native nested confirmation cancels only itself, then the capability.
+	b.eval(`permissionReport({__avMedia:true,id:'nested',video:true})`)
+	b.run(chromedp.Click(chromedp.CSS(`#media-allow`)))
+	b.wait(`document.getElementById('direct-open-modal').open`)
+	b.run(chromedp.KeyEvent(kb.Escape))
+	b.check(`!document.getElementById('direct-open-modal').open && document.getElementById('media-modal').open && document.activeElement.id==='media-allow'`)
+	b.run(chromedp.KeyEvent(kb.Escape))
+	b.wait(`!document.getElementById('media-modal').open`)
+}
+
+func TestDirectOpenPendingBrowser(t *testing.T) {
+	b, _ := newPermissionViewer(t, 390, false)
+	b.eval(`window.directResults=[];window.tabs=[];window.open=()=>{const tab={opener:window,location:null,closed:false,close(){this.closed=true}};tabs.push(tab);return tab};document.dispatchEvent(new CustomEvent('exhibit:open-directly',{detail:{trigger:document.getElementById('pip-more'),approve:()=>new Promise(resolve=>window.approveDirect=resolve),resolve:value=>directResults.push(value)}}))`)
+	b.wait(`document.getElementById('direct-open-modal').open`)
+	b.eval(`document.getElementById('direct-open-remember').checked=true`)
+	b.run(chromedp.Click(chromedp.CSS(`#direct-open-confirm`)))
+	b.wait(`document.getElementById('direct-open-confirm').disabled`)
+	b.run(chromedp.KeyEvent(kb.Escape))
+	b.check(`directResults.length===1 && directResults[0]===false && tabs[0].closed`)
+	b.eval(`approveDirect(true)`)
+	b.run(chromedp.Sleep(30 * time.Millisecond))
+	b.check(`directResults.length===1 && tabs[0].location===null && !document.getElementById('direct-open-modal').open && !Object.keys(localStorage).some(key=>key.startsWith('exhibit:direct-open:'))`)
+}
+
+func TestDirectOpenPreviewSwapBrowser(t *testing.T) {
+	b, _ := newPermissionViewer(t, 390, true)
+	b.eval(`window.oldOpen=document.getElementById('pv-open');oldOpen.click();document.body.dispatchEvent(new CustomEvent('exhibit:artifact-saved'))`)
+	b.wait(`!oldOpen.isConnected && document.getElementById('pv-open')`)
+	b.run(chromedp.KeyEvent(kb.Escape))
+	b.check(`document.activeElement===document.getElementById('pv-open')`)
+	// Create a different preview through the real API and htmx partial path.
+	b.eval(`(async()=>{const response=await window.apiFetch('/api/artifacts',{method:'POST',body:JSON.stringify({title:'New preview',body:'<h1>New preview</h1>'})});const data=await response.json();artifact=data.artifact;window.nextArtifact=artifact;document.body.dispatchEvent(new CustomEvent('exhibit:artifact-saved'))})()`)
+	b.wait(`window.nextArtifact && document.getElementById('pv-open').dataset.directOpenArtifact===nextArtifact.id`)
+	b.eval(`window.tabs=[];window.open=()=>{const tab={opener:window,closed:false,location:null,close(){this.closed=true}};tabs.push(tab);return tab};document.getElementById('pv-open').click()`)
+	b.run(chromedp.Click(chromedp.CSS(`#direct-open-confirm`)))
+	b.wait(`tabs.length===1`)
+	b.check(`tabs[0].location==='/artifacts/'+nextArtifact.id+'/open' && tabs[0].opener===null`)
+}
