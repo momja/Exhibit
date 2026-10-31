@@ -1,6 +1,6 @@
 ---
 id: av-f3cp
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-07-06T22:06:39Z
@@ -14,7 +14,7 @@ Add real-browser regression coverage to CI for the isolated artifact runtime and
 
 ## Planning state — 2026-10-20
 
-This is a ticket refresh for discussion. All implementation stories remain open; do not start implementation until the user has discussed this plan. No application code, browser installation, workflow, VM runner, or repository rules are being changed in this pass.
+The planning pass is complete. On 2026-10-23 the user approved Duplicate as the first shared-modal consumer and a required merge check after a green hosted CI run. Implementation of the first three steps is authorized; later security, broader UI, and maintenance stories remain follow-ups.
 
 The July proposal `docs/proposals/e2e_testing.md` is absent from main and the locally available `origin/feature/av-f3cp/e2e-testing` tree. These tickets now carry the actionable design and acceptance criteria themselves. Current architecture references are [security](../docs/security.md), [UI components](../docs/ui-components.md), and [technical stack](../docs/technical_stack.md), rather than missing proposal sections.
 
@@ -22,7 +22,7 @@ The July proposal `docs/proposals/e2e_testing.md` is absent from main and the lo
 
 1. [av-e1sr: isolated harness and state round-trip](av-e1sr.md). Run the built application with fresh storage, two real origins, real login, and API-seeded fixtures. Start with Chromium and one worker.
 2. [av-g8oa: minimal hosted CI gate](av-g8oa.md). Establish the repository's first GitHub Actions workflow on GitHub-hosted Ubuntu. Install the browser, execute existing Go/Node checks and required browser suites, and retain failure evidence. This moves ahead of wider test coverage and maintenance automation.
-3. [av-f05n: modal and htmx integration flow](av-f05n.md). Cover menu → modal → save → server-rendered htmx refresh → usable replacement component, including keyboard and focus. Coordinate with the upcoming modal implementation; the proposed first consumer is gallery Duplicate, subject to discussion.
+3. [av-f05n: modal and htmx integration flow](av-f05n.md). Cover menu → modal → save → server-rendered htmx refresh → usable replacement component, including keyboard and focus. Coordinate with the upcoming modal implementation; the approved first consumer is gallery Duplicate, with the shared-controller prerequisite tracked in [Exh-b5hv](Exh-b5hv.md).
 
 Then expand coverage with [av-8qc0: runtime security boundaries](av-8qc0.md), [Exh-jtv1: ingest/sharing/search/tags](Exh-jtv1.md), and [Exh-gtz1: coverage inventory and maintenance guidance](Exh-gtz1.md). These remain part of the epic, but do not delay the initial CI milestone. Security can proceed after the harness and CI without waiting for modal delivery.
 
@@ -38,8 +38,8 @@ Then expand coverage with [av-8qc0: runtime security boundaries](av-8qc0.md), [E
 
 - Hosted CI is the recommended environment. The public repository currently has no Actions workflows. Go, Node-built embedded assets, filesystem blobs, SQLite, and two loopback listeners fit a standard hosted Ubuntu runner; a runner on this VM is not needed for the proposed scope. Runtime and reliability still need to be measured in implementation.
 - The built server now enables login on a fresh database. The harness must establish a fixture owner session and ensure bearer-token seeding and UI login resolve to the same owner; the old unauthenticated-page assumption is stale.
-- Agree which feature first adopts the shared native-dialog controller and identify its implementation ticket. No such modal story was found in the current ticket set. Existing Duplicate is a concrete candidate, but its current dialog is feature-owned.
-- Agree the merge-gate policy. A failing workflow check and a repository rule requiring that check are separate changes. The classic branch-protection endpoint currently reports main unprotected, and the listed "Main protection" ruleset is disabled. Enabling required checks belongs to the CI rollout discussion; this pass changes no settings.
+- Approved 2026-10-23: Duplicate is the first shared native-dialog consumer; [Exh-b5hv](Exh-b5hv.md) implements the controller and migration before the Playwright flow.
+- Agree the merge-gate policy. A failing workflow check and a repository rule requiring that check are separate changes. The classic branch-protection endpoint currently reports main unprotected, and the listed "Main protection" ruleset is disabled. Approved 2026-10-23: require the new check for merges after its first green hosted run, preserving unrelated repository rules.
 - Sharing UI exists, and anonymous shares now live until revoked/replaced; expiry was removed. The old API-only share journey and expiry criterion are superseded.
 
 ## Acceptance Criteria

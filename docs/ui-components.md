@@ -150,7 +150,7 @@ with `exhibit:artifacts-changed`.
 
 [Phone layout](screenshots/Exh-16ds/02-gallery-action-menu-mobile.png)
 
-## Adding a controller, including the next modal
+## Adding a controller
 
 1. Add a native module under `web/gallery/` importing `Controller` from
    `../stimulus/stimulus.js`. Register it in `controllers.js` and add its file
@@ -165,11 +165,44 @@ with `exhibit:artifacts-changed`.
 5. Features perform authenticated API calls and emit the existing change events
    that htmx regions listen for. Controllers do not rebuild server markup.
 
-The next modal component should wrap native `<dialog>` behavior, define initial
-and return focus, and route Escape, backdrop, and explicit dismissal through
-the same feature guard. Form contents and asynchronous saving belong to the
-story implementing them. Existing dialogs retain their implementations until
-migrated.
+## Native modal dialogs
+
+The registered `modal` controller wraps native `<dialog>`, which supplies the
+top layer and inert background. The controller wraps Tab/Shift+Tab between its
+enabled fields, keeping focus in the dialog at both boundaries. Duplicate is its first
+consumer. Keep the dialog root outside a region whose htmx refresh should
+preserve its form state. Compose the feature's named Go partial with shared
+`.modal-dialog` styling and these actions:
+
+```html
+<dialog class="modal-dialog" aria-labelledby="example-title"
+  data-controller="modal"
+  data-action="exhibit:modal-open->modal#open exhibit:modal-close->modal#dismiss cancel->modal#cancel click->modal#backdrop keydown->modal#wrapFocus">
+  <h2 id="example-title">Edit example</h2>
+  <input aria-label="Name" data-modal-target="initialFocus">
+  <button type="button" data-action="modal#dismiss">Cancel</button>
+</dialog>
+```
+
+Feature code dispatches `exhibit:modal-open` on that dialog with
+`detail.trigger` set to the visible return-focus element. The controller opens
+it and focuses `initialFocus` when present. A feature can then select its text.
+Dispatch `exhibit:modal-close` after a successful save. Escape, backdrop clicks,
+Cancel, and programmatic close requests all emit the same cancellable
+`modal:before-close` event. Features call `event.preventDefault()` while a save
+must not be dismissed. Dialog padding is part of the dialog, not its backdrop.
+
+After accepted dismissal, the controller closes the dialog, restores focus to
+the trigger if it is still connected, and emits `modal:closed`. Features own
+error feedback, uncertain-request reconciliation, API calls, and refresh
+events. Duplicate focuses the new card title after its successful htmx refresh;
+it does not try to refocus the old removed trigger. Focus restoration is
+synchronous, so an earlier queued native `close` event cannot steal focus from
+a reopened dialog or refreshed result. Removing the component closes its
+native modal state without dispatching a feature mutation. Stimulus owns its
+action listeners and reconnects it when reinserted.
+
+Existing feature dialogs retain their implementations until explicitly migrated.
 
 ## Unsaved changes
 
@@ -206,8 +239,13 @@ The helper finds a locally installed Playwright Chromium headless shell, or
 uses `CHROMIUM_TEST_BINARY`. It skips browser tests when neither is available.
 Cases cover two different menus, escaped payloads, keyboard/focus, actual htmx
 replacements and appends, disconnect/reconnect, and the existing duplication
-dialog. Add browser integration cases for new controllers; keep the miniature
-Node DOM focused on feature logic.
+dialog, including modal removal/reconnection. The full application journeys in
+`e2e/` cover persisted state and Duplicate's save/htmx replacement, cancellation,
+keyboard focus, pending-save guards, and retries after a committed response is
+lost. These run in CI; local Playwright execution is explicit for relevant
+frontend work or failure investigation. See [browser test setup](../e2e/README.md).
+Add browser integration cases for new controllers; keep the miniature Node DOM
+focused on feature logic.
 
 ## Account menu and Settings
 

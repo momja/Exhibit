@@ -21,7 +21,6 @@ export function initializeDuplication(root) {
   const cancel = form.querySelector('[data-duplicate-cancel]');
   const status = form.querySelector('[data-duplicate-status]');
   let artifactID = '';
-  let trigger;
   let busy = false;
   let pending;
   let newArtifactID = '';
@@ -31,18 +30,17 @@ export function initializeDuplication(root) {
     submit.disabled = busy;
     cancel.disabled = busy;
   }
-  function close() {
-    if (busy) return;
-    dialog.close();
-    trigger?.focus();
+  dialog.addEventListener('modal:before-close', event => {
+    if (busy) event.preventDefault();
+  });
+  dialog.addEventListener('modal:closed', () => {
     // An unconfirmed request may already have succeeded. Reconcile when the
     // person closes the modal too, without issuing another mutation.
     if (pending) root.dispatchEvent(new CustomEvent('exhibit:artifacts-changed', { bubbles: true }));
-  }
+  });
   root.addEventListener('exhibit:duplicate', event => {
     if (busy || dialog.open) return;
     artifactID = event.detail.artifactID;
-    trigger = event.detail.trigger;
     title.value = event.detail.title + ' (copy)';
     share.checked = false;
     data.checked = false;
@@ -50,20 +48,8 @@ export function initializeDuplication(root) {
     status.textContent = '';
     submit.textContent = 'Duplicate artifact';
     controls();
-    dialog.showModal();
-    title.focus();
+    dialog.dispatchEvent(new CustomEvent('exhibit:modal-open', { detail: { trigger: event.detail.trigger } }));
     title.select();
-  });
-  cancel.addEventListener('click', close);
-  dialog.addEventListener('cancel', event => {
-    event.preventDefault();
-    close();
-  });
-  dialog.addEventListener('click', event => {
-    if (event.target !== dialog) return;
-    const bounds = dialog.getBoundingClientRect();
-    if (event.clientX < bounds.left || event.clientX > bounds.right ||
-        event.clientY < bounds.top || event.clientY > bounds.bottom) close();
   });
   form.addEventListener('submit', async event => {
     event.preventDefault();
@@ -99,7 +85,7 @@ export function initializeDuplication(root) {
       newArtifactID = artifact.id;
       pending = undefined;
       busy = false;
-      close();
+      dialog.dispatchEvent(new CustomEvent('exhibit:modal-close'));
       root.dispatchEvent(new CustomEvent('exhibit:artifacts-changed', { bubbles: true }));
     } catch {
       status.textContent = 'Could not confirm duplication. Try again to check the saved result.';

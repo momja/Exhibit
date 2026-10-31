@@ -12,7 +12,7 @@ async function fixture(clipboard) {
     setTimeout: fn => { timers.push(fn); return timers.length; },
     clearTimeout: () => {}
   });
-  const content = { textContent: '  First line\n\n<code> & **markdown**\n' };
+  const content = { querySelector: () => null, textContent: '  First line\n\n<code> & **markdown**\n' };
   const status = { textContent: '', setAttribute() {}, removeAttribute() {} };
   const message = { querySelector: selector => selector === '[data-message-content]' ? content : status };
   const button = { dataset: { messageAction: 'copy' }, disabled: false, closest: () => message };
@@ -79,4 +79,15 @@ test('HTTP fallback copies synchronously and restores focus and selection on fai
   p.context.document.execCommand = () => true;
   await p.click();
   assert.equal(p.status.textContent, 'Copied');
+});
+
+
+test('copy preserves the Markdown source of a rendered message', async () => {
+  const copied = [];
+  const p = await fixture({ writeText: async text => copied.push(text) });
+  const source = '## Heading\n\n**bold** and `code`\n\n- one\n- two';
+  p.content.textContent = 'Headingbold and codeonetwo';
+  p.content.querySelector = () => ({ dataset: { messageSource: source } });
+  await p.click();
+  assert.deepEqual(copied, [source]);
 });

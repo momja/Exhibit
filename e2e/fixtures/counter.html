@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Persistent counter</title>
+<h1>Persistent counter</h1>
+<p>Startup value: <output aria-label="Startup counter"></output></p>
+<p>Current value: <output aria-label="Current counter"></output></p>
+<button type="button">Increment</button>
+<script>
+  // Capture the synchronous startup read before any event or async work.
+  let counter = Number(localStorage.getItem('counter') || '0');
+  document.querySelector('[aria-label="Startup counter"]').textContent = counter;
+  const current = document.querySelector('[aria-label="Current counter"]');
+  current.textContent = counter;
+  document.querySelector('button').addEventListener('click', () => {
+    counter++;
+    localStorage.setItem('counter', String(counter));
+    current.textContent = counter;
+  });
+</script>
+</html>

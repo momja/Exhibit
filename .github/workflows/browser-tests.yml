@@ -1,0 +1,99 @@
+name: Browser regression
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: browser-regression-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser-regression:
+    name: Browser regression
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Check for changes outside tickets
+        id: changes
+        env:
+          DIFF_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          python3 <<'PY'
+          import os
+          import subprocess
+
+          run_tests = True
+          base = os.environ.get("DIFF_BASE", "")
+          if os.environ["GITHUB_EVENT_NAME"] in {"pull_request", "push"} and base and set(base) != {"0"}:
+              # PRs compare the tested merge to its base, covering the entire PR.
+              # Disable rename detection so moves into/out of tickets check both paths.
+              result = subprocess.run(
+                  ["git", "diff", "--name-only", "--no-renames", "-z", base, os.environ["GITHUB_SHA"], "--"],
+                  check=True, capture_output=True,
+              )
+              paths = [path for path in result.stdout.split(b"\0") if path]
+              run_tests = not paths or any(not path.startswith(b".tickets/") for path in paths)
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write(f"run_tests={str(run_tests).lower()}\n")
+          PY
+      - name: Report ticket-only success
+        if: steps.changes.outputs.run_tests == 'false'
+        run: echo 'Only .tickets/ changed; test workload skipped.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/setup-go@v6
+        if: steps.changes.outputs.run_tests == 'true'
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v6
+        if: steps.changes.outputs.run_tests == 'true'
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+      - name: Install test dependencies
+        if: steps.changes.outputs.run_tests == 'true'
+        run: npm ci --prefix e2e
+      - name: Install Chromium and Linux dependencies
+        if: steps.changes.outputs.run_tests == 'true'
+        working-directory: e2e
+        run: npx --no-install playwright install --with-deps chromium
+      - name: Select the installed browser for Go component tests
+        if: steps.changes.outputs.run_tests == 'true'
+        working-directory: e2e
+        run: |
+          browser_binary="$(node chromium-binary.mjs)"
+          test -x "$browser_binary"
+          echo "CHROMIUM_TEST_BINARY=$browser_binary" >> "$GITHUB_ENV"
+      - name: Build the application and embedded assets
+        if: steps.changes.outputs.run_tests == 'true'
+        run: make build
+      - name: Run Go, gallery Node, and Chromium component checks
+        if: steps.changes.outputs.run_tests == 'true'
+        run: |
+          mkdir -p e2e/artifacts
+          go test -count=1 -json ./... > e2e/artifacts/go-tests.jsonl
+          node e2e/check-browser-tests.mjs
+      - name: Run Playwright application journeys
+        if: steps.changes.outputs.run_tests == 'true'
+        run: make e2e
+      - name: Retain failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: browser-regression-failure
+          path: |
+            e2e/playwright-report/
+            e2e/test-results/
+            e2e/artifacts/
+          retention-days: 14
+          if-no-files-found: warn

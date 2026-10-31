@@ -25,7 +25,7 @@ const files = [
   // api.js joins them (av-5imk): it is the one credentialed API client every
   // page script calls instead of building an Authorization header itself.
   "tokens.css", "components.css", "components.js", "api.js", "api-module.js",
-  "controllers.js", "floating-header-controller.js", "clerk.js", "clerk-controller.js", "clerk-client.js", "clerk-appearance.js", "clerk-menu.js", "account-deletion-controller.js", "action-menu-controller.js", "filter-sheet-controller.js", "unsaved-changes-controller.js", "editor-session.js",
+  "controllers.js", "floating-header-controller.js", "clerk.js", "clerk-controller.js", "clerk-client.js", "clerk-appearance.js", "clerk-menu.js", "account-deletion-controller.js", "action-menu-controller.js", "modal-controller.js", "filter-sheet-controller.js", "unsaved-changes-controller.js", "editor-session.js",
   "index.css", "index.js", "gallery.js", "gallery-return.js", "gallery-widgets.js", "duplicate.js",
   "new.css", "new.js",
   "detail.css", "detail.js", "direct-open.js", "pip.js", "pip-placement.js",

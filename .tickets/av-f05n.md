@@ -1,7 +1,7 @@
 ---
 id: av-f05n
-status: open
-deps: [av-e1sr, av-g8oa]
+status: closed
+deps: [av-e1sr, av-g8oa, Exh-b5hv]
 links: []
 created: 2026-07-07T05:44:49Z
 type: feature
@@ -13,9 +13,9 @@ parent: av-f3cp
 
 Third step in [av-f3cp](av-f3cp.md): use the upcoming shared modal to cover one complete UI lifecycle after the [harness](av-e1sr.md) and [CI gate](av-g8oa.md) exist. Broader ingest/sharing/search/tag journeys moved to [Exh-jtv1](Exh-jtv1.md).
 
-## Consumer and prerequisite to settle
+## Approved consumer and prerequisite
 
-The proposed first consumer is gallery Duplicate: it already starts from a Stimulus action menu, opens a native dialog, saves through the API, dispatches `exhibit:artifacts-changed`, refreshes server-rendered gallery cards through htmx, and focuses the new card. Its dialog is currently feature-owned, not a shared Stimulus modal. Confirm this consumer and identify/link the upcoming modal implementation ticket before starting the shared-modal portion. If another consumer is chosen, retain the same observable lifecycle criteria.
+The first consumer, approved on 2026-10-23, is gallery Duplicate: it already starts from a Stimulus action menu, opens a native dialog, saves through the API, dispatches `exhibit:artifacts-changed`, refreshes server-rendered gallery cards through htmx, and focuses the new card. Its dialog is currently feature-owned, not a shared Stimulus modal. The controller and migration are tracked in [Exh-b5hv](Exh-b5hv.md), which is a prerequisite for this coverage.
 
 This story tests that component when it ships; it does not implement the shared modal or invent a new product flow. The existing `TestActionMenuBrowser` and `TestGalleryActionMenuDuplicationBrowser` remain focused component coverage. Avoid duplicating all their menu/controller internals in Playwright.
 
@@ -38,3 +38,7 @@ This story tests that component when it ships; it does not implement the shared 
 ## Historical scope superseded — 2026-10-20
 
 The July note requested broad flows to protect classic inline-bootstrap/external-script globals. The gallery now includes native modules and Stimulus. Cover the current behavior and import/component contracts, not a rule that scripts must stay classic. Follow-up journeys are tracked in [Exh-jtv1](Exh-jtv1.md); share UI already exists and share expiry no longer exists.
+
+## Implementation — 2026-10-23
+
+Implemented five full-app Duplicate journeys: keyboard/focus and three dismissal paths; two save/real-htmx replacement cycles; pending-save guard; retry after a real commit with a simulated lost response; and editable retry after a definite refusal. All six Playwright journeys including state pass locally. Shared controller prerequisite implemented; success cases use the real API and server fragments.

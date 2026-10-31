@@ -22,7 +22,8 @@ var templatesFS embed.FS
 // Templates name embedded files with {{asset "gallery/index.js"}}, which
 // yields the cacheable, build-versioned URL (assets.go).
 var pageTemplates = template.Must(template.New("").Funcs(template.FuncMap{
-	"asset": assetURL,
+	"asset":         assetURL,
+	"agentMarkdown": agentMarkdown,
 }).ParseFS(templatesFS, "templates/*.tmpl"))
 
 // renderPage executes one of the named page templates to a string.

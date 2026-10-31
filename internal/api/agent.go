@@ -541,6 +541,9 @@ func (ro *Router) agentEvents(w http.ResponseWriter, r *http.Request) {
 	defer unsubscribe()
 	heartbeat := time.NewTicker(15 * time.Second)
 	defer heartbeat.Stop()
+	var markdown agentMarkdownStream
+	markdownTicker := time.NewTicker(agentMarkdownInterval)
+	defer markdownTicker.Stop()
 
 	for {
 		select {
@@ -548,8 +551,13 @@ func (ro *Router) agentEvents(w http.ResponseWriter, r *http.Request) {
 			if !open {
 				return
 			}
-			fmt.Fprintf(w, "data: %s\n\n", ev)
+			fmt.Fprintf(w, "data: %s\n\n", markdown.renderEvent(ev))
 			flusher.Flush()
+		case <-markdownTicker.C:
+			if ev := markdown.flush(); ev != nil {
+				fmt.Fprintf(w, "data: %s\n\n", ev)
+				flusher.Flush()
+			}
 		case <-heartbeat.C:
 			fmt.Fprint(w, ": ping\n\n")
 			flusher.Flush()
