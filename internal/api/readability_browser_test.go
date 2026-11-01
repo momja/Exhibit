@@ -121,3 +121,45 @@ const readabilityLayoutChecks = `(() => {
  if (/user-scalable\s*=\s*(no|0)|maximum-scale\s*=\s*1\b/.test(viewport)) failures.push('zoom disabled');
  return failures;
 })()`
+
+// Relative field tokens also reach the agent composer and the saved-data
+// choices. Exercise those consumers at doubled text size, not just /new.
+func TestEnlargedFieldsBrowser(t *testing.T) {
+	ro := newTestRouter(t)
+	id := createTestArtifact(t, ro, "Enlarged fields")
+	app := httptest.NewServer(ro)
+	defer app.Close()
+	ro.cfg.AppOrigin = app.URL
+	for _, theme := range []string{"light", "dark"} {
+		for _, width := range []int64{320, 375, 390, 430} {
+			t.Run(fmt.Sprintf("%s/%d", theme, width), func(t *testing.T) {
+				b := newModalBrowser(t, width)
+				_, err := chromedp.Call(b.ctx, emulation.SetEmulatedMedia, emulation.SetEmulatedMediaParams{Features: []*emulation.MediaFeature{{Name: "prefers-color-scheme", Value: theme}}})
+				require.NoError(t, err)
+				_, err = chromedp.Call(b.ctx, emulation.SetTouchEmulationEnabled, emulation.SetTouchEmulationEnabledParams{Enabled: true})
+				require.NoError(t, err)
+				b.run(chromedp.Navigate(app.URL + "/agent"))
+				b.wait(`window.closeKeyModal && document.getElementById('input')`)
+				b.eval(`window.closeKeyModal();document.documentElement.style.fontSize='200%';
+     const input=document.getElementById('input');input.value='First line of a longer message\nSecond line of a longer message\nThird line';input.dispatchEvent(new Event('input',{bubbles:true}))`)
+				b.check(`(() => {
+     const input=document.getElementById('input'), style=getComputedStyle(input), box=input.getBoundingClientRect(), row=input.closest('.compose-row').getBoundingClientRect();
+     return parseFloat(style.fontSize)>=32 && parseFloat(style.lineHeight)>=parseFloat(style.fontSize)*1.2 && box.left>=row.left && box.right<=row.right && row.right<=innerWidth;
+    })()`)
+				b.capture("Exh-h9m4/agent-"+theme, width)
+				b.run(chromedp.Navigate(app.URL + "/artifacts/" + id))
+				b.wait(`window.apiFetch && document.getElementById('share-open')`)
+				b.eval(`document.documentElement.style.fontSize='200%';document.getElementById('share-open').click()`)
+				b.wait(`document.getElementById('share-panel').open`)
+				b.check(`(() => {
+     const dialog=document.getElementById('share-panel');
+     return dialog.scrollWidth<=dialog.clientWidth && [...dialog.querySelectorAll('.state-choice strong')].every(heading=>{
+      const box=heading.closest('.state-choice').getBoundingClientRect(),range=document.createRange();range.selectNodeContents(heading);
+      return parseFloat(getComputedStyle(heading).fontSize)>=32 && [...range.getClientRects()].every(line=>line.left>=box.left && line.right<=box.right);
+     });
+    })()`)
+				b.capture("Exh-h9m4/share-"+theme, width)
+			})
+		}
+	}
+}
