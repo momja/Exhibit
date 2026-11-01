@@ -139,6 +139,8 @@ func TestAppHeaderAccountStatesBrowser(t *testing.T) {
 				require.NoError(t, err)
 				require.True(t, hidden, "successful account loading must not reveal the recovery link")
 				require.NoError(t, chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](`
+					// Initial SDK load failure never mounts an avatar.
+					document.querySelector('[data-clerk-target="mount"]').replaceChildren();
 					document.querySelector('[data-clerk-target="status"]').textContent = 'The account service did not respond. Reload this page to retry. If this continues, check whether your browser or network is blocking Clerk.';
 					document.querySelector('[data-clerk-target="recovery"]').hidden = false;
 				`)))
@@ -146,7 +148,9 @@ func TestAppHeaderAccountStatesBrowser(t *testing.T) {
 					const header = document.querySelector('.app-header').getBoundingClientRect();
 					const status = document.querySelector('[data-clerk-target="status"]').getBoundingClientRect();
 					const recovery = document.querySelector('[data-clerk-target="recovery"]').getBoundingClientRect();
+					const search = document.querySelector('[data-gallery-query]');
 					return status.top >= header.top && status.bottom <= header.bottom &&
+						(!search || search.getBoundingClientRect().width >= 80) &&
 						recovery.width > 0 && recovery.top >= header.top && recovery.bottom <= header.bottom &&
 						document.querySelector('main').getBoundingClientRect().top >= header.bottom &&
 						document.documentElement.scrollWidth <= innerWidth;

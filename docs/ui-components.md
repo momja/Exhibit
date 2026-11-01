@@ -78,8 +78,10 @@ app document against bypassing this component. Browser coverage includes the
 standard pages at six widths, authentication pages without signed-in controls,
 and floating-header interactions and disconnect/reconnect.
 
-[Desktop gallery](screenshots/Exh-arf2/gallery-desktop.png) ·
-[Phone gallery](screenshots/Exh-arf2/gallery-phone.png) ·
+[Desktop gallery](screenshots/Exh-1og2/gallery-desktop.png) ·
+[320px gallery](screenshots/Exh-1og2/gallery-320.png) ·
+[Phone gallery](screenshots/Exh-1og2/gallery-390.png) ·
+[Dark phone gallery](screenshots/Exh-1og2/gallery-390-dark.png) ·
 [Account](screenshots/Exh-arf2/account-desktop.png) ·
 [Editor](screenshots/Exh-arf2/editor-desktop.png) ·
 [Accounts](screenshots/Exh-arf2/admin-desktop.png) ·

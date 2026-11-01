@@ -69,6 +69,10 @@
   .account-admin-link{min-height:44px}
   .app-header .account-control [data-clerk-target="mount"] button,
   .app-header .account-control [data-clerk-target="recovery"]{min-width:var(--header-control-size);min-height:var(--header-control-size);justify-content:center}
+  /* Account-service failures need their own row, not the search field's space. */
+  .app-header:has(.account-control [data-clerk-target="status"]:not(:empty)){flex-wrap:wrap}
+  .app-header:has(.account-control [data-clerk-target="status"]:not(:empty)) .search-row{flex:1 1 0}
+  .app-header .account-control:has([data-clerk-target="status"]:not(:empty)){flex-basis:100%;padding-bottom:6px}
 }
 @media (max-width:600px){
   .app-header-actions .btn:not(.icon-btn){width:var(--header-control-size);padding:0;justify-content:center;font-size:17px}
