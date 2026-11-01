@@ -528,7 +528,7 @@ and [phone](screenshots/Exh-xw54/02-space-switch-phone.png).
 
 **Spaces and filters** (Exh-2c2e, Exh-gx18): one `gallerySpaces` partial
 lays out Library, Shared with me, and Shared by me as a 208px desktop rail
-at widths of at least 768px, and fixed bottom tabs on phones. Per-viewer counts
+at widths of at least 768px, and bottom-sticky tabs on phones. Per-viewer counts
 come from `SpaceCounts`, independently of search. All three destinations remain
 available even when both sharing counts are zero. Empty sharing spaces explain
 what belongs there. Phones use the same full labels, wrapping as needed. Tags

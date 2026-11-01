@@ -311,8 +311,9 @@ uses `shot-scraper` and verifies header identity after a real space click.
 On phones, the library rail becomes bottom-sticky tabs in a column layout.
 It keeps its rendered height in document flow, so wrapped labels, enlarged
 text and the bottom safe-area inset reserve their own clearance above the
-last card or Load more. At normal text size the bar is 54px before the inset,
-with 45px link targets; its height is a minimum, not a cap. Desktop retains
+last card or Load more. At normal text size the bar is about 55px before the inset
+when labels fit one line, with at least 44px link targets. Full labels can wrap
+on a 320px screen; the bar grows to fit them. Desktop retains
 the 208px side rail. No observer or duplicate height token is needed.
 `TestGalleryMobileTabsBrowser` checks 320/375/390/430px in light and dark,
 200% tab text with full labels, a simulated 34px inset, pagination, and short
@@ -322,9 +323,8 @@ pages. `TestGallerySpacesBrowser` retains keyboard, focus and desktop checks.
 [Compact tabs at 390px](screenshots/Exh-0n90/after-390.png) ·
 [Desktop rail](screenshots/Exh-0n90/desktop-1280.png) ·
 [Single-label compatibility fixture at 200% text](screenshots/Exh-0n90/single-labels-200-320-dark.png).
-The last capture temporarily uses the navigation story's full single labels,
-with a simulated 34px bottom inset. Those labels are not part of this change;
-full labels can wrap even at normal text size on a 320px screen. These are
+The last capture uses the full single labels with a simulated 34px bottom inset.
+The combined navigation regression checks the same markup at 200% text. These are
 Chromium captures, not physical iPhone, VoiceOver or browser-zoom checks.
 
 ## Unsaved changes

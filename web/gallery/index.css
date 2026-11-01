@@ -194,7 +194,7 @@ main{padding:10px 12px}
   .gallery-rail{position:sticky;bottom:0;order:1;flex-shrink:0;z-index:30;border-right:0;border-top:1px solid var(--color-hairline-strong);padding:4px max(8px,env(safe-area-inset-right,0px)) calc(4px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px))}
   .gallery-spaces ul{flex-direction:row;gap:8px}
   .gallery-spaces li{display:flex;flex:1;min-width:0}
-  .gallery-spaces a{flex:1;min-width:0;flex-direction:column;justify-content:center;gap:2px;min-height:44px;padding:4px;font-size:.75rem;line-height:1.25;text-align:center;overflow-wrap:anywhere}
+  .gallery-spaces a{flex:1;min-width:0;flex-direction:column;justify-content:center;gap:2px;min-height:44px;padding:4px 2px;font-size:.75rem;line-height:1.25;text-align:center;overflow-wrap:anywhere}
   .space-count{display:none}
   .space-label{max-width:100%;text-align:center}
 }
