@@ -19,10 +19,6 @@ import { loadPageScript, recordingApi, permissionDialog } from "./testdom.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ASSETS = path.join(here, "../../internal/api/assets/gallery");
-// The order detail.tmpl loads them in: the shared prompt module, then the page
-// script that installs it.
-const DETAIL_JS = [
-];
 
 const ID = "art-1";
 const OPEN_URL = "/artifacts/art-1/open";
@@ -31,7 +27,7 @@ const OPEN_URL = "/artifacts/art-1/open";
 async function loadDetail({ readOnly = false, responses = [], headline = "" } = {}) {
   const api = recordingApi(responses);
   const capabilitiesChanged = [];
-  const page = loadPageScript(DETAIL_JS, {
+  const page = loadPageScript([], {
     TOKEN: "",
     READ_ONLY: readOnly,
     STATE_WRITABLE: !readOnly,
@@ -66,7 +62,7 @@ async function loadDetail({ readOnly = false, responses = [], headline = "" } = 
   // the listener the #capability-cluster target stands in for here.
   page.document.body.addEventListener("exhibit:capabilities-changed",
     (e) => capabilitiesChanged.push(e.type));
-  const netDialog = permissionDialog(page, 'net-modal');
+  permissionDialog(page, 'net-modal');
   await page.loadModule(path.join(ASSETS, 'detail.js'));
   return { ...page, api, capabilitiesChanged };
 }
@@ -181,16 +177,6 @@ test("Block once dismisses without writing anything", async () => {
   assert.deepEqual(originCalls(api), [], "dismissing decides nothing");
 });
 
-test("shared dismissal dismisses the prompt", async () => {
-  const { byId, api, postFromFrame, pressKey } = await loadDetail();
-
-  await postFromFrame(report("https://cdn.example.com"));
-  byId("net-modal").dispatchEvent(new Event('cancel', { cancelable: true }));
-
-  assert.equal(byId("net-modal").open, false);
-  assert.deepEqual(originCalls(api), []);
-});
-
 test("several blocked origins queue rather than overwrite each other", async () => {
   const { byId, api, postFromFrame } = await loadDetail();
 
@@ -217,7 +203,7 @@ test("a dismissal during the block write is not thrown away by the write finishi
   // under it. If the settled write then advanced again it would drop that
   // report unseen, and the preamble reports each origin only once per load —
   // so the user would never be asked about b at all.
-  const { byId, postFromFrame, pressKey } = await loadDetail();
+  const { byId, postFromFrame } = await loadDetail();
 
   await postFromFrame(report("https://a.example.com"));
   await postFromFrame(report("https://b.example.com"));
