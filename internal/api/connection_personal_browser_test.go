@@ -88,6 +88,23 @@ func TestPersonalConnectionsBrowser(t *testing.T) {
 				chromedp.Poll[chromedp.Void](`window.connectionsApplication?.getControllerForElementAndIdentifier(document.querySelector('.connect-page'), 'connections')?.active && document.getAnimations().length === 0`),
 				chromedp.SendKeys(chromedp.CSS(`#repair-secret`), "fixture-replacement")))
 			check(`!document.querySelector('[data-connections-target="createForm"]') && document.querySelector('#repair-secret').value === 'fixture-replacement' && document.documentElement.scrollWidth <= innerWidth`, "reconnect is a repair form and fits the viewport")
+			// Focusing the input can scroll the desktop's sticky sidebar. Wait
+			// for the button to settle and be hit-testable before the real mouse
+			// click; an animation check before SendKeys does not cover scrolling.
+			require.NoError(t, chromedp.Do(ctx,
+				chromedp.Evaluate[chromedp.Void](`document.fonts.ready`, chromedp.EvalAwaitPromise),
+				chromedp.ScrollIntoView(chromedp.CSS(`[data-action="submit->connections#repair"] button`)),
+				chromedp.PollFunction[chromedp.Void](`async () => {
+					const button = document.querySelector('[data-action="submit->connections#repair"] button');
+					const before = button.getBoundingClientRect();
+					await new Promise(requestAnimationFrame);
+					await new Promise(requestAnimationFrame);
+					const after = button.getBoundingClientRect();
+					const hit = document.elementFromPoint(after.x + after.width / 2, after.y + after.height / 2);
+					return before.x === after.x && before.y === after.y &&
+						before.width === after.width && before.height === after.height &&
+						!button.disabled && button.contains(hit);
+				}`)))
 			_, err = chromedp.RunResponse(ctx, chromedp.Click(chromedp.CSS(`[data-action="submit->connections#repair"] button`)))
 			require.NoError(t, err)
 			require.NoError(t, chromedp.Do(ctx, chromedp.WaitVisible(chromedp.CSS(`.connection-grant`))))

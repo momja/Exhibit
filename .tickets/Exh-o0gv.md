@@ -1,6 +1,6 @@
 ---
 id: Exh-o0gv
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-01T17:31:30Z
@@ -35,3 +35,7 @@ Reopened for current readiness blockers: rebase over the shared-modal migration 
 **2026-11-01 — Shared-modal integration**
 
 Rebased onto main 8393af8d, retaining shared native dialog lifecycles, stale-preview checks, connector navigation policy checks and no-referrer navigation. Corrected the VM module test fixture and removed a duplicate component script include. All 444 gallery tests, vet, asset/server builds, six Playwright journeys and refreshed personal-connection screenshots pass. Reproduced the intermittent desktop reconnect submission timeout locally with CI Chromium 1248; diagnosis and full Go validation remain in progress.
+
+**2026-11-01T22:26:10Z**
+
+Fixed the remaining readiness blockers after rebase onto 8393af8d: reconnect browser clicks now wait for stable, unobstructed geometry after focus/scroll (45-second deadline unchanged); competing link reports are dropped before asynchronous policy checks during approval; browser fixtures use native dialogs, direct=1, and verify no-referrer before popup navigation. The pending-link regression was demonstrated red before the fix. Validation: all 445 gallery tests, final-source vet, 20 desktop plus 20 mobile reconnect journeys, all four previously failing modal browser cases, six application journeys, assets/server builds and updated screenshots pass. Full local baseline run is still completing; new CI will validate the final integrated commit. Live provider validation remains separate in Exh-3kvx.

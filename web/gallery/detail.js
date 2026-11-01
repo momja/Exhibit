@@ -596,6 +596,9 @@ window.addEventListener('message', async function(e) {
   if (!d || d.__avNavigate !== true || d.artifactId !== ID) return;
   const frame = document.querySelector('iframe');
   if (!frame || e.source !== frame.contentWindow) return;
+  // Drop competing reports when received, before an asynchronous policy check
+  // can outlive the current approval and replace its prompt or error.
+  if (linkModal.pending) return;
   let url;
   try {
     url = new URL(String(d.url));

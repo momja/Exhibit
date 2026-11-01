@@ -88,10 +88,10 @@ func TestNetworkOriginBrowserKeepsApprovedStylesheetAlongsideConnections(t *test
 		if path == "/agent?artifact="+id {
 			// This fixture has no model API key; dismiss the agent's independent
 			// first-use dialog before interacting with the preview's notice.
-			run(chromedp.Poll[chromedp.Void](`!document.getElementById('key-modal').hidden`),
-				chromedp.Click(chromedp.CSS(`#key-modal button[onclick="closeKeyModal()"]`)))
+			run(chromedp.Poll[chromedp.Void](`document.getElementById('key-modal').open`),
+				chromedp.Click(chromedp.CSS(`#key-cancel`)))
 		}
-		check(`document.getElementById('net-modal').hidden`)
+		check(`!document.getElementById('net-modal').open`)
 	}
 	after, err := ro.cfg.Store.ListOriginDecisions(t.Context(), 1, id)
 	require.NoError(t, err)
@@ -107,7 +107,7 @@ func TestNetworkOriginBrowserKeepsApprovedStylesheetAlongsideConnections(t *test
 	}
 	callsBefore := stylesheetCalls.Load()
 	run(chromedp.Navigate(app.URL+"/artifacts/"+ordinaryID), chromedp.Poll[chromedp.Void](`
-!document.getElementById('net-modal')?.hidden`))
+document.getElementById('net-modal')?.open`))
 	check(`document.getElementById('net-title').innerText === 'Allow network access?'`)
 	check(`getComputedStyle(document.getElementById('net-allow')).display !== 'none' && getComputedStyle(document.getElementById('net-never')).display !== 'none'`)
 	check(`document.getElementById('net-once').innerText === 'Block once'`)
@@ -118,7 +118,7 @@ func TestNetworkOriginBrowserKeepsApprovedStylesheetAlongsideConnections(t *test
 	require.NoError(t, err)
 	require.NotNil(t, approved)
 	assert.EqualValues(t, http.StatusOK, approved.Status)
-	check(`document.getElementById('net-modal').hidden`)
+	check(`!document.getElementById('net-modal').open`)
 	require.Eventually(t, func() bool { return stylesheetCalls.Load() > callsBefore }, 5*time.Second, 10*time.Millisecond)
 	allowed, err := ro.cfg.Store.AllowedOrigins(t.Context(), 1, ordinaryID)
 	require.NoError(t, err)

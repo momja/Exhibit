@@ -187,3 +187,21 @@ test('agent state writes use the active preview policy and do not send it to ano
   await page.window.apiFetch('/api/artifacts/other/state');
   assert.equal(page.calls.at(-1).options.headers['X-Exhibit-Relay-Policy'], undefined);
 });
+
+test('link messages received during approval are dropped before checking policy', async () => {
+  const page = await loadNavigation({ approved: false });
+  await page.postFromFrame(link);
+  const paused = page.pauseNextCheck();
+  const approving = page.byId('link-allow').click();
+  await paused.started;
+  const checks = page.calls.length;
+  try {
+    await page.postFromFrame({ ...link, url: 'https://other.example/' });
+    assert.equal(page.calls.length, checks, 'a pending approval must not start another policy check');
+  } finally {
+    paused.release();
+    await approving;
+  }
+  assert.equal(page.tabs[0].location, link.url);
+  assert.equal(page.opened.length, 1);
+});

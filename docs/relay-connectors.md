@@ -508,7 +508,9 @@ or changing the saved approvals. Updated interface evidence is in
 The shared native sharing dialog keeps account access separate from saved-result
 sharing. Viewer navigation checks connection-data policy before opening a link
 and again after permission, discards stale preview requests, and preserves
-no-referrer navigation.
+no-referrer navigation. Requests received while link approval is pending are
+dropped immediately, so delayed policy checks cannot replace that approval or
+its error message.
 
 The personal-account and advanced-setup corrections are shown in
 [screenshots/Exh-k6gt](screenshots/Exh-k6gt):
