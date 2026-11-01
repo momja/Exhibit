@@ -73,6 +73,7 @@ services:
       - "8090:8090"
     environment:
       - EXHIBIT_URL=http://app:8080
+      - EXHIBIT_PUBLIC_URL=${EXHIBIT_PUBLIC_URL:-${APP_ORIGIN:-http://localhost:8080}}
       - MCP_PUBLIC_URL=${MCP_PUBLIC_URL:-http://localhost:8090/mcp}
       - MCP_ADDR=:8090
       - MAX_REQUEST_BODY_BYTES=${MAX_REQUEST_BODY_BYTES:-}

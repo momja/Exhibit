@@ -25,7 +25,8 @@ func serve() error {
 	}
 	handler, err := mcpserver.NewHTTPHandler(mcpserver.HTTPConfig{
 		BaseURL: os.Getenv("EXHIBIT_URL"), PublicURL: os.Getenv("MCP_PUBLIC_URL"),
-		Version: version(), MaxRequestBodyBytes: maxBody,
+		ExhibitPublicURL: os.Getenv("EXHIBIT_PUBLIC_URL"),
+		Version:          version(), MaxRequestBodyBytes: maxBody,
 	})
 	if err != nil {
 		return err

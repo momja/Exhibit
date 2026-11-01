@@ -700,17 +700,25 @@ default. The agent mode is a form of named fields. The brief crosses to `/agent`
   `internal/chromium`), out of the main image and shared by server features,
   each in its own browser contexts. Share link previews are the first (av-rclm);
   unset, they use the logo card.
-- **Remote MCP service** (Exh-uhvu): `exhibit-mcp` runs separately under
+- **Remote MCP service** (Exh-uhvu, Exh-354p): `exhibit-mcp` runs separately under
   Compose profile `mcp`, using a second binary shipped in the same image. It
   holds no database or credentials of its own. Each request verifies the caller's
   bearer through the core's `/api/agent/credential`; only library grants pass,
   and sessions bind to the grant id. Tools use the ordinary HTTP API with that
   bearer. `MCP_PUBLIC_URL` defines its endpoint and allowed browser origin;
-  `EXHIBIT_URL` may be an internal core address. Core `MCP_URL` enables token
+  `EXHIBIT_URL` may be an internal core address. The service serves unauthenticated
+  RFC 9728 metadata at `/.well-known/oauth-protected-resource<endpoint path>` and
+  its bare form, with cross-origin GET access. It names `MCP_PUBLIC_URL` as the
+  resource and `EXHIBIT_PUBLIC_URL` (the core's public `APP_ORIGIN`, defaulting to
+  `EXHIBIT_URL`) as the authorization server. Every 401 links to the path-inserted
+  metadata URL through `WWW-Authenticate`; core outages remain 503. Metadata does
+  not decide token validity: the core still verifies every bearer.
+  Core `MCP_URL` enables token
   issuance and remote connection configuration in Settings. Without it, new grants
   return 404 and the panel is hidden unless the owner has live grants; those remain
   listed for revocation with a note that MCP is not enabled. The core has no
   `/mcp` route or MCP transport.
+  The core's authorization-server endpoints are a subsequent story.
   [Settings after issuance](screenshots/Exh-uhvu/connected-agents.png).
 
 ### 3.7 Agent sidecar (Pi harness, Exh-yvhp)

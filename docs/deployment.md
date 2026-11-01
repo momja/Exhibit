@@ -947,7 +947,11 @@ API. It has no database, no operator token and no secrets of its own: each
 request supplies a library grant issued in **Settings → Connected agents**.
 The service verifies that bearer with the core on every request, so revocation
 takes effect on the next request. Cookies, Pi tokens and `AUTH_TOKEN` are not
-accepted. A core outage refuses requests with 503.
+accepted. A core outage refuses requests with 503. Authentication failures return
+401 with a `WWW-Authenticate` header pointing clients to the service's OAuth
+protected-resource metadata. Discovery names the core's public origin as the
+authorization server; the authorization-server endpoints arrive in the next
+story, so connecting still requires a grant from Settings.
 
 The image ships both `/server` and `/exhibit-mcp` from the same revision. The
 Compose `mcp` profile selects the second entrypoint; keeping one release image
@@ -962,19 +966,28 @@ Configure the service separately from the core:
 | Variable | Default | Meaning |
 |----------|---------|---------|
 | `EXHIBIT_URL` | **required** | How the service reaches the core API; Compose uses `http://app:8080`. This may be an internal address |
-| `MCP_PUBLIC_URL` | `http://localhost:8090/mcp` | The service's public URL, including the endpoint path. An omitted path means `/mcp`. Its origin is the only accepted browser `Origin`; non-browser clients may omit Origin |
+| `EXHIBIT_PUBLIC_URL` | `EXHIBIT_URL` | The core's public `APP_ORIGIN`, advertised as the OAuth authorization-server issuer. Must be an HTTP(S) origin without a path. Set this when `EXHIBIT_URL` is internal; Compose defaults it to `APP_ORIGIN` |
+| `MCP_PUBLIC_URL` | `http://localhost:8090/mcp` | The service's public URL, including the endpoint path. An omitted path means `/mcp`. Its origin is the only accepted browser `Origin` for MCP requests; non-browser clients may omit Origin. Discovery metadata allows cross-origin reads |
 | `MCP_ADDR` | `:8090` | Service listen address |
 | `MAX_REQUEST_BODY_BYTES` | `33554432` (32 MiB) | Maximum MCP request body, a positive integer; invalid values fail startup |
 
 Set `MCP_URL` on the **core** to the same public endpoint as `MCP_PUBLIC_URL`
 on the **service**. These URLs name what clients reach, independently of the
-internal `EXHIBIT_URL`. Without `MCP_URL`, the instance offers no MCP connection:
+internal `EXHIBIT_URL`. Set `EXHIBIT_PUBLIC_URL` to the core's public
+`APP_ORIGIN`, with no endpoint path. When calling the core at an internal address,
+leaving the service default would send clients to that internal address for OAuth.
+Compose supplies `APP_ORIGIN` (or its local default) unless explicitly overridden.
+
+Without `MCP_URL`, the instance offers no MCP connection:
 `POST /api/agent-grants` returns 404, and Connected agents is hidden for owners
 with no live grants. Existing grants remain visible for revocation only, with
 a note that MCP is not enabled; listing and revoking grants continue to work.
+
 For example, set these in Compose's `.env`:
 
 ```bash
+APP_ORIGIN=https://exhibit.example.com
+EXHIBIT_PUBLIC_URL=https://exhibit.example.com
 MCP_URL=https://exhibit.example.com/mcp
 MCP_PUBLIC_URL=https://exhibit.example.com/mcp
 ```
@@ -990,15 +1003,30 @@ Compose. It does not contact the core or require a credential. MCP sessions live
 in memory and expire after 30 minutes idle; restarting the service requires
 clients to reconnect.
 
+The service exposes RFC 9728 protected-resource metadata without authentication
+at `/.well-known/oauth-protected-resource/mcp` and
+`/.well-known/oauth-protected-resource`. Both serve metadata only on GET and
+permit cross-origin reads for browser clients. OPTIONS preflight requests return
+204; other methods return 405. The document names `MCP_PUBLIC_URL` as
+`resource`, `[EXHIBIT_PUBLIC_URL]` as `authorization_servers`, `["header"]` as
+`bearer_methods_supported`, and `"Exhibit"` as `resource_name`. Every 401 challenge
+links to the path-inserted form on the public service origin; a presented invalid
+token also adds `error="invalid_token"`. An unavailable core remains a 503, without
+an authentication challenge.
+
 #### Route a public path to the service
 
-The reverse proxy must send `/mcp` to port 8090 **without stripping the path**,
-and keep the remaining app routes on port 8080. Preserve Authorization and allow
-streamed responses. For Caddy, with the proxy running on the same host:
+The reverse proxy must send `/mcp` and
+`/.well-known/oauth-protected-resource/mcp` to port 8090 **without stripping the
+path**, and keep the remaining app routes on port 8080. Route the bare discovery
+path there too if you want to expose that fallback. The examples include both
+forms. Preserve Authorization and allow streamed responses. For Caddy, with the
+proxy running on the same host:
 
 ```caddyfile
 exhibit.example.com {
-    handle /mcp {
+    @mcp path /mcp /.well-known/oauth-protected-resource/mcp /.well-known/oauth-protected-resource
+    handle @mcp {
         reverse_proxy 127.0.0.1:8090 {
             flush_interval -1
         }
@@ -1024,22 +1052,31 @@ location = /mcp {
     proxy_buffering off;
     proxy_read_timeout 3600s;
 }
+location = /.well-known/oauth-protected-resource/mcp {
+    proxy_pass http://127.0.0.1:8090;
+    proxy_set_header Host $host;
+}
+location = /.well-known/oauth-protected-resource {
+    proxy_pass http://127.0.0.1:8090;
+    proxy_set_header Host $host;
+}
 ```
 
 Keep the app's other locations and artifact hostname routing as in §5. If the
 proxy is itself on the Compose network, use `mcp:8090` and `app:8080`/`app:8081`
 as the upstreams. Match any proxy body cap to the configured service limit.
-The next OAuth story will also require
-`/.well-known/oauth-protected-resource/mcp` to reach the MCP service when using
-path routing; that metadata endpoint is not provided by this story.
+For a custom endpoint path, change both the MCP route and its path-inserted
+metadata route: `/agents/exhibit` uses
+`/.well-known/oauth-protected-resource/agents/exhibit`. The bare metadata route
+stays the same. Discovery routes must be reachable without proxy authentication.
 
 Alternatively, dedicate a hostname such as `mcp.example.com` to port 8090 and
-set both public URL variables to `https://mcp.example.com/mcp`. A whole-host
-reverse proxy then handles `/mcp` and future discovery paths together. Keep this
-hostname separate from the artifact renderer. With the service reachable, issue
-a grant in Settings. The token is shown once, together with a Claude Code
-`claude mcp add --transport http` command and HTTP JSON configuration for other
-clients. Copy the applicable remote configuration before leaving the page.
+set `MCP_URL` and `MCP_PUBLIC_URL` to `https://mcp.example.com/mcp`; keep
+`EXHIBIT_PUBLIC_URL` equal to the core's public `APP_ORIGIN`. A whole-host reverse
+proxy then handles `/mcp` and discovery paths together. Keep this hostname separate
+from the artifact renderer. With the service reachable, issue
+a grant in Settings and use the displayed Claude Code command or HTTP JSON
+configuration in the client.
 
 ## 6. Backups (optional)
 

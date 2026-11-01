@@ -68,6 +68,29 @@ grant id. A supplied `Origin` must match `MCP_PUBLIC_URL`'s origin (otherwise
 owner scope, revisions and agent version provenance. The service's `GET /healthz`
 is an unauthenticated process-health check, not a core-readiness check.
 
+The service also exposes unauthenticated RFC 9728 metadata:
+
+```
+GET /.well-known/oauth-protected-resource/mcp
+GET /.well-known/oauth-protected-resource
+```
+
+For a custom endpoint path, append that path to
+`/.well-known/oauth-protected-resource` in place of `/mcp`; the bare form always
+remains available. Both routes serve metadata only on GET and permit cross-origin
+reads. OPTIONS preflight requests return 204; other methods return 405.
+The JSON contains `resource: MCP_PUBLIC_URL`,
+`authorization_servers: [EXHIBIT_PUBLIC_URL]`, `bearer_methods_supported: ["header"]`,
+and `resource_name: "Exhibit"`. `EXHIBIT_PUBLIC_URL` is the core's public
+`APP_ORIGIN` and defaults to `EXHIBIT_URL`; configure it explicitly when the
+service reaches the core at an internal address.
+
+Every 401 includes `WWW-Authenticate: Bearer resource_metadata="<metadata URL>"`,
+where the metadata URL uses `MCP_PUBLIC_URL`'s origin and the path-inserted form.
+A presented invalid token also adds `error="invalid_token"`. A core outage returns
+503 without that challenge. Discovery is served entirely by the MCP service;
+the core's authorization-server endpoints arrive in a subsequent story.
+
 ## Artifacts
 
 ```
