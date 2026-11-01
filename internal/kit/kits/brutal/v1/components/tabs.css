@@ -1,0 +1,13 @@
+.kit-tabs{display:flex;flex-direction:column;gap:var(--kit-space-3)}
+.kit-tabs__list{display:flex;gap:var(--kit-space-2)}
+.kit-tabs__list > label{padding:var(--kit-space-2) var(--kit-space-3);cursor:pointer;border:2px solid var(--kit-color-border);background:var(--kit-color-panel);color:var(--kit-color-ink);font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.06em}
+.kit-tabs__list input{position:absolute;opacity:0;pointer-events:none}
+.kit-tabs__list > label:has(input:checked){background:var(--kit-color-ink);color:var(--kit-color-ground);box-shadow:3px 3px 0 var(--kit-color-accent)}
+.kit-tabs__list > label:has(input:focus-visible){outline:3px solid var(--kit-color-accent);outline-offset:2px}
+.kit-tabs__panels > *{display:none}
+.kit-tabs:has(.kit-tabs__list > label:nth-child(1) input:checked) .kit-tabs__panels > :nth-child(1),
+.kit-tabs:has(.kit-tabs__list > label:nth-child(2) input:checked) .kit-tabs__panels > :nth-child(2),
+.kit-tabs:has(.kit-tabs__list > label:nth-child(3) input:checked) .kit-tabs__panels > :nth-child(3),
+.kit-tabs:has(.kit-tabs__list > label:nth-child(4) input:checked) .kit-tabs__panels > :nth-child(4),
+.kit-tabs:has(.kit-tabs__list > label:nth-child(5) input:checked) .kit-tabs__panels > :nth-child(5),
+.kit-tabs:has(.kit-tabs__list > label:nth-child(6) input:checked) .kit-tabs__panels > :nth-child(6){display:block}

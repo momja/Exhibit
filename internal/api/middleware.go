@@ -278,6 +278,12 @@ func urlParamID(r *http.Request, key string) string {
 }
 
 func agentScopeAllows(scope agentscope.Scope, method, escapedPath string) bool {
+	// The one route family outside /api/artifacts an agent may reach: the
+	// component kit, read-only. It is instance-wide data Exhibit itself ships,
+	// identical for every caller, so reading it widens nothing (Exh-61ix).
+	if kitPathReadable(method, escapedPath) {
+		return true
+	}
 	rest, ok := artifactsSubPath(escapedPath)
 	if !ok {
 		return false

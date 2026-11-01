@@ -21,6 +21,7 @@ async function load(responses, widgetBody = '<b>my tile</b>') {
   setTimeout:callback=>timers.push(callback)
  }, {
   title:{value:'Draft title'},
+  'kit-select':{value:''},
   body:{value:'<p>my source</p>', dataset:{revision:'source-v1'}},
   'widget-src':{value:widgetBody, dataset:{revision:'widget-v1'}},
   'scan-result':{style:{}}
@@ -220,4 +221,19 @@ test('Save and leave joins a pending save and refuses to leave with later edits'
  assert.equal(await first,false);
  assert.equal(p.context.artifactDirty(),true);
  assert.equal(p.byId('body').value,'<p>typed after Save</p>');
+});
+
+test('the component kit is part of the draft and is sent only when it changed', async()=>{
+ const p=await load([sourceSaved,widgetSaved,sourceSaved,widgetSaved]);
+ assert.equal(p.context.artifactDirty(),false);
+ p.byId('kit-select').value='paper/v1';
+ assert.equal(p.context.artifactDirty(),true);
+ assert.equal(await p.context.save(),true);
+ assert.equal(JSON.parse(p.api.calls[0].body).kit,'paper/v1');
+ assert.equal(p.context.artifactDirty(),false);
+ // A later save that leaves the kit alone does not resend it, so a kit
+ // chosen in another tab since this page loaded is not overwritten.
+ p.byId('body').value='<p>new source</p>';
+ assert.equal(await p.context.save(),true);
+ assert.equal('kit' in JSON.parse(p.api.calls[2].body),false);
 });

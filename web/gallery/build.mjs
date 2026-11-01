@@ -45,7 +45,7 @@ const files = [
   // page, because the shell is what the two share — but the scripts are one
   // per page, since settings.js drives the admin table /profile does not
   // have and profile.js (av-4wyq) drives a deletion /admin/users must not.
-  "settings.css", "settings.js", "profile.js",
+  "settings.css", "settings.js", "profile.js", "library-kit.js",
   "agent.css", "agent.js", "session-preparation.js", "agent-resize.js", "agent-questions.js", "message-actions.js",
   // The login page (av-q30x) is stylesheet-only: it deliberately ships no
   // script, being the one page a not-yet-authenticated visitor has to be able

@@ -1,0 +1,6 @@
+.kit-table{width:100%;border-collapse:collapse;font-variant-numeric:lining-nums tabular-nums;border-top:2px solid var(--kit-color-ink);border-bottom:2px solid var(--kit-color-ink)}
+.kit-table th,.kit-table td{padding:var(--kit-space-2) var(--kit-space-3);text-align:left;border-bottom:1px solid var(--kit-color-hairline)}
+.kit-table th{font-size:var(--kit-text-md);font-weight:600;font-variant-caps:all-small-caps;letter-spacing:.08em;color:var(--kit-color-ink-soft);border-bottom:1px solid var(--kit-color-ink)}
+.kit-table tbody tr:last-child td{border-bottom:0}
+.kit-table tbody tr:hover{background:var(--kit-color-subtle)}
+.kit-table .kit-num{text-align:right}

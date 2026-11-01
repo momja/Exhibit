@@ -1,0 +1,73 @@
+/* Exhibit kit v1: design tokens. Every kit rule reads these; an artifact may
+   redefine any of them on :root to restyle the kit without touching a rule. */
+:root{
+	color-scheme:light dark;
+	--kit-font:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+	--kit-font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+	--kit-text-sm:13px;
+	--kit-text-md:15px;
+	--kit-text-lg:18px;
+	--kit-text-xl:24px;
+	--kit-text-display:40px;
+	--kit-field-text:15px;
+	--kit-space-1:4px;
+	--kit-space-2:8px;
+	--kit-space-3:12px;
+	--kit-space-4:16px;
+	--kit-space-5:24px;
+	--kit-space-6:32px;
+	--kit-radius-sm:4px;
+	--kit-radius-md:8px;
+	--kit-radius-lg:12px;
+	--kit-radius-pill:999px;
+	--kit-color-ground:#f4f4f5;
+	--kit-color-panel:#fff;
+	--kit-color-subtle:#f8f8f8;
+	--kit-color-ink:#111;
+	--kit-color-ink-soft:#444;
+	--kit-color-muted:#777;
+	--kit-color-border:#d9d9de;
+	--kit-color-hairline:#e6e6ea;
+	--kit-color-accent:#23559e;
+	--kit-color-accent-hover:#1a4076;
+	--kit-color-on-accent:#fff;
+	--kit-color-accent-tint:#eef4ff;
+	--kit-color-danger:#c62828;
+	--kit-color-on-danger:#fff;
+	--kit-color-danger-tint:#fdeeee;
+	--kit-color-success:#2a7d2a;
+	--kit-color-success-tint:#eef8ee;
+	--kit-color-warn:#a86a00;
+	--kit-color-warn-tint:#fff7e0;
+	--kit-shadow-card:0 1px 3px rgba(0,0,0,.08);
+	--kit-shadow-raised:0 4px 24px rgba(0,0,0,.18);
+	--kit-focus-ring:0 0 0 3px color-mix(in srgb,var(--kit-color-accent) 35%,transparent);
+}
+@media (pointer:coarse){
+	:root{--kit-field-text:16px}
+}
+@media (prefers-color-scheme:dark){
+	:root{
+		--kit-color-ground:#16181c;
+		--kit-color-panel:#1f2227;
+		--kit-color-subtle:#272a30;
+		--kit-color-ink:#e8eaed;
+		--kit-color-ink-soft:#c4c7cc;
+		--kit-color-muted:#9aa0a9;
+		--kit-color-border:#3a3e46;
+		--kit-color-hairline:#2f333a;
+		--kit-color-accent:#7eaaf0;
+		--kit-color-accent-hover:#a3c2f5;
+		--kit-color-on-accent:#0f1a2b;
+		--kit-color-accent-tint:#1e2a3d;
+		--kit-color-danger:#f28b82;
+		--kit-color-on-danger:#2b0f0d;
+		--kit-color-danger-tint:#3a1f1d;
+		--kit-color-success:#81c995;
+		--kit-color-success-tint:#1d3324;
+		--kit-color-warn:#fdd663;
+		--kit-color-warn-tint:#3a3220;
+		--kit-shadow-card:0 1px 3px rgba(0,0,0,.4);
+		--kit-shadow-raised:0 4px 24px rgba(0,0,0,.55);
+	}
+}

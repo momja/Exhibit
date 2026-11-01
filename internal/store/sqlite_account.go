@@ -93,7 +93,7 @@ func (s *SQLiteStore) GetAccountSummary(ctx context.Context, userID int64) (Acco
 //     artifact_network_origins, share_links, share_grants, agent_transcripts and artifact_state
 //     with it by ON DELETE CASCADE, and keeps artifacts_fts in step through
 //     the triggers migration 010 installed.
-//   - `tags`, `collections`, `agent_keys` (owner_id) — no cascade reaches
+//   - `tags`, `collections`, `agent_keys`, `library_settings` (owner_id) — no cascade reaches
 //     these, since nothing about an artifact owns them; deleted here.
 //   - `blob_sizes` (blob_id) — the recorded length of each blob the account's
 //     rows named, deleted last and only for ids no surviving row references
@@ -175,6 +175,7 @@ func (s *SQLiteStore) deleteAccount(ctx context.Context, userID int64, hosted bo
 		"DELETE FROM tags WHERE owner_id = ?",
 		"DELETE FROM collections WHERE owner_id = ?",
 		"DELETE FROM agent_keys WHERE owner_id = ?",
+		"DELETE FROM library_settings WHERE owner_id = ?",
 	} {
 		if _, err := tx.ExecContext(ctx, stmt, userID); err != nil {
 			return nil, err

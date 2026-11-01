@@ -1,0 +1,14 @@
+.kit-badge{
+	display:inline-flex;align-items:center;gap:var(--kit-space-1);
+	padding:0 var(--kit-space-2);border:1px solid currentColor;border-radius:var(--kit-radius-pill);
+	font-size:var(--kit-text-md);font-variant-caps:all-small-caps;letter-spacing:.06em;line-height:1.4;
+	background:transparent;color:var(--kit-color-ink-soft);
+}
+.kit-badge--accent{color:var(--kit-color-accent)}
+.kit-badge--success{color:var(--kit-color-success)}
+.kit-badge--warn{color:var(--kit-color-warn)}
+.kit-badge--danger{color:var(--kit-color-danger)}
+.kit-notice{padding:var(--kit-space-3) var(--kit-space-4);border-left:3px solid var(--kit-color-accent);background:var(--kit-color-accent-tint);color:var(--kit-color-ink);font-style:italic}
+.kit-notice--warn{border-left-color:var(--kit-color-warn);background:var(--kit-color-warn-tint)}
+.kit-notice--danger{border-left-color:var(--kit-color-danger);background:var(--kit-color-danger-tint)}
+.kit-notice--success{border-left-color:var(--kit-color-success);background:var(--kit-color-success-tint)}

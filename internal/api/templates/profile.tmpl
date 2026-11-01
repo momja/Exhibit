@@ -66,6 +66,20 @@
 </section>
 {{end}}
 
+{{/* The library's component kit (Exh-61ix). An artifact's source names only
+     the kit contract its markup uses; which kit draws it is chosen here for
+     the whole library, or per artifact on its edit page, and resolved on every
+     render. Saved on change: nothing else on this card is a draft. */}}
+<section class="card" id="appearance" aria-labelledby="appearance-heading">
+  <h3 class="settings-h3" id="appearance-heading">Appearance</h3>
+  <label class="settings-copy" for="library-kit">Component kit</label>
+  <div class="settings-foot">
+    {{template "kitPicker" .LibraryKit}}
+    <span id="library-kit-status" class="text-sm muted" role="status"></span>
+  </div>
+  <p class="muted text-sm settings-note">Styles every artifact built with the component kit, except those that choose their own on their edit page. Artifacts restyle the next time they load; their source does not change.</p>
+</section>
+
 {{/* Sign out (nw-a1ef). The session was revocable from the first day it
      existed, since /auth/logout deletes the row, and nothing in the UI ever
      pointed at it. Clearing a cookie by hand was the only way out.

@@ -104,6 +104,9 @@ var appOriginGETRoutePaths = []pageRoute{
 	{route: "/s/{shareID}/widget", path: "/s/some-share/widget"},
 	{route: "/api/settings/public", path: "/api/settings/public"},
 
+	{route: "/api/settings/kit", path: "/api/settings/kit"},
+	{route: "/api/kit", path: "/api/kit"},
+	{route: "/api/kit/{name}/{version}/components/{component}", path: "/api/kit/exhibit/v1/components/button"},
 	// The authenticated API. A JSON response has no business echoing the
 	// service token either, and including the group means the walk covers the
 	// whole mux rather than a subset someone has to keep re-drawing.

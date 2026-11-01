@@ -87,6 +87,7 @@ var writeRoutes = []struct {
 	{"POST", "/api/artifacts/{artifactID}/tags/{tagID}", false},
 	{"DELETE", "/api/artifacts/{artifactID}/tags/{tagID}", false},
 	{"PUT", "/api/agent/key", true},
+	{"PUT", "/api/settings/kit", true},
 	{"DELETE", "/api/agent/key", false},
 	{"POST", "/api/agent/sessions", true},
 	{"POST", "/api/agent/sessions/{sessionID}/ticket", false},

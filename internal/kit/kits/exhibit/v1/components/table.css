@@ -1,0 +1,5 @@
+.kit-table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.kit-table th,.kit-table td{padding:var(--kit-space-2) var(--kit-space-3);text-align:left;border-bottom:1px solid var(--kit-color-hairline)}
+.kit-table th{font-size:var(--kit-text-sm);font-weight:600;color:var(--kit-color-muted)}
+.kit-table tbody tr:hover{background:var(--kit-color-subtle)}
+.kit-table .kit-num{text-align:right}

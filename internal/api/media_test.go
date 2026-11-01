@@ -166,7 +166,7 @@ func TestEditPageRendersMediaControls(t *testing.T) {
 	a := &store.Artifact{ID: "abc123", OwnerID: 1, Title: "Recorder", Tier: store.Tier1,
 		CreatedAt: time.Now(), CameraApproved: true}
 	page, err := renderEditPage(a, nil, nil, "<html></html>", "", testPageCreds,
-		testRenderURLs("https://render.example.com"), false, "", nil, editNavigation{})
+		testRenderURLs("https://render.example.com"), false, "", nil, editNavigation{}, "")
 	require.NoError(t, err)
 
 	assert.Contains(t, page, `<select id="cam-select" class="select">`)

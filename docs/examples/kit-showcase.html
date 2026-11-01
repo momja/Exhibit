@@ -1,0 +1,36 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<meta name="color-scheme" content="light dark">
+<meta name="exhibit-kit" content="v1">
+<title>Kit showcase</title>
+<!-- Every component of kit contract v1. Which kit draws it is chosen outside
+     this file: the artifact's kit setting, else the library's. --></head>
+<body><main class="kit-page kit-stack">
+<div class="kit-row kit-row--between"><h1>Run log</h1>
+<div class="kit-row"><button class="kit-btn" popovertarget="m">Actions</button><button class="kit-btn kit-btn--primary">Log a run</button></div></div>
+<div id="m" class="kit-menu" popover><button class="kit-menu__item">Export</button><button class="kit-menu__item">Reset</button></div>
+<div class="kit-grid">
+<section class="kit-card"><div class="kit-stat"><span class="kit-stat__label">This week</span><span class="kit-stat__value">42.5 km</span></div></section>
+<section class="kit-card"><div class="kit-stat"><span class="kit-stat__label">Runs</span><span class="kit-stat__value">5</span></div></section>
+<section class="kit-card"><div class="kit-stat"><span class="kit-stat__label">Streak</span><span class="kit-stat__value">12 days</span></div><span class="kit-badge kit-badge--success">On track</span></section>
+</div>
+<p class="kit-notice kit-notice--warn">You have one run without a distance.</p>
+<div class="kit-tabs"><div class="kit-tabs__list" role="tablist">
+<label><input type="radio" name="v" checked> List</label><label><input type="radio" name="v"> Add</label></div>
+<div class="kit-tabs__panels"><div class="kit-card">
+<table class="kit-table"><thead><tr><th>Date</th><th>Route</th><th class="kit-num">km</th><th>Status</th></tr></thead>
+<tbody><tr><td>Mon</td><td>River loop</td><td class="kit-num">8.2</td><td><span class="kit-badge kit-badge--accent">Easy</span></td></tr>
+<tr><td>Wed</td><td>Hills</td><td class="kit-num">10.4</td><td><span class="kit-badge kit-badge--warn">Hard</span></td></tr>
+<tr><td>Sat</td><td>Long run</td><td class="kit-num">23.9</td><td><span class="kit-badge kit-badge--danger">Missed pace</span></td></tr></tbody></table></div>
+<div class="kit-card kit-stack"><label class="kit-field"><span class="kit-field__label">Route</span><input class="kit-input"></label></div></div></div>
+<div class="kit-card kit-stack"><h2 class="kit-card__title">New run</h2>
+<div class="kit-row"><label class="kit-field" style="flex:1"><span class="kit-field__label">Distance (km)</span><input class="kit-input" value="5.0"><span class="kit-field__hint">Up to two decimals</span></label>
+<label class="kit-field" style="flex:1"><span class="kit-field__label">Notes</span><input class="kit-input" placeholder="How did it feel?"></label></div>
+<label class="kit-check"><input type="checkbox" checked> Count toward streak</label>
+<div class="kit-card__footer"><button class="kit-btn kit-btn--ghost">Cancel</button><button class="kit-btn kit-btn--danger" commandfor="confirm" command="show-modal">Delete…</button><button class="kit-btn kit-btn--primary">Save</button></div></div>
+<dialog id="confirm" class="kit-dialog"><h2 class="kit-dialog__title">Delete this run?</h2><p>It will be removed from your streak.</p>
+<form method="dialog" class="kit-dialog__actions"><button class="kit-btn">Cancel</button><button class="kit-btn kit-btn--danger">Delete</button></form></dialog>
+<details class="kit-disclosure" open><summary>How is the streak counted?</summary><div class="kit-disclosure__body kit-muted">Any day with a logged run keeps it going.</div></details>
+<details class="kit-disclosure"><summary>Can I import from my watch?</summary><div class="kit-disclosure__body">Not yet.</div></details>
+<div class="kit-card"><div class="kit-empty"><p class="kit-empty__title">No races planned</p><p>Add a race to see a countdown here.</p></div></div>
+</main>
+</body></html>

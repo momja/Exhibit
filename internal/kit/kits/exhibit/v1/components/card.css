@@ -1,0 +1,11 @@
+.kit-card{
+	background:var(--kit-color-panel);
+	border:1px solid var(--kit-color-hairline);border-radius:var(--kit-radius-lg);
+	box-shadow:var(--kit-shadow-card);padding:var(--kit-space-4);
+}
+.kit-card__header{display:flex;align-items:center;justify-content:space-between;gap:var(--kit-space-2);margin-bottom:var(--kit-space-3)}
+.kit-card__title{margin:0;font-size:var(--kit-text-lg)}
+.kit-card__footer{display:flex;justify-content:flex-end;gap:var(--kit-space-2);margin-top:var(--kit-space-4)}
+.kit-stat{display:flex;flex-direction:column;gap:var(--kit-space-1)}
+.kit-stat__label{font-size:var(--kit-text-sm);color:var(--kit-color-muted)}
+.kit-stat__value{font-size:var(--kit-text-xl);font-weight:700;font-variant-numeric:tabular-nums}

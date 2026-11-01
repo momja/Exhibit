@@ -455,3 +455,13 @@
   {{end}}
 </div>
 {{end}}
+
+{{/* The component kit select (Exh-61ix), shared by the profile page's library
+     kit and the edit page's per-artifact kit. Its value is a kit ID, or "" for
+     no choice at this level, which falls back to what Inherit names. */}}
+{{define "kitPicker"}}<select id="{{.SelectID}}" class="select kit-picker">
+  <option value="">{{.Inherit}}</option>
+  {{- range .Options}}
+  <option value="{{.ID}}" title="{{.Description}}"{{if .Selected}} selected{{end}}>{{.ID}}</option>
+  {{- end}}
+</select>{{end}}

@@ -1,0 +1,14 @@
+.kit-field{display:flex;flex-direction:column;gap:var(--kit-space-1)}
+.kit-field__label{font-size:var(--kit-text-md);font-variant-caps:all-small-caps;letter-spacing:.08em;color:var(--kit-color-muted)}
+.kit-field__hint{font-size:var(--kit-text-sm);font-style:italic;color:var(--kit-color-muted)}
+.kit-input{
+	width:100%;min-height:36px;padding:var(--kit-space-1) 0;
+	border:0;border-bottom:1px solid var(--kit-color-ink-soft);border-radius:0;
+	background:transparent;color:var(--kit-color-ink);font-size:var(--kit-field-text);
+}
+.kit-input:focus-visible{box-shadow:none;border-bottom:2px solid var(--kit-color-accent);margin-bottom:-1px}
+textarea.kit-input{min-height:80px;resize:vertical;border:1px solid var(--kit-color-border);padding:var(--kit-space-2)}
+.kit-input:user-invalid{border-color:var(--kit-color-danger)}
+.kit-field:has(.kit-input:user-invalid) .kit-field__hint{color:var(--kit-color-danger)}
+.kit-check{display:inline-flex;align-items:center;gap:var(--kit-space-2);cursor:pointer}
+.kit-check input{accent-color:var(--kit-color-accent);width:16px;height:16px}

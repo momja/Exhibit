@@ -1,0 +1,72 @@
+/* Paper kit v1: design tokens. Same names as every kit on contract v1; an
+   artifact may redefine any of them on :root to restyle the kit. */
+:root{
+	color-scheme:light dark;
+	--kit-font:"Iowan Old Style","Palatino Linotype",Palatino,Charter,"Bitstream Charter",Georgia,serif;
+	--kit-font-mono:ui-monospace,"Courier Prime","Courier New",monospace;
+	--kit-text-sm:13px;
+	--kit-text-md:17px;
+	--kit-text-lg:21px;
+	--kit-text-xl:30px;
+	--kit-text-display:48px;
+	--kit-field-text:16px;
+	--kit-space-1:4px;
+	--kit-space-2:8px;
+	--kit-space-3:12px;
+	--kit-space-4:18px;
+	--kit-space-5:28px;
+	--kit-space-6:40px;
+	--kit-radius-sm:1px;
+	--kit-radius-md:2px;
+	--kit-radius-lg:2px;
+	--kit-radius-pill:2px;
+	--kit-color-ground:#f5f0e6;
+	--kit-color-panel:#fbf8f1;
+	--kit-color-subtle:#efe8d9;
+	--kit-color-ink:#231f1a;
+	--kit-color-ink-soft:#4a4238;
+	--kit-color-muted:#857a6a;
+	--kit-color-border:#cbbfa8;
+	--kit-color-hairline:#ddd3c0;
+	--kit-color-accent:#8b2b23;
+	--kit-color-accent-hover:#6d1f19;
+	--kit-color-on-accent:#fbf8f1;
+	--kit-color-accent-tint:#f3e3dc;
+	--kit-color-danger:#a3261b;
+	--kit-color-on-danger:#fbf8f1;
+	--kit-color-danger-tint:#f5e0dc;
+	--kit-color-success:#3f6b35;
+	--kit-color-success-tint:#e5ecd9;
+	--kit-color-warn:#8a5a00;
+	--kit-color-warn-tint:#f4e8c8;
+	--kit-shadow-card:none;
+	--kit-shadow-raised:0 12px 40px rgba(60,40,20,.22);
+	--kit-focus-ring:0 0 0 2px var(--kit-color-panel),0 0 0 4px var(--kit-color-accent);
+}
+@media (pointer:coarse){
+	:root{--kit-field-text:16px}
+}
+@media (prefers-color-scheme:dark){
+	:root{
+		--kit-color-ground:#1c1915;
+		--kit-color-panel:#24201b;
+		--kit-color-subtle:#2e2922;
+		--kit-color-ink:#ece4d4;
+		--kit-color-ink-soft:#cfc4b0;
+		--kit-color-muted:#9a8e7b;
+		--kit-color-border:#4d4537;
+		--kit-color-hairline:#3a342b;
+		--kit-color-accent:#e0907f;
+		--kit-color-accent-hover:#eeab9d;
+		--kit-color-on-accent:#24201b;
+		--kit-color-accent-tint:#3b2723;
+		--kit-color-danger:#ef8b7c;
+		--kit-color-on-danger:#24201b;
+		--kit-color-danger-tint:#3d2420;
+		--kit-color-success:#a7c48f;
+		--kit-color-success-tint:#2a3324;
+		--kit-color-warn:#e6bf6a;
+		--kit-color-warn-tint:#3a3220;
+		--kit-shadow-raised:0 12px 40px rgba(0,0,0,.6);
+	}
+}

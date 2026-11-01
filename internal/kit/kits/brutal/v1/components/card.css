@@ -1,0 +1,11 @@
+.kit-card{
+	background:var(--kit-color-panel);
+	border:2px solid var(--kit-color-border);border-radius:var(--kit-radius-lg);
+	box-shadow:var(--kit-shadow-card);padding:var(--kit-space-4);
+}
+.kit-card__header{display:flex;align-items:center;justify-content:space-between;gap:var(--kit-space-2);margin:calc(-1 * var(--kit-space-4)) calc(-1 * var(--kit-space-4)) var(--kit-space-3);padding:var(--kit-space-2) var(--kit-space-4);border-bottom:2px solid var(--kit-color-border);background:var(--kit-color-subtle)}
+.kit-card__title{margin:0;font-size:var(--kit-text-md)}
+.kit-card__footer{display:flex;justify-content:flex-end;gap:var(--kit-space-2);margin-top:var(--kit-space-4)}
+.kit-stat{display:flex;flex-direction:column;gap:var(--kit-space-1)}
+.kit-stat__label{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--kit-color-ink)}
+.kit-stat__value{font-size:var(--kit-text-display);font-weight:900;line-height:1;letter-spacing:-.03em;font-variant-numeric:tabular-nums}

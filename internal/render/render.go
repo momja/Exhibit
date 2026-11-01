@@ -17,6 +17,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/momja/Exhibit/internal/artifacticon"
 	"github.com/momja/Exhibit/internal/blob"
+	"github.com/momja/Exhibit/internal/kit"
 	"github.com/momja/Exhibit/internal/rendertoken"
 	"github.com/momja/Exhibit/internal/store"
 	"github.com/momja/Exhibit/internal/tile"
@@ -652,7 +653,13 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 		origins = originPolicy{Allowed: a.NetworkAllowlist}
 	}
 
-	body := string(bodyBytes)
+	// The component kit (Exh-61ix) is materialized here, at the edge, like
+	// assets are at export: the stored body names a contract, and the kit
+	// that draws it is chosen outside the body and resolved now. Under the
+	// artifact's owner, like the origin decisions above: the look is the
+	// owner's choice, so a recipient sees the artifact as its owner does. A
+	// failed read falls back to the default kit rather than not rendering.
+	body := kit.Inline(string(bodyBytes), rd.kitChoice(r, a))
 	if !widget {
 		body = injectFavicon(body, artifacticon.DataURI(a.Tags))
 	}
@@ -2520,4 +2527,17 @@ func headContentStart(body string) (int, bool) {
 			return 0, false
 		}
 	}
+}
+
+// kitChoice is where an artifact's component kit is chosen (Exh-61ix): its
+// own setting, then its owner's library setting.
+func (rd *Renderer) kitChoice(r *http.Request, a *store.Artifact) kit.Choice {
+	choice := kit.Choice{Artifact: a.Kit}
+	library, err := rd.cfg.Store.LibraryKit(r.Context(), a.OwnerID)
+	if err != nil {
+		slog.WarnContext(r.Context(), "render library kit read failed",
+			slog.String("artifact_id", a.ID), slog.String("err", err.Error()))
+	}
+	choice.Library = library
+	return choice
 }

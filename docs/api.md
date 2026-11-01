@@ -391,6 +391,31 @@ POST   /api/artifacts/:id/tags/:tagID                Add tag
 DELETE /api/artifacts/:id/tags/:tagID                Remove tag
 ```
 
+## Component kits (experimental, Exh-61ix)
+
+```
+GET /api/kit                                          Every released kit and the contracts they implement
+GET /api/kit/:name/:version/components/:component     One component, with that kit's stylesheet
+GET /api/settings/kit                                 The caller's library kit
+PUT /api/settings/kit                                 Choose it: {"kit": "paper/v1"}, or "" for the default
+```
+
+`GET /api/kit` returns `{"default":"exhibit/v1","kits":[…],"contracts":[…]}`.
+Each kit carries its `id`, `name`, `version`, `description` and the `contract`
+it implements. Each contract carries its `marker` (the
+`<meta name="exhibit-kit" content="v1">` line an artifact writes), `base`,
+`tokens` and `components` (name, description, classes, usage example); the
+index carries no CSS. Both are read-only and the same for every caller, so an
+agent session credential may read them too. Unknown kits and components are
+`404`.
+
+The kit that draws an artifact is chosen outside its source: its own `kit`
+field (`PATCH /api/artifacts/:id {"kit": "paper/v1"}`, or `""` to follow the
+library), else the library kit, else the default. Both writes refuse anything
+but a released kit ID or `""` with `400`. `/api/settings/kit` answers
+`{"kit": "…", "default": "exhibit/v1"}` and is the owner's own data, so an
+agent session cannot reach it. See [component-kit.md](component-kit.md).
+
 ## Agent (build/modify with AI, BYO key)
 
 ```

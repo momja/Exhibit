@@ -1,0 +1,27 @@
+/* Brutal kit v1: base. Gentle defaults for bare elements, all at zero
+   specificity (:where) so any rule the artifact writes takes precedence. */
+:where(*,*::before,*::after){box-sizing:border-box}
+:where(body){
+	margin:0;
+	font-family:var(--kit-font);
+	font-size:var(--kit-text-md);
+	line-height:1.5;
+	color:var(--kit-color-ink);
+	background:var(--kit-color-ground);
+}
+:where(h1,h2,h3,h4){margin:0 0 var(--kit-space-2);line-height:1.25;color:var(--kit-color-ink)}
+:where(h1){font-size:var(--kit-text-xl)}
+:where(h2){font-size:var(--kit-text-lg)}
+:where(h3,h4){font-size:var(--kit-text-md)}
+:where(p){margin:0 0 var(--kit-space-3)}
+:where(a){color:var(--kit-color-accent)}
+:where(code,kbd,pre){font-family:var(--kit-font-mono);font-size:.92em}
+:where(input,select,textarea,button){font:inherit}
+:where(:focus-visible){outline:none;box-shadow:var(--kit-focus-ring)}
+:where(hr){border:0;border-top:1px solid var(--kit-color-hairline);margin:var(--kit-space-4) 0}
+.kit-muted{color:var(--kit-color-muted)}
+.kit-display{font-size:var(--kit-text-display);font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums}
+:where(h1,h2,h3,h4){font-weight:900;letter-spacing:-.02em;text-transform:uppercase}
+:where(h1){font-size:var(--kit-text-xl)}
+:where(a){font-weight:700;text-decoration-thickness:2px}
+:where(hr){border-top:2px solid var(--kit-color-ink)}

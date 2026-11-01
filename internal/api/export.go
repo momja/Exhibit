@@ -17,6 +17,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/momja/Exhibit/internal/export"
+	"github.com/momja/Exhibit/internal/kit"
 	"github.com/momja/Exhibit/internal/store"
 )
 
@@ -46,7 +47,13 @@ func (ro *Router) exportArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	doc, err := export.Materialize(body, assets,
+	libraryKit, err := ro.cfg.Store.LibraryKit(r.Context(), ownerID)
+	if err != nil {
+		serverError(w, r, "export: read library kit", err)
+		return
+	}
+
+	doc, err := export.Materialize(body, kit.Choice{Artifact: a.Kit, Library: libraryKit}, assets,
 		func(as store.ArtifactAsset) string {
 			return ro.cfg.RenderOrigin + "/a/" + id + "/assets/" + as.ID
 		},
