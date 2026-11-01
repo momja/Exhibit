@@ -413,11 +413,13 @@ func runSSOLogin(t *testing.T, ro *Router) *http.Cookie {
 func TestLocalLoginHonoursNextButOnlyOnThisOrigin(t *testing.T) {
 	ro, _ := newLocalLoginRouter(t)
 
-	w := submitLogin(t, ro, testUsername, testPassword, "/artifacts/abc?q=1")
-	require.Equal(t, http.StatusFound, w.Code)
-	assert.Equal(t, "/artifacts/abc?q=1", w.Header().Get("Location"))
+	for _, next := range []string{"/artifacts/abc?q=1", "/%2F/evil.test", "/ok", "/ok?x=//y"} {
+		w := submitLogin(t, ro, testUsername, testPassword, next)
+		require.Equal(t, http.StatusFound, w.Code)
+		assert.Equal(t, next, w.Header().Get("Location"))
+	}
 
-	for _, bad := range []string{"https://evil.test/", "//evil.test/", "/\\evil.test"} {
+	for _, bad := range []string{"https://evil.test/", "//evil.test/", "/\\evil.test", "///evil.test", "////evil.test", "//evil.test"} {
 		w := submitLogin(t, ro, testUsername, testPassword, bad)
 		require.Equal(t, http.StatusFound, w.Code)
 		assert.Equal(t, "/", w.Header().Get("Location"), bad)

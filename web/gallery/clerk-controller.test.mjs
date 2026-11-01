@@ -48,3 +48,38 @@ test('only the account button defers loading Clerk', async () => {
   }
   assert.deepEqual(calls, ['after-load', 'now']);
 });
+
+// safeNext is enforced by the server (TestClerkLoginNextStaysOnOrigin).
+// Exercise its allowed outputs here with browser URL semantics, particularly
+// the encoded slash that must not be decoded again before navigation.
+for (const mode of ['signed-in', 'signin', 'signup']) {
+  test(`hosted ${mode} keeps server-provided return paths on origin`, async t => {
+    const origin = 'https://app.test';
+    const destinations = [];
+    const old = { fetch: globalThis.fetch, window: globalThis.window, clerk: globalThis.testClerk };
+    globalThis.testClerk = {
+      isSignedIn: mode === 'signed-in',
+      session: { getToken: async () => {} },
+      mountSignIn: (_element, options) => destinations.push(options.forceRedirectUrl),
+      mountSignUp: (_element, options) => destinations.push(options.forceRedirectUrl),
+    };
+    globalThis.fetch = async () => ({ ok: true });
+    globalThis.window = { location: { replace: next => destinations.push(next) } };
+    t.after(() => { globalThis.fetch = old.fetch; globalThis.window = old.window; globalThis.testClerk = old.clerk; });
+    const { default: Controller } = await import(`data:text/javascript,${encodeURIComponent(source)}#return-${mode}`);
+    // '/' is the server's fallback for //evil.test, ///evil.test and ////evil.test.
+    for (const next of ['/', '/%2F/evil.test', '/ok', '/ok?x=//y']) {
+      const controller = new Controller();
+      Object.assign(controller, {
+        element: { isConnected: true }, modeValue: mode === 'signup' ? 'signup' : 'signin',
+        nextValue: next, statusTarget: { textContent: '' }, hasRecoveryTarget: false, mountTarget: {},
+      });
+      await controller.connect();
+      assert.equal(controller.statusTarget.textContent, '');
+      assert.equal(destinations.length, 1);
+      const destination = destinations.pop();
+      assert.equal(destination, next);
+      assert.equal(new URL(destination, origin).origin, origin);
+    }
+  });
+}
