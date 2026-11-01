@@ -775,79 +775,75 @@ function approveAndOpenDirectly(approve, stillPending, trigger) {
 // reloaded frame numbers its requests from 1 again, and an id compared by value
 // could mistake a new request for the one the user approved.
 let pendingGeolocation = null;
+const geoDialog = document.getElementById('geo-modal');
+const geoModal = modalFor(geoDialog);
+function denyPendingGeolocation() {
+  const req = pendingGeolocation;
+  pendingGeolocation = null;
+  if (req) replyGeolocation(req, false, 'User denied Geolocation');
+}
+for (const event of ['modal:closed', 'modal:disconnected']) geoDialog.addEventListener(event, denyPendingGeolocation);
+document.addEventListener('exhibit:preview-reloaded', () => {
+  pendingGeolocation = null;
+  geoModal.close();
+});
 
 window.addEventListener('message', function(e) {
   const d = e.data;
   if (!d || d.__avGeolocation !== true || d.artifactId !== ID) return;
   const frame = document.querySelector('iframe');
   if (!frame || e.source !== frame.contentWindow) return;
-  const req = { id: d.id };
+  const req = { id: d.id, frame, generation: previewGeneration };
   if (geolocationApproved) {
     // Nothing to decide. The approval exists; it just isn't spent in this
     // frame. Ask the frame to raise the banner, which offers the top-level
     // render.
-    replyGeolocation(req.id, true, 'Location is unavailable in the embedded preview; open the artifact directly');
+    replyGeolocation(req, true, 'Location is unavailable in the embedded preview; open the artifact directly');
     return;
   }
   // Not ours to approve: settle it as the denial Block would produce. The
   // owner's approval would not have handed over the visitor's location anyway;
   // the browser asks its own question on the visitor's machine.
-  if (!mayApprove()) {
-    replyGeolocation(req.id, false, 'User denied Geolocation');
+  if (!mayApprove() || !geoDialog.isConnected) {
+    replyGeolocation(req, false, 'User denied Geolocation');
     return;
   }
   // A second request while the prompt is open displaces the first. Artifacts
   // commonly call getCurrentPosition and watchPosition back to back, and one
   // prompt for both is right, but the displaced one still gets its error
   // callback.
-  if (pendingGeolocation) replyGeolocation(pendingGeolocation.id, false, 'User denied Geolocation');
+  if (pendingGeolocation) replyGeolocation(pendingGeolocation, false, 'User denied Geolocation');
   pendingGeolocation = req;
-  document.getElementById('geo-modal').hidden = false;
-  document.getElementById('geo-block').focus();
+  geoDialog.querySelector('[data-permission-status]').textContent = '';
+  geoModal.show(frame);
 });
 
 // Settles one pending geolocation request inside the frame, which then runs
 // the artifact's error callback. targetOrigin is '*' because the frame's
 // origin is opaque. banner asks the frame to raise the capability banner, as
 // replyMedia's does; there is never a position to send.
-function replyGeolocation(id, banner, error) {
-  const frame = document.querySelector('iframe');
-  if (!frame) return;
-  frame.contentWindow.postMessage({ __avGeolocationResult: true, id: id, banner: banner, error: error }, '*');
+function replyGeolocation(req, banner, error) {
+  if (!currentPreviewRequest(req)) return;
+  const frame = req.frame;
+  frame.contentWindow.postMessage({ __avGeolocationResult: true, id: req.id, banner: banner, error: error }, '*');
 }
 
-async function setGeolocationApproved() {
-  if (!(await setCapabilityApproved('geolocation_approved', true, 'location'))) return false;
+async function setGeolocationApproved(req) {
+  if (!(await setCapabilityApproved('geolocation_approved', true, 'location', () => pendingGeolocation === req && currentPreviewRequest(req)))) return false;
   geolocationApproved = true;
   return true;
 }
 
-// deny=true settles the pending request so the artifact's error callback runs
-// with PERMISSION_DENIED, the code a refused location request reports.
-function closeGeoModal(deny) {
-  document.getElementById('geo-modal').hidden = true;
-  if (deny && pendingGeolocation) replyGeolocation(pendingGeolocation.id, false, 'User denied Geolocation');
-  pendingGeolocation = null;
-  const frame = document.querySelector('iframe');
-  if (frame) frame.focus();
-}
-
-document.getElementById('geo-block').addEventListener('click', function() { closeGeoModal(true); });
-document.getElementById('geo-modal').addEventListener('click', function(e) {
-  if (e.target.id === 'geo-modal') closeGeoModal(true);
-});
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape' && !document.getElementById('geo-modal').hidden) closeGeoModal(true);
-});
 document.getElementById('geo-allow').addEventListener('click', async function() {
   const req = pendingGeolocation;
-  if (!req) return;
-  if (!(await approveAndOpenDirectly(setGeolocationApproved, () => pendingGeolocation === req))) return;
-  document.getElementById('geo-modal').hidden = true;
+  if (!req || req.confirming) return;
+  req.confirming = true;
+  const opened = await approveAndOpenDirectly(() => setGeolocationApproved(req), () => pendingGeolocation === req && currentPreviewRequest(req), document.getElementById('geo-allow'));
+  req.confirming = false;
+  if (!opened || pendingGeolocation !== req || !currentPreviewRequest(req)) return;
   pendingGeolocation = null;
-  document.querySelector('iframe')?.focus();
-  // No banner: the user is already looking at the place the approval works.
-  replyGeolocation(req.id, false, 'Location is unavailable in the embedded preview; the artifact was opened directly');
+  geoModal.close();
+  replyGeolocation(req, false, 'Location is unavailable in the embedded preview; the artifact was opened directly');
 });
 
 // What a blocked origin becomes when the visitor cannot approve it (av-awr4).

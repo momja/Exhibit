@@ -91,6 +91,7 @@ async function loadDetail({ readOnly, approvals = {} } = {}) {
   permissionDialog(page, 'clip-modal');
   permissionDialog(page, 'link-modal');
   permissionDialog(page, 'media-modal');
+  permissionDialog(page, 'geo-modal');
   await page.loadModule(path.join(ASSETS, 'detail.js'));
   return { ...page, api, opened };
 }
@@ -266,7 +267,7 @@ test("a recipient's session issues no API call at all across every bridge", asyn
     "sending them is how a recipient learns the tool is broken instead of that " +
     "it is not theirs");
   for (const id of ["net-modal", "dl-modal", "clip-modal", "link-modal", "media-modal", "geo-modal"]) {
-    assert.equal(["net-modal", "dl-modal", "clip-modal", "link-modal", "media-modal"].includes(id) ? !byId(id).open : byId(id).hidden, true, id + " must not open for a visitor who cannot answer it");
+    assert.equal(["net-modal", "dl-modal", "clip-modal", "link-modal", "media-modal", "geo-modal"].includes(id) ? !byId(id).open : byId(id).hidden, true, id + " must not open for a visitor who cannot answer it");
   }
 });
 
