@@ -60,8 +60,8 @@ func TestGallerySpacesBrowser(t *testing.T) {
 			check(`Array.from(document.querySelectorAll('.gallery-spaces a')).every(a => a.getBoundingClientRect().width >= 44 && a.getBoundingClientRect().height >= 44) && document.documentElement.scrollWidth <= innerWidth`, "all targets are at least 44px and the page fits")
 			check(fmt.Sprintf(`Array.from(document.querySelectorAll('.space-count')).every(el => (getComputedStyle(el).display === 'none') === %t)`, viewport.phone), "counts appear only in the rail")
 			if viewport.phone {
-				check(`getComputedStyle(document.querySelector('.gallery-rail')).paddingBottom === '38px' && getComputedStyle(document.querySelector('main')).paddingBottom === '114px'`, "the phone home-indicator inset is reserved in both the tabs and content")
-				check(`getComputedStyle(document.querySelector('.gallery-rail')).position === 'fixed' && Math.abs(document.querySelector('.gallery-rail').getBoundingClientRect().bottom - innerHeight) < 1`, "phone tabs are fixed to the viewport bottom")
+				check(`getComputedStyle(document.querySelector('.gallery-rail')).paddingBottom === '38px' && document.querySelector('.gallery-rail').getBoundingClientRect().height >= 86 && document.querySelector('.gallery-rail').getBoundingClientRect().height <= 90`, "the compact tabs include the phone home-indicator inset")
+				check(`getComputedStyle(document.querySelector('.gallery-rail')).position === 'sticky' && Math.abs(document.querySelector('.gallery-rail').getBoundingClientRect().bottom - innerHeight) < 1`, "phone tabs stick to the viewport bottom")
 				require.NoError(t, chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](`window.scrollTo(0, document.documentElement.scrollHeight)`)))
 				check(`Array.from(document.querySelectorAll('.card')).at(-1).getBoundingClientRect().bottom <= document.querySelector('.gallery-rail').getBoundingClientRect().top`, "the last card scrolls fully above the tabs")
 			} else {
