@@ -386,5 +386,13 @@ windows. `TestShareModalBrowser` checks both viewport sizes and real swaps.
 `TestShareModalTransactionsBrowser` covers partial success, pending guards,
 failed/lost refresh recovery, stale link IDs, and reconnecting the feature root.
 
+Sharing retains a 560px content width: the recipient entry/action and the two
+saved-data choice cards need more room than a small form. It still obeys the
+shared viewport cap and scrolls as one surface on short windows. The guest list
+alone is capped at 30dvh so a long list does not bury link/data settings. The
+status can wrap beside Done. Monospace read-only link/embed fields distinguish
+copyable code; the data-mode radio cards keep their explanatory illustrations.
+Heading, body, checkbox and footer styling use shared defaults.
+
 [Sharing desktop](screenshots/Exh-9xfp/1280.png) ·
 [Sharing phone](screenshots/Exh-9xfp/390.png)

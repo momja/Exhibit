@@ -166,6 +166,7 @@ func TestShareModalBrowser(t *testing.T) {
 			b.dialogCycle("#share-panel", open, "#share-add-input")
 			b.check(`document.activeElement.id==='share-open'`)
 			b.eval(open)
+			checkModalVisuals(t, b.ctx, "#share-panel")
 			b.capture("Exh-9xfp", width)
 			b.eval(`document.getElementById('share-add-input').value='unfinished';document.getElementById('share-add-input').dispatchEvent(new Event('input',{bubbles:true})); document.getElementById('state-how-it-works').open=true;document.getElementById('share-state-shared').click()`)
 			b.wait(`document.getElementById('share-state-mode').dataset.savedMode==='shared' && !document.getElementById('share-close').disabled`)

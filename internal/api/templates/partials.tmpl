@@ -301,11 +301,11 @@
     {{/* The row's share id rides on the toggle itself: switching the link off
          is a DELETE of that row, and the id is the only thing the page needs
          to know about it. */}}
-    <label class="row">
+    <label class="modal-check">
       <input type="checkbox" id="share-link-toggle" aria-describedby="share-link-permissions"{{if .Shares.Link}} checked data-share-id="{{.Shares.Link.ID}}"{{end}}>
       <span class="spacer">Anyone with the link can open this artifact</span>
     </label>
-    <p class="share-help" id="share-link-permissions">Anyone with the link can view your existing saved data, in either data mode. Public visitors cannot save changes back to your data.</p>
+    <p id="share-link-permissions">Anyone with the link can view your existing saved data, in either data mode. Public visitors cannot save changes back to your data.</p>
     {{if .Shares.Link}}
     <div class="share-link-row">
       <input type="text" id="share-link-url" class="field" readonly value="{{.Shares.Link.URL}}" aria-label="Public link">
