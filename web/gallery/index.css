@@ -8,6 +8,7 @@
  * each tile. */
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(--color-ink);min-height:100vh}
+#gallery-search-region{display:contents}
 /* Search in the app bar. It takes up to 340px and gives way first when the
  * bar runs out of room, so on a phone it fills whatever the logo and the two
  * icon buttons leave. min-width:0 on both the row and the input: a flex item
@@ -221,7 +222,7 @@ main{padding:10px 12px}
 @media (max-width:767px){
   .search-row input:placeholder-shown{padding-right:9px}
   .gallery-filter-trigger{display:inline-flex;flex:0 0 auto;gap:4px;padding:0 6px}
-  [data-controller~=filter-sheet]>.app-header,[data-controller~=filter-sheet]>.app-header .app-header-actions{gap:8px}
+  #gallery-shell:has(.gallery-filter-trigger)>.app-header,#gallery-shell:has(.gallery-filter-trigger)>.app-header .app-header-actions{gap:8px}
   .gallery-rail-filters{display:none}
   .gallery-layout-solo>.gallery-rail{display:none}
   .gallery-layout-solo main{padding-bottom:12px}
@@ -229,5 +230,5 @@ main{padding:10px 12px}
 }
 
 @media (max-width:360px){
-  [data-controller~=filter-sheet]>.app-header,[data-controller~=filter-sheet]>.app-header .app-header-actions{gap:4px}
+  #gallery-shell:has(.gallery-filter-trigger)>.app-header,#gallery-shell:has(.gallery-filter-trigger)>.app-header .app-header-actions{gap:4px}
 }

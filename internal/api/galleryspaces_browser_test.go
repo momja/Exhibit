@@ -72,7 +72,7 @@ func TestGallerySpacesBrowser(t *testing.T) {
 			check(`document.activeElement.getAttribute('href') === '/shared' && document.activeElement.matches(':focus-visible') && getComputedStyle(document.activeElement).outlineStyle === 'solid'`, "Tab reaches the incoming space with a visible outline")
 			require.NoError(t, chromedp.Do(ctx, chromedp.KeyEvent(kb.Tab)))
 			check(`document.activeElement.getAttribute('href') === '/shared-by-me'`, "Tab reaches outgoing shares next")
-			_, err = chromedp.RunResponse(ctx, chromedp.KeyEvent(kb.Enter))
+			err = chromedp.Do(ctx, chromedp.KeyEvent(kb.Enter), chromedp.Poll[chromedp.Void](`location.pathname === "/shared-by-me"`))
 			require.NoError(t, err)
 			check(`location.pathname === '/shared-by-me' && document.querySelector('.gallery-spaces [aria-current="page"]').getAttribute('href') === '/shared-by-me'`, "keyboard activation navigates to outgoing shares")
 			for _, path := range []string{"/", "/shared"} {
@@ -82,9 +82,9 @@ func TestGallerySpacesBrowser(t *testing.T) {
 				require.NoError(t, chromedp.Do(ctx,
 					chromedp.Evaluate[chromedp.Void](`new Promise(resolve => requestAnimationFrame(resolve)).then(() => document.activeViewTransition?.finished)`, chromedp.EvalAwaitPromise),
 					chromedp.Poll[chromedp.Void](`document.getAnimations().length === 0`)))
-				_, err = chromedp.RunResponse(ctx, chromedp.Click(chromedp.CSS(`.gallery-spaces a[href="`+path+`"]`)))
+				err = chromedp.Do(ctx, chromedp.Click(chromedp.CSS(`.gallery-spaces a[href="`+path+`"]`)), chromedp.Poll[chromedp.Void](`location.pathname === "`+path+`"`))
 				require.NoError(t, err)
-				check(`location.pathname === '`+path+`' && document.querySelector('.gallery-spaces [aria-current="page"]').getAttribute('href') === '`+path+`'`, "plain links navigate and update the active space")
+				check(`location.pathname === '`+path+`' && document.querySelector('.gallery-spaces [aria-current="page"]').getAttribute('href') === '`+path+`'`, "space links navigate and update the active space")
 			}
 			_, err = chromedp.Call(ctx, emulation.SetEmulatedMedia, emulation.SetEmulatedMediaParams{Features: []*emulation.MediaFeature{{Name: "prefers-color-scheme", Value: "dark"}}})
 			require.NoError(t, err)

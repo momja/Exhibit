@@ -165,12 +165,16 @@ func (ro *Router) serveGalleryPage(w http.ResponseWriter, r *http.Request, galle
 	if gallery.ReadOnly {
 		creds.ReadOnly = true
 	}
-	page, err := renderGalleryPage(grid, newGallerySpaces(gallery.PagePath, sharedWith, sharedBy), creds, ro.adminRequest(r))
+	page, err := renderGalleryRegion(galleryTemplate(r), grid, newGallerySpaces(gallery.PagePath, sharedWith, sharedBy), creds, ro.adminRequest(r))
 	if err != nil {
 		serverError(w, r, "gallery index render", err)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Add("Vary", "HX-Request")
+	w.Header().Add("Vary", "HX-Target")
+	w.Header().Add("Vary", "HX-History-Restore-Request")
 	fmt.Fprint(w, page)
 }
 
@@ -913,7 +917,21 @@ type galleryPageData struct {
 }
 
 func renderGalleryPage(grid galleryGridData, spaces []gallerySpace, creds pageCredentials, isAdmin bool) (string, error) {
-	return renderPage("gallery", galleryPageData{
+	return renderGalleryRegion("gallery", grid, spaces, creds, isAdmin)
+}
+
+// A history restore requests the same content region as a space link. Other
+// htmx callers selecting from a full page still receive the complete document.
+func galleryTemplate(r *http.Request) string {
+	target := r.Header.Get("HX-Target")
+	if r.Header.Get("HX-Request") != "" && (target == "div#gallery-content" || target == "gallery-content" || r.Header.Get("HX-History-Restore-Request") == "true") {
+		return "gallerySpaceUpdate"
+	}
+	return "gallery"
+}
+
+func renderGalleryRegion(name string, grid galleryGridData, spaces []gallerySpace, creds pageCredentials, isAdmin bool) (string, error) {
+	return renderPage(name, galleryPageData{
 		Favicon:         template.URL(exhibitLogoDataURI),
 		Header:          galleryHeader(grid, isAdmin, creds.Clerk),
 		Grid:            grid,

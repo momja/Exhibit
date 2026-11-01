@@ -21,3 +21,8 @@ application.register('filter-sheet', FilterSheetController);
 
 import FloatingHeaderController from './floating-header-controller.js';
 application.register('floating-header', FloatingHeaderController);
+
+import GalleryController from './gallery-controller.js';
+import GallerySpaceController from './gallery-space-controller.js';
+application.register('gallery', GalleryController);
+application.register('gallery-space', GallerySpaceController);

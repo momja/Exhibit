@@ -490,6 +490,42 @@ Repeated `?owner=<id>` parameters are validated against `SharedWithOwners`,
 canonicalized and deduplicated, then carried by search, paging and retry URLs.
 Malformed or unavailable owners return 400.
 
+**Space navigation** ([Exh-xw54](../.tickets/Exh-xw54.md)): the three
+space links retain ordinary `href`s and request htmx fragments from their
+bookmarkable page URLs. Full pages and fragments share `gallerySpaceContent`
+(results, navigation, filters and owner-only dialogs) and `gallerySearchRegion`
+(the heading, search form and phone filter trigger). A switch replaces
+`#gallery-content` and swaps the search region out of band; `#gallery-shell`,
+the header and the mounted Clerk control remain connected. Fragment responses
+contain no scripts, bootstrap credentials or account markup.
+
+The registered `gallery` controller invalidates and aborts outstanding work
+when leaving a space, stops the search debounce, and rejects late responses
+before they can swap or change history. `gallery-space` releases widget
+observers, dialog listeners and edit-return behavior on disconnect. Search
+gets a new connection for the destination controls. `api.js` reads the current
+region's server-rendered read-only flag at call time; the original `TOKEN`
+still belongs to the same visitor. Starting on `/shared` therefore cannot
+leave the owner's library unable to duplicate after a switch.
+
+Space switches push history; searches and filters replace its current entry.
+Back/Forward refetches the selected `hx-history-elt` from the server, restoring
+query/filter parameters and fresh permissions instead of caching account or
+widget DOM. The controller changes htmx 4's history `outerSync` to `outerHTML`
+so space components reconnect, and supplies the `HX-Request` header omitted by
+htmx's history request options. Expired sessions keep the existing 401 plus
+`HX-Refresh` path. A network or destination error retains the previous coherent
+space and URL and shows a retry notice. Modified clicks and no-JS navigation
+keep the ordinary link behavior.
+
+When composing the shared header or changing account controls, keep both
+outside `#gallery-content` and `#gallery-search-region`. Only the search,
+heading and filter trigger belong in the latter; putting Clerk inside either
+swapped region would repeat its user reload and mount.
+
+Screenshots after a space switch: [desktop](screenshots/Exh-xw54/01-space-switch-desktop.png)
+and [phone](screenshots/Exh-xw54/02-space-switch-phone.png).
+
 **Spaces and filters** (Exh-2c2e, Exh-gx18): one `gallerySpaces` partial
 lays out My library, Shared with me, and Shared by me as a 208px desktop rail
 at widths of at least 768px, and fixed bottom tabs on phones. Per-viewer counts

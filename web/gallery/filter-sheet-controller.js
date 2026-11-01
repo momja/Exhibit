@@ -12,7 +12,7 @@ export default class FilterSheetController extends Controller {
   }
 
   close() {
-    if (this.dialogTarget.open) this.dialogTarget.close();
+    if (this.hasDialogTarget && this.dialogTarget.open) this.dialogTarget.close();
   }
 
   cancel(event) {
@@ -32,7 +32,7 @@ export default class FilterSheetController extends Controller {
   closed() {
     const active = document.activeElement;
     if (!active || active === document.body || this.dialogTarget.contains(active)) {
-      this.triggerTarget.focus();
+      if (this.hasTriggerTarget) this.triggerTarget.focus();
     }
   }
 

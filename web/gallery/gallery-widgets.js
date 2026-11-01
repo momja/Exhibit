@@ -70,6 +70,13 @@ export function initializeGalleryWidgets(root) {
   });
   removals.observe(root, { childList: true, subtree: true });
   if (root.parentNode) removals.observe(root.parentNode, { childList: true });
-  root.addEventListener('htmx:after:process', (event) => visit(event.target, register));
+  const process = event => visit(event.target, register);
+  root.addEventListener('htmx:after:process', process);
   visit(root, register);
+  return () => {
+    root.removeEventListener('htmx:after:process', process);
+    removals.disconnect();
+    widgets.forEach((_, well) => release(well));
+    visibility.disconnect();
+  };
 }

@@ -494,6 +494,14 @@ lifecycles. Gallery duplication dispatches the scoped,
 bubbling `exhibit:artifacts-changed` event; the gallery controller clears its
 search and resets paging before firing that form's existing htmx search trigger.
 The modal and card markup remain server templates (`artifact-duplication.md`).
+Space navigation uses the same htmx model: page URLs serve `gallerySpaceContent`
+and an out-of-band search/header-controls region for fragment requests. The app
+header and Clerk mount stay connected. Registered `gallery` and `gallery-space`
+controllers own request invalidation and per-space cleanup; browser Back/Forward
+refetches this content region rather than replacing the document. `api.js` reads
+its live server-rendered read-only flag instead of retaining the initial space's
+bootstrap decision. See `architecture.md` §3.5 and `ui-components.md` for the
+region boundary, history handling, component lifecycle and browser checks.
 
 **Home-screen app shell (av-fdcx).** Every app-origin page head includes the shared
 `pwaHead` partial: the `manifest.json` link plus the `apple-*` tags iOS reads instead
