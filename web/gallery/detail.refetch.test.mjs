@@ -44,6 +44,8 @@ async function refetchWith(body) {
   permissionDialog(page, 'dl-modal');
   permissionDialog(page, 'clip-modal');
   permissionDialog(page, 'link-modal');
+  permissionDialog(page, 'media-modal');
+  permissionDialog(page, 'geo-modal');
   await page.loadModule(path.join(ASSETS, 'detail.js'));
   await page.window.refetchSource();
   const status = page.byId("al-status");
