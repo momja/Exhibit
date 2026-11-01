@@ -536,6 +536,7 @@ func TestLocationModalBrowser(t *testing.T) {
 			report := `permissionReport({__avGeolocation:true,id:1})`
 			b.dialogCycle("#geo-modal", report, "#geo-block")
 			b.eval(report)
+			checkModalVisuals(t, b.ctx, "#geo-modal")
 			b.capture("Exh-7hh4", width)
 			b.run(chromedp.Click(chromedp.CSS(`#geo-allow`)))
 			b.wait(`document.getElementById('direct-open-modal').open`)
