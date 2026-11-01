@@ -805,9 +805,32 @@ refetch and import/export. Existing agent field restrictions remain in force.
 Versions record `origin=agent`, the owner's label as message, and `grant:<id>`
 as session. Pi retains its process-lifetime one-artifact scope.
 `GET /api/agent/credential` describes the authenticated scope without a second
-store lookup, for future MCP clients.
+store lookup.
 
 Screenshot: [Connected agents after issuance](screenshots/Exh-l2xj/01-connected-agents.png).
+
+### External-agent MCP tools (Exh-q6xo)
+
+`internal/mcpserver` implements the library tool surface using the official Go
+SDK. It reaches Exhibit only through its HTTP API, behind an `API` interface.
+The optional MCP service supplies the transport in the next layer; this layer
+adds no binary or routes to the core server.
+
+Tools search the owner's library, create artifacts, read/edit/write source and
+widgets, and read saved state. Every per-artifact tool requires `artifact_id`; search returns
+compact metadata (20 results by default, at most 50). Each connection gets its
+own MCP server and a revision map keyed by artifact id. Source/widget reads and
+saves are serialized per artifact; saves require a remembered revision and advance
+it only on success. Creation remembers the returned source revision. Conflicts
+require a deliberate re-read and reconciliation, never an automatic retry.
+State retains the API's last-write-wins behavior. Network approvals remain with
+the owner.
+
+`internal/agentguidance` shares the artifact, storage, widget and untrusted
+tool-result guidance with Pi without changing its prompt output. MCP adds
+search-first discovery and asks the user to resolve ambiguous matches. An MCP client
+exercises the tools over in-memory transport against the real HTTP router with
+a fresh temporary database and blob directory.
 
 ### Hosted authentication
 
