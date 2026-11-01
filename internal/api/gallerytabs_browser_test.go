@@ -95,9 +95,17 @@ func TestGalleryMobileTabsBrowser(t *testing.T) {
 				require.NoError(t, chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](`window.scrollTo(0, document.documentElement.scrollHeight / 2)`)))
 				check(`Math.abs(document.querySelector('.gallery-rail').getBoundingClientRect().bottom - innerHeight) < 1`, "the growing rail stays on screen during document scrolling")
 				require.NoError(t, chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](`window.scrollTo(0, document.documentElement.scrollHeight)`)))
+				// Wait for automatic paging's pending layout before measuring.
+				require.NoError(t, chromedp.Do(ctx,
+					chromedp.Poll[chromedp.Void](`document.querySelector('.gallery-more button').disabled`),
+					chromedp.Evaluate[chromedp.Void](`window.scrollTo(0, document.documentElement.scrollHeight)`)))
 				check(`document.querySelector('.gallery-more').getBoundingClientRect().bottom + 11 <= document.querySelector('.gallery-rail').getBoundingClientRect().top`, "Load more clears the actual enlarged bar and its inset with a content gap")
 				capture("large-labels-pagination")
-				pageResponses <- struct{}{}
+				select {
+				case pageResponses <- struct{}{}:
+				case <-ctx.Done():
+					t.Fatal(ctx.Err())
+				}
 				require.NoError(t, chromedp.Do(ctx, chromedp.Poll[chromedp.Void](`document.querySelectorAll('.card').length > 24 && !document.querySelector('.gallery-more')`), chromedp.Evaluate[chromedp.Void](`window.scrollTo(0, document.documentElement.scrollHeight)`)))
 				check(`Array.from(document.querySelectorAll('.card')).at(-1).getBoundingClientRect().bottom + 11 <= document.querySelector('.gallery-rail').getBoundingClientRect().top`, "the last appended card also clears the enlarged tabs")
 
