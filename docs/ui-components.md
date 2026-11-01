@@ -586,7 +586,7 @@ permission forms; it needs no private label/field styling.
 Run all modal integrations and refresh their screenshots with:
 
 ```sh
-MODAL_SCREENSHOT_DIR="$PWD/docs/screenshots" go test ./internal/api -run 'Test(.*Modal.*Browser|DirectOpenPendingBrowser|DirectOpenPreviewSwapBrowser)$' -count=1
+MODAL_SCREENSHOT_DIR="$PWD/docs/screenshots" go test ./internal/api -run 'Test(.*Modal.*Browser|DirectOpenPendingBrowser|DirectOpenPreviewSwapBrowser|GalleryActionMenuDuplicationBrowser|GalleryFilterBrowser)$' -count=1
 ```
 
 Direct-open keeps Cancel live while its placeholder tab awaits approval. The tab
