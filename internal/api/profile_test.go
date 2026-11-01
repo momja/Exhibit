@@ -83,6 +83,7 @@ func TestProfileNamesTheSignedInAccount(t *testing.T) {
 	page := in.page(t)
 
 	assert.Contains(t, page, "person@example.test")
+	assert.Contains(t, page, `href="/admin/users"`, "administration remains reachable through Settings on phones")
 	assert.Contains(t, page, "Identity provider",
 		"an account with no password here signs in through the provider, and the page says which")
 	assert.NotContains(t, page, "subject identifier",
@@ -241,6 +242,7 @@ func TestProfileNeedsASessionAndNothingMore(t *testing.T) {
 	w := httptest.NewRecorder()
 	in.ro.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code, "a member with no admin role owns their own account page")
+	assert.NotContains(t, w.Body.String(), `href="/admin/users"`)
 	assert.Contains(t, w.Body.String(), "second@example.test",
 		"and it is their account, resolved from the session rather than from the URL")
 

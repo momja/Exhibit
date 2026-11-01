@@ -50,14 +50,19 @@ Stimulus and htmx behavior remains attached to the stable gallery root.
 
 `.app-header` and its child classes in `components.css` own the layout, including
 when the bar is nested inside a gallery controller. The baseline is the
-rendered gallery: 37px tall with 36px icon controls on desktop; 33px tall with
-32px controls at 767px and below, plus any phone top safe-area inset. Horizontal
+rendered gallery: 37px tall with 36px icon controls on desktop; 56px tall with
+44px controls at 767px and below, plus any phone top safe-area inset. Horizontal
 padding is 16px (8px at 360px and below), with 12px gaps. The gallery filter
-layout tightens gaps on narrow screens. Page styles only extend feature layout,
-not the bar's dimensions. `--header-height` supplies the shared minimum height.
-Account-service errors appear in an anchored panel below the account slot without
-changing the bar or its neighbors. Hidden recovery actions remain hidden until
-their controller reveals them.
+layout tightens gaps on narrow screens. On phones the filter label is visually
+hidden, search clearing occupies a separate 44px box, and the Accounts shortcut
+moves to Settings (the desktop header retains it). Back links and the hosted
+account trigger also have a 44px minimum hit area. Card metadata grows to fit
+44px title, posture and overflow targets without overlapping their neighbors.
+Page styles only extend feature layout, not the bar's dimensions.
+`--header-height` supplies the shared minimum height. Account-service errors
+appear in an anchored panel below the account slot without changing the bar or
+its neighbors. Hidden recovery actions remain hidden until their controller
+reveals them.
 
 The artifact viewer uses the `Floating` variant, populated by
 `artifactHeader`. Its `floatingHeaderView` carries the title, created date,

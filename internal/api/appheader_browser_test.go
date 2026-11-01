@@ -42,7 +42,7 @@ func TestAppHeaderBrowser(t *testing.T) {
 	ctx, cancel = context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 
-	for _, width := range []int64{1280, 768, 767, 600, 390, 320} {
+	for _, width := range []int64{1280, 768, 767, 600, 430, 390, 375, 320} {
 		_, err = chromedp.Call(ctx, emulation.SetDeviceMetricsOverride, emulation.SetDeviceMetricsOverrideParams{Width: width, Height: 900, DeviceScaleFactor: 1})
 		require.NoError(t, err)
 		for _, path := range []string{"/", "/profile", "/connections", "/connections?advanced=1&artifact=" + id, "/new", "/admin/users", "/agent", "/not-a-page", "/artifacts/" + id + "/edit?return_to=/artifacts/" + id} {
@@ -59,17 +59,18 @@ func TestAppHeaderBrowser(t *testing.T) {
 						fits: document.documentElement.scrollWidth <= innerWidth &&
 						[...header.querySelectorAll('a, button, input')].filter(el => el.getBoundingClientRect().width > 0).every(el => {
 							const box = el.getBoundingClientRect();
-							if (el.matches('.gallery-filter-trigger')) {
+							if (el.matches('.gallery-filter-trigger') && innerWidth > 767) {
 								const label = el.querySelector('span').getBoundingClientRect();
 								if (label.left < box.left || label.right > box.right) return false;
 							}
+							if (innerWidth <= 767 && (box.width < 44 || box.height < 44)) return false;
 							return box.left >= rect.left && box.right <= rect.right && box.top >= rect.top && box.bottom <= rect.bottom;
 						})};
 				})()`))
 				require.NoError(t, err)
 				height, padding := 37.0, "16px"
 				if width <= 767 {
-					height = 33
+					height = 56
 				}
 				if width <= 360 {
 					padding = "8px"
@@ -118,12 +119,19 @@ func TestAppHeaderAccountStatesBrowser(t *testing.T) {
 	defer cancel()
 	ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	for _, width := range []int64{1280, 390} {
+	for _, width := range []int64{1280, 430, 390, 375, 320} {
 		_, err := chromedp.Call(ctx, emulation.SetDeviceMetricsOverride, emulation.SetDeviceMetricsOverrideParams{Width: width, Height: 900, DeviceScaleFactor: 1})
 		require.NoError(t, err)
 		for _, path := range []string{"/settings", "/gallery"} {
 			t.Run(fmt.Sprintf("%d%s", width, path), func(t *testing.T) {
 				require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(app.URL+path)))
+				// Model the SDK's compact avatar trigger without a remote account.
+				require.NoError(t, chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](`document.querySelector('[data-clerk-target="mount"]').innerHTML = '<button style="width:28px;height:28px" aria-label="Account">A</button>'`)))
+				if width <= 767 {
+					ok, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`(() => {const r=document.querySelector('[data-clerk-target="mount"] button').getBoundingClientRect();return r.width>=44 && r.height>=44 && document.documentElement.scrollWidth<=innerWidth})()`))
+					require.NoError(t, err)
+					require.True(t, ok, "the hosted account trigger has a full mobile hit box")
+				}
 				hidden, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`(() => {
 					const recovery = document.querySelector('[data-clerk-target="recovery"]');
 					const placeholder = document.querySelector('.account-control-placeholder');
@@ -206,7 +214,7 @@ func TestAuthAppHeaderBrowser(t *testing.T) {
 			ok, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`(() => {
 				const header = document.querySelector('[data-app-header]');
 				const rect = header.getBoundingClientRect();
-				return rect.height === (innerWidth <= 767 ? 33 : 37) && rect.width === innerWidth &&
+				return rect.height === (innerWidth <= 767 ? 56 : 37) && rect.width === innerWidth &&
 					!header.querySelector('a, button, [data-controller="clerk"]') &&
 					document.documentElement.scrollWidth <= innerWidth && document.querySelector('main').getBoundingClientRect().top >= rect.bottom;
 			})()`))
