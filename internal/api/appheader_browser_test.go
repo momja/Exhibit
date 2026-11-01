@@ -136,13 +136,15 @@ func TestAppHeaderAccountStatesBrowser(t *testing.T) {
 					const recovery = document.querySelector('[data-clerk-target="recovery"]');
 					const placeholder = document.querySelector('.account-control-placeholder');
 					return recovery.hidden && getComputedStyle(recovery).display === 'none' && recovery.getClientRects().length === 0 &&
-						placeholder.getBoundingClientRect().width === 32 && placeholder.getBoundingClientRect().height === 32 &&
+						placeholder.getBoundingClientRect().width === (innerWidth <= 767 ? 44 : 32) && placeholder.getBoundingClientRect().height === (innerWidth <= 767 ? 44 : 32) &&
 						document.querySelector('[role="status"]').textContent === 'Loading your account…';
 				})()`))
 				require.NoError(t, err)
 				require.True(t, hidden, "without JavaScript the first HTML reserves space, describes loading, and hides recovery actions")
 				require.NoError(t, chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](`
 					window.headerBeforeFailure = document.querySelector('.app-header').getBoundingClientRect().toJSON();
+					// Initial SDK load failure never mounts an avatar.
+					document.querySelector('[data-clerk-target="mount"]').replaceChildren();
 					document.querySelector('.account-control').dataset.clerkState = 'error';
 					document.querySelector('[data-clerk-target="status"]').classList.remove('sr-only');
 					document.querySelector('[data-clerk-target="status"]').textContent = 'The account service did not respond. Reload this page to retry. If this continues, check whether your browser or network is blocking Clerk.';
@@ -152,7 +154,9 @@ func TestAppHeaderAccountStatesBrowser(t *testing.T) {
 					const header = document.querySelector('.app-header').getBoundingClientRect();
 					const status = document.querySelector('[data-clerk-target="status"]').getBoundingClientRect();
 					const recovery = document.querySelector('[data-clerk-target="recovery"]').getBoundingClientRect();
+					const search = document.querySelector('[data-gallery-query]');
 					return status.top >= header.bottom && status.left >= 0 && status.right <= innerWidth &&
+						(!search || search.getBoundingClientRect().width >= 80) &&
 						recovery.width > 0 && recovery.top >= status.bottom && recovery.right <= innerWidth &&
 						JSON.stringify(header.toJSON()) === JSON.stringify(headerBeforeFailure) &&
 						document.querySelector('main').getBoundingClientRect().top >= header.bottom &&

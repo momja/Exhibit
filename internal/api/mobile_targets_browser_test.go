@@ -66,14 +66,18 @@ func TestMobileTargetsBrowser(t *testing.T) {
 			}
 			// Use a point inside the new padding, away from the original tiny glyph.
 			for _, target := range []struct{ selector, open string }{{".card-actions-trigger", ".card-actions.is-open"}, {"[data-capability-trigger]", ".capability-wrap.is-open"}} {
-				point, err := chromedp.Run(ctx, chromedp.Evaluate[struct{ X, Y float64 }](fmt.Sprintf(`(() => {const r=document.querySelector(%q).getBoundingClientRect();return {X:r.left+2,Y:r.top+2}})()`, target.selector)))
+				point, err := chromedp.Run(ctx, chromedp.Evaluate[struct{ X, Y float64 }](fmt.Sprintf(`(() => {const r=document.querySelector(%q).getBoundingClientRect();return {X:r.left+2,Y:r.top+r.height/2}})()`, target.selector)))
 				require.NoError(t, err)
-				run(chromedp.MouseClickXY(point.X, point.Y), chromedp.Poll[chromedp.Void](fmt.Sprintf(`document.querySelector(%q)`, target.open)))
+				run(chromedp.MouseClickXY(point.X, point.Y), chromedp.Poll[chromedp.Void](fmt.Sprintf(`document.querySelector(%q)`, target.open), chromedp.WithPollingTimeout(5*time.Second)))
 				check(`location.pathname === '/'`)
 				run(chromedp.KeyEvent(kb.Escape))
 			}
 			run(chromedp.Click(chromedp.CSS(`[data-gallery-clear]`)), chromedp.Poll[chromedp.Void](`document.querySelector('[data-gallery-query]').value === '' && document.querySelector('[data-gallery-clear]').hidden`))
 			check(`document.activeElement.matches('[data-gallery-query]')`)
+			// Typography may wrap the title or change its leading/padding. The
+			// anchor's target floor must not depend on any of those choices.
+			run(chromedp.Evaluate[chromedp.Void](`Object.assign(document.querySelector('.card-title').style,{fontSize:'16px',lineHeight:'1.4',paddingBlock:'6px'})`))
+			check(`document.querySelector('.card-title').getBoundingClientRect().height >= 44`)
 			run(chromedp.Evaluate[chromedp.Void](`document.querySelector('.card-title').style.fontSize='25px'; document.querySelector('[data-gallery-query]').style.fontSize='32px'`))
 			check(`document.documentElement.scrollWidth <= innerWidth`)
 			modalBrowser{t, ctx}.capture("Exh-1og2/gallery-large-text", width)
@@ -82,6 +86,13 @@ func TestMobileTargetsBrowser(t *testing.T) {
 			run(chromedp.Navigate(app.URL+"/artifacts/"+id+"/edit?return_to=/artifacts/"+id), chromedp.Evaluate[chromedp.Void](`document.querySelector('.app-header-back-label').style.fontSize='28px'`))
 			check(`(() => {const back=document.querySelector('.app-header-back').getBoundingClientRect(); const actions=document.querySelector('.app-header-actions').getBoundingClientRect(); return back.width>=44 && back.height>=44 && back.right<=actions.left && document.documentElement.scrollWidth<=innerWidth})()`)
 			modalBrowser{t, ctx}.capture("Exh-1og2/editor-large-text", width)
+			topInset := int64(24)
+			_, err = chromedp.Call(ctx, emulation.SetSafeAreaInsetsOverride, emulation.SetSafeAreaInsetsOverrideParams{Insets: &emulation.SafeAreaInsets{Top: &topInset}})
+			require.NoError(t, err)
+			run(chromedp.Evaluate[chromedp.Void](`window.scrollTo(0,document.documentElement.scrollHeight)`))
+			check(`document.querySelector('.app-header').getBoundingClientRect().height === 80 && document.querySelector('.app-header-back').getBoundingClientRect().top >= 24`)
+			_, err = chromedp.Call(ctx, emulation.SetSafeAreaInsetsOverride, emulation.SetSafeAreaInsetsOverrideParams{Insets: &emulation.SafeAreaInsets{}})
+			require.NoError(t, err)
 		})
 	}
 	_, err = chromedp.Call(ctx, emulation.SetDeviceMetricsOverride, emulation.SetDeviceMetricsOverrideParams{Width: 1280, Height: 900, DeviceScaleFactor: 1})
