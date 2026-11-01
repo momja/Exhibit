@@ -324,6 +324,7 @@ func TestEditorLeaveModalBrowser(t *testing.T) {
 			b.wait(`document.querySelector('.cm-editor')`)
 			b.eval(`document.getElementById('title').value='Draft';document.getElementById('title').dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('.app-header-back').click()`)
 			b.wait(`document.querySelector('.editor-leave-dialog').open`)
+			checkModalVisuals(t, b.ctx, ".editor-leave-dialog")
 			b.capture("Exh-yrgf", width)
 			b.check(`document.activeElement.hasAttribute('data-keep-editing')`)
 			// This coordinator intentionally requires a decision on backdrop clicks.
