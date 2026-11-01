@@ -45,14 +45,16 @@ class Modal {
   }
 
   disconnect() {
+    if (!this.connected) return;
     for (const [name, listener] of Object.entries(this.listeners)) this.element.removeEventListener(name, listener);
     this.connected = false;
     // Removal releases the top layer, pending controls, and stale completions,
-    // without sending feature events or focusing a removed region.
+    // without focusing a removed region.
     if (this.element.open) this.element.close();
     this.returnFocus = null;
     this.restoreControls();
     this.operation = null;
+    this.element.dispatchEvent(new CustomEvent('modal:disconnected', { bubbles: true }));
   }
 
   show(trigger) {

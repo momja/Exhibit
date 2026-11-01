@@ -97,7 +97,7 @@ func TestDetailPageRendersLinkBridge(t *testing.T) {
 
 	// Host-side message handler for the shim's navigation messages, plus the
 	// gate variable and the pendingLink hook the confirmation modal consumes.
-	assert.Contains(t, page, `<script src="`+assetURL("gallery/detail.js")+`"></script>`)
+	assert.Contains(t, page, `<script type="module" src="`+assetURL("gallery/detail.js")+`"></script>`)
 	detailJS, err := embeddedAssets.ReadFile("assets/gallery/detail.js")
 	require.NoError(t, err)
 	assert.Contains(t, string(detailJS), "d.__avNavigate !== true")
@@ -126,9 +126,7 @@ func TestDetailPageRendersLinkConfirmationModal(t *testing.T) {
 
 	// The modal mirrors dl-modal/clip-modal: an accessible dialog, the approved
 	// copy verbatim, and a hostname span detail.js fills from the pending link.
-	assert.Contains(t, page, `<div id="link-modal" class="modal-overlay" hidden>`)
-	assert.Contains(t, page, `role="dialog"`)
-	assert.Contains(t, page, `aria-modal="true"`)
+	assert.Contains(t, page, `<dialog id="link-modal" class="modal-dialog"`)
 	assert.Contains(t, page, `aria-labelledby="link-title"`)
 	assert.Contains(t, page, `<h2 id="link-title">Allow opening links?</h2>`)
 	assert.Contains(t, page,
@@ -141,7 +139,8 @@ func TestDetailPageRendersLinkConfirmationModal(t *testing.T) {
 	detailJS, err := embeddedAssets.ReadFile("assets/gallery/detail.js")
 	require.NoError(t, err)
 	assert.Contains(t, string(detailJS), `document.getElementById('link-host').textContent = url.hostname`)
-	assert.Contains(t, string(detailJS), `document.getElementById('link-modal').hidden = false`)
-	assert.Contains(t, string(detailJS), `setCapabilityApproved('links_approved', approved, 'link')`)
-	assert.Contains(t, string(detailJS), `window.open(link.url, '_blank', 'noopener')`)
+	// Native opening/dismissal outcomes are exercised by TestLinkModalBrowser.
+	assert.Regexp(t, `id="link-block"[^>]*autofocus[^>]*data-modal-dismiss`, page)
+	assert.Contains(t, string(detailJS), `setCapabilityApproved('links_approved', approved, 'link',`)
+	assert.Contains(t, string(detailJS), `tab.location = link.url`)
 }

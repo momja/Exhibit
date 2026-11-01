@@ -357,3 +357,294 @@ func TestEditorLeaveModalBrowser(t *testing.T) {
 	}
 }
 
+// Real viewer bootstrap for the permission consumers. Messages retain the
+// current sandbox frame identity; only transport delays are stubbed per case.
+func newPermissionViewer(t *testing.T, width int64, agent bool) (modalBrowser, string) {
+	t.Helper()
+	ro := newTestRouter(t)
+	id := createArtifact(t, ro, map[string]any{"title": "Permission sample", "body": `<!doctype html><h1>Permission sample</h1><script>addEventListener('message',event=>{if(event.data.__modalTestPing)parent.postMessage({__modalTestPong:true},'*');if(event.data.__avClipboardResult || event.data.__avMediaResult || event.data.__avGeolocationResult)parent.postMessage({__modalTestReply:event.data},'*')})</script>`})
+	app := httptest.NewServer(ro)
+	t.Cleanup(app.Close)
+	ro.cfg.AppOrigin = app.URL
+	render := httptest.NewServer(ro.RenderHandler())
+	t.Cleanup(render.Close)
+	ro.cfg.RenderOrigin = render.URL
+	b := newModalBrowser(t, width)
+	path := "/artifacts/" + id
+	if agent {
+		path = "/agent?artifact=" + id
+	}
+	b.run(chromedp.Navigate(app.URL + path))
+	b.wait(`document.querySelector('iframe')`)
+	if agent {
+		b.wait(`document.getElementById('key-modal').open`)
+		b.eval(`document.getElementById('key-cancel').click();document.getElementById('tab-preview').click()`)
+	}
+	b.eval(fmt.Sprintf(`window.permissionReplies=[];addEventListener('message',event=>{if(event.source===document.querySelector('iframe').contentWindow){if(event.data.__modalTestReply)permissionReplies.push(event.data.__modalTestReply);if(event.data.__modalTestPong)window.permissionPong=true}});window.permissionReport=data=>window.dispatchEvent(new MessageEvent('message',{source:document.querySelector('iframe').contentWindow,data:{artifactId:%q,...data}}))`, id))
+	return b, id
+}
+
+func TestNetworkModalBrowser(t *testing.T) {
+	for _, agent := range []bool{false, true} {
+		for _, width := range []int64{1280, 390} {
+			t.Run(fmt.Sprintf("agent=%t/%d", agent, width), func(t *testing.T) {
+				b, _ := newPermissionViewer(t, width, agent)
+				report := `permissionReport({__avNetwork:true,origin:'https://first.example.test',directive:'connect-src'})`
+				b.dialogCycle("#net-modal", report, "#net-once")
+				b.eval(report)
+				checkModalVisuals(t, b.ctx, "#net-modal")
+				b.capture("Exh-1grc", width)
+				b.eval(`permissionReport({__avNetwork:true,origin:'https://second.example.test'});window.savedFetch=window.fetch;window.fetch=(url,opts)=>opts?.method==='POST'?new Promise(resolve=>window.finishNetwork=()=>resolve(new Response('{}',{status:200}))):savedFetch(url,opts);document.getElementById('net-never').click()`)
+				b.wait(`document.getElementById('net-never').disabled`)
+				b.run(chromedp.KeyEvent(kb.Escape))
+				b.wait(`document.getElementById('net-modal').open && document.getElementById('net-origin').textContent==='https://second.example.test'`)
+				b.eval(`finishNetwork()`)
+				b.run(chromedp.Sleep(30 * time.Millisecond))
+				b.check(`document.getElementById('net-modal').open && document.getElementById('net-origin').textContent==='https://second.example.test' && document.activeElement.id==='net-once'`)
+				b.run(chromedp.KeyEvent(kb.Escape))
+				b.wait(`!document.getElementById('net-modal').open`)
+			})
+		}
+	}
+}
+
+func TestDownloadModalBrowser(t *testing.T) {
+	for _, width := range []int64{1280, 390} {
+		t.Run(fmt.Sprint(width), func(t *testing.T) {
+			b, _ := newPermissionViewer(t, width, false)
+			report := `permissionReport({__avDownload:true,filename:'report.csv',mime:'text/csv',bytes:new ArrayBuffer(3)})`
+			b.dialogCycle("#dl-modal", report, "#dl-block")
+			b.eval(report)
+			checkModalVisuals(t, b.ctx, "#dl-modal")
+			b.capture("Exh-fvzb", width)
+			// A late grant can persist, but cannot download discarded or replaced bytes.
+			b.eval(`window.downloads=[];HTMLAnchorElement.prototype.click=function(){downloads.push(this.download)};window.savedFetch=window.fetch;window.fetch=(url,opts)=>opts?.method==='PATCH'?new Promise(resolve=>window.finishDownload=(ok=true)=>resolve(new Response('{}',{status:ok?200:503}))):savedFetch(url,opts);document.getElementById('dl-allow').click()`)
+			b.wait(`document.getElementById('dl-allow').disabled`)
+			b.eval(`finishDownload(false)`)
+			b.wait(`!document.getElementById('dl-allow').disabled`)
+			b.check(`document.querySelector('#dl-modal [data-permission-status]').textContent.includes('download') && document.getElementById('dl-modal').open`)
+			b.eval(`document.getElementById('dl-allow').click()`)
+			b.wait(`document.getElementById('dl-allow').disabled`)
+			b.run(chromedp.KeyEvent(kb.Escape))
+			b.eval(`finishDownload()`)
+			b.run(chromedp.Sleep(30 * time.Millisecond))
+			b.check(`downloads.length===0 && !document.getElementById('dl-modal').open`)
+			b.eval(`window.fetch=savedFetch;window.savedObjectURL=URL.createObjectURL;URL.createObjectURL=blob=>{window.downloadBlob=blob;return savedObjectURL(blob)}`)
+			b.eval(report)
+			b.wait(`document.getElementById('dl-modal').open`)
+			b.eval(`document.getElementById('dl-allow').click()`)
+			b.wait(`downloads.length===1`)
+			b.check(`downloads[0]==='report.csv' && downloadBlob.size===3 && downloadBlob.type==='text/csv' && !document.getElementById('dl-modal').open`)
+
+		})
+	}
+}
+
+func TestClipboardModalBrowser(t *testing.T) {
+	for _, width := range []int64{1280, 390} {
+		t.Run(fmt.Sprint(width), func(t *testing.T) {
+			b, _ := newPermissionViewer(t, width, false)
+			report := `permissionReport({__avClipboard:true,id:'first',op:'read'})`
+			b.dialogCycle("#clip-modal", report, "#clip-block")
+			b.eval(report)
+			checkModalVisuals(t, b.ctx, "#clip-modal")
+			b.capture("Exh-3917", width)
+			b.eval(`window.clipGestures=[];Object.defineProperty(navigator,'clipboard',{value:{readText(){clipGestures.push(navigator.userActivation.isActive);return Promise.resolve('test clipboard')},writeText(){clipGestures.push(navigator.userActivation.isActive);return Promise.resolve()}}});window.savedFetch=window.fetch;window.fetch=(url,opts)=>opts?.method==='PATCH'?new Promise(resolve=>window.finishClip=()=>resolve(new Response('{}',{status:200}))):savedFetch(url,opts);permissionReplies=[]`)
+			b.run(chromedp.Click(chromedp.CSS(`#clip-allow`)))
+			b.wait(`document.getElementById('clip-allow').disabled`)
+			b.check(`clipGestures.length===1 && clipGestures[0]`)
+			// Displacement denies the first request once; its late grant cannot answer second.
+			b.eval(`permissionReport({__avClipboard:true,id:'second',op:'write',text:'next'})`)
+			b.wait(`permissionReplies.length===1`)
+			b.check(`permissionReplies[0].id==='first' && !permissionReplies[0].ok`)
+			b.eval(`finishClip()`)
+			b.run(chromedp.Sleep(30 * time.Millisecond))
+			b.check(`permissionReplies.length===1 && document.getElementById('clip-modal').open && document.activeElement.id==='clip-block'`)
+			b.run(chromedp.KeyEvent(kb.Escape))
+			b.wait(`permissionReplies.length===2`)
+			b.check(`permissionReplies[1].id==='second' && !permissionReplies[1].ok`)
+			b.eval(`window.fetch=savedFetch;permissionReport({__avClipboard:true,id:'success',op:'read'})`)
+			b.run(chromedp.Click(chromedp.CSS(`#clip-allow`)))
+			b.wait(`permissionReplies.length===3`)
+			b.check(`permissionReplies[2].id==='success' && permissionReplies[2].ok && permissionReplies[2].text==='test clipboard' && clipGestures.at(-1) && !document.getElementById('clip-modal').open`)
+		})
+	}
+}
+
+func TestLinkModalBrowser(t *testing.T) {
+	for _, width := range []int64{1280, 390} {
+		t.Run(fmt.Sprint(width), func(t *testing.T) {
+			b, _ := newPermissionViewer(t, width, false)
+			report := `permissionReport({__avNavigate:true,url:'https://example.test/report'})`
+			b.dialogCycle("#link-modal", report, "#link-block")
+			b.eval(report)
+			checkModalVisuals(t, b.ctx, "#link-modal")
+			b.capture("Exh-d0np", width)
+			b.eval(`window.tabs=[];window.open=()=>{const tab={opener:window,location:null,closed:false,close(){this.closed=true}};tabs.push(tab);return tab};window.savedFetch=window.fetch;window.fetch=(url,opts)=>opts?.method==='PATCH'?new Promise(resolve=>window.finishLink=(ok=true)=>resolve(new Response('{}',{status:ok?200:503}))):savedFetch(url,opts)`)
+			b.run(chromedp.Click(chromedp.CSS(`#link-allow`)))
+			b.wait(`document.getElementById('link-block').disabled`)
+			b.run(chromedp.KeyEvent(kb.Escape))
+			b.check(`document.getElementById('link-modal').open && tabs.length===1 && tabs[0].opener===null`)
+			b.eval(`permissionReport({__avNavigate:true,url:'https://other.example.test/'})`)
+			b.check(`document.getElementById('link-host').textContent==='example.test'`)
+			b.eval(`finishLink(false)`)
+			b.wait(`!document.getElementById('link-block').disabled`)
+			b.check(`tabs[0].closed && document.getElementById('link-modal').open && document.querySelector('#link-modal [data-permission-status]').textContent.includes('link')`)
+			b.run(chromedp.Click(chromedp.CSS(`#link-allow`)))
+			b.wait(`tabs.length===2`)
+			b.eval(`finishLink()`)
+			b.wait(`!document.getElementById('link-modal').open`)
+			b.check(`tabs[1].location==='https://example.test/report' && document.activeElement===document.querySelector('iframe')`)
+		})
+	}
+}
+
+func TestMediaModalBrowser(t *testing.T) {
+	for _, width := range []int64{1280, 390} {
+		t.Run(fmt.Sprint(width), func(t *testing.T) {
+			b, _ := newPermissionViewer(t, width, false)
+			report := `permissionReport({__avMedia:true,id:'camera',video:true,audio:false})`
+			b.dialogCycle("#media-modal", report, "#media-block")
+			b.eval(report)
+			checkModalVisuals(t, b.ctx, "#media-modal")
+			b.capture("Exh-w432", width)
+			b.run(chromedp.Click(chromedp.CSS(`#media-allow`)))
+			b.wait(`document.getElementById('direct-open-modal').open`)
+			b.run(chromedp.KeyEvent(kb.Escape))
+			b.wait(`!document.getElementById('direct-open-modal').open`)
+			b.check(`document.getElementById('media-modal').open && document.activeElement.id==='media-allow'`)
+			b.eval(`window.tabs=[];window.writes=[];window.open=()=>{const tab={opener:window,location:null,closed:false,close(){this.closed=true}};tabs.push(tab);return tab};window.savedFetch=window.fetch;window.fetch=(url,opts)=>{if(opts?.method==='PATCH')writes.push(JSON.parse(opts.body));return savedFetch(url,opts)};permissionReplies=[]`)
+			b.run(chromedp.Click(chromedp.CSS(`#media-allow`)))
+			b.wait(`document.getElementById('direct-open-modal').open`)
+			b.run(chromedp.Click(chromedp.CSS(`#direct-open-confirm`)))
+			b.wait(`permissionReplies.length===1`)
+			b.check(`writes.length===1 && writes[0].camera_approved===true && permissionReplies[0].id==='camera' && permissionReplies[0].name==='NotSupportedError' && tabs[0].opener===null && !document.getElementById('media-modal').open`)
+			b.eval(`permissionReport({__avMedia:true,id:'mic',audio:true,video:false})`)
+			b.wait(`document.getElementById('media-modal').open`)
+			b.check(`document.getElementById('media-devices').textContent==='your microphone' && document.getElementById('media-icon').classList.contains('ph-microphone')`)
+			b.run(chromedp.KeyEvent(kb.Escape))
+			b.wait(`permissionReplies.length===2`)
+			b.check(`permissionReplies[1].id==='mic' && permissionReplies[1].name==='NotAllowedError'`)
+		})
+	}
+}
+
+func TestLocationModalBrowser(t *testing.T) {
+	for _, width := range []int64{1280, 390} {
+		t.Run(fmt.Sprint(width), func(t *testing.T) {
+			b, _ := newPermissionViewer(t, width, false)
+			report := `permissionReport({__avGeolocation:true,id:1})`
+			b.dialogCycle("#geo-modal", report, "#geo-block")
+			b.eval(report)
+			checkModalVisuals(t, b.ctx, "#geo-modal")
+			b.capture("Exh-7hh4", width)
+			b.run(chromedp.Click(chromedp.CSS(`#geo-allow`)))
+			b.wait(`document.getElementById('direct-open-modal').open`)
+			b.run(chromedp.KeyEvent(kb.Escape))
+			b.wait(`!document.getElementById('direct-open-modal').open`)
+			b.check(`document.getElementById('geo-modal').open && document.activeElement.id==='geo-allow'`)
+			b.eval(`permissionReplies=[];window.tabs=[];window.open=()=>{const tab={opener:window,location:null,closed:false,close(){this.closed=true}};tabs.push(tab);return tab};permissionReport({__avGeolocation:true,id:2})`)
+			b.wait(`permissionReplies.length===1`)
+			b.check(`permissionReplies[0].id===1 && permissionReplies[0].error==='User denied Geolocation'`)
+			b.run(chromedp.Click(chromedp.CSS(`#geo-allow`)))
+			b.wait(`document.getElementById('direct-open-modal').open`)
+			b.run(chromedp.Click(chromedp.CSS(`#direct-open-confirm`)))
+			b.wait(`permissionReplies.length===2`)
+			b.check(`permissionReplies[1].id===2 && !permissionReplies[1].banner && tabs[0].opener===null && !document.getElementById('geo-modal').open`)
+		})
+	}
+}
+
+func TestDirectOpenModalBrowser(t *testing.T) {
+	for _, agent := range []bool{false, true} {
+		for _, width := range []int64{1280, 390} {
+			t.Run(fmt.Sprintf("agent=%t/%d", agent, width), func(t *testing.T) {
+				b, _ := newPermissionViewer(t, width, agent)
+				trigger := "#direct-open-toolbar"
+				if agent {
+					trigger = "#pv-open"
+				}
+				open := `document.querySelector('` + trigger + `').click()`
+				b.dialogCycle("#direct-open-modal", open, "#direct-open-cancel")
+				b.eval(open)
+				checkModalVisuals(t, b.ctx, "#direct-open-modal")
+				b.capture("Exh-sqny", width)
+				b.check(`document.documentElement.scrollWidth<=innerWidth && !document.querySelector('body > [inert]')`)
+				// Explicit content clicks keep the dialog open; only outside bounds dismiss.
+				b.eval(`document.getElementById('direct-open-title').click()`)
+				b.check(`document.getElementById('direct-open-modal').open`)
+				b.eval(`window.tabs=[];window.blockPopup=true;window.open=()=>{if(blockPopup)return null;const tab={opener:window,closed:false,location:null,close(){this.closed=true}};tabs.push(tab);return tab}`)
+				b.run(chromedp.Click(chromedp.CSS(`#direct-open-confirm`)))
+				b.wait(`document.getElementById('direct-open-status').textContent.includes('blocked')`)
+				b.check(`document.getElementById('direct-open-modal').open`)
+				b.eval(`blockPopup=false;document.getElementById('direct-open-remember').checked=true`)
+				b.run(chromedp.Click(chromedp.CSS(`#direct-open-confirm`)))
+				b.wait(`!document.getElementById('direct-open-modal').open`)
+				b.check(`tabs.length===1 && tabs[0].opener===null && tabs[0].location.includes('/open')`)
+				b.eval(open)
+				b.wait(`tabs.length===2`)
+				b.check(`!document.getElementById('direct-open-modal').open`)
+			})
+		}
+	}
+}
+
+func TestPermissionModalStackBrowser(t *testing.T) {
+	b, _ := newPermissionViewer(t, 390, false)
+	b.eval(`permissionReport({__avDownload:true,filename:'queued.txt',bytes:new ArrayBuffer(1)});permissionReport({__avClipboard:true,id:'top',op:'read'})`)
+	b.wait(`document.getElementById('dl-modal').open && document.getElementById('clip-modal').open`)
+	b.run(chromedp.KeyEvent(kb.Escape))
+	b.wait(`!document.getElementById('clip-modal').open`)
+	b.check(`document.getElementById('dl-modal').open && document.getElementById('dl-modal').contains(document.activeElement)`)
+	b.run(chromedp.KeyEvent(kb.Escape))
+	b.wait(`!document.getElementById('dl-modal').open`)
+	b.check(`document.activeElement===document.querySelector('iframe')`)
+	// Native nested confirmation cancels only itself, then the capability.
+	b.eval(`permissionReport({__avMedia:true,id:'nested',video:true})`)
+	b.run(chromedp.Click(chromedp.CSS(`#media-allow`)))
+	b.wait(`document.getElementById('direct-open-modal').open`)
+	b.run(chromedp.KeyEvent(kb.Escape))
+	b.check(`!document.getElementById('direct-open-modal').open && document.getElementById('media-modal').open && document.activeElement.id==='media-allow'`)
+	b.run(chromedp.KeyEvent(kb.Escape))
+	b.wait(`!document.getElementById('media-modal').open`)
+}
+
+func TestDirectOpenPendingBrowser(t *testing.T) {
+	b, _ := newPermissionViewer(t, 390, false)
+	b.eval(`window.directResults=[];window.tabs=[];window.open=()=>{const tab={opener:window,location:null,closed:false,close(){this.closed=true}};tabs.push(tab);return tab};document.dispatchEvent(new CustomEvent('exhibit:open-directly',{detail:{trigger:document.getElementById('pip-more'),approve:()=>new Promise(resolve=>window.approveDirect=resolve),resolve:value=>directResults.push(value)}}))`)
+	b.wait(`document.getElementById('direct-open-modal').open`)
+	b.eval(`document.getElementById('direct-open-remember').checked=true`)
+	b.run(chromedp.Click(chromedp.CSS(`#direct-open-confirm`)))
+	b.wait(`document.getElementById('direct-open-confirm').disabled`)
+	b.run(chromedp.KeyEvent(kb.Escape))
+	b.check(`directResults.length===1 && directResults[0]===false && tabs[0].closed`)
+	b.eval(`approveDirect(true)`)
+	b.run(chromedp.Sleep(30 * time.Millisecond))
+	b.check(`directResults.length===1 && tabs[0].location===null && !document.getElementById('direct-open-modal').open && !Object.keys(localStorage).some(key=>key.startsWith('exhibit:direct-open:'))`)
+	// Disconnection has the same transaction cleanup as cancellation, without
+	// focusing a removed region or leaving a blank tab behind.
+	b.eval(`document.dispatchEvent(new CustomEvent('exhibit:open-directly',{detail:{trigger:document.getElementById('pip-more'),approve:()=>new Promise(resolve=>window.approveRemoved=resolve),resolve:value=>directResults.push(value)}}))`)
+	b.run(chromedp.Click(chromedp.CSS(`#direct-open-confirm`)))
+	b.wait(`tabs.length===2 && document.getElementById('direct-open-confirm').disabled`)
+	b.eval(`window.removedDirect=document.getElementById('direct-open-modal');removedDirect.remove()`)
+	b.wait(`directResults.length===2 && directResults[1]===false && tabs[1].closed && !removedDirect.open`)
+	b.eval(`approveRemoved(true)`)
+	b.run(chromedp.Sleep(30 * time.Millisecond))
+	b.check(`directResults.length===2 && tabs[1].location===null && !Object.keys(localStorage).some(key=>key.startsWith('exhibit:direct-open:'))`)
+
+}
+
+func TestDirectOpenPreviewSwapBrowser(t *testing.T) {
+	b, _ := newPermissionViewer(t, 390, true)
+	b.eval(`window.oldOpen=document.getElementById('pv-open');oldOpen.click();document.body.dispatchEvent(new CustomEvent('exhibit:artifact-saved'))`)
+	b.wait(`!oldOpen.isConnected && document.getElementById('pv-open')`)
+	b.run(chromedp.KeyEvent(kb.Escape))
+	b.check(`document.activeElement===document.getElementById('pv-open')`)
+	// Create a different preview through the real API and htmx partial path.
+	b.eval(`(async()=>{const response=await window.apiFetch('/api/artifacts',{method:'POST',body:JSON.stringify({title:'New preview',body:'<h1>New preview</h1>'})});const data=await response.json();artifact=data.artifact;window.nextArtifact=artifact;document.body.dispatchEvent(new CustomEvent('exhibit:artifact-saved'))})()`)
+	b.wait(`window.nextArtifact && document.getElementById('pv-open').dataset.directOpenArtifact===nextArtifact.id`)
+	b.eval(`window.tabs=[];window.open=()=>{const tab={opener:window,closed:false,location:null,close(){this.closed=true}};tabs.push(tab);return tab};document.getElementById('pv-open').click()`)
+	b.run(chromedp.Click(chromedp.CSS(`#direct-open-confirm`)))
+	b.wait(`tabs.length===1`)
+	b.check(`tabs[0].location==='/artifacts/'+nextArtifact.id+'/open' && tabs[0].opener===null`)
+}
