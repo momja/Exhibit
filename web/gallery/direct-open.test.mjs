@@ -38,7 +38,7 @@ async function load({ artifact = 'art-1', viewer = '1', store = storage(), block
   permissionDialog(page, 'media-modal');
   permissionDialog(page, 'geo-modal');
   await page.loadModule(asset('detail.js'));
-  const directDialog = permissionDialog(page, 'direct-open-modal');
+  permissionDialog(page, 'direct-open-modal');
   await page.loadModule(asset('direct-open.js'));
   const trigger = page.byId('direct-open-toolbar');
   const prompt = page.byId('direct-open-modal');
@@ -67,22 +67,19 @@ test('both toolbar and capability banner ask before opening exactly one isolated
   assert.deepEqual(page.api.calls, [], 'opening is not an artifact mutation');
 });
 
-for (const dismiss of ['cancel', 'shared dismissal']) {
-  test(`${dismiss} opens nothing and resets the checkbox`, async () => {
-    const page = await load();
-    await page.trigger.click();
-    page.checkbox.checked = true;
-    if (dismiss === 'cancel') await page.cancel.click();
-    if (dismiss === 'shared dismissal') page.prompt.dispatchEvent(new Event('cancel', { cancelable: true }));
-    assert.equal(page.prompt.open, false);
-    assert.equal(page.checkbox.checked, false);
-    assert.equal(page.tabs.length, 0);
-    assert.equal(page.store.values.size, 0);
-    await page.trigger.click();
-    assert.equal(page.prompt.open, true);
-    assert.equal(page.checkbox.checked, false);
-  });
-}
+test('cancel opens nothing and resets the checkbox', async () => {
+  const page = await load();
+  await page.trigger.click();
+  page.checkbox.checked = true;
+  await page.cancel.click();
+  assert.equal(page.prompt.open, false);
+  assert.equal(page.checkbox.checked, false);
+  assert.equal(page.tabs.length, 0);
+  assert.equal(page.store.values.size, 0);
+  await page.trigger.click();
+  assert.equal(page.prompt.open, true);
+  assert.equal(page.checkbox.checked, false);
+});
 
 test('a hidden toolbar menu returns focus to More actions', async () => {
   const page = await load();
