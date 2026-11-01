@@ -1,0 +1,25 @@
+{{define "networkWarnings"}}{{if .}}<section class="network-warnings" role="status" aria-label="Network warnings">
+  <strong><i class="ph ph-warning" aria-hidden="true"></i> Review this artifact's requests</strong>
+  <ul>{{range .}}<li data-network-warning="{{.Code}}">{{.Message}}{{if .Origin}} <code>{{.Origin}}</code>{{end}}</li>{{end}}</ul>
+</section>{{end}}{{end}}
+
+{{define "networkApproval"}}
+{{template "networkWarnings" .Warnings}}
+{{if .Origins}}<strong>{{if .New}}This artifact{{else}}The saved artifact{{end}} wants to contact these origins.</strong>
+<p class="text-sm muted">Origins stay blocked until you allow them. This static scan may miss addresses built while the artifact runs.</p>
+{{range .Origins}}<label class="origin-row"><input type="checkbox" class="al-origin" value="{{.Origin}}"{{if not .Blocked}} checked{{end}}> <code>{{.Origin}}</code>{{if .Blocked}} <span class="text-sm muted">blocked</span>{{end}}</label>{{end}}
+<div class="scan-actions btn-row">
+  <button type="button" class="btn btn-sm" onclick="{{if .New}}approveOrigins({{.ID}}){{else}}approveOrigins(){{end}}">Approve selected &amp; enable</button>
+  <button type="button" class="btn btn-sm btn-sec" onclick="{{if .New}}finishIngest({{.ID}}){{else}}finishEdit(){{end}}">Keep remaining origins blocked</button>
+</div>
+{{else}}<div class="scan-actions btn-row">
+  <button type="button" class="btn btn-sm btn-sec" onclick="{{if .New}}finishIngest({{.ID}}){{else}}finishEdit(){{end}}">Continue to artifact</button>
+</div>{{end}}
+{{end}}
+
+{{define "agentConnectionRequests"}}{{if .Requests}}<section class="connection-request-notice" role="status" aria-label="Connection setup requested">
+  <strong><i class="ph ph-plugs-connected" aria-hidden="true"></i> Connection setup requested</strong>
+  {{range .Requests}}<p><b>{{.Provider}}</b> — {{.Reason}}</p><a class="btn btn-sm btn-sec" href="{{.URL}}">{{.Action}}</a>{{end}}
+  <a class="btn btn-sm btn-sec" href="{{.ManageURL}}">Review accounts <i class="ph ph-arrow-square-out" aria-hidden="true"></i></a>
+  <p class="text-sm muted">Your account access stays personal. Only you can approve it for this tool.</p>
+</section>{{end}}{{end}}

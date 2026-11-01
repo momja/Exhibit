@@ -65,6 +65,11 @@ function mayApprove() {
   return !(typeof READ_ONLY === 'boolean' && READ_ONLY);
 }
 
+function needsHostReload() {
+  return (typeof RELAY_ENABLED === 'boolean' && RELAY_ENABLED) ||
+    (typeof CONNECTION_PROTECTED === 'boolean' && CONNECTION_PROTECTED);
+}
+
 // State bridge: the artifact runs in a sandboxed (opaque-origin) iframe and
 // cannot call the API itself. Its storage shim posts state writes here; we
 // forward them same-origin with the auth token. Validate the message shape and
@@ -149,7 +154,9 @@ async function resyncState() {
   if (!frame || !frame.contentWindow) return;
   let resp;
   try {
-    resp = await apiFetch(window.ExhibitState.url(ID));
+    const options = typeof NAVIGATION_POLICY === 'string'
+      ? { headers: { 'X-Exhibit-Relay-Policy': NAVIGATION_POLICY } } : undefined;
+    resp = await apiFetch(window.ExhibitState.url(ID), options);
   } catch (err) {
     return;
   }
@@ -220,6 +227,7 @@ window.addEventListener('message', function (e) {
 const stateReloadBtn = document.getElementById('state-changed-reload');
 if (stateReloadBtn) {
   stateReloadBtn.addEventListener('click', function () {
+    if (needsHostReload()) { window.location.reload(); return; }
     const frame = document.querySelector('iframe');
     if (frame) frame.src = OPEN_URL + '?r=' + Date.now();
     document.getElementById('state-changed-banner').hidden = true;
@@ -553,6 +561,7 @@ document.getElementById('clip-allow').addEventListener('click', async function()
 // first-request confirmation (av-e3sj), naming the destination host, and open
 // nothing until the user allows.
 let pendingLink = null;
+let linkRequestSequence = 0;
 const linkDialog = document.getElementById('link-modal');
 const linkModal = modalFor(linkDialog);
 for (const event of ['modal:closed', 'modal:disconnected']) linkDialog.addEventListener(event, () => {
@@ -560,15 +569,36 @@ for (const event of ['modal:closed', 'modal:disconnected']) linkDialog.addEventL
   pendingLink = null;
 });
 document.addEventListener('exhibit:preview-reloaded', () => {
+  linkRequestSequence++;
   linkModal.pending = false;
   closeLinkModal();
 });
 
-window.addEventListener('message', function(e) {
+async function checkedLinkDestination(destination) {
+  // The server grants this narrow exemption to uncredentialed views with no
+  // connection data policies. A signed-in read-only recipient still checks
+  // their own policy through the authenticated viewer endpoint.
+  if (typeof PUBLIC_NAVIGATION === 'boolean' && PUBLIC_NAVIGATION) return destination;
+  try {
+    const response = await window.apiNavigationCheck(ID, destination,
+      typeof NAVIGATION_POLICY === 'string' ? NAVIGATION_POLICY : '');
+    const result = await response.json();
+    if (!response.ok || typeof result.url !== 'string') throw new Error(result.error || 'This link is not permitted.');
+    return result.url;
+  } catch (error) {
+    document.getElementById('al-status').textContent = error.message || 'Could not check this link. Try reopening the artifact.';
+    return null;
+  }
+}
+
+window.addEventListener('message', async function(e) {
   const d = e.data;
   if (!d || d.__avNavigate !== true || d.artifactId !== ID) return;
   const frame = document.querySelector('iframe');
   if (!frame || e.source !== frame.contentWindow) return;
+  // Drop competing reports when received, before an asynchronous policy check
+  // can outlive the current approval and replace its prompt or error.
+  if (linkModal.pending) return;
   let url;
   try {
     url = new URL(String(d.url));
@@ -576,15 +606,19 @@ window.addEventListener('message', function(e) {
     return;
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
+  if (!linksApproved && !mayApprove()) return;
+  const sequence = ++linkRequestSequence;
+  const destination = await checkedLinkDestination(url.href);
+  if (!destination || sequence !== linkRequestSequence) return;
   if (linksApproved) {
-    window.open(url.href, '_blank', 'noopener');
+    window.open(destination, '_blank', 'noopener,noreferrer');
     return;
   }
   // Not ours to approve: the destination is dropped, which is what a denial
   // does and what the sandbox did before the bridge existed.
   if (!mayApprove() || !linkDialog.isConnected || linkModal.pending) return;
   closeLinkModal();
-  pendingLink = { url: url.href, host: url.hostname, frame, generation: previewGeneration };
+  pendingLink = { url: destination, host: url.hostname, frame, generation: previewGeneration };
   document.getElementById('link-host').textContent = url.hostname;
   linkDialog.querySelector('[data-permission-status]').textContent = '';
   linkModal.show(frame);
@@ -621,7 +655,16 @@ document.getElementById('link-allow').addEventListener('click', async function()
     const ok = await setLinksApproved(true, link);
     if (pendingLink !== link || !currentPreviewRequest(link)) { tab.close(); return false; }
     if (!ok || tab.closed) { tab.close(); link.tab = null; return false; }
-    tab.location = link.url;
+    const destination = await checkedLinkDestination(link.url);
+    if (!destination || pendingLink !== link || !currentPreviewRequest(link) || tab.closed) {
+      tab.close(); link.tab = null; return false;
+    }
+    // Keep the blank tab's navigation from disclosing the Exhibit page URL.
+    const policy = tab.document.createElement('meta');
+    policy.name = 'referrer';
+    policy.content = 'no-referrer';
+    tab.document.head.appendChild(policy);
+    tab.location = destination;
     link.tab = null;
     return true;
   });
@@ -672,6 +715,10 @@ window.addEventListener('message', function(e) {
   if (!frame || e.source !== frame.contentWindow) return;
   const req = { id: String(d.id), audio: !!d.audio, video: !!d.video, frame, generation: previewGeneration };
   if (!req.audio && !req.video) return;
+  if (typeof CONNECTION_PROTECTED === 'boolean' && CONNECTION_PROTECTED) {
+    replyMedia(req, false, 'Connected data must stay inside Exhibit; capture devices are unavailable in this preview.', 'NotAllowedError');
+    return;
+  }
   // Approved means approved for every device this request named: a camera-only
   // grant must still prompt when the artifact later asks for the microphone.
   const needsPrompt = (req.video && !cameraApproved) || (req.audio && !microphoneApproved);
@@ -794,6 +841,10 @@ window.addEventListener('message', function(e) {
   const frame = document.querySelector('iframe');
   if (!frame || e.source !== frame.contentWindow) return;
   const req = { id: d.id, frame, generation: previewGeneration };
+  if (typeof CONNECTION_PROTECTED === 'boolean' && CONNECTION_PROTECTED) {
+    replyGeolocation(req, false, 'Connected data must stay inside Exhibit; location is unavailable in this preview.');
+    return;
+  }
   if (geolocationApproved) {
     // Nothing to decide. The approval exists; it just isn't spent in this
     // frame. Ask the frame to raise the banner, which offers the top-level
@@ -910,6 +961,9 @@ networkPrompt.install({
     if (st) st.textContent = text;
   },
   reload: function () {
+    // The host's policy is bound to the approved origins and current source.
+    // Refresh it together with the frame after an origin approval.
+    if (needsHostReload()) { window.location.reload(); return; }
     const frame = document.querySelector('iframe');
     frame.src = OPEN_URL + '?r=' + Date.now();
     frame.addEventListener('load', function onload() {

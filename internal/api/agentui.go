@@ -57,13 +57,18 @@ type agentPageData struct {
 // default tile is visible too, which is what "this artifact has no widget yet"
 // looks like. It carries the same stamp for the same reason.
 type agentPreviewData struct {
-	ID          string
-	HasArtifact bool
-	Title       string
-	FrameURL    string
-	OpenURL     string
-	DetailURL   string
-	Widget      widgetView
+	ID                  string
+	HasArtifact         bool
+	Title               string
+	FrameURL            string
+	OpenURL             string
+	DetailURL           string
+	Widget              widgetView
+	RelayEnabled        bool
+	FramePolicyEnabled  bool
+	ConnectionProtected bool
+	RelayPolicy         string
+	RelayFramePolicy    string
 }
 
 // newAgentPreviewData builds the pane's view model for one artifact; the zero
@@ -79,18 +84,25 @@ func (ro *Router) newAgentPreviewData(r *http.Request, a *store.Artifact) agentP
 		return agentPreviewData{}
 	}
 	urls := ro.renderURLs(r)
+	policy, _ := ro.relayPolicy(r.Context(), ownerIDFromCtx(r.Context()), a)
+	protected, protectionErr := ro.hasConnectionDataPolicies(r.Context(), ownerIDFromCtx(r.Context()), a.ID)
 	widget := newWidgetView(a, urls)
 	if widget.URL != "" {
 		widget.URL = cacheBust(widget.URL)
 	}
 	return agentPreviewData{
-		ID:          a.ID,
-		HasArtifact: true,
-		Title:       a.Title,
-		FrameURL:    cacheBust(urls.artifact(a.ID)),
-		OpenURL:     openURL(a.ID),
-		DetailURL:   "/artifacts/" + a.ID,
-		Widget:      widget,
+		RelayEnabled:        ro.cfg.Relay.Enabled,
+		FramePolicyEnabled:  ro.cfg.Relay.Enabled || protected || protectionErr != nil,
+		ConnectionProtected: protected || protectionErr != nil,
+		RelayPolicy:         policy,
+		RelayFramePolicy:    urls.framePolicy(a.ID),
+		ID:                  a.ID,
+		HasArtifact:         true,
+		Title:               a.Title,
+		FrameURL:            cacheBust(urls.artifact(a.ID)),
+		OpenURL:             openURL(a.ID),
+		DetailURL:           "/artifacts/" + a.ID,
+		Widget:              widget,
 	}
 }
 
@@ -178,5 +190,8 @@ func (ro *Router) agentPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if ro.cfg.Relay.Enabled || ro.connectionPolicy() != nil {
+		w.Header().Set("Content-Security-Policy", ro.renderURLs(r).framePolicy(data.Preview.ID))
+	}
 	fmt.Fprint(w, page)
 }

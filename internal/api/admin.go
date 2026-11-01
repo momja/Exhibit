@@ -352,7 +352,11 @@ type updateUserRequest struct {
 	// instance default, and a number sets it. See nullableInt64 — a pointer
 	// would silently collapse the first two, and "clear this override" is
 	// precisely what a downgrade is.
-	StorageLimitBytes nullableInt64 `json:"storage_limit_bytes"`
+	StorageLimitBytes     nullableInt64 `json:"storage_limit_bytes"`
+	ConnectionNativeLimit nullableInt64 `json:"connection_native_limit"`
+	ConnectionOAuthLimit  nullableInt64 `json:"connection_oauth_limit"`
+	ConnectionVendorLimit nullableInt64 `json:"connection_vendor_limit"`
+	RelayScheduleLimit    nullableInt64 `json:"relay_schedule_limit"`
 	// EntitlementRef is the opaque external reference. The empty string
 	// clears it, which needs no third state: unlike a limit, "" and "unset"
 	// are the same thing for a string nothing parses.
@@ -393,10 +397,14 @@ func (n *nullableInt64) UnmarshalJSON(b []byte) error {
 // and the handler below stays about ordering and refusals.
 func (req updateUserRequest) entitlementPatch() store.EntitlementPatch {
 	return store.EntitlementPatch{
-		Plan:              req.Plan,
-		Ref:               req.EntitlementRef,
-		SetStorageLimit:   req.StorageLimitBytes.Set,
-		StorageLimitBytes: req.StorageLimitBytes.Value,
+		Plan:                     req.Plan,
+		Ref:                      req.EntitlementRef,
+		SetStorageLimit:          req.StorageLimitBytes.Set,
+		StorageLimitBytes:        req.StorageLimitBytes.Value,
+		SetConnectionNativeLimit: req.ConnectionNativeLimit.Set, ConnectionNativeLimit: req.ConnectionNativeLimit.Value,
+		SetConnectionOAuthLimit: req.ConnectionOAuthLimit.Set, ConnectionOAuthLimit: req.ConnectionOAuthLimit.Value,
+		SetConnectionVendorLimit: req.ConnectionVendorLimit.Set, ConnectionVendorLimit: req.ConnectionVendorLimit.Value,
+		SetRelayScheduleLimit: req.RelayScheduleLimit.Set, RelayScheduleLimit: req.RelayScheduleLimit.Value,
 	}
 }
 
@@ -447,6 +455,12 @@ func (ro *Router) updateAdminUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest,
 			"a storage limit is a number of bytes and cannot be negative; send null to put this account back on the instance default")
 		return
+	}
+	for _, limit := range []nullableInt64{req.ConnectionNativeLimit, req.ConnectionOAuthLimit, req.ConnectionVendorLimit, req.RelayScheduleLimit} {
+		if limit.Set && limit.Value != nil && (*limit.Value < 0 || *limit.Value > 1_000_000) {
+			writeError(w, http.StatusBadRequest, "connection and schedule limits must be counts from 0 to 1000000; send null to restore the instance default")
+			return
+		}
 	}
 
 	// Role and disabled-state changes run first, ahead of the password reset.

@@ -16,6 +16,7 @@
  */
 
 let currentMode = 'agent';
+let pendingIngestArtifactId = '';
 
 // The CodeMirror island mounts the first time Paste HTML is selected, not at
 // load. The page no longer opens on paste, and an editor mounted inside a
@@ -166,12 +167,12 @@ async function ingest() {
   const footprint = data.network_footprint || [];
   snapshotReportHTML = renderSnapshotReport(data.snapshot);
   snapshotNeedsAttention = snapshotHasProblems(data.snapshot);
-  if (footprint.length > 0) {
+  if (footprint.length > 0 || (data.network_warnings || []).length > 0) {
     // The artifact is saved but network-blocked (CSP connect-src 'none').
     // Pause here for explicit approval — nothing is added to the allowlist,
     // and no origin gains network access, until the user decides.
     status.textContent = '✓ Saved — review network access below.';
-    showApproval(id, footprint);
+    showApproval(id);
     return;
   }
   finishIngest(id);
@@ -241,22 +242,12 @@ function renderSnapshotReport(rep) {
 // showApproval presents the scanned origins for explicit approval. Origins are
 // blocked until the user approves them; nothing is written to the allowlist here.
 // The snapshot report, when one exists, is shown above the approval controls.
-function showApproval(id, footprint) {
+function showApproval(id) {
   const scanDiv = document.getElementById('scan-result');
-  const rows = footprint.map(o =>
-    '<label class="origin-row">' +
-    '<input type="checkbox" class="al-origin" value="' + esc(o) + '" checked> ' +
-    '<code>' + esc(o) + '</code></label>'
-  ).join('');
+  pendingIngestArtifactId = id;
   scanDiv.style.display = 'block';
-  scanDiv.innerHTML = snapshotReportHTML +
-    '<strong>This artifact wants to contact these origins.</strong>' +
-    '<div class="scan-note">The most secure option will <em>always</em> be to disable all external origins. Use your own discretion when allowing access to the listed networks below. This is a static scan and may not include every origin the application needs to work.</div>' +
-    rows +
-    '<div class="scan-actions">' +
-    '<button class="btn btn-sm" onclick="approveOrigins(\'' + id + '\')">Approve selected &amp; enable</button>' +
-    '<button class="btn btn-sm btn-sec" onclick="finishIngest(\'' + id + '\')">Keep all blocked</button>' +
-    '</div>';
+  document.getElementById('snapshot-report').innerHTML = snapshotReportHTML;
+  document.body.dispatchEvent(new CustomEvent('exhibit:network-approval-changed'));
 }
 
 // approveOrigins writes the user-selected origins to the artifact's allowlist.
@@ -288,7 +279,8 @@ function finishIngest(id) {
     status.appendChild(link);
     const scanDiv = document.getElementById('scan-result');
     scanDiv.style.display = 'block';
-    scanDiv.innerHTML = snapshotReportHTML;
+    document.getElementById('snapshot-report').innerHTML = snapshotReportHTML;
+    document.getElementById('network-approval').replaceChildren();
     return;
   }
   status.textContent = '✓ Saved — opening artifact…';

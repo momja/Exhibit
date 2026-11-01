@@ -1,6 +1,7 @@
 package api
 
 import (
+	"io"
 	"net/http"
 
 	"github.com/momja/Exhibit/internal/store"
@@ -10,6 +11,9 @@ import (
 // offscreen gallery widget is brought back. Its iframe remains sandboxed and
 // the final document is still served exclusively by the render origin.
 func (ro *Router) openGalleryWidget(w http.ResponseWriter, r *http.Request) {
+	if !trustedFrameRefresh(w, r) {
+		return
+	}
 	id := urlParamID(r, "artifactID")
 	a, err := ro.cfg.Store.GetArtifact(r.Context(), ownerIDFromCtx(r.Context()), id)
 	if err != nil {
@@ -21,12 +25,22 @@ func (ro *Router) openGalleryWidget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
+	view := newWidgetView(a, ro.renderURLs(r))
+	if view.Wrapped {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Content-Security-Policy", widgetFramePolicy(view.URL)+"; frame-ancestors 'self'")
+		_, _ = io.WriteString(w, view.FrameDocument())
+		return
+	}
 	http.Redirect(w, r, ro.renderURLs(r).widget(a.ID), http.StatusFound)
 }
 
 // Recipients refresh widget credentials through viewer access, leaving the
 // owner accessor and its callers unchanged.
 func (ro *Router) openReadableGalleryWidget(w http.ResponseWriter, r *http.Request) {
+	if !trustedFrameRefresh(w, r) {
+		return
+	}
 	urls := ro.renderURLs(r)
 	a, err := ro.cfg.Store.GetArtifactReadableBy(r.Context(), store.ViewerID(urls.viewerID), urlParamID(r, "artifactID"))
 	if err != nil {
@@ -38,5 +52,13 @@ func (ro *Router) openReadableGalleryWidget(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	http.Redirect(w, r, urls.ownedBy(a.OwnerID).widget(a.ID), http.StatusFound)
+	urls = urls.ownedBy(a.OwnerID)
+	view := newWidgetView(a, urls)
+	if view.Wrapped {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Content-Security-Policy", widgetFramePolicy(view.URL)+"; frame-ancestors 'self'")
+		_, _ = io.WriteString(w, view.FrameDocument())
+		return
+	}
+	http.Redirect(w, r, urls.widget(a.ID), http.StatusFound)
 }

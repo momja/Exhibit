@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Connection snapshot</title>
+<style>
+:root{color-scheme:light dark;--bg:#f4f7fc;--ink:#18273c;--muted:#627590;--blue:#23559e;--line:#dce5f2}
+*{box-sizing:border-box}body{margin:0;padding:24px;background:var(--bg);color:var(--ink);font:14px/1.5 system-ui,sans-serif}.eyebrow{font-size:10px;font-weight:700;letter-spacing:1.5px;color:var(--blue);text-transform:uppercase}h1{font-size:25px;line-height:1.2;letter-spacing:-.6px;margin:18px 0 10px}p{color:var(--muted);margin:0}.footer{border-top:1px solid var(--line);padding-top:13px;margin-top:21px;font-size:11px}
+@media(prefers-color-scheme:dark){:root{--bg:#18212f;--ink:#e9eff8;--muted:#a0b0c7;--blue:#9ebff0;--line:#344156}}
+@media(max-height:180px){body{padding:14px}.eyebrow{font-size:9px}h1{font-size:21px;margin:9px 0 6px}p{font-size:12px;line-height:1.35}.footer{display:none}}
+</style>
+</head>
+<body>
+<span class="eyebrow">HTTPbin · saved snapshot</span>
+<h1 id="status">Ready to connect</h1>
+<p id="detail">Open the artifact to configure a connection.</p>
+<p class="footer">This widget reads saved data. It makes no API requests.</p>
+<script type="module">
+let snapshot;
+try { snapshot = JSON.parse(localStorage.getItem('connection-check-auto') || localStorage.getItem('connection-check') || 'null'); } catch {}
+if (snapshot?.authenticated === true) {
+  document.getElementById('status').textContent = 'Authenticated';
+  document.getElementById('detail').textContent = 'Verified with a saved background response.';
+}
+</script>
+</body>
+</html>

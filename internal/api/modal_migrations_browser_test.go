@@ -480,13 +480,15 @@ func TestLinkModalBrowser(t *testing.T) {
 			b.eval(report)
 			checkModalVisuals(t, b.ctx, "#link-modal")
 			b.capture("Exh-d0np", width)
-			b.eval(`window.tabs=[];window.open=()=>{const tab={opener:window,location:null,closed:false,close(){this.closed=true}};tabs.push(tab);return tab};window.savedFetch=window.fetch;window.fetch=(url,opts)=>opts?.method==='PATCH'?new Promise(resolve=>window.finishLink=(ok=true)=>resolve(new Response('{}',{status:ok?200:503}))):savedFetch(url,opts)`)
+			b.eval(`window.linkChecks=[];window.savedNavigationCheck=window.apiNavigationCheck;window.apiNavigationCheck=(...args)=>{linkChecks.push(args[1]);return savedNavigationCheck(...args)};window.tabs=[];window.open=()=>{const tab={opener:window,document:document.implementation.createHTMLDocument(''),destination:null,closed:false,close(){this.closed=true},set location(url){this.referrerAtNavigation=this.document.querySelector('meta[name=referrer]')?.content;this.destination=url},get location(){return this.destination}};tabs.push(tab);return tab};window.savedFetch=window.fetch;window.fetch=(url,opts)=>opts?.method==='PATCH'?new Promise(resolve=>window.finishLink=(ok=true)=>resolve(new Response('{}',{status:ok?200:503}))):savedFetch(url,opts)`)
 			b.run(chromedp.Click(chromedp.CSS(`#link-allow`)))
 			b.wait(`document.getElementById('link-block').disabled`)
 			b.run(chromedp.KeyEvent(kb.Escape))
 			b.check(`document.getElementById('link-modal').open && tabs.length===1 && tabs[0].opener===null`)
 			b.eval(`permissionReport({__avNavigate:true,url:'https://other.example.test/'})`)
-			b.check(`document.getElementById('link-host').textContent==='example.test'`)
+			// A request received during a grant must be dropped before its asynchronous
+			// policy check can outlive the pending dialog and replace its error state.
+			b.check(`linkChecks.length===0 && document.getElementById('link-host').textContent==='example.test'`)
 			b.eval(`finishLink(false)`)
 			b.wait(`!document.getElementById('link-block').disabled`)
 			b.check(`tabs[0].closed && document.getElementById('link-modal').open && document.querySelector('#link-modal [data-permission-status]').textContent.includes('link')`)
@@ -494,7 +496,7 @@ func TestLinkModalBrowser(t *testing.T) {
 			b.wait(`tabs.length===2`)
 			b.eval(`finishLink()`)
 			b.wait(`!document.getElementById('link-modal').open`)
-			b.check(`tabs[1].location==='https://example.test/report' && document.activeElement===document.querySelector('iframe')`)
+			b.check(`tabs[1].location==='https://example.test/report' && tabs[1].referrerAtNavigation==='no-referrer' && linkChecks.length===1 && linkChecks[0]==='https://example.test/report' && document.activeElement===document.querySelector('iframe')`)
 		})
 	}
 }
@@ -646,5 +648,5 @@ func TestDirectOpenPreviewSwapBrowser(t *testing.T) {
 	b.eval(`window.tabs=[];window.open=()=>{const tab={opener:window,closed:false,location:null,close(){this.closed=true}};tabs.push(tab);return tab};document.getElementById('pv-open').click()`)
 	b.run(chromedp.Click(chromedp.CSS(`#direct-open-confirm`)))
 	b.wait(`tabs.length===1`)
-	b.check(`tabs[0].location==='/artifacts/'+nextArtifact.id+'/open' && tabs[0].opener===null`)
+	b.check(`tabs[0].location==='/artifacts/'+nextArtifact.id+'/open?direct=1' && tabs[0].opener===null`)
 }
