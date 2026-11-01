@@ -920,7 +920,10 @@ selected panel. Programmatic pane switches keep focus visible. Above that
 breakpoint, both panes are named regions and the tab strip is hidden. Switching
 panes does not recreate their content or preview frame. Inactive mobile panes
 stay laid out in the same grid cell, hidden and inert, to retain iframe scroll
-without exposing inactive controls. `TestAgentPanesBrowser`
+without exposing inactive controls. Breakpoint visibility changes together with
+roles, inertness and focus, so CSS cannot blur the focused control before the
+handler captures it. `TestAgentPaneBreakpointFocusBrowser` deliberately delays
+that handler across rendered frames in both resize directions. `TestAgentPanesBrowser`
 covers the responsive geometry, keyboard focus, retained draft/scroll/frame
 state, htmx swaps, and short viewports in light and dark modes.
 

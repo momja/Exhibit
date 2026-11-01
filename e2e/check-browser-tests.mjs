@@ -11,6 +11,7 @@ const required = new Set([
   'TestShareModalTransactionsBrowser',
   'TestAgentKeyModalBrowser',
   'TestAgentPanesBrowser',
+  'TestAgentPaneBreakpointFocusBrowser',
   'TestFilterModalBrowser',
   'TestAdminEntitlementModalBrowser',
   'TestEditorLeaveModalBrowser',

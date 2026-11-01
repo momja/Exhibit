@@ -782,21 +782,24 @@ for (const tab of [tabChatEl, tabPreviewEl]) {
 }
 
 function syncPaneSemantics() {
+  const mobile = mobileQuery.matches;
   const preview = document.body.classList.contains('show-preview');
   const activeTab = preview ? tabPreviewEl : tabChatEl;
   const activePane = document.getElementById(preview ? 'pane-preview' : 'pane-chat');
   const inactivePane = document.getElementById(preview ? 'pane-chat' : 'pane-preview');
   const focused = document.activeElement;
   for (const pane of [activePane, inactivePane]) {
-    pane.inert = mobileQuery.matches && pane === inactivePane;
-    pane.setAttribute('role', mobileQuery.matches ? 'tabpanel' : 'region');
-    pane.tabIndex = mobileQuery.matches ? 0 : -1;
-    if (mobileQuery.matches) pane.setAttribute('aria-labelledby', pane.id.replace('pane-', 'tab-'));
+    pane.inert = mobile && pane === inactivePane;
+    pane.setAttribute('role', mobile ? 'tabpanel' : 'region');
+    pane.tabIndex = mobile ? 0 : -1;
+    if (mobile) pane.setAttribute('aria-labelledby', pane.id.replace('pane-', 'tab-'));
     else pane.removeAttribute('aria-labelledby');
   }
-  // Resizing must not strand keyboard focus in a panel or tab that CSS hides.
-  if (mobileQuery.matches && focused && inactivePane.contains(focused)) activeTab.focus({preventScroll: true});
-  if (!mobileQuery.matches && (focused === tabChatEl || focused === tabPreviewEl)) activePane.focus({preventScroll: true});
+  // Commit visibility only after capturing focus. A CSS media query could
+  // otherwise blur the control before this matchMedia callback runs.
+  document.body.classList.toggle('mobile-panes', mobile);
+  if (mobile && focused && (inactivePane.contains(focused) || focused.id === 'agent-pane-resizer')) activeTab.focus({preventScroll: true});
+  if (!mobile && (focused === tabChatEl || focused === tabPreviewEl)) activePane.focus({preventScroll: true});
 }
 mobileQuery.addEventListener('change', syncPaneSemantics);
 syncPaneSemantics();
