@@ -292,3 +292,19 @@ export function nativeDialog(page, dialog, controls = []) {
   dialog.querySelectorAll = selector => selector === 'button, fieldset' ? controls : query(selector);
   return dialog;
 }
+
+// Feature transactions use the shipped modal module over this native dialog
+// stand-in. Dismiss buttons model markup by sending the native cancel event;
+// native top-layer/focus/removal semantics remain browser-tested.
+export function permissionDialog(page, id) {
+  const buttons = id === 'net-modal' ? ['net-never', 'net-once', 'net-allow']
+    : id === 'direct-open-modal' ? ['direct-open-cancel', 'direct-open-confirm']
+    : [id.replace('-modal', '-block'), id.replace('-modal', '-allow')];
+  const controls = buttons.map(name => page.byId(name));
+  controls.forEach(control => { control.disabled = false; });
+  const dialog = nativeDialog(page, page.byId(id), controls);
+  dialog.querySelector = selector => selector === '[data-permission-status]' ? page.byId(id + '-status') : null;
+  const dismiss = page.byId(buttons[buttons.length - 2]);
+  dismiss.addEventListener('click', () => dialog.dispatchEvent(new Event('cancel', { cancelable: true })));
+  return dialog;
+}

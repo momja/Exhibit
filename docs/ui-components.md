@@ -405,3 +405,193 @@ Heading, body, checkbox and footer styling use shared defaults.
 
 [Long content at 390×400](screenshots/Exh-9xfp/short-content/390.png) ·
 [Expanded explanation and Done at 390×400](screenshots/Exh-9xfp/short-actions/390.png)
+
+The BYOK API-key dialog uses `modal`, initially focuses the secret field, and
+forgets its editable secret on close. Saving/deleting uses `run` and a native fieldset to lock the working copy
+until the request and key-status refresh settle; server errors retain the form. Platform mode renders no
+key dialog and never starts key operations. The native module binds the key
+controls; compatibility exports remain for other existing page integrations.
+`TestAgentKeyModalBrowser` exercises pending Escape and a server failure with
+an empty-field screenshot (no credentials).
+
+Key explanatory paragraphs use shared body typography. The current-key summary
+keeps its bordered metadata box so an existing masked credential is distinct
+from editable fields. Read-only fields use the shared state styling.
+
+[API key desktop](screenshots/Exh-uxyy/1280.png) ·
+[API key phone](screenshots/Exh-uxyy/390.png)
+
+Gallery filters compose `filter-sheet` (trigger-to-instance routing) with
+`modal` on the stable sheet. Only options swap; bottom-sheet sizing and safe
+area padding stay in gallery CSS. The close button is the initial focus.
+`TestGalleryFilterBrowser` covers actual htmx filters; `TestFilterModalBrowser`
+covers two independently addressed instances and shared keyboard dismissal.
+
+The sheet keeps its bottom anchor, full width up to 560px, 85dvh scroll cap,
+bottom-only square corners, and bottom safe-area inset. These make it a reachable
+phone filter surface rather than a centered form. Done spans the sheet for a
+clear exit after selecting filters; its footer spacing and phone touch height,
+heading typography, and base padding come from the shared dialog.
+
+[Filters desktop](screenshots/Exh-gynk/1280.png) ·
+[Filters phone](screenshots/Exh-gynk/390.png)
+
+Admin entitlements use the shared modal with the invoking account button as
+return focus and Plan as initial focus. The feature parses raw text as exact,
+safe whole bytes (blank is `null`); it retains fields on authorization/network
+failure. `run` locks buttons and the native fieldset while saving. The form submits through the native
+ES module. `TestAdminEntitlementModalBrowser` checks malformed and blank input,
+server refusal, pending Escape, and account-specific return focus.
+
+The entitlement editor uses the standard 420px frame, heading, associated
+captions, body explanations, fields, error and action footer. Its dialog heading
+has a unique ID separate from the page's Entitlements section. Long account
+identifiers wrap through the shared heading rule; no private width or type
+scale is needed. Add-account page controls retain their page styles.
+
+[Entitlement desktop](screenshots/Exh-b98w/1280.png) ·
+[Entitlement phone](screenshots/Exh-b98w/390.png)
+
+[Long account desktop](screenshots/Exh-b98w/long-account/1280.png) ·
+[Long account phone](screenshots/Exh-b98w/long-account/390.png)
+
+The editor's leave dialog composes `unsaved-changes` with `modal`. Keep editing
+is initial focus. Escape returns to the attempted navigation link; backdrop
+clicks intentionally leave this decision open. The close hook vetoes only backdrop dismissal. `run` owns the
+save/discard lock and the handle closes after the existing coordinator settles. Browser beforeunload and pageshow restoration remain with
+the editor coordinator. `TestEditorLeaveModalBrowser` covers this policy;
+`TestEditNavigationBrowser` and `TestEditNavigationPermissionSavesBrowser`
+exercise saves, discard, Back, permission edits and partial page refreshes.
+
+Unsaved changes uses the existing `.modal-wide` 480px content size for its three
+explicit decisions. Heading, body, padding and wrapping footer use the defaults;
+phone controls share the same 44px minimum as every dialog. No private button
+sizing or mobile padding remains.
+
+[Unsaved changes desktop](screenshots/Exh-yrgf/1280.png) ·
+[Unsaved changes phone](screenshots/Exh-yrgf/390.png)
+
+The browser measures that the three labels need more than the default 374px
+content area and fit the wide frame's 434px content area.
+[Actions at 390×240](screenshots/Exh-yrgf/short-actions/390.png)
+
+Runtime network prompts are one imported ES module used by detail and agent.
+`modal:closed` advances exactly one queued report, so a late block reply cannot
+consume the next origin. Allow clears the old queue and refreshes capabilities
+before reloading the current frame. Reports retain their artifact and frame
+identity; replies from a displaced preview cannot reload its replacement.
+Block once is initial focus; transient dismissal stays available while a block
+write is pending. `modal:disconnected` lets features discard transient requests
+without performing mutations or restoring a detached trigger.
+
+`TestNetworkModalBrowser` runs native keyboard/backdrop and delayed block
+settlement on both pages at both widths. Node feature fixtures import the actual page and dialog modules and drive
+the public handle/native cancellation; browser suites cover native focus,
+Escape, top-layer behavior, and Stimulus removal.
+
+Network uses the shared 480px wide frame for its three distinct decisions;
+its heading, explanation, status and wrapping footer use the same defaults.
+
+[Network prompt desktop](screenshots/Exh-1grc/1280.png) ·
+[Network prompt phone](screenshots/Exh-1grc/390.png)
+
+Download permission uses `modal` with Block as initial focus and the live
+artifact frame as return focus. Dismissal discards its bytes; delayed approval
+checks request identity and the frame's document generation before downloading.
+An iframe navigation clears the pending request even when its WindowProxy is
+unchanged. Approval failures are shown inside the dialog and allow retry.
+`TestDownloadModalBrowser` checks native dismissal, failed/late grants, and a
+successful download's filename, MIME type and byte count.
+
+[Download desktop](screenshots/Exh-fvzb/1280.png) ·
+[Download phone](screenshots/Exh-fvzb/390.png)
+
+Clipboard permission uses the same safe Block focus and native dismissal.
+The feature settles displaced and denied request IDs once, ignores late replies,
+and invalidates requests on frame navigation. Clipboard access starts in the
+Allow gesture; its result is delivered only after the grant persists and the
+request is still current. Native paste remains browser-owned. The browser test
+uses a clipboard adapter to assert real transient activation and relays replies
+through the sandbox frame; it never reads the operator's clipboard.
+
+[Clipboard desktop](screenshots/Exh-3917/1280.png) ·
+[Clipboard phone](screenshots/Exh-3917/390.png)
+
+Clipboard retains a request-specific Allow guard through both the grant write
+and the browser operation. Block/Escape stay live; a late operation cannot send
+a second reply after denial. This differs deliberately from shared `pending`,
+which locks every dismissal.
+
+External-link permission uses `run` to lock buttons and every dismissal while
+approval is pending, with no feature busy flag or control loop. The selected destination is immutable during
+that request. Allow claims a blank tab in the click gesture, severs its opener,
+and navigates only after persistence; failures and stale requests close the
+placeholder. Block/Escape/backdrop record no denial. Initial focus is Block;
+closing restores the artifact frame. `TestLinkModalBrowser` checks delayed
+approval, refusal/retry, destination stability and opener isolation.
+
+[External link desktop](screenshots/Exh-d0np/1280.png) ·
+[External link phone](screenshots/Exh-d0np/390.png)
+
+Camera and microphone share one `modal` consumer. The feature retains the
+requested device set, per-device PATCHes, denial/unsupported replies, and the
+direct-open continuation. Dismissal or displacement settles the matching call;
+frame navigation invalidates it. Cancelling direct-open leaves device consent
+available. Direct-open is also a shared native dialog, so its confirmation
+sits above device consent in the browser top layer.
+`TestMediaModalBrowser` covers camera-only persistence, microphone copy/denial,
+and nested Escape/focus without acquiring real devices.
+
+[Device permission desktop](screenshots/Exh-w432/1280.png) ·
+[Device permission phone](screenshots/Exh-w432/390.png)
+
+Location consent is another shared-modal consumer. The feature owns
+`geolocation_approved`, direct-open continuation, matching denial/unsupported
+replies and frame-generation guards. Cancelling the nested direct-open dialog
+returns to location consent; replacing a pending location call settles the old
+one. No browser geolocation grant is spent by these tests.
+`TestLocationModalBrowser` checks both widths, native dismissal, displacement,
+and the successful continuation through direct-open.
+
+[Location desktop](screenshots/Exh-7hh4/1280.png) ·
+[Location phone](screenshots/Exh-7hh4/390.png)
+
+Direct-open uses the shared handle for both viewer and agent. The feature
+retains viewer/artifact-scoped preferences, synchronous blank-tab claiming,
+opener severance, blocked-popup retry, approval callbacks and exactly-once
+promise settlement. Cancellation/disconnection closes unused placeholders. Its
+fallback resolves the current preview or More actions trigger after htmx
+replaces/hides the original. Manual background inertness and the document
+keyboard trap have been removed, along with obsolete overlay styles.
+`TestDirectOpenModalBrowser` runs both pages at both widths;
+`TestPermissionModalStackBrowser` verifies topmost Escape across independent
+and nested prompts. Pending-approval and actual agent htmx-swap checks cover
+late settlement and the newly rendered preview URL.
+
+Every consumer tested through `dialogCycle` also removes/reconnects the same
+open dialog and verifies native modality is released. The editor separately
+checks removal/reconnection, navigation and pageshow because its backdrop policy
+is intentionally different.
+CI's `e2e/check-browser-tests.mjs` requires all migration browser suites to run,
+so skipped native-dialog coverage cannot silently pass CI.
+
+Direct-open uses the shared checkbox row and error presentation. Its explanation
+and remember choice wrap within the same default frame as the other small
+permission forms; it needs no private label/field styling.
+
+[Direct-open desktop](screenshots/Exh-sqny/1280.png) ·
+[Direct-open phone](screenshots/Exh-sqny/390.png)
+
+
+Run all modal integrations and refresh their screenshots with:
+
+```sh
+MODAL_SCREENSHOT_DIR="$PWD/docs/screenshots" go test ./internal/api -run 'Test(.*Modal.*Browser|DirectOpenPendingBrowser|DirectOpenPreviewSwapBrowser|GalleryActionMenuDuplicationBrowser|GalleryFilterBrowser)$' -count=1
+```
+
+Direct-open keeps Cancel live while its placeholder tab awaits approval. The tab
+itself guards duplicate confirmation; there is no second generic busy flag.
+Network, download, and clipboard likewise keep cancellation live and retain
+request-specific write guards. Use shared `pending` for non-dismissible work
+(tags, Duplicate, sharing, keys, entitlements, editor saves, and link approval);
+do not apply it to cancellable permission transactions.

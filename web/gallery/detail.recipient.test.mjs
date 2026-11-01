@@ -30,14 +30,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadPageScript, recordingApi } from "./testdom.mjs";
+import { loadPageScript, recordingApi, permissionDialog } from "./testdom.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ASSETS = path.join(here, "../../internal/api/assets/gallery");
 const DETAIL_JS = [
-  path.join(ASSETS, "network-prompt.js"),
   path.join(ASSETS, "state-api.js"),
-  path.join(ASSETS, "detail.js")
 ];
 const API_JS = path.join(ASSETS, "api.js");
 
@@ -47,7 +45,7 @@ const OPEN_URL = "/artifacts/art-1/open";
 // What detail.tmpl renders: every dialog and banner starts hidden. Without it
 // "the prompt did not open" would be a claim the harness itself made false.
 const HIDDEN = {
-  "net-modal": { hidden: true },
+  "net-modal": { open: false },
   "dl-modal": { hidden: true },
   "clip-modal": { hidden: true },
   "link-modal": { hidden: true },
@@ -62,7 +60,7 @@ const HIDDEN = {
 // artifact (pageCredentials.forArtifactOwnedBy), and everything below turns on
 // it. approvals are the OWNER's capability grants, which travel with the
 // artifact and are not the visitor's to make.
-function loadDetail({ readOnly, approvals = {} } = {}) {
+async function loadDetail({ readOnly, approvals = {} } = {}) {
   const api = recordingApi();
   const opened = [];
   const page = loadPageScript(DETAIL_JS, {
@@ -88,6 +86,13 @@ function loadDetail({ readOnly, approvals = {} } = {}) {
     CustomEvent,
     open: (url) => { opened.push(url); return null; }
   }, HIDDEN);
+  const netDialog = permissionDialog(page, 'net-modal');
+  permissionDialog(page, 'dl-modal');
+  permissionDialog(page, 'clip-modal');
+  permissionDialog(page, 'link-modal');
+  permissionDialog(page, 'media-modal');
+  permissionDialog(page, 'geo-modal');
+  await page.loadModule(path.join(ASSETS, 'detail.js'));
   return { ...page, api, opened };
 }
 
@@ -112,11 +117,11 @@ const locationRequest = () => ({ __avGeolocation: true, artifactId: ID, id: 1 })
 // --- AC#4: explain, do not ask ----------------------------------------
 
 test("a blocked origin is explained by name, and never prompted for", async () => {
-  const { byId, api, postFromFrame } = loadRecipient();
+  const { byId, api, postFromFrame } = await loadRecipient();
 
   await postFromFrame(blocked("https://api.example.com"));
 
-  assert.equal(byId("net-modal").hidden, true,
+  assert.equal(byId("net-modal").open, false,
     "the runtime prompt writes an origin decision, which is the owner's to make");
   assert.equal(byId("origin-blocked-banner").hidden, false,
     "a silent block is the failure this ticket exists to prevent");
@@ -128,7 +133,7 @@ test("a blocked origin is explained by name, and never prompted for", async () =
 });
 
 test("the explanation names every blocked origin, not just the first", async () => {
-  const { byId, postFromFrame } = loadRecipient();
+  const { byId, postFromFrame } = await loadRecipient();
 
   await postFromFrame(blocked("https://api.example.com"));
   await postFromFrame(blocked("https://cdn.example.com", "script-src-elem"));
@@ -144,7 +149,7 @@ test("the explanation names every blocked origin, not just the first", async () 
 });
 
 test("the same origin reported twice is listed once", async () => {
-  const { byId, postFromFrame } = loadRecipient();
+  const { byId, postFromFrame } = await loadRecipient();
 
   await postFromFrame(blocked("https://api.example.com"));
   await postFromFrame(blocked("https://api.example.com", "img-src"));
@@ -154,7 +159,7 @@ test("the same origin reported twice is listed once", async () => {
 });
 
 test("the origin reaches the banner as text, never as markup", async () => {
-  const { byId, postFromFrame } = loadRecipient();
+  const { byId, postFromFrame } = await loadRecipient();
 
   const hostile = 'https://evil.example.com/"><img src=x onerror=alert(1)>';
   await postFromFrame(blocked(hostile));
@@ -164,11 +169,11 @@ test("the origin reaches the banner as text, never as markup", async () => {
 });
 
 test("the owner is still asked, so the gate is about ownership and not about the feature", async () => {
-  const { byId, postFromFrame } = loadOwner();
+  const { byId, postFromFrame } = await loadOwner();
 
   await postFromFrame(blocked("https://api.example.com"));
 
-  assert.equal(byId("net-modal").hidden, false, "the owner can widen their own allowlist");
+  assert.equal(byId("net-modal").open, true, "the owner can widen their own allowlist");
   assert.equal(byId("net-origin").textContent, "https://api.example.com");
   assert.equal(byId("origin-blocked-banner").hidden, true,
     "and is not also told they cannot, which would be a page contradicting itself");
@@ -177,20 +182,20 @@ test("the owner is still asked, so the gate is about ownership and not about the
 // --- AC#5: capability attempts fail the way they always have ----------
 
 test("an unapproved download is dropped without a prompt", async () => {
-  const { byId, api, postFromFrame } = loadRecipient();
+  const { byId, api, postFromFrame } = await loadRecipient();
 
   await postFromFrame(download());
 
-  assert.equal(byId("dl-modal").hidden, true);
+  assert.equal(byId("dl-modal").open, false);
   assert.deepEqual(api.calls, []);
 });
 
 test("an unapproved clipboard call is rejected into the frame rather than left hanging", async () => {
-  const { byId, api, frame, postFromFrame } = loadRecipient();
+  const { byId, api, frame, postFromFrame } = await loadRecipient();
 
   await postFromFrame(clipboardRead());
 
-  assert.equal(byId("clip-modal").hidden, true);
+  assert.equal(byId("clip-modal").open, false);
   const [reply] = frame.contentWindow.posted.filter((m) => m.__avClipboardResult);
   assert.ok(reply, "an unanswered clipboard promise is a hang, which is worse than a denial");
   assert.equal(reply.ok, false);
@@ -199,21 +204,21 @@ test("an unapproved clipboard call is rejected into the frame rather than left h
 });
 
 test("an unapproved external link opens nothing and prompts for nothing", async () => {
-  const { byId, api, opened, postFromFrame } = loadRecipient();
+  const { byId, api, opened, postFromFrame } = await loadRecipient();
 
   await postFromFrame(externalLink());
 
-  assert.equal(byId("link-modal").hidden, true);
+  assert.equal(byId("link-modal").open, false);
   assert.deepEqual(opened, []);
   assert.deepEqual(api.calls, []);
 });
 
 test("an unapproved camera request is denied, not offered", async () => {
-  const { byId, api, frame, postFromFrame } = loadRecipient();
+  const { byId, api, frame, postFromFrame } = await loadRecipient();
 
   await postFromFrame(cameraRequest());
 
-  assert.equal(byId("media-modal").hidden, true,
+  assert.equal(byId("media-modal").open, false,
     "Allow would open a tab on an approval this visitor cannot record");
   const [reply] = frame.contentWindow.posted.filter((m) => m.__avMediaResult);
   assert.ok(reply, "getUserMedia must settle; a pending promise looks like a hang");
@@ -227,7 +232,7 @@ test("an unapproved camera request is denied, not offered", async () => {
 // is looking — otherwise a shared tool would lose the capability its owner
 // deliberately turned on, which is a second silent breakage rather than a fix.
 test("an approval the owner already made still works for the recipient", async () => {
-  const { api, opened, postFromFrame } = loadRecipient({ linksApproved: true });
+  const { api, opened, postFromFrame } = await loadRecipient({ linksApproved: true });
 
   await postFromFrame(externalLink());
 
@@ -239,7 +244,7 @@ test("an approval the owner already made still works for the recipient", async (
 // --- AC#6: the blanket claim, over one whole session ------------------
 
 test("a recipient's session issues no API call at all across every bridge", async () => {
-  const { byId, api, postFromFrame } = loadRecipient();
+  const { byId, api, postFromFrame } = await loadRecipient();
 
   await postFromFrame(blocked("https://api.example.com"));
   await postFromFrame(blocked("https://cdn.example.com", "script-src-elem"));
@@ -262,7 +267,7 @@ test("a recipient's session issues no API call at all across every bridge", asyn
     "sending them is how a recipient learns the tool is broken instead of that " +
     "it is not theirs");
   for (const id of ["net-modal", "dl-modal", "clip-modal", "link-modal", "media-modal", "geo-modal"]) {
-    assert.equal(byId(id).hidden, true, id + " must not open for a visitor who cannot answer it");
+    assert.equal(["net-modal", "dl-modal", "clip-modal", "link-modal", "media-modal", "geo-modal"].includes(id) ? !byId(id).open : byId(id).hidden, true, id + " must not open for a visitor who cannot answer it");
   }
 });
 
@@ -270,12 +275,12 @@ test("a recipient's session issues no API call at all across every bridge", asyn
 // open dialogs, and answering one does write. Without this a detail.js that
 // stopped wiring the bridges at all would pass the whole file.
 test("the owner's session prompts and writes", async () => {
-  const { byId, api, postFromFrame } = loadOwner();
+  const { byId, api, postFromFrame } = await loadOwner();
 
   await postFromFrame(blocked("https://api.example.com"));
   await byId("net-allow").click();
   await postFromFrame(download());
-  assert.equal(byId("dl-modal").hidden, false, "the owner is asked before the first download");
+  assert.equal(byId("dl-modal").open, true, "the owner is asked before the first download");
   await byId("dl-allow").click();
 
   const paths = api.calls.map((c) => c.method + " " + c.path);

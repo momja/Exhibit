@@ -15,25 +15,19 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadPageScript, recordingApi } from "./testdom.mjs";
+import { loadPageScript, recordingApi, permissionDialog } from "./testdom.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ASSETS = path.join(here, "../../internal/api/assets/gallery");
-// The order detail.tmpl loads them in: the shared prompt module, then the page
-// script that installs it.
-const DETAIL_JS = [
-  path.join(ASSETS, "network-prompt.js"),
-  path.join(ASSETS, "detail.js")
-];
 
 const ID = "art-1";
 const OPEN_URL = "/artifacts/art-1/open";
 
 // Loads detail.js with the bootstrap globals its page template renders.
-function loadDetail({ readOnly = false, responses = [], headline = "" } = {}) {
+async function loadDetail({ readOnly = false, responses = [], headline = "" } = {}) {
   const api = recordingApi(responses);
   const capabilitiesChanged = [];
-  const page = loadPageScript(DETAIL_JS, {
+  const page = loadPageScript([], {
     TOKEN: "",
     READ_ONLY: readOnly,
     STATE_WRITABLE: !readOnly,
@@ -54,7 +48,7 @@ function loadDetail({ readOnly = false, responses = [], headline = "" } = {}) {
     CustomEvent
   }, {
     // What detail.tmpl renders: every capability dialog starts hidden.
-    "net-modal": { hidden: true },
+    "net-modal": { open: false },
     "dl-modal": { hidden: true },
     "clip-modal": { hidden: true },
     "link-modal": { hidden: true },
@@ -68,6 +62,13 @@ function loadDetail({ readOnly = false, responses = [], headline = "" } = {}) {
   // the listener the #capability-cluster target stands in for here.
   page.document.body.addEventListener("exhibit:capabilities-changed",
     (e) => capabilitiesChanged.push(e.type));
+  permissionDialog(page, 'net-modal');
+  permissionDialog(page, 'dl-modal');
+  permissionDialog(page, 'clip-modal');
+  permissionDialog(page, 'link-modal');
+  permissionDialog(page, 'media-modal');
+  permissionDialog(page, 'geo-modal');
+  await page.loadModule(path.join(ASSETS, 'detail.js'));
   return { ...page, api, capabilitiesChanged };
 }
 
@@ -82,8 +83,8 @@ const originCalls = (api) => api.calls.filter((c) => c.path.includes("/origins")
 // and a listener attached afterwards never hears it. Announcing only on `load`
 // left the frame's buffered reports stranded and the prompt simply never
 // appeared — intermittently, with cache state deciding.
-test("the host announces itself immediately, not only on a future frame load", () => {
-  const { frame } = loadDetail();
+test("the host announces itself immediately, not only on a future frame load", async () => {
+  const { frame } = await loadDetail();
 
   assert.ok(frame.contentWindow.posted.some((m) => m.__avHostReady === true),
     "a frame that already loaded fires no second load event; the ping must not wait for one");
@@ -95,19 +96,19 @@ test("the host announces itself immediately, not only on a future frame load", (
 });
 
 test("a blocked origin is prompted for in app chrome, not in the frame", async () => {
-  const { byId, postFromFrame } = loadDetail();
+  const { byId, postFromFrame } = await loadDetail();
 
-  assert.equal(byId("net-modal").hidden, true, "no prompt before anything is blocked");
+  assert.equal(byId("net-modal").open, false, "no prompt before anything is blocked");
   await postFromFrame(report("https://cdn.example.com", "script-src-elem"));
 
-  assert.equal(byId("net-modal").hidden, false);
+  assert.equal(byId("net-modal").open, true);
   assert.equal(byId("net-origin").textContent, "https://cdn.example.com",
     "the origin is set as text, never as markup");
   assert.equal(byId("net-directive").textContent, "Blocked by script-src-elem");
 });
 
 test("Allow records an allow decision and reloads the frame under the new CSP", async () => {
-  const { byId, frame, api, postFromFrame, capabilitiesChanged } = loadDetail();
+  const { byId, frame, api, postFromFrame, capabilitiesChanged } = await loadDetail();
   const before = frame.src;
 
   await postFromFrame(report("https://cdn.example.com"));
@@ -129,7 +130,7 @@ test("Allow records an allow decision and reloads the frame under the new CSP", 
   assert.notEqual(frame.src, before, "the frame must refetch, or the widened CSP never applies");
   assert.ok(frame.src.startsWith(OPEN_URL + "?r="),
     `the reload goes through the token-minting open route, got ${frame.src}`);
-  assert.equal(byId("net-modal").hidden, true, "the prompt closes once the answer is recorded");
+  assert.equal(byId("net-modal").open, false, "the prompt closes once the answer is recorded");
 
   // The reload re-runs the artifact, so anything still blocked reports itself
   // again — the load handler clears the status line rather than leaving
@@ -140,7 +141,7 @@ test("Allow records an allow decision and reloads the frame under the new CSP", 
 });
 
 test("a failed write leaves the prompt open rather than claiming success", async () => {
-  const { byId, frame, postFromFrame, capabilitiesChanged } = loadDetail({
+  const { byId, frame, postFromFrame, capabilitiesChanged } = await loadDetail({
     responses: [{ ok: false, status: 500, json: async () => ({}) }]
   });
   const before = frame.src;
@@ -148,7 +149,7 @@ test("a failed write leaves the prompt open rather than claiming success", async
   await postFromFrame(report("https://cdn.example.com"));
   await byId("net-allow").click();
 
-  assert.equal(byId("net-modal").hidden, false, "the user must be able to try again");
+  assert.equal(byId("net-modal").open, true, "the user must be able to try again");
   assert.equal(frame.src, before, "no reload: the CSP did not change");
   assert.match(byId("al-status").textContent, /Failed to save/);
   assert.deepEqual(capabilitiesChanged, [],
@@ -156,7 +157,7 @@ test("a failed write leaves the prompt open rather than claiming success", async
 });
 
 test("Don't ask again records a block decision and never an allow", async () => {
-  const { byId, frame, api, postFromFrame, capabilitiesChanged } = loadDetail();
+  const { byId, frame, api, postFromFrame, capabilitiesChanged } = await loadDetail();
   const before = frame.src;
 
   await postFromFrame(report("https://tracker.example.com"));
@@ -164,7 +165,7 @@ test("Don't ask again records a block decision and never an allow", async () => 
 
   const [call] = originCalls(api);
   assert.equal(JSON.parse(call.body).decision, "block");
-  assert.equal(byId("net-modal").hidden, true);
+  assert.equal(byId("net-modal").open, false);
   assert.equal(frame.src, before,
     "a block changes no policy, so there is nothing to reload for");
   assert.deepEqual(capabilitiesChanged, [],
@@ -172,27 +173,17 @@ test("Don't ask again records a block decision and never an allow", async () => 
 });
 
 test("Block once dismisses without writing anything", async () => {
-  const { byId, api, postFromFrame } = loadDetail();
+  const { byId, api, postFromFrame } = await loadDetail();
 
   await postFromFrame(report("https://cdn.example.com"));
   byId("net-once").click();
 
-  assert.equal(byId("net-modal").hidden, true);
+  assert.equal(byId("net-modal").open, false);
   assert.deepEqual(originCalls(api), [], "dismissing decides nothing");
 });
 
-test("Escape dismisses the prompt", async () => {
-  const { byId, api, postFromFrame, pressKey } = loadDetail();
-
-  await postFromFrame(report("https://cdn.example.com"));
-  pressKey("Escape");
-
-  assert.equal(byId("net-modal").hidden, true);
-  assert.deepEqual(originCalls(api), []);
-});
-
 test("several blocked origins queue rather than overwrite each other", async () => {
-  const { byId, api, postFromFrame } = loadDetail();
+  const { byId, api, postFromFrame } = await loadDetail();
 
   await postFromFrame(report("https://a.example.com"));
   await postFromFrame(report("https://b.example.com"));
@@ -200,11 +191,11 @@ test("several blocked origins queue rather than overwrite each other", async () 
     "the second report must not steal the dialog out from under the first");
 
   await byId("net-never").click();
-  assert.equal(byId("net-modal").hidden, false);
+  assert.equal(byId("net-modal").open, true);
   assert.equal(byId("net-origin").textContent, "https://b.example.com");
 
   await byId("net-never").click();
-  assert.equal(byId("net-modal").hidden, true);
+  assert.equal(byId("net-modal").open, false);
   assert.deepEqual(
     originCalls(api).map((c) => JSON.parse(c.body).origin),
     ["https://a.example.com", "https://b.example.com"]
@@ -217,44 +208,44 @@ test("a dismissal during the block write is not thrown away by the write finishi
   // under it. If the settled write then advanced again it would drop that
   // report unseen, and the preamble reports each origin only once per load —
   // so the user would never be asked about b at all.
-  const { byId, postFromFrame, pressKey } = loadDetail();
+  const { byId, postFromFrame } = await loadDetail();
 
   await postFromFrame(report("https://a.example.com"));
   await postFromFrame(report("https://b.example.com"));
 
   const written = byId("net-never").click();
-  pressKey("Escape");
+  byId("net-modal").dispatchEvent(new Event('cancel', { cancelable: true }));
   assert.equal(byId("net-origin").textContent, "https://b.example.com");
   await written;
 
-  assert.equal(byId("net-modal").hidden, false, "b is still waiting on an answer");
+  assert.equal(byId("net-modal").open, true, "b is still waiting on an answer");
   assert.equal(byId("net-origin").textContent, "https://b.example.com");
 });
 
 test("Allow drops the queue, because the reload re-reports whatever is still blocked", async () => {
-  const { byId, postFromFrame } = loadDetail();
+  const { byId, postFromFrame } = await loadDetail();
 
   await postFromFrame(report("https://a.example.com"));
   await postFromFrame(report("https://b.example.com"));
   await byId("net-allow").click();
 
-  assert.equal(byId("net-modal").hidden, true,
+  assert.equal(byId("net-modal").open, false,
     "asking about b now would ask again the moment the fresh load reports it");
 });
 
 test("a message from anything but the artifact frame is ignored", async () => {
-  const { byId, postFromFrame } = loadDetail();
+  const { byId, postFromFrame } = await loadDetail();
 
   await postFromFrame(report("https://evil.example.com"), { notTheFrame: true });
-  assert.equal(byId("net-modal").hidden, true,
+  assert.equal(byId("net-modal").open, false,
     "an opaque frame's origin is the string 'null', so identity is the source window");
 });
 
 test("a report for another artifact is ignored", async () => {
-  const { byId, postFromFrame } = loadDetail();
+  const { byId, postFromFrame } = await loadDetail();
 
   await postFromFrame({ __avNetwork: true, artifactId: "someone-else", origin: "https://x.example.com" });
-  assert.equal(byId("net-modal").hidden, true);
+  assert.equal(byId("net-modal").open, false);
 });
 
 // av-kmwj: the redirect case does not prompt, it explains. The frame sends the
@@ -262,7 +253,7 @@ test("a report for another artifact is ignored", async () => {
 // about it — its shared headline offers "open it directly to run it", which is
 // exactly wrong here: the top-level render enforces the same policy.
 test("a blocked redirect replaces the banner headline rather than promising a fix", async () => {
-  const { byId, postFromFrame } = loadDetail();
+  const { byId, postFromFrame } = await loadDetail();
 
   await postFromFrame({
     __avCapabilityWarning: true, artifactId: ID,
@@ -275,13 +266,13 @@ test("a blocked redirect replaces the banner headline rather than promising a fi
   assert.match(byId("capability-warning-detail").textContent, /forwarded the request somewhere else/);
   assert.match(byId("capability-warning-detail").textContent, /Network panel/,
     "the devtools Network panel is where a redirect chain is visible; the console is not");
-  assert.equal(byId("net-modal").hidden, true, "the redirect case must never open the prompt");
+  assert.equal(byId("net-modal").open, false, "the redirect case must never open the prompt");
 });
 
 // A capability that the sandbox itself causes keeps the shared headline, so the
 // swap above is per-capability rather than a blanket replacement.
 test("an ordinary sandbox capability keeps the shared headline", async () => {
-  const { byId, postFromFrame } = loadDetail({ headline: "SHARED" });
+  const { byId, postFromFrame } = await loadDetail({ headline: "SHARED" });
 
   await postFromFrame({
     __avCapabilityWarning: true, artifactId: ID,
@@ -293,11 +284,40 @@ test("an ordinary sandbox capability keeps the shared headline", async () => {
 });
 
 test("a read-only visitor is not asked a question they cannot answer", async () => {
-  const { byId, api, postFromFrame, capabilitiesChanged } = loadDetail({ readOnly: true });
+  const { byId, api, postFromFrame, capabilitiesChanged } = await loadDetail({ readOnly: true });
 
   await postFromFrame(report("https://cdn.example.com"));
-  assert.equal(byId("net-modal").hidden, true);
+  assert.equal(byId("net-modal").open, false);
   assert.deepEqual(originCalls(api), []);
   assert.deepEqual(capabilitiesChanged, [],
     "a visitor who cannot approve changes no posture");
 });
+
+for (const dismiss of [false, true]) for (const grant of [false, true]) {
+  test(`clipboard request stays exclusive until the browser operation settles (dismiss=${dismiss}, grant=${grant})`, async () => {
+    const page = await loadDetail({ responses: grant ? [] : [{ ok: false, status: 503 }] });
+    let finish;
+    let calls = 0;
+    page.context.navigator = { clipboard: { writeText: () => {
+      calls++;
+      return new Promise(resolve => { finish = resolve; });
+    } } };
+    await page.postFromFrame({ __avClipboard: true, artifactId: ID, id: 'slow-clipboard', op: 'write', text: 'fixture' });
+    const allowing = page.byId('clip-allow').click();
+    assert.equal(calls, 1, 'clipboard starts in the click stack');
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(page.byId('clip-allow').disabled, true, 'a persisted grant is not a completed clipboard operation');
+    await page.byId('clip-allow').click();
+    assert.equal(calls, 1, 'duplicate Allow does not touch the clipboard twice');
+    if (dismiss) await page.byId('clip-block').click();
+    finish();
+    await allowing;
+    const replies = page.frame.contentWindow.posted.filter(message => message.__avClipboardResult && message.id === 'slow-clipboard');
+    assert.equal(replies.length, dismiss || grant ? 1 : 0, 'completion and cancellation settle the request exactly once');
+    if (replies.length) assert.equal(replies[0].ok, !dismiss);
+    if (!dismiss && !grant) {
+      assert.equal(page.byId('clip-modal').open, true, 'failed grant remains retryable');
+      assert.equal(page.byId('clip-allow').disabled, false);
+    }
+  });
+}

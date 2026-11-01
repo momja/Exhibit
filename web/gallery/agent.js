@@ -1,3 +1,5 @@
+import { modalFor } from './modal.js';
+import { networkPrompt } from './network-prompt.js';
 import { apiFetch, apiEventSource } from './api-module.js';
 import { createSessionPreparation, createTypingPreparation } from './session-preparation.js';
 
@@ -159,16 +161,26 @@ function clearMaskedKey(secret) {
   secret.dataset.masked = 'false';
 }
 
-function openKeyModal() {
-  if (!BYOK) return;
+const keyDialog = BYOK ? document.getElementById('key-modal') : null;
+const keyModal = keyDialog && modalFor(keyDialog);
+keyDialog?.addEventListener('modal:closed', () => { clearMaskedKey(document.getElementById('key-secret')); });
+async function keyRequest(method, body) {
+  try {
+    return await apiFetch('/api/agent/key', { method, ...(body ? { body: JSON.stringify(body) } : {}) });
+  } catch {
+    return { ok: false, json: async () => ({ error: 'Could not reach the server. Try again.' }) };
+  }
+}
+
+function openKeyModal(event) {
+  if (!BYOK || keyModal.pending || keyDialog.open) return;
   document.getElementById('key-error').hidden = true;
   document.getElementById('key-thinking').value = configuredThinkingLevel;
   const secret = document.getElementById('key-secret');
   if (keyConfigured) { showMaskedKey(secret); } else { clearMaskedKey(secret); }
-  document.getElementById('key-modal').hidden = false;
-  secret.focus();
+  keyModal.show(event?.currentTarget || document.getElementById('key-btn'));
 }
-function closeKeyModal() { document.getElementById('key-modal').hidden = true; }
+function closeKeyModal() { keyModal?.close(); }
 
 // The masked placeholder is a single unit, not editable text: it can only be
 // cleared in full (Backspace/Delete), never edited in place. Cancel discards
@@ -192,6 +204,7 @@ function closeKeyModal() { document.getElementById('key-modal').hidden = true; }
 })();
 
 async function saveKey() {
+  if (!BYOK || keyModal.pending) return;
   const provider = document.getElementById('key-provider').value;
   const model = document.getElementById('key-model').value.trim();
   const thinking_level = document.getElementById('key-thinking').value;
@@ -207,15 +220,19 @@ async function saveKey() {
     api_key = secretInput.value.trim();
     if (!api_key) { errEl.textContent = 'Enter the API key.'; errEl.hidden = false; return; }
   }
-  const r = await apiFetch('/api/agent/key', {method:'PUT', body: JSON.stringify({provider, model, api_key, thinking_level})});
-  if (!r.ok) {
-    const d = await r.json().catch(() => ({}));
-    errEl.textContent = d.error || 'Failed to save key.';
-    errEl.hidden = false;
-    return;
-  }
+  const saved = await keyModal.run(async () => {
+    const r = await keyRequest('PUT', {provider, model, api_key, thinking_level});
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      errEl.textContent = d.error || 'Failed to save key.';
+      errEl.hidden = false;
+      return false;
+    }
+    await refreshKeyStatus();
+    return true;
+  });
+  if (!saved) return;
   closeKeyModal();
-  await refreshKeyStatus();
   // A new key means the next prompt should start a fresh session.
   resetSession();
   addMsg('sys', 'API key saved. The key is encrypted on the server and never returned to the browser.');
@@ -230,10 +247,22 @@ async function saveKey() {
 }
 
 async function deleteKey() {
+  if (!BYOK || keyModal.pending) return;
   if (!confirm('Remove the stored API key?')) return;
-  await apiFetch('/api/agent/key', {method:'DELETE'});
+  const removed = await keyModal.run(async () => {
+    const response = await keyRequest('DELETE');
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      const status = document.getElementById('key-error');
+      status.textContent = error.error || 'Failed to remove key.';
+      status.hidden = false;
+      return false;
+    }
+    await refreshKeyStatus();
+    return true;
+  });
+  if (!removed) return;
   closeKeyModal();
-  await refreshKeyStatus();
   resetSession();
 }
 
@@ -978,7 +1007,7 @@ document.addEventListener('keydown', (e) => {
 // one. reload re-renders the preview pane through that same htmx path rather
 // than reassigning src, so the fragment mints a fresh render token and the
 // pane keeps its one definition (av-6m3e).
-window.ExhibitNetworkPrompt.install({
+networkPrompt.install({
   frame: previewFrame,
   artifactId: previewArtifactId,
   // The transcript is this page's status line. #pv-title holds the artifact's
@@ -993,9 +1022,9 @@ window.ExhibitNetworkPrompt.install({
 // page noticed the new frame would be lost, which is the failure mode the
 // handshake exists to remove.
 document.getElementById('pane-preview').addEventListener('htmx:after:swap', function () {
-  window.ExhibitNetworkPrompt.announceTo(previewFrame());
+  networkPrompt.announceTo(previewFrame());
 });
-window.ExhibitNetworkPrompt.announceTo(previewFrame());
+networkPrompt.announceTo(previewFrame());
 
 // State bridge (same contract as the detail page): the sandboxed preview
 // iframe can't call the API itself, so its storage shim posts writes here
@@ -1136,3 +1165,9 @@ function briefToMessage(brief) {
 document.getElementById('key-btn')?.addEventListener('click', openKeyModal);
 Object.assign(window, { openKeyModal, closeKeyModal, providerChanged, saveKey, deleteKey,
   showPane, openHistory, closeHistory, send, stopAgent, toggleSnippet, previewArtifactId });
+
+if (BYOK) {
+  document.getElementById('key-provider')?.addEventListener('change', providerChanged);
+  document.getElementById('key-save')?.addEventListener('click', saveKey);
+  document.getElementById('key-delete')?.addEventListener('click', deleteKey);
+}
