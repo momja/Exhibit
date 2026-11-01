@@ -178,11 +178,9 @@ body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(-
 .modal{background:var(--color-panel);border-radius:10px;padding:20px;width:380px;max-width:92vw;box-shadow:var(--shadow-modal)}
 #key-modal{max-height:calc(100dvh - 32px)}
 .modal h2{font-size:16px;font-weight:600}
-.key-dialog p.note{font-size:12px;color:var(--color-muted);margin-top:6px;line-height:1.5}
 .modal label{display:block;font-size:12px;color:var(--color-ink-mid);margin:12px 0 4px}
 .modal input,.modal select{width:100%;padding:7px 10px;border:1px solid var(--color-border);border-radius:6px;font-size:var(--field-font-size);outline:none;background:var(--color-panel);color:var(--color-ink)}
 .modal input:focus,.modal select:focus{border-color:var(--brand-blue)}
-.key-dialog input:read-only{background:var(--color-ground);color:var(--color-ink-mid);cursor:default}
 .modal-error{color:var(--color-danger-hover);font-size:12px;margin-top:10px}
 .modal-actions{display:flex;gap:8px;align-items:center;margin-top:18px}
 .current-key{font-size:12.5px;color:var(--color-ink-mid);background:var(--color-subtle);border:1px solid var(--color-hairline);border-radius:6px;padding:8px 10px;margin-top:10px}

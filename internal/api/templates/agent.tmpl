@@ -86,7 +86,7 @@
   data-controller="modal">
     <fieldset class="modal-fields">
     <h2 id="key-title">Agent API key</h2>
-    <p class="note">Bring your own key. It is sent to your Exhibit server once, encrypted there at rest, and used only by the server-side agent — this page never sees it again.</p>
+    <p>Bring your own key. It is sent to your Exhibit server once, encrypted there at rest, and used only by the server-side agent — this page never sees it again.</p>
     <div class="current-key" id="current-key" hidden></div>
     <label for="key-provider">Provider</label>
     <select id="key-provider">
@@ -111,7 +111,7 @@
       <option value="xhigh">Extra high</option>
       <option value="max">Max</option>
     </select>
-    <p class="note" id="key-thinking-help">Higher levels can take longer. Available levels depend on the model. Applies to new or resumed conversations.</p>
+    <p id="key-thinking-help">Higher levels can take longer. Available levels depend on the model. Applies to new or resumed conversations.</p>
     <label for="key-secret">API key</label>
     <input type="password" id="key-secret" autofocus placeholder="sk-…" autocomplete="off">
     <div id="key-error" class="modal-error" hidden></div>

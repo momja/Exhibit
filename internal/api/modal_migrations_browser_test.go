@@ -218,6 +218,7 @@ func TestAgentKeyModalBrowser(t *testing.T) {
 			b.wait(`document.getElementById('key-modal').open`)
 			b.dialogCycle("#key-modal", `document.getElementById('key-btn').click()`, "#key-secret")
 			b.eval(`document.getElementById('key-btn').click()`)
+			checkModalVisuals(t, b.ctx, "#key-modal")
 			b.capture("Exh-uxyy", width)
 			// Delay at the transport boundary to exercise real native dismissal guards.
 			b.eval(`window.savedFetch=window.fetch;window.fetch=(url,options)=>options?.method==='PUT'?new Promise(resolve=>window.finishKey=()=>resolve(new Response('{"error":"Provider unavailable"}',{status:503,headers:{'Content-Type':'application/json'}}))):savedFetch(url,options);document.getElementById('key-secret').value='fixture';document.getElementById('key-save').click()`)
