@@ -280,10 +280,9 @@ func TestGalleryHeaderCarriesBothIconControls(t *testing.T) {
 	assert.Contains(t, page, `href="/settings" aria-label="Settings" title="Settings"`)
 	assert.Contains(t, page, `href="/new" aria-label="Add artifact" title="Add artifact"`)
 	assert.Contains(t, page, "ph-user-circle")
-	assert.Contains(t, page, `class="btn btn-sec" href="/admin/users"`,
-		"the admin link keeps its box")
-	// The word stays in the markup, and so in the accessible name, even where
-	// a phone hides it visually to leave search room (av-uvc6).
+	assert.Contains(t, page, `class="btn btn-sec app-header-desktop-action" href="/admin/users"`,
+		"the desktop admin link keeps its box; phones reach Accounts through Settings")
+	// The desktop shortcut keeps its visible and accessible label.
 	assert.Contains(t, page, `<span class="header-link-label">Accounts</span></a>`)
 
 	// Sized as peers: one class, applied to both, so they cannot drift apart.
