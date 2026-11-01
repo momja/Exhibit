@@ -478,6 +478,7 @@ func TestLinkModalBrowser(t *testing.T) {
 			report := `permissionReport({__avNavigate:true,url:'https://example.test/report'})`
 			b.dialogCycle("#link-modal", report, "#link-block")
 			b.eval(report)
+			checkModalVisuals(t, b.ctx, "#link-modal")
 			b.capture("Exh-d0np", width)
 			b.eval(`window.tabs=[];window.open=()=>{const tab={opener:window,location:null,closed:false,close(){this.closed=true}};tabs.push(tab);return tab};window.savedFetch=window.fetch;window.fetch=(url,opts)=>opts?.method==='PATCH'?new Promise(resolve=>window.finishLink=(ok=true)=>resolve(new Response('{}',{status:ok?200:503}))):savedFetch(url,opts)`)
 			b.run(chromedp.Click(chromedp.CSS(`#link-allow`)))
