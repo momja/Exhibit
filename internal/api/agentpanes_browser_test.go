@@ -29,7 +29,7 @@ func TestAgentPanesBrowser(t *testing.T) {
 		let count = 0;
 		addEventListener('message', event => {
 		  if (event.data === 'seed-preview') { count++; scrollTo(0, 120); }
-		  if (event.data === 'read-preview') parent.postMessage({paneTest: true, count, scroll: scrollY}, '*');
+		  if (event.data?.readPreview) parent.postMessage({paneTest: true, request: event.data.readPreview, count, scroll: scrollY}, '*');
 		});
 		</script></body>`,
 	})
@@ -70,40 +70,40 @@ func TestAgentPanesBrowser(t *testing.T) {
 		_, err := chromedp.Call(ctx, emulation.SetEmulatedMedia, emulation.SetEmulatedMediaParams{Features: []*emulation.MediaFeature{{Name: "prefers-color-scheme", Value: theme}}})
 		require.NoError(t, err)
 		for _, width := range []int{320, 375, 390, 430} {
-			t.Run(fmt.Sprintf("%s-%d", theme, width), func(t *testing.T) {
-				run(chromedp.EmulateViewport(int64(width), 568), chromedp.Navigate(app.URL+"/agent?artifact="+id))
-				wait(`typeof window.showPane === 'function'`)
-				check(`(() => {
+			t.Logf("%s at %d CSS px", theme, width)
+			run(chromedp.EmulateViewport(int64(width), 568), chromedp.Navigate(app.URL+"/agent?artifact="+id))
+			wait(`typeof window.showPane === 'function'`)
+			check(`(() => {
 					const row = document.querySelector('.pane-switch').getBoundingClientRect();
 					return row.height >= 48 && row.height <= 52 &&
 					  [...document.querySelectorAll('.pane-tab')].every(el => el.getBoundingClientRect().height >= 44 && el.getBoundingClientRect().width >= 44) &&
 					  document.documentElement.scrollWidth <= innerWidth && document.getElementById('input').getBoundingClientRect().bottom <= innerHeight;
 				})()`)
-				check(`document.getElementById('pane-chat').getAttribute('role') === 'tabpanel' && document.getElementById('pane-chat').getAttribute('aria-labelledby') === 'tab-chat' && document.getElementById('tab-preview').tabIndex === -1`)
-				check(`[...document.querySelectorAll('.pane-tab i')].every(el => el.getAttribute('aria-hidden') === 'true')`)
-				capture(fmt.Sprintf("%s-%d-chat", theme, width))
-				run(chromedp.Focus(chromedp.CSS(`#tab-chat`)), chromedp.KeyEvent(kb.ArrowRight))
-				check(`document.activeElement.id === 'tab-preview' && document.getElementById('tab-preview').getAttribute('aria-selected') === 'true' && document.getElementById('tab-chat').tabIndex === -1 && getComputedStyle(document.getElementById('pane-chat')).display === 'none'`)
-				run(chromedp.KeyEvent(kb.Tab))
-				check(`document.activeElement.id === 'pane-preview'`)
-				capture(fmt.Sprintf("%s-%d-preview", theme, width))
-				run(chromedp.Focus(chromedp.CSS(`#tab-preview`)), chromedp.KeyEvent(kb.ArrowRight))
-				check(`document.activeElement.id === 'tab-chat' && document.getElementById('tab-chat').getAttribute('aria-selected') === 'true'`)
-				run(chromedp.KeyEvent(kb.ArrowLeft))
-				check(`document.activeElement.id === 'tab-preview'`)
-				run(chromedp.KeyEvent(kb.Home))
-				check(`document.activeElement.id === 'tab-chat'`)
-				run(chromedp.KeyEvent(kb.End))
-				check(`document.activeElement.id === 'tab-preview'`)
-				run(chromedp.KeyEvent(kb.Home), chromedp.KeyEvent(kb.Tab))
-				check(`document.activeElement.id === 'pane-chat'`)
-				// The row must grow with large text/long localized labels, never clip.
-				run(chromedp.Evaluate[chromedp.Void](`
+			check(`document.getElementById('pane-chat').getAttribute('role') === 'tabpanel' && document.getElementById('pane-chat').getAttribute('aria-labelledby') === 'tab-chat' && document.getElementById('tab-preview').tabIndex === -1`)
+			check(`[...document.querySelectorAll('.pane-tab i')].every(el => el.getAttribute('aria-hidden') === 'true')`)
+			capture(fmt.Sprintf("%s-%d-chat", theme, width))
+			run(chromedp.Focus(chromedp.CSS(`#tab-chat`)), chromedp.KeyEvent(kb.ArrowRight))
+			check(`document.activeElement.id === 'tab-preview' && document.getElementById('tab-preview').getAttribute('aria-selected') === 'true' && document.getElementById('tab-chat').tabIndex === -1 && getComputedStyle(document.getElementById('pane-chat')).display === 'none'`)
+			run(chromedp.KeyEvent(kb.Tab))
+			check(`document.activeElement.id === 'pane-preview'`)
+			capture(fmt.Sprintf("%s-%d-preview", theme, width))
+			run(chromedp.Focus(chromedp.CSS(`#tab-preview`)), chromedp.KeyEvent(kb.ArrowRight))
+			check(`document.activeElement.id === 'tab-chat' && document.getElementById('tab-chat').getAttribute('aria-selected') === 'true'`)
+			run(chromedp.KeyEvent(kb.ArrowLeft))
+			check(`document.activeElement.id === 'tab-preview'`)
+			run(chromedp.KeyEvent(kb.Home))
+			check(`document.activeElement.id === 'tab-chat'`)
+			run(chromedp.KeyEvent(kb.End))
+			check(`document.activeElement.id === 'tab-preview'`)
+			run(chromedp.KeyEvent(kb.Home), chromedp.KeyEvent(kb.Tab))
+			check(`document.activeElement.id === 'pane-chat'`)
+			// The row must grow with large text/long localized labels, never clip.
+			run(chromedp.Evaluate[chromedp.Void](`
 				  document.documentElement.style.fontSize = '32px';
 				  document.querySelector('#tab-chat span').textContent = 'Conversation with the agent';
 				  document.querySelector('#tab-preview span').textContent = 'Artifactpreviewwithaverylonglabel';
 				`))
-				check(`(() => {
+			check(`(() => {
 				  const row = document.querySelector('.pane-switch').getBoundingClientRect();
 				  return row.height > 52 && document.documentElement.scrollWidth <= innerWidth &&
 				    [...document.querySelectorAll('.pane-tab span:not(.dot)')].every(el => {
@@ -111,8 +111,7 @@ func TestAgentPanesBrowser(t *testing.T) {
 				      return label.left >= tab.left && label.right <= tab.right && label.top >= tab.top && label.bottom <= tab.bottom;
 				    }) && document.getElementById('input').getBoundingClientRect().bottom <= innerHeight;
 				})()`)
-				capture(fmt.Sprintf("%s-%d-large-labels", theme, width))
-			})
+			capture(fmt.Sprintf("%s-%d-large-labels", theme, width))
 		}
 	}
 
@@ -130,19 +129,28 @@ func TestAgentPanesBrowser(t *testing.T) {
 	`))
 	wait(`document.getElementById('pv-frame').contentWindow != null`)
 	// Wait for the sandboxed document's listener as well as its frame element.
-	run(chromedp.Evaluate[chromedp.Void](`window.readPreview = setInterval(() => retainedFrame.contentWindow.postMessage('read-preview', '*'), 20)`))
+	run(chromedp.Evaluate[chromedp.Void](`window.readPreview = setInterval(() => retainedFrame.contentWindow.postMessage({readPreview: 'initial'}, '*'), 20)`))
 	wait(`window.previewState != null`)
 	run(chromedp.Evaluate[chromedp.Void](`retainedFrame.contentWindow.postMessage('seed-preview', '*')`))
 	wait(`window.previewState.count === 1 && window.previewState.scroll === 120`)
+	run(chromedp.Evaluate[chromedp.Void](`clearInterval(window.readPreview)`))
 	run(chromedp.Click(chromedp.CSS(`#tab-chat`)))
 	check(`document.getElementById('messages').scrollTop === 120 && document.getElementById('input').value === 'Keep this unsent draft'`)
-	run(chromedp.Click(chromedp.CSS(`#tab-preview`)))
-	wait(`window.previewState.count === 1 && window.previewState.scroll === 120`)
+	run(chromedp.Click(chromedp.CSS(`#tab-preview`)),
+		chromedp.Evaluate[chromedp.Void](`retainedFrame.contentWindow.postMessage({readPreview: 'after-switch'}, '*')`))
+	wait(`window.previewState.request === 'after-switch'`)
+	check(`window.previewState.count === 1 && window.previewState.scroll === 120`)
 	check(`document.getElementById('pv-frame') === window.retainedFrame`)
-	run(chromedp.Evaluate[chromedp.Void](`clearInterval(window.readPreview); showPane('chat'); document.getElementById('input').focus()`))
+	run(chromedp.Evaluate[chromedp.Void](`showPane('chat'); document.getElementById('input').focus()`))
 	// Programmatic links/nudges move focus out of the pane they hide.
 	run(chromedp.Evaluate[chromedp.Void](`showPane('preview')`))
 	check(`document.activeElement.id === 'tab-preview'`)
+
+	// Same-pane actions keep their focus so Enter can toggle snippet mode off.
+	run(chromedp.Focus(chromedp.CSS(`#snip-btn`)), chromedp.KeyEvent(kb.Enter))
+	check(`document.activeElement.id === 'snip-btn' && document.getElementById('snip-btn').classList.contains('active')`)
+	run(chromedp.KeyEvent(kb.Enter))
+	check(`document.activeElement.id === 'snip-btn' && !document.getElementById('snip-btn').classList.contains('active')`)
 
 	// Actual htmx content replacement must keep the tab/panel association.
 	run(chromedp.Evaluate[chromedp.Void](`document.body.dispatchEvent(new CustomEvent('exhibit:artifact-saved'))`))
