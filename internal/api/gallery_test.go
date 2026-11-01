@@ -121,7 +121,7 @@ func TestEditPageRendersTagsPanel(t *testing.T) {
 	assert.NotContains(t, page, `class="tag-create" hidden`)
 	assert.Contains(t, page, `id="tag-add-color-hex" class="field" value="#6b7280"`)
 	// The library-wide edit dialog, and the script that drives both.
-	assert.Contains(t, page, `<div id="tag-edit-modal" class="modal-overlay" hidden>`)
+	assert.Contains(t, page, `<dialog id="tag-edit-modal" class="modal-dialog tag-edit-dialog"`)
 	assert.Contains(t, page, `data-color="#6B7280"`) // store.DefaultTagColor preset
 	assert.Contains(t, page, `id="tag-edit-delete"`)
 	assert.Contains(t, page, `<script type="module" src="`+assetURL("gallery/tags.js")+`"></script>`)
@@ -379,7 +379,7 @@ func TestDetailPageMediatesClipboardViaBridge(t *testing.T) {
 		"the opaque-origin allow= delegation is a no-op and must be removed in favor of the bridge")
 	// The host frame mediates clipboard requests posted by the shim; the
 	// handler lives in the static page script the detail page loads.
-	assert.Contains(t, page, `<script src="`+assetURL("gallery/detail.js")+`"></script>`)
+	assert.Contains(t, page, `<script type="module" src="`+assetURL("gallery/detail.js")+`"></script>`)
 	detailJS, err := embeddedAssets.ReadFile("assets/gallery/detail.js")
 	require.NoError(t, err)
 	assert.Contains(t, string(detailJS), "__avClipboard",
@@ -445,9 +445,9 @@ func TestDetailPagePromptsForBlockedNetworkOrigins(t *testing.T) {
 
 	detailJS, err := embeddedAssets.ReadFile("assets/gallery/detail.js")
 	require.NoError(t, err)
-	assert.Contains(t, page, `<script src="`+assetURL("gallery/network-prompt.js")+`"></script>`,
+	assert.Contains(t, string(detailJS), `import { networkPrompt } from './network-prompt.js';`,
 		"the dialog is inert without the module that drives it")
-	assert.Contains(t, string(detailJS), "ExhibitNetworkPrompt.install",
+	assert.Contains(t, string(detailJS), "networkPrompt.install",
 		"the viewer installs the shared prompt rather than hand-rolling one")
 
 	promptJS, err := embeddedAssets.ReadFile("assets/gallery/network-prompt.js")
@@ -480,13 +480,13 @@ func TestAgentPageHostsTheNetworkPrompt(t *testing.T) {
 	assert.Contains(t, page, `id="net-once"`)
 	assert.Contains(t, page, `id="net-never"`)
 	assert.Contains(t, page, `<code id="net-origin"></code>`)
-	assert.Contains(t, page, `<script src="`+assetURL("gallery/network-prompt.js")+`"></script>`)
+	assert.Contains(t, page, `<script type="module" src="`+assetURL("gallery/agent.js")+`"></script>`)
 
 	agentJS, err := embeddedAssets.ReadFile("assets/gallery/agent.js")
 	require.NoError(t, err)
-	assert.Contains(t, string(agentJS), "ExhibitNetworkPrompt.install",
+	assert.Contains(t, string(agentJS), "networkPrompt.install",
 		"the agent page must install the prompt, not merely render its markup")
-	assert.Contains(t, string(agentJS), "ExhibitNetworkPrompt.announceTo",
+	assert.Contains(t, string(agentJS), "networkPrompt.announceTo",
 		"each swapped-in preview frame must be told the host is listening")
 }
 

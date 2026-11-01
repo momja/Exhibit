@@ -43,6 +43,7 @@
            hx-swap="innerHTML">{{template "tagPanelBody" .TagPanel}}</div>
       {{/* Outside the swap so errors survive the re-render. */}}
       <div id="tag-add-error" class="text-sm tag-error" hidden></div>
+      {{template "editTagModal" .Presets}}
     </div>
   </details>
 
@@ -267,7 +268,6 @@
   </div>
 </div>
 </main>
-{{template "editTagModal" .Presets}}
 {{template "editorLeaveDialog"}}
 {{template "componentScripts"}}
 {{/* components.js carries the widget-tile health watcher (av-fafu), which the

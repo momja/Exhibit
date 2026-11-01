@@ -75,7 +75,7 @@ func TestDetailPageRendersClipboardBridge(t *testing.T) {
 	// Host-side handler for the shim's clipboard messages, the result reply,
 	// and the PATCH that persists the decision — all live in the static page
 	// script the detail page loads.
-	assert.Contains(t, page, `<script src="`+assetURL("gallery/detail.js")+`"></script>`)
+	assert.Contains(t, page, `<script type="module" src="`+assetURL("gallery/detail.js")+`"></script>`)
 	detailJS, err := embeddedAssets.ReadFile("assets/gallery/detail.js")
 	require.NoError(t, err)
 	assert.Contains(t, string(detailJS), "d.__avClipboard !== true")
@@ -85,7 +85,7 @@ func TestDetailPageRendersClipboardBridge(t *testing.T) {
 	// sees the persisted decision.
 	assert.Contains(t, page, "let clipboardApproved = false;")
 	// First-use prompt names the artifact (HTML-escaped).
-	assert.Contains(t, page, `<div id="clip-modal" class="modal-overlay" hidden>`)
+	assert.Contains(t, page, `<dialog id="clip-modal" class="modal-dialog"`)
 	assert.Contains(t, page, `<strong>Copy &lt;Tool&gt;</strong> wants to`)
 	assert.Contains(t, page, `id="clip-allow"`)
 	assert.Contains(t, page, `id="clip-block"`)
