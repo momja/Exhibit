@@ -31,6 +31,7 @@ type appHeaderAction struct {
 	Label, Icon, Href, ID, LabelID string
 	IconOnly, Primary              bool
 	SaveEditor                     bool
+	DesktopOnly                    bool // Phone users reach account administration through Settings.
 }
 
 func galleryHeader(grid galleryGridData, isAdmin bool, clerk *clerkView) appHeaderView {
@@ -44,7 +45,7 @@ func galleryHeader(grid galleryGridData, isAdmin bool, clerk *clerkView) appHead
 	}
 	if isAdmin {
 		header.Actions = append(header.Actions, appHeaderAction{
-			Label: "Accounts", Icon: "ph-users-three", Href: "/admin/users",
+			Label: "Accounts", Icon: "ph-users-three", Href: "/admin/users", DesktopOnly: true,
 		})
 	}
 	header.Actions = append(header.Actions,

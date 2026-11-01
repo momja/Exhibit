@@ -103,6 +103,7 @@ type profilePageData struct {
 	Header  appHeaderView
 	Favicon template.URL
 	Account profileAccount
+	IsAdmin bool
 	pageCredentials
 }
 
@@ -149,6 +150,7 @@ func (ro *Router) profilePage(w http.ResponseWriter, r *http.Request) {
 		Header:          profileHeader(creds.Clerk),
 		Favicon:         template.URL(exhibitLogoDataURI),
 		Account:         acct,
+		IsAdmin:         ro.adminRequest(r),
 		pageCredentials: creds,
 	})
 	if err != nil {

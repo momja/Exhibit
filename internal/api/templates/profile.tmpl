@@ -55,6 +55,11 @@
   {{end}}
 </div>
 
+{{if .IsAdmin}}<div class="card">
+  <h3 class="settings-h3">Administration</h3>
+  <a class="btn btn-sec account-admin-link" href="/admin/users"><i class="ph ph-users-three" aria-hidden="true"></i> Accounts</a>
+</div>{{end}}
+
 {{if .Account.SignedIn}}
 <section class="card" id="storage" aria-labelledby="storage-heading">
   <h3 class="settings-h3" id="storage-heading"><i class="ph ph-hard-drives" aria-hidden="true"></i> Storage</h3>

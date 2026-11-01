@@ -93,6 +93,21 @@ main{padding:10px 12px}
 .card:has(.card-actions.is-open){z-index:31}
 @media (hover:none),(pointer:coarse){.card-actions{width:22px;margin:0 -4px 0 -2px}.card-actions-trigger{opacity:1}}
 
+/* Real, separate hit boxes: no negative margins extending a control over
+ * the title or the card's delegated open action. Keep desktop tiles dense. */
+@media (max-width:767px){
+  .card-meta{min-height:52px;height:auto;flex-wrap:wrap;padding:4px 8px}
+  .card-title{min-width:44px;line-height:44px}
+  .card .tag-dots{max-width:100%;flex-wrap:wrap}
+  .card .capability-cluster{min-width:44px;min-height:44px;justify-content:center;flex-wrap:wrap;max-width:100%;padding:4px 6px;margin:0}
+  .card .capability-wrap{max-width:100%}
+  .card-actions,.card:hover .card-actions,.card:focus-within .card-actions,.card-actions.is-open{width:44px;height:44px;margin:0}
+  .card-actions-trigger{height:44px;opacity:1}
+  .card-actions-menu a,.card-actions-menu button{min-height:44px}
+  .card .capability-popover-manage{min-height:44px;display:flex;align-items:center}
+  .gallery-filter-sheet .icon-btn{width:44px;height:44px}
+}
+
 .empty{color:var(--color-muted);font-size:14px;padding:20px 0}
 .empty a{color:var(--brand-blue)}
 
@@ -205,8 +220,14 @@ main{padding:10px 12px}
 .gallery-filter-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .gallery-filter-done{width:100%}
 @media (max-width:767px){
+  /* Clear is a sibling hit box on phones, not an overlay on the input. */
+  .search-clear{position:static;flex:0 0 44px;width:44px;height:44px;margin-left:4px}
+  .search-row input{padding-right:9px}
   .search-row input:placeholder-shown{padding-right:9px}
   .gallery-filter-trigger{display:inline-flex;flex:0 0 auto;gap:4px;padding:0 6px}
+  .app-header .gallery-filter-trigger{width:44px;justify-content:center;padding:0}
+  .gallery-filter-trigger span{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+  .app-header:has(.search-row)>.spacer{display:none}
   #gallery-shell:has(.gallery-filter-trigger)>.app-header,#gallery-shell:has(.gallery-filter-trigger)>.app-header .app-header-actions{gap:8px}
   .gallery-rail-filters{display:none}
   .gallery-layout-solo>.gallery-rail{display:none}
