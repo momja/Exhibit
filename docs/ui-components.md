@@ -575,6 +575,10 @@ is intentionally different.
 CI's `e2e/check-browser-tests.mjs` requires all migration browser suites to run,
 so skipped native-dialog coverage cannot silently pass CI.
 
+Direct-open uses the shared checkbox row and error presentation. Its explanation
+and remember choice wrap within the same default frame as the other small
+permission forms; it needs no private label/field styling.
+
 [Direct-open desktop](screenshots/Exh-sqny/1280.png) ·
 [Direct-open phone](screenshots/Exh-sqny/390.png)
 

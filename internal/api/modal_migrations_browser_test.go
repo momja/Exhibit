@@ -567,6 +567,7 @@ func TestDirectOpenModalBrowser(t *testing.T) {
 				open := `document.querySelector('` + trigger + `').click()`
 				b.dialogCycle("#direct-open-modal", open, "#direct-open-cancel")
 				b.eval(open)
+				checkModalVisuals(t, b.ctx, "#direct-open-modal")
 				b.capture("Exh-sqny", width)
 				b.check(`document.documentElement.scrollWidth<=innerWidth && !document.querySelector('body > [inert]')`)
 				// Explicit content clicks keep the dialog open; only outside bounds dismiss.

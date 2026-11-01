@@ -2,8 +2,8 @@
 <dialog id="direct-open-modal" class="modal-dialog direct-open-dialog" data-controller="modal" aria-labelledby="direct-open-title" aria-describedby="direct-open-body" data-artifact="{{.ID}}" data-viewer="{{.ViewerPreference}}" data-open-url="{{.OpenURL}}">
     <h2 id="direct-open-title">Open outside the preview sandbox?</h2>
     <p id="direct-open-body">This tool will run as a regular web page. It can download files, navigate to external sites, and use browser features restricted in the preview, subject to your browser’s normal controls.</p>
-    <label class="direct-open-remember"><input type="checkbox" id="direct-open-remember"> Do not ask again for this artifact</label>
-    <p id="direct-open-status" role="status" hidden></p>
+    <label class="modal-check"><input type="checkbox" id="direct-open-remember"> Do not ask again for this artifact</label>
+    <p id="direct-open-status" class="modal-error" role="status" hidden></p>
     <div class="modal-actions">
       <span class="spacer"></span>
       <button type="button" class="btn btn-sec" id="direct-open-cancel" autofocus data-modal-dismiss>Cancel</button>
