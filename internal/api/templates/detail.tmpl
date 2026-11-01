@@ -152,30 +152,30 @@
     </div>
 </dialog>
 
-<div id="clip-modal" class="modal-overlay" hidden>
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="clip-title">
+<dialog id="clip-modal" class="modal-dialog" aria-labelledby="clip-title"
+  data-controller="modal">
     <h2 id="clip-title">Allow clipboard access?</h2>
     <p><strong>{{.Title}}</strong> wants to <span id="clip-direction">use</span> your clipboard.</p>
     <p>Allowing lets this artifact read and write your clipboard from now on. You can revoke this at any time from its security settings.</p>
+    <p data-permission-status role="status" aria-live="polite"></p>
     <div class="modal-actions">
       <span class="spacer"></span>
-      <button type="button" class="btn btn-sec" id="clip-block">Block</button>
+      <button type="button" class="btn btn-sec" id="clip-block" autofocus data-modal-dismiss>Block</button>
       <button type="button" class="btn" id="clip-allow"><i class="ph ph-clipboard-text"></i> Allow clipboard</button>
     </div>
-  </div>
-</div>
+</dialog>
 
-<div id="link-modal" class="modal-overlay" hidden>
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="link-title">
+<dialog id="link-modal" class="modal-dialog" aria-labelledby="link-title"
+  data-controller="modal">
     <h2 id="link-title">Allow opening links?</h2>
     <p>You are opening a link to <code id="link-host">example.com</code>. Exhibit cannot verify the safety of external sites. Make sure you trust this destination before allowing links. You can revoke this at any time from its security settings.</p>
+    <p data-permission-status role="status" aria-live="polite"></p>
     <div class="modal-actions">
       <span class="spacer"></span>
-      <button type="button" class="btn btn-sec" id="link-block">Block</button>
+      <button type="button" class="btn btn-sec" id="link-block" autofocus data-modal-dismiss>Block</button>
       <button type="button" class="btn" id="link-allow"><i class="ph ph-arrow-square-out"></i> Allow links</button>
     </div>
-  </div>
-</div>
+</dialog>
 {{/* Camera / microphone first-use approval (av-mv3k). One modal for both
      devices: the artifact asks for what its getUserMedia constraints named, so
      the prompt names exactly that and detail.js persists only the flags that
@@ -188,18 +188,18 @@
      through the document's Permissions-Policy header. Saying that plainly is
      the point: an "Allow" that silently did nothing here would be the worst
      available answer. */}}
-<div id="media-modal" class="modal-overlay" hidden>
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="media-title">
+<dialog id="media-modal" class="modal-dialog" aria-labelledby="media-title"
+  data-controller="modal">
     <h2 id="media-title">Allow device access?</h2>
     <p><strong>{{.Title}}</strong> wants to use <span id="media-devices">your camera</span>.</p>
     <p>Browsers cannot give a capture device to this embedded preview, so allowing opens the artifact in its own tab, where it can use the device. Your browser will ask for its own permission there. The approval is remembered for this artifact and can be revoked at any time from its security settings.</p>
+    <p data-permission-status role="status" aria-live="polite"></p>
     <div class="modal-actions">
       <span class="spacer"></span>
-      <button type="button" class="btn btn-sec" id="media-block">Block</button>
+      <button type="button" class="btn btn-sec" id="media-block" autofocus data-modal-dismiss>Block</button>
       <button type="button" class="btn" id="media-allow"><i id="media-icon" class="ph ph-camera"></i> Allow and open</button>
     </div>
-  </div>
-</div>
+</dialog>
 {{/* Location first-use approval (av-f446). The camera prompt's sibling, and
      spent the same way: Allow persists geolocation_approved and opens the
      top-level render, whose Permissions-Policy header that flag builds.
@@ -209,18 +209,18 @@
      true of this page, that the preview does not share location. The reason
      lives in security.md §4: that delegation would spend the library's own
      location permission on the artifact's behalf. */}}
-<div id="geo-modal" class="modal-overlay" hidden>
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="geo-title">
+<dialog id="geo-modal" class="modal-dialog" aria-labelledby="geo-title"
+  data-controller="modal">
     <h2 id="geo-title">Allow location access?</h2>
     <p><strong>{{.Title}}</strong> wants to know your location.</p>
     <p>The embedded preview does not share your location with artifacts, so allowing opens the artifact in its own tab, where it can ask for it. Your browser will ask for its own permission there. The approval is remembered for this artifact and can be revoked at any time from its security settings.</p>
+    <p data-permission-status role="status" aria-live="polite"></p>
     <div class="modal-actions">
       <span class="spacer"></span>
-      <button type="button" class="btn btn-sec" id="geo-block">Block</button>
+      <button type="button" class="btn btn-sec" id="geo-block" autofocus data-modal-dismiss>Block</button>
       <button type="button" class="btn" id="geo-allow"><i class="ph ph-map-pin"></i> Allow and open</button>
     </div>
-  </div>
-</div>
+</dialog>
 
 {{template "networkPrompt"}}
 {{template "directOpenPrompt" .}}

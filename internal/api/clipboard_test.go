@@ -85,7 +85,7 @@ func TestDetailPageRendersClipboardBridge(t *testing.T) {
 	// sees the persisted decision.
 	assert.Contains(t, page, "let clipboardApproved = false;")
 	// First-use prompt names the artifact (HTML-escaped).
-	assert.Contains(t, page, `<div id="clip-modal" class="modal-overlay" hidden>`)
+	assert.Contains(t, page, `<dialog id="clip-modal" class="modal-dialog"`)
 	assert.Contains(t, page, `<strong>Copy &lt;Tool&gt;</strong> wants to`)
 	assert.Contains(t, page, `id="clip-allow"`)
 	assert.Contains(t, page, `id="clip-block"`)
