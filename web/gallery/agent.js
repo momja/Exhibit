@@ -750,6 +750,7 @@ function showPane(pane) {
   tabPreviewEl.setAttribute('aria-selected', String(preview));
   tabChatEl.tabIndex = preview ? -1 : 0;
   tabPreviewEl.tabIndex = preview ? 0 : -1;
+  syncPaneSemantics();
   // A nudge or history link can hide its own pane. Keep focus on a visible
   // control. Same-pane actions (such as toggling snippet mode) keep focus,
   // and desktop never moves it into the hidden mobile tab strip.
@@ -779,14 +780,15 @@ function syncPaneSemantics() {
   const activeTab = preview ? tabPreviewEl : tabChatEl;
   const activePane = document.getElementById(preview ? 'pane-preview' : 'pane-chat');
   const inactivePane = document.getElementById(preview ? 'pane-chat' : 'pane-preview');
+  const focused = document.activeElement;
   for (const pane of [activePane, inactivePane]) {
+    pane.inert = mobileQuery.matches && pane === inactivePane;
     pane.setAttribute('role', mobileQuery.matches ? 'tabpanel' : 'region');
     pane.tabIndex = mobileQuery.matches ? 0 : -1;
     if (mobileQuery.matches) pane.setAttribute('aria-labelledby', pane.id.replace('pane-', 'tab-'));
     else pane.removeAttribute('aria-labelledby');
   }
   // Resizing must not strand keyboard focus in a panel or tab that CSS hides.
-  const focused = document.activeElement;
   if (mobileQuery.matches && focused && inactivePane.contains(focused)) activeTab.focus({preventScroll: true});
   if (!mobileQuery.matches && (focused === tabChatEl || focused === tabPreviewEl)) activePane.focus({preventScroll: true});
 }

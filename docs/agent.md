@@ -829,9 +829,16 @@ long labels and enlarged text grow the row instead of clipping. Left/Right
 wrap between tabs, Home/End select the first/last tab, and Tab enters the
 selected panel. Programmatic pane switches keep focus visible. Above that
 breakpoint, both panes are named regions and the tab strip is hidden. Switching
-panes does not recreate their content or preview frame. `TestAgentPanesBrowser`
+panes does not recreate their content or preview frame. Inactive mobile panes
+stay laid out in the same grid cell, hidden and inert, to retain iframe scroll
+without exposing inactive controls. `TestAgentPanesBrowser`
 covers the responsive geometry, keyboard focus, retained draft/scroll/frame
 state, htmx swaps, and short viewports in light and dark modes.
+
+[Phone Chat](screenshots/Exh-a5ez/light-390-chat.png) ·
+[Dark Preview](screenshots/Exh-a5ez/dark-430-preview.png) ·
+[Enlarged labels](screenshots/Exh-a5ez/light-320-large-labels.png) ·
+[Desktop](screenshots/Exh-a5ez/desktop.png)
 
 **The brief handoff (nw-d1dd).** A create session usually arrives from `/new`,
 whose Build-with-agent panel is now the page's default and is a *form* rather
