@@ -149,10 +149,10 @@ func TestConnectionDataPolicyMigrationBackfillsExistingGrants(t *testing.T) {
 	// A former recipient may still hold a saved copy even if their share is
 	// currently revoked. Regranting access must retain that copy's policy.
 	require.NoError(t, s.SetState(ctx, OwnerID(alice), "old-connected", ViewerID(bob), "balance", "existing financial data"))
-	// Rewind newer migrations as well, so this remains a version-45 fixture
+	// Rewind newer migrations as well, so this remains a version-46 fixture
 	// when additional connector migrations are introduced.
-	require.NoError(t, goose.DownToContext(ctx, s.db, "migrations", 45))
-	// Model the historical delegation before migration 046 existed.
+	require.NoError(t, goose.DownToContext(ctx, s.db, "migrations", 46))
+	// Model the historical delegation before migration 047 existed.
 	_, err = s.db.ExecContext(ctx, `UPDATE artifact_connection_grants SET share_with_recipients=1`)
 	require.NoError(t, err)
 	require.NoError(t, s.Close())

@@ -1169,7 +1169,7 @@ apply the same separation between origin permission and credential use.
 Once response bytes reach the artifact, its code can save or send them to other
 approved origins. Credential custody cannot guarantee response-data non-egress.
 Connection grants authorize only their owner, including after a tool is shared.
-Migration 050 clears legacy shared-account flags. Saved-state visibility remains
+Migration 051 clears legacy shared-account flags. Saved-state visibility remains
 the separate decision expressed by the tool's own/shared data mode and public
 link. Retained provenance still supports private render boundaries; legacy
 destination fields confer no network authority.

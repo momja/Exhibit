@@ -858,7 +858,7 @@ field, and `allow_writes` is not accepted.
 
 A grant accepts `connection_id` for a connection owned by the current viewer.
 V1 has no shared-account grants: `share_with_recipients=true` is rejected,
-legacy shared flags are cleared by migration 050, and recipients connect their
+legacy shared flags are cleared by migration 051, and recipients connect their
 own accounts. The current viewer must own the selected connection even on a
 shared-data tool; shared saved results confer no credential authority.
 Grants are additive: artifact origin approvals remain the network boundary,

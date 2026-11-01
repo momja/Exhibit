@@ -295,7 +295,7 @@ func TestLegacyNativeBasicShapeMigratesWithoutLosingCredentialOrProvenance(t *te
 	require.NoError(t, s.cfg.Store.PutConnectionCache(ctx, record.ID, "preserved", "encrypted-fixture", s.cfg.Now(), s.cfg.Now().Add(time.Hour)))
 	// Run the shipped migration against a pre-upgrade record shape. Reading
 	// its Up section also keeps this fixture independent of later migrations.
-	migration, err := os.ReadFile("../store/migrations/047_generic_basic_connections.sql")
+	migration, err := os.ReadFile("../store/migrations/048_generic_basic_connections.sql")
 	require.NoError(t, err)
 	up, _, found := strings.Cut(string(migration), "-- +goose Down")
 	require.True(t, found)

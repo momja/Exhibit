@@ -129,10 +129,10 @@ Cached responses and stand-ins are invalidated when the credential is replaced.
 It does not move an existing account to another vendor or expand its API origins.
 Keep the original engine's operator key configured until its connections are
 removed. Failure to retire the previous remote account leaves repair retryable.
-Migration 048 pins earlier managed connections to Nango and resolves their
+Migration 049 pins earlier managed connections to Nango and resolves their
 legacy encrypted reference without transferring credentials between vendors.
 
-Migration 051 records unfinished managed authorizations before authentication
+Migration 052 records unfinished managed authorizations before authentication
 starts. If consent succeeds but local completion fails (for example, because
 the account limit changed), Exhibit revokes the unused remote account. Failed
 revocation stays in a durable queue and is retried by maintenance after restart.
@@ -273,7 +273,7 @@ Connections are personal in V1. A recipient connects their own account; sharing
 a tool never lets them use the owner's credential, cache authority or stand-in.
 The store and service enforce the current viewer as the connection owner,
 including relay requests and schedules. `share_with_recipients=true` is rejected.
-Migration 050 clears the old shared-credential flags without deleting saved
+Migration 051 clears the old shared-credential flags without deleting saved
 results. Saved-result provenance remains with the shared-state owner and
 authenticated readers after grants are removed or sharing mode changes.
 Public links cannot use the relay.

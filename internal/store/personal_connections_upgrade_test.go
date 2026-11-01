@@ -10,7 +10,7 @@ import (
 
 func TestPersonalConnectionUpgradeKeepsSavedResultsAndOwnerAccess(t *testing.T) {
 	registerOriginNormalizationMigration()
-	path := newMigratedTo(t, 49)
+	path := newMigratedTo(t, 50)
 	db, err := sql.Open("sqlite", path)
 	require.NoError(t, err)
 	legacy := &SQLiteStore{db: db}
@@ -50,7 +50,7 @@ func TestPersonalConnectionUpgradeKeepsSavedResultsAndOwnerAccess(t *testing.T) 
 
 func TestPersonalConnectionUpgradeRetainsSharedStateOwnerProvenance(t *testing.T) {
 	registerOriginNormalizationMigration()
-	path := newMigratedTo(t, 49)
+	path := newMigratedTo(t, 50)
 	db, err := sql.Open("sqlite", path)
 	require.NoError(t, err)
 	legacy := &SQLiteStore{db: db}

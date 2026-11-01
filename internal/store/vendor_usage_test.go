@@ -36,7 +36,7 @@ func TestVendorConnectionEngineAndExternalAccountStayPinned(t *testing.T) {
 func TestVendorEngineMigrationPinsOriginalEngineAndLazilyAddsExternalRef(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
-	require.NoError(t, goose.DownToContext(ctx, s.db, "migrations", 47))
+	require.NoError(t, goose.DownToContext(ctx, s.db, "migrations", 48))
 	_, err := s.db.ExecContext(ctx, `INSERT INTO connections(id,owner_id,name,provider,kind,recipe_json,encrypted_secret) VALUES
  ('legacy',?,'Legacy account','nango','vendor','{"vendor_provider":"slack","origins":["https://slack.com"]}','old-encrypted-id'),
  ('native',?,'Personal account','basic','native','{}','native-encrypted'),

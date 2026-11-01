@@ -13,7 +13,7 @@ import (
 // promised GET and HEAD only, so the upgrade asks again rather than widening it.
 func TestRelayConsentUpgradeKeepsOnlyFullGrantsAndDropsAllowWrites(t *testing.T) {
 	registerOriginNormalizationMigration()
-	path := newMigratedTo(t, 48)
+	path := newMigratedTo(t, 49)
 	db, err := sql.Open("sqlite", path)
 	require.NoError(t, err)
 	legacy := &SQLiteStore{db: db}

@@ -34,6 +34,8 @@ func TestProfileShowsResolvedConnectionAndScheduleLimits(t *testing.T) {
 	in.ro.cfg.Relay.Enabled = true
 	in.ro.cfg.Entitlements = Entitlements{Enforced: true, DefaultStorageBytes: 1 << 30, DefaultConnections: connectors.Limits{Native: 25, OAuth: 10, Vendor: 3}, DefaultSchedules: 10}
 	page := in.page(t)
+	assert.Contains(t, page, `id="agent-grants-panel"`, "agent grants remain available alongside personal service connections")
+	assert.Contains(t, page, "Connected accounts")
 	for _, text := range []string{"Custom connections", "25 connections", "Service accounts", "10 connections", "Managed accounts", "3 connections", "Scheduled fetches", "10 schedules", `href="/connections"`} {
 		assert.Contains(t, page, text)
 	}

@@ -72,7 +72,7 @@ func TestConnectionCacheMigrationBackfillsByteCounts(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 	cacheTestConnection(t, s, "legacy")
-	require.NoError(t, goose.DownToContext(ctx, s.db, "migrations", 51))
+	require.NoError(t, goose.DownToContext(ctx, s.db, "migrations", 52))
 	now := time.Now()
 	_, err := s.db.ExecContext(ctx, `INSERT INTO connection_cache(connection_id,request_hash,encrypted_response,expires_at) VALUES(?,?,?,?)`, "legacy", "old", "encrypted-data", now.Add(time.Hour).Unix())
 	require.NoError(t, err)
