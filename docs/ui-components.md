@@ -427,5 +427,11 @@ area padding stay in gallery CSS. The close button is the initial focus.
 `TestGalleryFilterBrowser` covers actual htmx filters; `TestFilterModalBrowser`
 covers two independently addressed instances and shared keyboard dismissal.
 
+The sheet keeps its bottom anchor, full width up to 560px, 85dvh scroll cap,
+bottom-only square corners, and bottom safe-area inset. These make it a reachable
+phone filter surface rather than a centered form. Done spans the sheet for a
+clear exit after selecting filters; its footer spacing and phone touch height,
+heading typography, and base padding come from the shared dialog.
+
 [Filters desktop](screenshots/Exh-gynk/1280.png) ·
 [Filters phone](screenshots/Exh-gynk/390.png)

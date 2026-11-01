@@ -259,6 +259,7 @@ func TestFilterModalBrowser(t *testing.T) {
 			b.check(`document.activeElement.id==='one-trigger'`)
 			b.eval(`document.getElementById('two-trigger').click()`)
 			b.wait(`document.getElementById('two-filter-sheet').open`)
+			checkModalVisuals(t, b.ctx, "#two-filter-sheet")
 			b.capture("Exh-gynk", width)
 			b.run(chromedp.KeyEvent(kb.Escape))
 			b.check(`document.activeElement.id==='two-trigger'`)

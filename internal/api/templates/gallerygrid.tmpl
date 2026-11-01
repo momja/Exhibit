@@ -75,7 +75,7 @@
 {{define "galleryFilterSheet"}}<dialog id="{{.ID}}-filter-sheet" class="modal-dialog gallery-filter-sheet" data-filter-sheet-target="dialog" data-controller="modal" aria-labelledby="{{.ID}}-filter-title">
 <div class="gallery-filter-heading"><h2 id="{{.ID}}-filter-title">Filters</h2><button class="btn btn-sec icon-btn" type="button" autofocus data-modal-dismiss aria-label="Close filters"><i class="ph ph-x" aria-hidden="true"></i></button></div>
 <div id="{{.ID}}-sheet-filters" hx-target:inherited="#{{.ID}}-results" hx-swap:inherited="innerHTML" hx-sync:inherited="#{{.ID}}:replace" hx-include:inherited="#{{.ID}}-search [name=q]">{{template "galleryFilterOptions" .}}</div>
-<button class="btn btn-sec gallery-filter-done" type="button" data-modal-dismiss>Done</button>
+<div class="modal-actions"><button class="btn btn-sec gallery-filter-done" type="button" data-modal-dismiss>Done</button></div>
 </dialog>{{end}}
 
 {{/* Successful first-page htmx responses refresh external filter controls
