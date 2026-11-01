@@ -1,6 +1,6 @@
 ---
 id: Exh-vora
-status: open
+status: closed
 deps: [Exh-354p]
 links: []
 created: 2026-10-27T18:33:48Z
@@ -29,3 +29,7 @@ Likely superseded by Exh-rhlq (2026-10-30). The built-in authorization server au
 **2026-10-31T05:40:08Z**
 
 Revised epic (2026-10-31): grants are now library-wide, so a Clerk OAuth token for a user would map onto a grant without an artifact step. The built-in authorization server (Exh-rhlq) still covers hosted instances through the Clerk session, so this remains superseded unless Clerk-issued tokens are wanted for another reason.
+
+**2026-10-31T16:10:20Z**
+
+Closed 2026-10-31: not doing. The built-in authorization server (Exh-rhlq) covers hosted instances through the Clerk session on the consent page, and every MCP token is an Exhibit library grant. Clerk-issued access tokens would add a second token type for the MCP service to verify and a second place where connections live, with no gain for users.

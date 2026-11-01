@@ -272,7 +272,8 @@ The seam between handlers and persistence.
 ```
 Store:  artifacts, collections, tags, shares, state; viewer-readable access (av-lrae);
         per-origin network decisions; users, sessions, local credentials (§3.8),
-        admin mutations (§3.8a), entitlements (§3.8c); the blob deletion queue (§3.3a)
+        admin mutations (§3.8a), entitlements (§3.8c), agent grants (§3.7);
+        the blob deletion queue (§3.3a)
 Blob:   put/get/delete by id
 ```
 
@@ -329,6 +330,13 @@ and writes state.
   addresses (artifact, recipient), owner-scoped. `ReplaceAnonymousLink` rotates
   in one transaction. Recipients resolve by `local:<name>` external id, then
   email; ambiguous email is refused (`ErrAmbiguousUser`).
+- **Agent grants** (Exh-l2xj): migration 043 adds `agent_grants`, holding owner,
+  label, client, SHA-256 token digest, created and last-used timestamps. No
+  artifact or expiry: a grant covers its owner's library until revoked. No users
+  foreign key, because a no-login owner need not have a users row; account deletion
+  removes grants explicitly. Only issuance returns the plaintext `exgrant_` token.
+  Each request resolves the digest and refuses disabled owners; last use is written
+  at most once a minute. Revocation makes the next request a 401.
 - **Assets**: `artifact_assets`, bytes in the blob store, content-addressed per
   owner and never across owners (av-20fk). Deletability depends only on recorded
   facts (artifact gone, generation superseded, owner asked), never on a literal in
@@ -700,32 +708,25 @@ default. The agent mode is a form of named fields. The brief crosses to `/agent`
   `internal/chromium`), out of the main image and shared by server features,
   each in its own browser contexts. Share link previews are the first (av-rclm);
   unset, they use the logo card.
-- **Remote MCP service** (Exh-uhvu, Exh-354p): `exhibit-mcp` runs separately under
-  Compose profile `mcp`, using a second binary shipped in the same image. It
-  holds no database or credentials of its own. Each request verifies the caller's
-  bearer through the core's `/api/agent/credential`; only library grants pass,
-  and sessions bind to the grant id. Tools use the ordinary HTTP API with that
-  bearer. `MCP_PUBLIC_URL` defines its endpoint and allowed browser origin;
-  `EXHIBIT_URL` may be an internal core address. The service serves unauthenticated
-  RFC 9728 metadata at `/.well-known/oauth-protected-resource<endpoint path>` and
-  its bare form, with cross-origin GET access. It names `MCP_PUBLIC_URL` as the
-  resource and `EXHIBIT_PUBLIC_URL` (the core's public `APP_ORIGIN`, defaulting to
-  `EXHIBIT_URL`) as the authorization server. Every 401 links to the path-inserted
-  metadata URL through `WWW-Authenticate`; core outages remain 503. Metadata does
-  not decide token validity: the core still verifies every bearer.
-  Core `MCP_URL` enables the authorization server, token issuance and remote
-  connection configuration in Settings. Without it, OAuth endpoints and new
-  grants return 404 and the panel is hidden unless the owner has live grants;
-  those remain listed for revocation with a note that MCP is not enabled. The
-  core has no `/mcp` route or MCP transport; its `/oauth/*` and authorization-server
-  metadata routes stay on the core.
-  [Settings after issuance](screenshots/Exh-uhvu/connected-agents.png).
+- **MCP service** (Exh-uhvu, Exh-354p): `exhibit-mcp` is a separate process from
+  the same image, enabled by Compose profile `mcp`. It holds no database or
+  secrets of its own. Each request verifies the caller's bearer through the
+  core's `/api/agent/credential`; only library grants pass, sessions bind to the
+  grant id, and tools use the same bearer over the HTTP API. `MCP_PUBLIC_URL`
+  names the Streamable HTTP endpoint; `EXHIBIT_URL` is its core API address.
+  Public protected-resource metadata names `EXHIBIT_PUBLIC_URL` as the
+  authorization server; 401 challenges point clients to that metadata. Discovery
+  does not decide validity: the core is asked on every request. The core never serves `/mcp` or carries MCP transport.
+  Core `MCP_URL` enables issuance, OAuth and the connection panel (§3.7); without
+  it no new connections are offered. Proxy routing and configuration:
+  [deployment.md](deployment.md).
 
-### 3.7 Agent sidecar (Pi harness, Exh-yvhp)
+### 3.7 Agents: Pi harness and external clients
 
-The agent is the main way artifacts are built and changed. Each chat session runs one
-`pi --mode rpc` subprocess managed by `internal/agent`. Without `pi` the server boots
-and agent routes answer 503; that is a broken install. Full flow: `agent.md`.
+The built-in agent is the main way artifacts are built and changed (Exh-yvhp).
+Each chat session runs one `pi --mode rpc` subprocess managed by `internal/agent`.
+Without `pi` the server boots and Pi routes answer 503; that is a broken install.
+Full flow: `agent.md`.
 
 - **Single write path**: built-in tools disabled; one extension
   (`internal/agent/ext/exhibit.ts`) whose tools (`create_artifact`,
@@ -797,88 +798,56 @@ and agent routes answer 503; that is a broken install. Full flow: `agent.md`.
 - **Guardrail** (av-gust): with `GUARDRAIL_*`, `ext/guard.ts` screens each user
   message on Pi's `input` hook; a failed screen blocks. `security.md` §5.4.
 
-### Persisted external-agent grants (Exh-l2xj)
+#### External agents (MCP)
 
-An owner connects an external agent from **Connected agents** on `/settings`
-(`/profile` alias). The same panel works with local, OIDC, Clerk and no-login
-instances. `GET/POST /api/agent-grants` and `DELETE /api/agent-grants/:grantID`
-require a session, or operator authority when no login is configured. The panel
-refreshes `/partials/agent-grants` through htmx on
-`exhibit:agent-grants-changed`; a newly issued token is displayed only once
-with a copy button and remote connection configuration when `MCP_URL` is set.
-When unset, issuance returns 404; list and revoke remain available. The panel
-then shows only existing grants for revocation and disappears when none remain.
+A connected agent acts for its owner across their library, like a signed-in
+device. The owner secures the agent and its token; Exhibit keeps the connection
+listable, revocable and on the API's ordinary rules. Full trust argument and
+accepted cross-artifact prompt-injection risk: `security.md` §5 (Exh-17a5).
 
-Migration 043 stores `agent_grants`: owner, label, client, SHA-256 token digest,
-created and last-used timestamps. No artifact, expiry, or foreign key to users
-(the no-login owner need not have a users row). Account deletion removes grants.
-The bearer is `exgrant_` plus 32 random bytes encoded as hex. Each request resolves
-its digest and refuses disabled owners; last use is updated at most once a minute.
-Revoked and unknown persisted tokens return 401 even on open/public instances.
+- **Owner-issued library grants** (Exh-l2xj): **Settings → Connected agents** lists
+  label, client, creation and last use, and revokes each connection. With
+  `MCP_URL` set, it shows the copyable endpoint and Claude Code command up front,
+  with browser sign-in instructions. Token issuance is the fallback under
+  **For clients without browser sign-in**; the token and header-based remote
+  configurations are shown only after issuance, and the token only once.
+  Issuance requires a signed-in person, or the operator
+  on a no-login instance. With `MCP_URL` unset, issuance returns 404; existing
+  grants remain listed for revocation and the empty panel disappears. The panel
+  refreshes through `/partials/agent-grants` on `exhibit:agent-grants-changed`.
+- **One owner's own artifacts** (Exh-l2xj): `agentScopeAllows` admits library
+  search/create, artifact get/patch, widget read/write, saved-state reads and
+  asset metadata reads. Incoming shares and other owners' artifacts are 404.
+  Saved-data writes and erasure are refused because they have no independently
+  restorable versions. Account/admin, pages, shares/grants, origins, history/
+  restore, deletion, tags/collections and import/export stay outside the route
+  allowlist. Versions carry `origin=agent`, the grant label as message and
+  `grant:<id>` as session; the request cannot supply provenance. Pi keeps its
+  process-lifetime one-artifact grants and state tools.
+- **OAuth in the core** (Exh-rhlq): only with `MCP_URL`, public metadata and
+  `/oauth/*` implement open registration, browser consent and authorization-code
+  exchange. Public clients have signed stateless `exclient_` ids, no secret or
+  client table. Single-use, five-minute codes live in bounded memory and bind
+  client, redirect, owner, `resource=MCP_URL` and PKCE S256. Login preserves the
+  consent return; approval covers the whole library, with no artifact picker.
+  Exchange requires a session owner's account still to exist and be enabled.
+  The token is the same persisted library grant, named after the client, with
+  no expiry or refresh token; Settings revocation is its lifetime control.
+- **One tool implementation, one write path** (Exh-q6xo): `internal/mcpserver`
+  uses the HTTP API behind an `API` interface. Tools search, create, read/edit/
+  write source and widgets, and read saved data. Each per-artifact tool takes
+  `artifact_id`. Each connection retains separate source/widget revisions per
+  artifact, serializing its reads and saves; only successful saves advance them.
+  A conflict requires re-reading and reconciliation, never an automatic retry.
+  MCP exposes no network or capability approval tools; direct agent API PATCH
+  can still set those fields, as it can for Pi (`security.md` §5).
+- **Shared instructions** (Exh-q6xo): `internal/agentguidance` supplies Pi and MCP
+  with the same artifact, widget, storage and untrusted-tool-result rules. MCP
+  adds search-first discovery and asks the user to resolve ambiguous matches.
+  Artifact text arrives only as tool results, never server instructions.
 
-A library grant reaches only its owner's **own** artifacts: list/search, create,
-get/patch, widget read/write, saved-state reads (never writes: state is not
-versioned, so an agent's write could not be undone), and asset metadata reads. Creation never
-binds or narrows a library grant. State routes retain viewer semantics for people,
-but require ownership for agent principals, so incoming shares are 404 too.
-The route allowlist excludes pages, partials, account/admin, shares/grants,
-origins, history/restore, artifact deletion, tags/collections, duplicate,
-refetch and import/export. Existing agent field restrictions remain in force.
-Versions record `origin=agent`, the owner's label as message, and `grant:<id>`
-as session. Pi retains its process-lifetime one-artifact scope.
-`GET /api/agent/credential` describes the authenticated scope without a second
-store lookup; the remote MCP service checks it on every request without caching.
-
-Screenshot: [Connected agents after issuance](screenshots/Exh-l2xj/01-connected-agents.png).
-
-### Built-in MCP authorization server (Exh-rhlq)
-
-With `MCP_URL` configured, the **core** serves RFC 8414 metadata at
-`/.well-known/oauth-authorization-server` and `/oauth/register`,
-`/oauth/authorize` (GET consent and POST decision), and `/oauth/token`.
-All return 404 without `MCP_URL`. The separate MCP service continues to serve
-only the MCP transport and its protected-resource metadata, naming `APP_ORIGIN`
-as issuer. Both authorization and token exchange require `resource=MCP_URL`.
-
-Open registration accepts public clients and signs their name and redirect URIs
-into an `exclient_…` id with `Secrets.DeriveKey("oauth-client-id")`; there is no
-client table or secret. Authorization codes are single-use, five-minute entries
-in a bounded in-memory store (1024), bound to client, redirect, owner, resource
-and PKCE S256 challenge. Restarting the core drops pending codes. Exchanging a
-session-issued code atomically requires its approving account to still exist and
-be enabled; no-login grants retain support for an owner without a users row.
-
-The page group supplies the existing local, OIDC or Clerk session, preserving
-the full consent URL through sign-in; on a no-login instance the operator may
-approve. Public/read-only visitors and agent credentials may not. Consent names
-the client and redirect host, describes whole-library access and offers Approve
-or Deny. It has no artifact picker and cannot be framed. Approval ultimately
-issues the same persisted library grant as Settings, with client name in both
-`label` and `client`: no expiry, no refresh token, ordinary API policy, and
-revocation in **Settings → Connected agents**. Saved data remains read-only.
-
-### External-agent MCP tools (Exh-q6xo)
-
-`internal/mcpserver` implements the library tool surface using the official Go
-SDK. It reaches Exhibit only through its HTTP API, behind an `API` interface.
-The optional MCP service supplies the transport; the tools add no routes to
-the core server.
-
-Tools search the owner's library, create artifacts, read/edit/write source and
-widgets, and read saved state. Every per-artifact tool requires `artifact_id`;
-search returns compact metadata (20 results by default, at most 50). Each
-connection gets its own MCP server and a revision map keyed by artifact id. Source/widget reads and
-saves are serialized per artifact; saves require a remembered revision and advance
-it only on success. Creation remembers the returned source revision. Conflicts
-require a deliberate re-read and reconciliation, never an automatic retry.
-Saved state is read-only for library grants. Network approvals remain with the
-owner.
-
-`internal/agentguidance` shares the artifact, storage, widget and untrusted
-tool-result guidance with Pi without changing its prompt output. MCP adds
-search-first discovery and asks the user to resolve ambiguous matches. An MCP client
-exercises the tools over in-memory transport against the real HTTP router with
-a fresh temporary database and blob directory.
+Connection steps and tool reference: [agent.md](agent.md). Endpoint reference:
+[api.md](api.md). [Connected agents](screenshots/Exh-rhlq/02-connected-agents.png).
 
 ### Hosted authentication
 
@@ -1150,6 +1119,7 @@ A share lives until deleted. There is no expiry, and `POST /api/shares` refuses 
 | Object-storage bodies | Blob interface | **done** (av-52ll) |
 | Tier-2 React | Render surface | in-iframe Babel, then esbuild |
 | Chat-UI ingest | API | Chrome extension as a new client |
+| External agents | library grants + HTTP API + optional MCP satellite (§3.6–3.7) | **done**: remote tools and built-in OAuth; Pi remains a separate harness (Exh-17a5) |
 
 ## 9. What this architecture deliberately is not
 

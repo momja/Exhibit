@@ -207,6 +207,11 @@ share_links(id, artifact_id UNIQUE)
 share_grants(artifact_id, recipient_id, created_at, PRIMARY KEY (artifact_id, recipient_id))
 -- Both cascade with the artifact; grants also cascade with the recipient.
 -- Card sharing indicators are computed by COUNT / EXISTS, not stored rollups.
+-- Connected agents act across one owner's own library (§8.7, Exh-l2xj).
+-- Only the digest is stored; a token is shown once and lives until revoked.
+-- No users FK: a no-login owner need not have a users row. Account deletion
+-- removes these grants explicitly.
+agent_grants(id, token_hash UNIQUE, owner_id, label, client, created_at, last_used_at)
 ```
 
 ### 4.5 Identity & auth
@@ -642,6 +647,25 @@ the artifact alone. Rolling back is what the conversation was about, so it is th
 primary choice; leaving the artifact as it is is the way out of it, and never the
 primary one. Either way the agent is told the artifact may have changed and reads it
 again before it changes anything.
+
+### 8.7 Use your own agent
+
+Connect the agent you already use to Exhibit through MCP, when the operator has
+enabled it (Exh-17a5). **Settings → Connected agents** shows the MCP address and
+Claude Code command up front. Copy the address or command, sign in and approve
+access to your library. For clients without browser sign-in, that panel offers
+fallback token issuance; copy the token once. Ask for “my water tracker”:
+the agent searches your library, finds the tool, and changes it through the same
+API as the built-in agent. Every source or widget change is a version you can
+restore.
+
+The connection covers **your own library**, not artifacts shared with you. It
+can read saved data to understand a tool, but cannot write or erase it: a saved
+note has no independently restorable version of its own. Sharing and deletion
+remain yours. Treat the connected agent like a device you leave signed in;
+Settings lists every connection and its last use, and revoking one stops its
+next request. Securing that agent and where it keeps the token is your job.
+Connection steps: `agent.md`.
 
 ## 9. Explicit non-goals
 

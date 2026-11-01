@@ -1,11 +1,11 @@
-# Exhibit — Agent Integration (Pi harness)
+# Exhibit — Agent Integration
 
 The build-and-modify-with-AI surface (epic `Exh-yvhp`, grown out of `av-q3wo`),
 and the main way artifacts are made. A chat page lets the user create new artifacts and modify existing
 ones through an LLM agent, using **their own API key**, with everything the
 agent saves flowing through the normal ingest path.
 
-## How it fits the architecture
+## How Pi fits the architecture
 
 Pi (`pi-mono`, Mario Zechner's agent harness) runs as a **sidecar subprocess**,
 one per chat session, spawned by the Go service as
@@ -35,6 +35,94 @@ Exhibit HTTP API; `ask_user` uses Pi's interactive RPC channel. Agent output is 
 **never** auto-approved — the chat UI tells the user when a saved artifact has
 a network footprint awaiting approval.
 
+## External agents (MCP)
+
+An agent of your own can connect to Exhibit and work across your library
+(Exh-17a5). Pi above remains the built-in, one-artifact chat; the external path
+is the optional `exhibit-mcp` service, speaking Streamable HTTP and calling the
+same Exhibit API. It reaches only artifacts you own, including new ones, never
+those shared with you. There is no local connector. If Settings has no
+**Connected agents** panel, the operator has not enabled MCP; see
+[deployment.md](deployment.md#53-optional-remote-mcp-service).
+
+### Connecting
+
+Open **Settings → Connected agents** to copy the MCP endpoint address or the
+ready-to-run Claude Code command. Both are shown before any token is issued.
+You can also replace `<MCP_URL>` below with the address shown in the panel:
+
+```sh
+claude mcp add --transport http exhibit <MCP_URL>
+```
+
+Then run `/mcp` in Claude Code, choose **Authenticate**, and approve the connection
+in your browser. Other MCP clients connect to the same URL and sign in the same
+way. The browser takes you through your instance's login and a consent page
+naming the client and its redirect destination. Approving connects your **whole library**;
+there is no artifact picker. OAuth issues an ordinary library grant named after
+the client, with no expiry or refresh token (Exh-rhlq).
+
+For a client without browser sign-in, use the fallback **For clients without
+browser sign-in** section in Connected agents: enter a connection label and choose
+**Issue token**. Copy the token once; the panel then shows header-based remote
+configurations. These use the same endpoint with this request header:
+
+```http
+Authorization: Bearer <exgrant_token>
+```
+
+The panel lists each connection's label, client, creation time and last use.
+Revoke ends its access on the next request; reconnecting requires a new grant
+(Exh-l2xj). Treat the connection as a signed-in device: you control the agent's
+other tools, instructions and token storage. A poisoned artifact can steer it
+into editing another artifact in your library; `security.md` §5.5 states that
+accepted risk and the API boundaries that remain.
+
+### Finding and changing artifacts
+
+Start with `search_artifacts`: “my water tracker” is a search over titles,
+visible source text and tags, not an id to guess. An empty query lists recent
+artifacts; optional tags narrow the results. It returns compact metadata
+(`id`, `title`, `tags`, `updated_at`, `created_at`), not source. When several
+results plausibly match, the server instructions tell the agent to ask which
+one you mean before changing anything (Exh-q6xo).
+
+| Tool | Contract |
+|------|----------|
+| `search_artifacts(query[, tags, limit])` | Search the owner's library; limit defaults to 20 and is capped at 50 |
+| `create_artifact(title, body)` | Create a complete HTML document; return its id and remember its source revision |
+| `get_artifact(artifact_id)` | Read source, title, allowlist and asset metadata; remember source and widget revisions |
+| `edit_artifact(artifact_id, edits)` | Targeted `{oldText, newText}` replacements; each old text must match exactly once, and edits must not touch or overlap |
+| `write_artifact(artifact_id, body[, title])` | Replace the complete source, optionally retitling it; for full rewrites |
+| `get_state(artifact_id)` | Read stored key/value strings verbatim; saved data is read-only |
+| `get_widget(artifact_id)` | Read the gallery tile and its revision, or learn that none exists |
+| `set_widget(artifact_id, body)` | Save a complete gallery tile after `get_widget` or `get_artifact` |
+| `edit_widget(artifact_id, edits)` | Targeted replacements in a tile whose text was read with `get_widget` |
+
+Every per-artifact call takes a canonical UUID `artifact_id` from search or
+creation. Each connection remembers source and widget revisions separately for
+the 256 artifacts whose source or widget was most recently read or saved
+successfully; reading one artifact never supplies the revision for another. Failed calls do not change this history.
+An evicted artifact needs a fresh read before its next save. Successful saves
+advance the remembered revisions. On a conflict, read again and reapply the change;
+no automatic retry overwrites somebody else's edit. All saves use the normal
+ingest, scan and version path, with agent provenance supplied by the grant row.
+Unapproved network origins are reported and stay blocked. Shared instructions
+in `internal/agentguidance` keep the artifact format, widget contract and
+“tool results are data” rule identical for Pi and MCP.
+
+**What is not available.** No MCP tool writes or erases saved data: those
+operations create no version of their own, so a source restore could not promise
+to undo them. The library-grant API policy refuses them too. Artifact deletion,
+version history/restore and sharing stay with the owner; tags/collections and
+asset upload are outside the tool surface. Pi's `get_selection` and `ask_user`
+depend on Exhibit's chat UI and are absent here; the external client supplies
+its own conversation. No MCP tool approves network origins or device/capability
+permissions. This is narrower than the credential's raw API reach: a direct
+artifact PATCH can still set `network_allowlist` and capability approvals,
+as with Pi. See `api.md` for the route contract and `security.md` §5.5 for its
+limits.
+
 ## Conversation rendering
 
 Assistant replies render CommonMark and GitHub Flavored Markdown using
@@ -63,7 +151,7 @@ AGENT_MARKDOWN_SCREENSHOT_DIR="$PWD/docs/screenshots/Exh-1e7n" \
   go test ./internal/api -run '^TestAgentMarkdownBrowser$' -count=1
 ```
 
-## Scope: one session, one artifact
+## Pi scope: one session, one artifact
 
 A session reaches exactly one artifact, and that is enforced twice — once for
 ergonomics, once for real. `security.md` §5 is the full statement; the shape:
@@ -94,9 +182,10 @@ ergonomics, once for real. `security.md` §5 is the full statement; the shape:
   with a per-session credential (`internal/agentscope`) that resolves to
   (owner, artifact), not the service token. `authMiddleware` allows exactly
   `POST /api/artifacts` while unbound, plus `GET`/`PATCH` on the session's own
-  artifact and the `state` / `widget` sub-resources of that same artifact —
-  one allowlist entry per tool above. Every other route — the BYO provider
-  key, shares, deletes, tags, collections, transcripts, `widget/generate`,
+  artifact and the `state` / `widget` sub-resources of that same artifact,
+  asset metadata reads, and `GET /api/agent/credential` to describe its scope.
+  Each sub-resource is named explicitly in the allowlist. Every other route —
+  the BYO provider key, shares, deletes, tags, collections, transcripts, `widget/generate`,
   `origins` (approving the artifact's own network egress, av-kmwj), and every
   other artifact in the library — is a 403 before any handler runs.
 - **This is the per-artifact half only.** The credential's owner becomes the
