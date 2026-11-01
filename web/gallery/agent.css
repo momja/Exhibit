@@ -198,6 +198,14 @@ body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(-
 body.mobile-panes.show-preview .chat{visibility:hidden}
 body.mobile-panes.show-preview .preview{visibility:visible}
 @media (max-width:640px){
+  /* Fit a cold navigation before the deferred module arrives. Once initialized,
+     only syncPaneSemantics owns pane visibility, including across resizes. */
+  body:not(.pane-layout-ready) .pane-switch{display:block}
+  body:not(.pane-layout-ready) .pane-resizer{display:none}
+  body:not(.pane-layout-ready) .layout{display:grid;grid-template:minmax(0,1fr)/minmax(0,1fr)}
+  body:not(.pane-layout-ready) .chat,body:not(.pane-layout-ready) .preview{grid-area:1/1;width:100%;min-width:0;min-height:0}
+  body:not(.pane-layout-ready) .chat{border-right:none}
+  body:not(.pane-layout-ready) .preview{visibility:hidden}
   /* dvh keeps the composer above the mobile URL bar instead of under it. */
   body{height:100dvh}
   .pv-nudge{display:inline-flex}
