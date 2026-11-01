@@ -64,12 +64,13 @@ type Config struct {
 }
 
 type Service struct {
-	cfg         Config
-	mu          sync.Mutex
-	flows       map[string]oauthFlow
-	locks       sync.Map
-	standins    map[string]standinBinding
-	vendorFlows map[string]vendorFlow
+	cfg             Config
+	mu              sync.Mutex
+	flows           map[string]oauthFlow
+	locks           sync.Map
+	vendorFlowLocks vendorFlowLocks
+	standins        map[string]standinBinding
+	vendorFlows     map[string]vendorFlow
 }
 
 func New(cfg Config) *Service {
@@ -750,8 +751,8 @@ func (s *Service) Do(ctx context.Context, viewerID int64, artifactID string, req
 		return nil, ErrEgress
 	}
 	hash := requestCacheKey(req)
-	cacheable := r.CacheSeconds > 0 && req.Method == http.MethodGet && (req.Body == nil || req.Body == http.NoBody)
-	if cacheable {
+	cacheable := r.CacheSeconds > 0 && req.Method == http.MethodGet && (req.Body == nil || req.Body == http.NoBody) && !hasCacheControlDirective(req.Header, "no-store")
+	if cacheable && !hasCacheControlDirective(req.Header, "no-cache") {
 		sealed, e := s.cfg.Store.GetConnectionCache(ctx, rec.ID, hash, s.cfg.Now())
 		if e == nil {
 			plain, e := s.cfg.Box.Decrypt(sealed)
@@ -762,7 +763,7 @@ func (s *Service) Do(ctx context.Context, viewerID int64, artifactID string, req
 			if e != nil {
 				return nil, e
 			}
-			if usable {
+			if usable && !responseForbidsCaching(cached.Header) {
 				snapshot.ExtraSecrets = append(snapshot.ExtraSecrets, c.ExtraSecrets...)
 				// The cache is connection-wide; stand-ins are viewer-local and
 				// expire. Scrub the encrypted original for this delivery only.
@@ -773,6 +774,9 @@ func (s *Service) Do(ctx context.Context, viewerID int64, artifactID string, req
 					return nil, e
 				}
 				return cached, nil
+			}
+			if e = s.cfg.Store.DeleteConnectionCache(ctx, rec.ID, hash); e != nil {
+				return nil, e
 			}
 		} else if !errors.Is(e, store.ErrNotFound) {
 			return nil, e
@@ -842,7 +846,14 @@ func (s *Service) Do(ctx context.Context, viewerID int64, artifactID string, req
 		return nil, errors.New("connection provider request failed")
 	}
 	var cacheEntry []byte
-	if cacheable && response.Status >= 200 && response.Status < 300 && response.Status != http.StatusPartialContent && !varyWildcard(response.Header) {
+	if cacheable && responseForbidsCaching(response.Header) {
+		// A forced refresh may replace a previously reusable representation
+		// with one the provider no longer permits us to retain.
+		if err = s.cfg.Store.DeleteConnectionCache(ctx, rec.ID, hash); err != nil {
+			return nil, err
+		}
+	}
+	if cacheable && response.Status >= 200 && response.Status < 300 && response.Status != http.StatusPartialContent && !varyWildcard(response.Header) && !responseForbidsCaching(response.Header) {
 		if err = responseSizeAllowed(response); err != nil {
 			return nil, err
 		}
@@ -865,7 +876,8 @@ func (s *Service) Do(ctx context.Context, viewerID int64, artifactID string, req
 		if e != nil {
 			return nil, e
 		}
-		if e = s.cfg.Store.PutConnectionCache(ctx, rec.ID, hash, sealed, s.cfg.Now().Add(time.Duration(r.CacheSeconds)*time.Second)); e != nil {
+		now := s.cfg.Now()
+		if e = s.cfg.Store.PutConnectionCache(ctx, rec.ID, hash, sealed, now, now.Add(time.Duration(r.CacheSeconds)*time.Second)); e != nil {
 			return nil, e
 		}
 	}
@@ -876,17 +888,36 @@ func requestCacheKey(req *http.Request) string {
 	// Include every frame-controlled representation header the common gate
 	// forwards. Stand-ins and discarded headers never split a shared cache,
 	// while ranges, language and conditional requests cannot reuse each other.
+	// Cache-Control governs reuse, so a refresh replaces the same entry.
 	headers := make(http.Header)
 	for key, values := range req.Header {
 		key = http.CanonicalHeaderKey(key)
 		switch key {
-		case "Accept", "Accept-Language", "Content-Type", "If-Match", "If-None-Match", "If-Modified-Since", "If-Unmodified-Since", "Range", "If-Range", "Cache-Control":
+		case "Accept", "Accept-Language", "Content-Type", "If-Match", "If-None-Match", "If-Modified-Since", "If-Unmodified-Since", "Range", "If-Range":
 			headers[key] = append(headers[key], values...)
 		}
 	}
 	raw, _ := json.Marshal(headers) // Header contains only JSON-safe string slices.
 	sum := sha256.Sum256([]byte(req.Method + "\n" + req.URL.String() + "\n" + string(raw)))
 	return hex.EncodeToString(sum[:])
+}
+
+func hasCacheControlDirective(header http.Header, directive string) bool {
+	for _, value := range header.Values("Cache-Control") {
+		for _, field := range strings.Split(value, ",") {
+			name, _, _ := strings.Cut(field, "=")
+			if strings.EqualFold(strings.TrimSpace(name), directive) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func responseForbidsCaching(header http.Header) bool {
+	// We do not revalidate stored responses, so even field-qualified
+	// no-cache directives require fetching the response again.
+	return hasCacheControlDirective(header, "no-store") || hasCacheControlDirective(header, "no-cache")
 }
 
 func varyWildcard(header http.Header) bool {

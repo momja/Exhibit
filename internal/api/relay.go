@@ -239,8 +239,10 @@ func (ro *Router) performRelay(w http.ResponseWriter, r *http.Request) {
 		}
 		req.Header.Set(k, v)
 	}
-	if input.Cache == "no-store" || input.Cache == "no-cache" || input.Cache == "reload" {
-		req.Header.Set("Cache-Control", "no-cache")
+	if input.Cache == "no-store" {
+		req.Header.Add("Cache-Control", "no-store")
+	} else if input.Cache == "no-cache" || input.Cache == "reload" {
+		req.Header.Add("Cache-Control", "no-cache")
 	}
 	response, err := ro.executeRelay(r.Context(), ownerIDFromCtx(r.Context()), a, req)
 	if err != nil {

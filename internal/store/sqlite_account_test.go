@@ -55,10 +55,13 @@ const (
 	reachCascade  = "ON DELETE CASCADE from a row DeleteAccount deletes"
 	reachTrigger  = "an AFTER DELETE trigger on the row DeleteAccount deletes"
 	reachNone     = "holds nothing belonging to an account"
+	reachRetained = "retained until external account cleanup is complete"
 )
 
 var accountTables = map[string]accountTable{
-	"hosted_account_deletions": {reachNone,
+	"pending_vendor_connections": {reachRetained,
+		"durable remote revocation work survives unexpected erasure; API deletion drains it first, and maintenance retries without retaining library payloads", ""},
+	"hosted_account_deletions": {reachRetained,
 		"identity fences and durable provider-deletion work survive erasure; no library payload is retained", ""},
 	"artifact_relay_grants": {reachTrigger, "relay_account_delete erases viewer consent, including on another owner's artifact", "SELECT COUNT(*) FROM artifact_relay_grants WHERE viewer_id = ?1"},
 	"relay_activity":        {reachTrigger, "relay_account_delete erases the viewer's request metadata", "SELECT COUNT(*) FROM relay_activity WHERE viewer_id = ?1"},
@@ -217,7 +220,7 @@ func TestEveryTableIsAccountedForInAccountDeletion(t *testing.T) {
 		"a table with no row in accountTables (internal/store/sqlite_account_test.go) is a table "+
 			"nobody has said what account deletion does about. Add one — reachExplicit if "+
 			"DeleteAccount must delete it, reachCascade/reachTrigger if the schema already "+
-			"does, reachNone with the reason it holds nothing belonging to a person.")
+			"does, reachRetained for durable external cleanup, or reachNone with the reason it holds nothing belonging to a person.")
 
 	// And the reverse: a row for a table that no longer exists is a stale
 	// claim, which is how a list stops describing the thing it walks.
@@ -298,7 +301,7 @@ func seedEverything(t *testing.T, s *SQLiteStore) accountFixture {
 	require.NoError(t, s.CreateConnection(ctx, &ConnectionRecord{ID: "member-connection", OwnerID: member.ID, Name: "member account", Provider: "bearer", Kind: "native", RecipeJSON: `{"origins":["https://api.example.test"]}`, EncryptedSecret: "sealed"}, -1))
 	require.NoError(t, s.PutConnectionGrant(ctx, ConnectionGrantRecord{ArtifactID: deletedArtifact, ConnectionID: "member-connection", ViewerID: member.ID}))
 	require.NoError(t, s.ReserveConnectionRequest(ctx, "member-connection", 24, time.Now()))
-	require.NoError(t, s.PutConnectionCache(ctx, "member-connection", "hash", "sealed", time.Now().Add(time.Hour)))
+	require.NoError(t, s.PutConnectionCache(ctx, "member-connection", "hash", "sealed", time.Now(), time.Now().Add(time.Hour)))
 	_, err = s.RequestArtifactConnection(ctx, member.ID, deletedArtifact, "basic", "Read my accounts")
 	require.NoError(t, err)
 	require.NoError(t, s.SaveTranscript(ctx, member.ID, Transcript{ArtifactID: deletedArtifact, SessionID: "sess-1", SessionFile: "{}\n"}))

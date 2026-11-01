@@ -132,6 +132,26 @@ removed. A failed remote-account cleanup leaves repair retryable.
 Migration 048 pins earlier managed connections to Nango and resolves their
 legacy encrypted reference without transferring credentials between vendors.
 
+Migration 051 records unfinished managed authorizations before authentication
+starts. If consent succeeds but local completion fails (for example, because
+the account limit changed), Exhibit revokes the unused remote account. Failed
+revocation stays in a durable queue and is retried by maintenance after restart.
+Abandoned authorizations are also cleaned up; Nango flow ownership remains
+until the provider's authentication session expires. Cleanup checks for an
+already-saved account before revoking, and account deletion drains unfinished
+authorizations as well as saved connections. A failed attempt to retire the old
+account during reconnect keeps that repair retryable and its grants intact.
+
+Indeterminate provider outcomes need operator attention: a lost Composio setup
+response can omit the remote account ID, and a Nango response can omit a usable
+session expiry. Exhibit retains these records in `pending_vendor_connections`
+for operator reconciliation. Keep the original engine configured,
+reconcile the pinned owner/provider/flow metadata against the vendor account,
+and remove a pending record only after confirming no remote authorization
+remains. These pending authorizations are separate from the saved-connection
+count in Vendor usage. Live vendor reconciliation remains part of staging
+validation; this epic adds no provider catalog.
+
 Operators can inspect **Vendor usage** on the Connections page or
 `GET /api/admin/connector-usage`. It reports the current UTC month's management,
 injected-provider and forwarded-provider attempts per engine/provider, plus
@@ -361,8 +381,21 @@ redirect destinations. Credential-free GET responses are cached only with
 explicit public `Cache-Control` freshness, scoped to viewer, artifact and policy;
 the cache caps TTL at five minutes and memory at 16 MiB. Generic connections
 add their user's persistent daily limit and encrypted response reuse policy,
-so repeated page opens need not spend provider quota. Connector responses scrub
-reflected credential material before delivery. Activity and relay logs contain
+so repeated page opens need not spend provider quota. Empty browser GETs use
+this cache too. `no-cache` and browser `reload` fetch a fresh response and
+replace the reusable entry; `no-store` bypasses both reading and writing it.
+Provider responses marked `no-store` or `no-cache` are not retained.
+
+The persistent connector cache holds at most 64 entries / 32 MiB per connection
+and 1,024 entries / 256 MiB across the instance, measured as encrypted bytes.
+Entries cannot exceed 12 MiB each. Writes evict the soonest-expiring entries
+within both budgets. Expired entries are deleted on reads and writes, and
+maintenance runs at startup and every six hours even with connectors disabled.
+Deleted SQLite pages can be reused; these limits bound retained cache data,
+not the database file's historical high-water size.
+
+Connector responses scrub reflected credential material before delivery.
+Activity and relay logs contain
 only owner/artifact, origin, method, status, bytes and latency: no bodies, access
 URLs, request paths or query strings.
 
@@ -370,8 +403,12 @@ URLs, request paths or query strings.
 
 The artifact's connection page can schedule a credential-free GET URL, a saved
 state key and an interval of one hour to one year. A stable random initial
-offset spreads provider traffic; workers claim due rows and recheck access,
+offset spreads provider traffic; workers claim due rows and recheck account access,
 entitlements, origin approval, relay grants and matching connector authorization at execution.
+Disabled accounts cannot start a refresh, even when entitlement limits are off.
+The worker rechecks account access before saving a response, so disabling an
+account during a request preserves its previous saved data. Jobs remain
+scheduled and can resume when the account is enabled again.
 Only a successful UTF-8 text/JSON response of at most one MiB replaces the key;
 errors preserve the previous value. A worker never interprets JavaScript,
 templates or provider responses as code. Widgets only read saved state.

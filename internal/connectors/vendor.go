@@ -163,14 +163,15 @@ type VendorConnectionSpec struct {
 }
 
 type vendorFlow struct {
-	ownerID  int64
-	provider string
-	binding  [32]byte
-	expires  time.Time
-	resultID string
-	request  VendorFlowRequest
-	setup    SetupContext
-	repair   *store.ConnectionRecord
+	ownerID        int64
+	provider       string
+	binding        [32]byte
+	expires        time.Time
+	cleanupExpires time.Time
+	resultID       string
+	request        VendorFlowRequest
+	setup          SetupContext
+	repair         *store.ConnectionRecord
 }
 
 type VendorProviderInfo struct {
@@ -259,6 +260,9 @@ func (s *Service) BeginVendorFor(ctx context.Context, ownerID int64, provider st
 	if spec.DeliveryMode != engine.DeliveryMode() {
 		return nil, ErrInvalid
 	}
+	if engine.ID() == "composio" && spec.AuthConfigID == "" {
+		return nil, ErrInvalid
+	}
 	list, err := s.List(ctx, ownerID)
 	if err != nil {
 		return nil, err
@@ -275,11 +279,12 @@ func (s *Service) BeginVendorFor(ctx context.Context, ownerID int64, provider st
 	id := randomToken()
 	request := VendorFlowRequest{ID: id, OwnerTag: ownerTag, Provider: provider, Spec: spec}
 	flow := vendorFlow{ownerID: ownerID, provider: provider, binding: sha256.Sum256([]byte(binding)), expires: s.cfg.Now().Add(30 * time.Minute), request: request, setup: setup, repair: repair}
+	release := s.vendorFlowLocks.acquire(id)
+	defer release()
 	s.mu.Lock()
 	for oldID, f := range s.vendorFlows {
 		if !f.expires.After(s.cfg.Now()) {
 			delete(s.vendorFlows, oldID)
-			s.locks.Delete("vendor-flow:" + oldID)
 		}
 	}
 	if len(s.vendorFlows) >= 512 {
@@ -288,14 +293,39 @@ func (s *Service) BeginVendorFor(ctx context.Context, ownerID int64, provider st
 	}
 	s.vendorFlows[id] = flow
 	s.mu.Unlock()
-	result, err := engine.Start(ctx, request)
-	if err != nil {
+	if err := s.cfg.Store.CreatePendingVendorConnection(ctx, pendingVendorConnection(flow)); err != nil {
 		s.mu.Lock()
 		delete(s.vendorFlows, id)
 		s.mu.Unlock()
 		return nil, err
 	}
-	flow.request.ExternalRef = result.ExternalRef
+	result, err := engine.Start(ctx, request)
+	if result != nil {
+		flow.request.ExternalRef = result.ExternalRef
+		if expires, parseErr := time.Parse(time.RFC3339, result.ExpiresAt); parseErr == nil {
+			flow.cleanupExpires = expires
+		}
+	}
+	if err != nil {
+		s.mu.Lock()
+		delete(s.vendorFlows, id)
+		s.mu.Unlock()
+		if flow.request.ExternalRef != "" {
+			return nil, errors.Join(err, s.abortVendorFlow(ctx, flow))
+		}
+		var failure *VendorError
+		if engine.ID() == "nango" || errors.As(err, &failure) && failure.HTTPStatus >= 400 && failure.HTTPStatus < 500 && failure.HTTPStatus != http.StatusRequestTimeout {
+			// Nango has created only a session whose link was never delivered.
+			// An explicit client rejection also did not create a remote account.
+			_ = s.cfg.Store.DeletePendingVendorConnection(context.WithoutCancel(ctx), ownerID, id)
+		}
+		// An indeterminate Composio POST may have created an account even
+		// without a usable response. Keep its reconciliation record.
+		return nil, err
+	}
+	if err := s.cfg.Store.UpdatePendingVendorConnection(ctx, pendingVendorConnection(flow)); err != nil {
+		return nil, errors.Join(err, s.abortVendorFlow(ctx, flow))
+	}
 	s.mu.Lock()
 	s.vendorFlows[id] = flow
 	s.mu.Unlock()
@@ -323,10 +353,8 @@ func (s *Service) CompleteVendorFor(ctx context.Context, ownerID int64, binding,
 	if !exists {
 		return nil, false, nil, ErrInvalid
 	}
-	lock, _ := s.locks.LoadOrStore("vendor-flow:"+id, &sync.Mutex{})
-	mu := lock.(*sync.Mutex)
-	mu.Lock()
-	defer mu.Unlock()
+	release := s.vendorFlowLocks.acquire(id)
+	defer release()
 	s.mu.Lock()
 	flow, ok := s.vendorFlows[id]
 	s.mu.Unlock()
@@ -335,6 +363,9 @@ func (s *Service) CompleteVendorFor(ctx context.Context, ownerID int64, binding,
 		return nil, false, nil, fmt.Errorf("%w: managed OAuth session expired or did not match this browser", ErrInvalid)
 	}
 	if err := s.validateSetup(ctx, ownerID, flow.setup); err != nil {
+		if flow.resultID == "" {
+			err = errors.Join(err, s.abortVendorFlow(ctx, flow))
+		}
 		return nil, false, nil, err
 	}
 	if flow.resultID != "" {
@@ -353,11 +384,39 @@ func (s *Service) CompleteVendorFor(ctx context.Context, ownerID int64, binding,
 	if err != nil || !complete {
 		return nil, false, nil, err
 	}
+	flow.request.ExternalRef = ref
+	if err := s.cfg.Store.UpdatePendingVendorConnection(ctx, pendingVendorConnection(flow)); err != nil {
+		return nil, false, nil, errors.Join(err, s.abortVendorFlow(ctx, flow))
+	}
+	c, err := s.completeVendorFlow(ctx, flow, name, limits)
+	if err != nil {
+		var pending *vendorRetirementPending
+		if errors.As(err, &pending) {
+			return nil, false, &flow.setup, err
+		}
+		return nil, false, nil, errors.Join(err, s.abortVendorFlow(ctx, flow))
+	}
+	flow.resultID = c.ID
+	s.mu.Lock()
+	s.vendorFlows[id] = flow
+	s.mu.Unlock()
+	// If this bookkeeping fails, maintenance recognizes the saved reference
+	// and discards the pending row without revoking the adopted account.
+	_ = s.cfg.Store.DeletePendingVendorConnection(ctx, ownerID, id)
+	return c, true, &flow.setup, nil
+}
+
+func (s *Service) completeVendorFlow(ctx context.Context, flow vendorFlow, name string, limits Limits) (*Connection, error) {
+	ownerID, ref := flow.ownerID, flow.request.ExternalRef
 	if strings.TrimSpace(name) == "" {
 		name = flow.request.Spec.Name
 	}
 	if err := s.validateSetup(ctx, ownerID, flow.setup); err != nil {
-		return nil, false, nil, err
+		return nil, err
+	}
+	engine, err := s.vendorEngine(flow.request.Spec.Engine)
+	if err != nil {
+		return nil, err
 	}
 	var c *Connection
 	if flow.repair != nil {
@@ -367,38 +426,31 @@ func (s *Service) CompleteVendorFor(ctx context.Context, ownerID int64, binding,
 		defer mu.Unlock()
 		current, lookupErr := s.cfg.Store.GetConnection(ctx, ownerID, flow.repair.ID)
 		if lookupErr != nil {
-			return nil, false, &flow.setup, lookupErr
+			return nil, lookupErr
 		}
 		if current.EncryptedSecret != flow.repair.EncryptedSecret || current.RecipeJSON != flow.repair.RecipeJSON {
-			return nil, false, &flow.setup, ErrInvalid
+			return nil, ErrInvalid
 		}
 		r, old, readErr := s.readCredential(current)
 		if readErr != nil {
-			return nil, false, &flow.setup, readErr
+			return nil, readErr
 		}
 		previous, specErr := s.vendorConnectionSpec(ctx, current, r, old)
 		if specErr != nil {
-			return nil, false, &flow.setup, specErr
+			return nil, specErr
 		}
 		// Retire the previous remote account before losing its durable identity.
 		// A refusal leaves this flow retryable and all local grants intact.
 		if previous.ExternalRef != ref {
 			if err := engine.Revoke(ctx, previous); err != nil {
-				return nil, false, &flow.setup, err
+				return nil, &vendorRetirementPending{err}
 			}
 		}
 		c, err = s.repairCredential(ctx, flow.repair, credential{VendorConnectionID: ref}, ref)
 	} else {
 		c, err = s.saveVendor(ctx, ownerID, name, flow.request.Provider, flow.request.OwnerTag, ref, flow.request.Spec, limits)
 	}
-	if err != nil {
-		return nil, false, nil, err
-	}
-	flow.resultID = c.ID
-	s.mu.Lock()
-	s.vendorFlows[id] = flow
-	s.mu.Unlock()
-	return c, true, &flow.setup, nil
+	return c, err
 }
 
 func (s *Service) saveVendor(ctx context.Context, ownerID int64, name, provider, ownerTag, ref string, spec VendorProvider, limits Limits) (*Connection, error) {
@@ -589,16 +641,15 @@ func (s *Service) PruneIdle(ctx context.Context) (int, error) {
 	if !s.cfg.VendorEnabled {
 		return 0, nil
 	}
+	count, joined := s.cleanupVendorConnections(ctx, 0, s.cfg.Now())
 	days := s.cfg.Vendor.IdleDays
 	if days <= 0 {
 		days = 30
 	}
 	idle, err := s.cfg.Store.ListIdleVendorConnections(ctx, s.cfg.Now().Add(-time.Duration(days)*24*time.Hour))
 	if err != nil {
-		return 0, err
+		return count, errors.Join(joined, err)
 	}
-	count := 0
-	var joined error
 	for _, rec := range idle {
 		if err = s.Revoke(ctx, rec.OwnerID, rec.ID); err != nil {
 			joined = errors.Join(joined, fmt.Errorf("prune connection %s: %w", rec.ID, err))

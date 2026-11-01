@@ -5,6 +5,7 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -135,17 +136,27 @@ func (ro *Router) StartRelaySchedules(ctx context.Context) {
 }
 
 func (ro *Router) StartConnectorMaintenance(ctx context.Context) {
-	if ro.cfg.Connections == nil {
+	cache, canPruneCache := ro.cfg.Store.(interface {
+		PruneConnectionCache(context.Context, time.Time) error
+	})
+	if ro.cfg.Connections == nil && !canPruneCache {
 		return
 	}
 	go func() {
 		ticker := time.NewTicker(6 * time.Hour)
 		defer ticker.Stop()
 		for {
-			if count, err := ro.cfg.Connections.PruneIdle(ctx); err != nil {
-				slog.WarnContext(ctx, "prune idle managed connections failed")
-			} else if count > 0 {
-				slog.InfoContext(ctx, "pruned idle managed connections", slog.Int("count", count))
+			if canPruneCache {
+				if err := cache.PruneConnectionCache(ctx, time.Now()); err != nil {
+					slog.WarnContext(ctx, "prune connection response cache failed")
+				}
+			}
+			if ro.cfg.Connections != nil {
+				if count, err := ro.cfg.Connections.PruneIdle(ctx); err != nil {
+					slog.WarnContext(ctx, "prune idle managed connections failed")
+				} else if count > 0 {
+					slog.InfoContext(ctx, "pruned idle managed connections", slog.Int("count", count))
+				}
 			}
 			select {
 			case <-ctx.Done():
@@ -178,6 +189,9 @@ func (ro *Router) runRelaySchedules(ctx context.Context, now time.Time) {
 }
 
 func (ro *Router) refreshSchedule(ctx context.Context, job store.RelaySchedule) (int, string) {
+	if enabled, err := ro.scheduledAccountEnabled(ctx, job.ViewerID); err != nil || !enabled {
+		return 0, "Account access is no longer available or could not be verified."
+	}
 	a, err := ro.cfg.Store.GetArtifactReadableBy(ctx, store.ViewerID(job.ViewerID), job.ArtifactID)
 	if err != nil || a == nil {
 		return 0, "Access to this artifact is no longer available."
@@ -215,6 +229,9 @@ func (ro *Router) refreshSchedule(ctx context.Context, job store.RelaySchedule) 
 	}
 	ro.connectionDataMu.Lock()
 	defer ro.connectionDataMu.Unlock()
+	if enabled, err := ro.scheduledAccountEnabled(ctx, job.ViewerID); err != nil || !enabled {
+		return response.Status, "Account access changed during the refresh. The response was not saved."
+	}
 	current, err := ro.cfg.Store.GetArtifactReadableBy(ctx, store.ViewerID(job.ViewerID), a.ID)
 	if err != nil || current == nil {
 		return response.Status, "Access changed before the response could be saved."
@@ -227,4 +244,19 @@ func (ro *Router) refreshSchedule(ctx context.Context, job store.RelaySchedule) 
 		return response.Status, "Could not save the response. The previous data was kept."
 	}
 	return response.Status, ""
+}
+
+// Scheduled work has no browser session for auth middleware to revoke. Check
+// the account itself, independently of whether entitlement limits are enabled.
+// Only the default owner of a single-user instance can operate without a user
+// row; a missing account elsewhere, or a failed read, grants no access.
+func (ro *Router) scheduledAccountEnabled(ctx context.Context, viewerID int64) (bool, error) {
+	user, err := ro.cfg.Store.GetUser(ctx, viewerID)
+	if errors.Is(err, store.ErrNotFound) {
+		return viewerID == defaultOwnerID && !ro.loginEnabled(), nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return user != nil && !user.Disabled, nil
 }

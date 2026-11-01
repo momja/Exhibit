@@ -824,6 +824,12 @@ Optional `daily_limit` and `cache_minutes` cap daily provider requests and reuse
 responses across all artifacts and devices; zero means unlimited requests or
 no response reuse, respectively. An optional `artifact_id` preserves the setup
 context and must name a tool readable by the caller. It does not grant access.
+Browser `cache: "reload"` and `cache: "no-cache"` bypass connector cache lookup
+and refresh the entry; `cache: "no-store"` bypasses both lookup and storage.
+Equivalent `Cache-Control` directives apply to direct requests. Responses with
+`no-store` or `no-cache` are not retained. Reuse is best-effort within the
+per-connection and instance storage limits documented in
+[relay-connectors.md](relay-connectors.md).
 
 `POST /api/connections/:connectionID/reconnect` accepts only replacement
 `secret`, `username`, `password` or `access_url` fields, according to the existing
@@ -863,6 +869,9 @@ accepts `{url, state_key, interval_hours}` and stores a successful text response
 viewer's artifact state without executing artifact code. See
 [relay-connectors.md](relay-connectors.md) for exact boundaries and operator
 configuration, and [the runnable examples](../examples/connectors/README.md).
+Scheduled refreshes require an enabled account both before fetching and before
+saving; disabling an account preserves previous data and records the refusal on
+the schedule. Re-enabling the account allows future scheduled attempts.
 
 Removing access or revoking a credential stops future credential use while saved
 responses and unrelated origin approvals remain. Returned data can be sent to

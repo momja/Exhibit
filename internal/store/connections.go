@@ -451,21 +451,6 @@ func (s *SQLiteStore) ReserveConnectionRequest(ctx context.Context, id string, l
 	}
 	return err
 }
-func (s *SQLiteStore) GetConnectionCache(ctx context.Context, id, hash string, now time.Time) (string, error) {
-	var sealed string
-	// Bound retrieval before SQLite copies an old oversized encrypted record
-	// into Go. New entries contain at most 4 MiB decoded body plus metadata;
-	// base64 for the JSON body and encryption accounts for the extra room.
-	err := s.db.QueryRowContext(ctx, `SELECT encrypted_response FROM connection_cache WHERE connection_id=? AND request_hash=? AND expires_at>? AND length(encrypted_response)<=?`, id, hash, now.Unix(), 12<<20).Scan(&sealed)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", ErrNotFound
-	}
-	return sealed, err
-}
-func (s *SQLiteStore) PutConnectionCache(ctx context.Context, id, hash, sealed string, expires time.Time) error {
-	_, err := s.db.ExecContext(ctx, `INSERT INTO connection_cache(connection_id,request_hash,encrypted_response,expires_at) VALUES(?,?,?,?) ON CONFLICT(connection_id,request_hash) DO UPDATE SET encrypted_response=excluded.encrypted_response,expires_at=excluded.expires_at`, id, hash, sealed, expires.Unix())
-	return err
-}
 func (s *SQLiteStore) ListIdleVendorConnections(ctx context.Context, before time.Time) ([]*ConnectionRecord, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT `+connectionColumns+` FROM connections WHERE kind='vendor' AND COALESCE(last_used_at,created_at)<?`, before.UTC().Format("2006-01-02 15:04:05"))
 	if err != nil {

@@ -144,6 +144,10 @@ func TestManagedOAuthRemainsInsideViewerGrantsGateAndIdlePruning(t *testing.T) {
 			require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
 			assert.Equal(t, "tenant:exhibit:1", body["end_user"].(map[string]any)["id"])
 			fmt.Fprint(w, `{"data":{"token":"session-not-provider-secret","connect_link":"https://connect.nango.dev/?session_token=session-not-provider-secret","expires_at":"2026-10-22T08:00:00Z"}}`)
+		case r.URL.Path == "/connections":
+			// This abandoned browser flow created no remote account; the
+			// directly attached legacy account below has separate ownership.
+			fmt.Fprint(w, `{"connections":[]}`)
 		case strings.HasPrefix(r.URL.Path, "/connections/"):
 			assert.Equal(t, "slack", r.URL.Query().Get("provider_config_key"))
 			if r.Method == http.MethodDelete {
@@ -188,7 +192,7 @@ func TestManagedOAuthRemainsInsideViewerGrantsGateAndIdlePruning(t *testing.T) {
 	s.cfg.Now = func() time.Time { return time.Now().Add(45 * 24 * time.Hour) }
 	n, err := s.PruneIdle(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, 1, n)
+	assert.Equal(t, 2, n, "one expired authorization and one idle saved connection")
 	assert.Equal(t, int32(1), deleted.Load())
 	n, err = s.PruneIdle(ctx)
 	require.NoError(t, err)

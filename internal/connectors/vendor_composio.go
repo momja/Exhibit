@@ -41,15 +41,18 @@ func (e composioEngine) Start(ctx context.Context, flow VendorFlowRequest) (*Ven
 	if json.Unmarshal(response.Body, &link) != nil || !composioReference(link.ID) {
 		return nil, vendorFailure(e.ID(), VendorUpstreamError)
 	}
+	// Even an unusable link may have created a remote account. Return its
+	// verified-format identity with the error so the caller can retire it.
+	session := &VendorSession{ID: flow.ID, URL: link.URL, Provider: flow.Provider, ExpiresAt: link.ExpiresAt, ExternalRef: link.ID}
 	u, err := url.Parse(link.URL)
 	if err != nil || u.Scheme != "https" || u.Host != "connect.composio.dev" || u.User != nil || u.Fragment != "" || !strings.HasPrefix(u.Path, "/link/") {
-		return nil, vendorFailure(e.ID(), VendorRefused)
+		return session, vendorFailure(e.ID(), VendorRefused)
 	}
 	expires, err := time.Parse(time.RFC3339, link.ExpiresAt)
 	if err != nil || !expires.After(e.s.cfg.Now()) {
-		return nil, vendorFailure(e.ID(), VendorNeedsReconnect)
+		return session, vendorFailure(e.ID(), VendorNeedsReconnect)
 	}
-	return &VendorSession{ID: flow.ID, URL: link.URL, Provider: flow.Provider, ExpiresAt: link.ExpiresAt, ExternalRef: link.ID}, nil
+	return session, nil
 }
 
 func (e composioEngine) Complete(ctx context.Context, flow VendorFlowRequest) (string, bool, error) {

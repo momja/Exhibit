@@ -376,6 +376,17 @@ func (ro *Router) deleteAccount(w http.ResponseWriter, r *http.Request) {
 // account intact and retrying finishes any remaining external cleanup.
 func (ro *Router) revokeAccountConnections(ctx context.Context, ownerID int64) error {
 	if ro.cfg.Connections == nil {
+		if pending, ok := ro.cfg.Store.(interface {
+			ListPendingVendorConnections(context.Context, int64, time.Time) ([]store.PendingVendorConnection, error)
+		}); ok {
+			rows, err := pending.ListPendingVendorConnections(ctx, ownerID, time.Time{})
+			if err != nil {
+				return err
+			}
+			if len(rows) > 0 {
+				return errors.New("pending remote connector revocation requires its operator configuration")
+			}
+		}
 		if registry, ok := ro.cfg.Store.(interface {
 			ListConnections(context.Context, int64) ([]*store.ConnectionRecord, error)
 		}); ok {
@@ -390,6 +401,9 @@ func (ro *Router) revokeAccountConnections(ctx context.Context, ownerID int64) e
 			}
 		}
 		return nil
+	}
+	if err := ro.cfg.Connections.CleanupVendorConnections(ctx, ownerID); err != nil {
+		return err
 	}
 	connections, err := ro.cfg.Connections.List(ctx, ownerID)
 	if err != nil {

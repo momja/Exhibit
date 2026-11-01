@@ -81,6 +81,29 @@ func (e nangoEngine) Complete(ctx context.Context, flow VendorFlowRequest) (stri
 	return ref, ref != "", nil
 }
 
+// Cleanup discovers even unhealthy accounts: unlike completion, revocation
+// must not forget a billable account merely because its credentials failed.
+func (e nangoEngine) pendingReferences(ctx context.Context, flow VendorFlowRequest) ([]string, error) {
+	query := url.Values{"tags[exhibit_flow]": []string{flow.ID}, "tags[end_user_id]": []string{flow.OwnerTag}}
+	response, err := e.s.vendorAPIRequest(ctx, e.ID(), flow.Provider, http.MethodGet, "/connections?"+query.Encode(), nil, "management")
+	if err != nil {
+		return nil, err
+	}
+	var listing struct {
+		Connections []nangoConnection `json:"connections"`
+	}
+	if json.Unmarshal(response.Body, &listing) != nil {
+		return nil, vendorFailure(e.ID(), VendorUpstreamError)
+	}
+	var refs []string
+	for _, remote := range listing.Connections {
+		if remote.Provider == flow.Provider && remote.Tags["exhibit_flow"] == flow.ID && remote.Tags["end_user_id"] == flow.OwnerTag && remote.Tags["exhibit_owner"] == flow.OwnerTag {
+			refs = append(refs, remote.ID)
+		}
+	}
+	return refs, nil
+}
+
 type nangoConnection struct {
 	ID       string            `json:"connection_id"`
 	Provider string            `json:"provider_config_key"`

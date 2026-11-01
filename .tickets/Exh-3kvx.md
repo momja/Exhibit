@@ -29,3 +29,7 @@ On staging, verify the operator's actual Composio project/plan retention setting
 **2026-10-24T04:29:39Z**
 
 2026-10-24 additive-permission validation: the existing native GitHub Bearer connection and the artifact's separately approved unpkg.com icon assets work together on the running demo, with GitHub relay status 200 and no connection-data notice. No origin/grant/state reset was performed. Two-connection, standalone API/CDN, schedules, legacy metadata and portable parity are fixture-tested, including races. This is native PAT validation; real Basic account, registered OAuth and Nango/Composio staging/retention/cost checks remain open.
+
+**2026-11-01T17:43:30Z**
+
+Review fixes add durable cleanup ownership for failed and abandoned managed authorizations. Staging must also verify revocation retries across restart and late Nango consent, and document operator reconciliation when an indeterminate Composio setup response supplies no account ID or Nango supplies no usable session expiry. Pending rows remain durable and can block account erasure until reconciled; saved-connection usage counts exclude them.

@@ -90,12 +90,15 @@ func (s *Service) Standin(ctx context.Context, viewerID int64, artifactID, id st
 func (s *Service) checkStandinMisuse(viewerID int64, artifactID string, req *http.Request, target string) error {
 	// Copy a bounded body before looking: the common gate applies its full
 	// decoded/body limits too, but stand-ins in a body are forbidden outright.
-	if req.Body != nil {
+	if req.Body != nil && req.Body != http.NoBody {
 		raw, err := io.ReadAll(io.LimitReader(req.Body, (1<<20)+1))
 		_ = req.Body.Close()
 		req.Body = io.NopCloser(bytes.NewReader(raw))
 		if err != nil || len(raw) > 1<<20 {
 			return ErrStandin
+		}
+		if len(raw) == 0 {
+			req.Body = http.NoBody
 		}
 		if bytes.Contains(raw, []byte(standinPrefix)) {
 			return s.standinAlert(viewerID, "", target)

@@ -1691,6 +1691,12 @@ encrypted at rest, and only metadata is logged. Basic access URLs are parsed
 only in trusted app code; credentials and private base paths
 remain encrypted and absent from artifact metadata. Per-connection daily
 request limits and encrypted response reuse apply across artifacts and devices.
+Connector caches honor request `no-cache` / `no-store` and provider cache
+prohibitions. Persistent retention is bounded to 64 entries / 32 MiB per
+connection and 1,024 entries / 256 MiB per instance; expired ciphertext is
+deleted on access, writes and periodic maintenance, including with connectors
+disabled. Scheduled work checks that its account is enabled before provider
+access and again before saving the response.
 Local exports enforce the same boundary with
 opaque frames, exact Host/Origin/session checks and locally acquired secrets.
 The full security and validation contract is in
@@ -1707,3 +1713,9 @@ never enter trusted app DOM or Exhibit activity logs. Native/Nango injection
 continues checking and authorizing each directly dialed hop. Vendor errors are
 normalized without retaining upstream body text. Per-engine anonymous aggregate
 counters carry no request, credential, connection or account identity.
+Pending managed authorizations retain pinned owner, engine and provider metadata
+for cleanup, without OAuth tokens or operator credentials. If a local save fails,
+the unused remote account is revoked or retained as durable retry work. Cleanup
+never revokes a reference already adopted by a saved connection. Account erasure
+drains pending work first; unresolved provider outcomes cannot silently discard
+the remote account's cleanup record.

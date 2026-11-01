@@ -1188,3 +1188,12 @@ in place, retaining connection identity, tool grants, schedules and request quot
 while invalidating cached responses and stand-ins. Tool context is carried in
 browser-bound setup state and return paths are generated from validated IDs.
 Aggregate monthly engine/provider attempts and current stored-connection counts are operator-only.
+Unfinished managed authorizations have durable cleanup ownership before remote
+setup starts. Local completion failure retires the unused account; failed remote
+cleanup survives restart and is retried during maintenance or account deletion.
+Pending records are retired only after adoption or confirmed remote cleanup;
+indeterminate vendor responses remain available for operator reconciliation.
+Connector cache writes atomically enforce per-connection and global entry/byte
+budgets. Persisted byte counts let pruning inspect metadata without reading
+encrypted response bodies. Expired entries are removed on cache access and by
+startup/periodic maintenance, including when acquisition is disabled.

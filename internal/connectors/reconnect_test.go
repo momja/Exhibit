@@ -23,7 +23,7 @@ func TestReconnectNativePreservesAccessAndInvalidatesCachedCredentials(t *testin
 	_, err = s.Grant(ctx, 1, "app", GrantRequest{ConnectionID: c.ID})
 	require.NoError(t, err)
 	require.NoError(t, s.cfg.Store.ReserveConnectionRequest(ctx, c.ID, 7, time.Now()))
-	require.NoError(t, s.cfg.Store.PutConnectionCache(ctx, c.ID, "cached", "old-cache", time.Now().Add(time.Hour)))
+	require.NoError(t, s.cfg.Store.PutConnectionCache(ctx, c.ID, "cached", "old-cache", time.Now(), time.Now().Add(time.Hour)))
 	handle, err := s.Standin(ctx, 1, "app", c.ID)
 	require.NoError(t, err)
 	require.NoError(t, s.cfg.Store.PutRelaySchedule(ctx, store.RelaySchedule{ID: "refresh", ArtifactID: "app", ViewerID: 1, URL: "https://api.example.test/data", StateKey: "result", IntervalSeconds: 86400, NextRunAt: time.Now().Unix(), Enabled: true}, 10))
