@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -135,6 +137,12 @@ func TestGalleryEmptySpacesBrowser(t *testing.T) {
 			check(`Array.from(document.querySelectorAll('.space-label')).map(el=>el.textContent).join('|') === 'Library|Shared with me|Shared by me'`)
 			check(`document.documentElement.scrollWidth <= innerWidth && Array.from(document.querySelectorAll('.gallery-spaces a')).every(a=>a.getBoundingClientRect().width >= 44 && a.getBoundingClientRect().height >= 44)`)
 			check(`Array.from(document.querySelectorAll('.space-label')).every(el=>getComputedStyle(el).visibility === 'visible' && el.scrollWidth <= el.clientWidth && el.scrollHeight <= el.clientHeight)`)
+			if dir := os.Getenv("GALLERY_SCREENSHOT_DIR"); dir != "" {
+				require.NoError(t, os.MkdirAll(dir, 0755))
+				shot, err := chromedp.Run(ctx, chromedp.Screenshot(chromedp.CSS("body")))
+				require.NoError(t, err)
+				require.NoError(t, os.WriteFile(filepath.Join(dir, fmt.Sprintf("empty-%d-%s.png", width, scheme)), shot, 0644))
+			}
 			visit("/shared-by-me")
 			check(`document.querySelector('.empty').textContent.includes('Share an artifact from its share panel.') && document.querySelector('#gallery-content').dataset.galleryReadOnly === 'false'`)
 			visit("/")
