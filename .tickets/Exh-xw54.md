@@ -35,3 +35,11 @@ Implemented htmx navigation for all three library spaces using shared gallerySpa
 Validation: make assets; go test ./... (all pass); focused gallery/shared/action-menu/compression regression suite (pass); Node search/duplication/widget suites (24 pass); go vet ./internal/api (pass); git diff --check (pass). Real Chromium desktop/phone checks cover exact document/header/account/button identity with Clerk load=1, reload=1, mount=1, unmount=0, search/filter/pagination/history, owner duplication from a read-only initial load, widget disposal/remount, delayed responses, rapid switches, failures, modified clicks and native links with app scripts blocked. The real Clerk loader/controller uses a local SDK double; no live hosted account was needed. shot-scraper desktop/phone captures are in docs/screenshots/Exh-xw54 and documented in architecture/ui-components.
 
 Integration: Exh-arf2 and Exh-r6a0 must keep the header/account control outside #gallery-content and #gallery-search-region; only the heading/search/filter trigger belongs in the search region. Clerk/account implementation and the separate Exh-j6wa placeholder ticket were left unchanged. No main edits, merge, push or PR.
+
+**2026-11-01T17:35:45Z**
+
+PR integration: rebased onto remote main at 7d84543, retaining the shared appHeader/account menu and shared Duplicate modal. The gallery heading/search/filter trigger now form the shared header's swappable region; the account control stays outside both swap targets. Duplication listeners follow space lifecycle while preserving the shared modal event contract. Desktop/mobile screenshots refreshed against this integrated layout.
+
+**2026-11-01T17:38:28Z**
+
+Post-rebase checks passed: make assets; go vet ./internal/api; screenshot capture for TestCaptureGallerySpaceNavigation; all six Playwright application journeys. Full Go test suite is running against the integrated branch.

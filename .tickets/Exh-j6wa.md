@@ -24,4 +24,3 @@ Start with the gallery account mount in internal/api/templates/gallery.tmpl, web
 - Loading, success, and failure states remain accessible; errors remain visible and usable without making the header jump. The placeholder is not an extra keyboard stop and does not obscure the loaded control.
 - Existing deferred loading, account behavior, and non-Clerk layouts remain correct; no third-party icons or new blocking startup work are introduced.
 - Verify before/after header geometry in a real browser with delayed Clerk startup, and update desktop/mobile screenshots.
-
