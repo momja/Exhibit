@@ -64,7 +64,7 @@ func TestGallerySpacesBrowser(t *testing.T) {
 				check(`Array.from(document.querySelectorAll('.card')).at(-1).getBoundingClientRect().bottom <= document.querySelector('.gallery-rail').getBoundingClientRect().top`, "the last card scrolls fully above the tabs")
 			} else {
 				check(`getComputedStyle(document.querySelector('.gallery-layout')).display === 'grid' && document.querySelector('.gallery-rail').getBoundingClientRect().width === 208 && document.querySelector('.gallery-rail').getBoundingClientRect().right <= document.querySelector('main').getBoundingClientRect().left`, "desktop rail sits beside the grid")
-				check(`Array.from(document.querySelectorAll('.space-label-wide')).every(el => el.scrollWidth <= el.clientWidth)`, "desktop labels fit alongside two-digit counts")
+				check(`Array.from(document.querySelectorAll('.space-label')).every(el => el.scrollWidth <= el.clientWidth)`, "desktop labels fit alongside two-digit counts")
 			}
 
 			// Ordinary Tab order and visible focus work in both layouts.
@@ -91,4 +91,68 @@ func TestGallerySpacesBrowser(t *testing.T) {
 			check(`matchMedia('(prefers-color-scheme: dark)').matches && getComputedStyle(document.querySelector('.gallery-rail')).backgroundColor === getComputedStyle(document.querySelector('header')).backgroundColor`, "the navigation follows the dark panel token")
 		})
 	}
+}
+
+// The zero-count destinations use the same htmx navigation and read-only
+// boundary as populated spaces, including after the final grant is revoked.
+func TestGalleryEmptySpacesBrowser(t *testing.T) {
+	in := newTwoOwnerInstance(t)
+	app := httptest.NewServer(in.ro)
+	defer app.Close()
+	in.ro.cfg.AppOrigin = app.URL
+	browser, err := chromium.New(chromiumtest.Start(t))
+	require.NoError(t, err)
+	ctx, cancel, err := browser.Tab(context.Background())
+	require.NoError(t, err)
+	defer cancel()
+	ctx, cancel = context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	_, err = chromedp.Call(ctx, network.SetCookie, network.SetCookieParams{Name: in.cookieTwo.Name, Value: in.cookieTwo.Value, URL: app.URL, Path: "/"})
+	require.NoError(t, err)
+	check := func(js string) {
+		t.Helper()
+		ok, err := chromedp.Run(ctx, chromedp.Evaluate[bool](js))
+		require.NoError(t, err)
+		require.True(t, ok, js)
+	}
+	visit := func(path string) {
+		t.Helper()
+		require.NoError(t, chromedp.Do(ctx,
+			chromedp.Click(chromedp.CSS(`.gallery-spaces a[href="`+path+`"]`)),
+			chromedp.Poll[chromedp.Void](`location.pathname === '`+path+`' && document.querySelector('.gallery-spaces [aria-current]')?.getAttribute('href') === '`+path+`'`)))
+	}
+	for _, width := range []int64{320, 375, 390, 430, 1280} {
+		t.Logf("viewport width: %d", width)
+		_, err = chromedp.Call(ctx, emulation.SetDeviceMetricsOverride, emulation.SetDeviceMetricsOverrideParams{Width: width, Height: 844, DeviceScaleFactor: 1, Mobile: width < 768})
+		require.NoError(t, err)
+		require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(app.URL), chromedp.WaitVisible(chromedp.CSS(`.gallery-spaces`))))
+		require.NoError(t, chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](`window.originalHeader=document.querySelector('header')`)))
+		for _, scheme := range []string{"light", "dark"} {
+			_, err = chromedp.Call(ctx, emulation.SetEmulatedMedia, emulation.SetEmulatedMediaParams{Features: []*emulation.MediaFeature{{Name: "prefers-color-scheme", Value: scheme}}})
+			require.NoError(t, err)
+			visit("/shared")
+			check(`document.querySelector('.empty').textContent === 'Nothing has been shared with you yet.' && document.querySelector('#gallery-content').dataset.galleryReadOnly === 'true' && !document.querySelector('[data-duplicate-dialog],.card-actions')`)
+			check(`Array.from(document.querySelectorAll('.space-label')).map(el=>el.textContent).join('|') === 'Library|Shared with me|Shared by me'`)
+			check(`document.documentElement.scrollWidth <= innerWidth && Array.from(document.querySelectorAll('.gallery-spaces a')).every(a=>a.getBoundingClientRect().width >= 44 && a.getBoundingClientRect().height >= 44)`)
+			check(`Array.from(document.querySelectorAll('.space-label')).every(el=>getComputedStyle(el).visibility === 'visible' && el.scrollWidth <= el.clientWidth && el.scrollHeight <= el.clientHeight)`)
+			visit("/shared-by-me")
+			check(`document.querySelector('.empty').textContent.includes('Share an artifact from its share panel.') && document.querySelector('#gallery-content').dataset.galleryReadOnly === 'false'`)
+			visit("/")
+			check(`document.querySelector('header') === originalHeader && document.querySelectorAll('.gallery-spaces a').length === 3`)
+		}
+		// Enlarge navigation text independently of viewport zoom, then exercise
+		// a longer label. Its full text must remain inside its clickable link.
+		require.NoError(t, chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](`document.querySelectorAll('.space-label').forEach(el=>el.style.fontSize='24px');document.querySelector('.space-label').textContent='My personal artifact library'`)))
+		check(`document.documentElement.scrollWidth <= innerWidth && Array.from(document.querySelectorAll('.space-label')).every(el=>{const r=el.getBoundingClientRect(),a=el.closest('a').getBoundingClientRect();return el.scrollWidth <= el.clientWidth && el.scrollHeight <= el.clientHeight && r.left >= a.left && r.right <= a.right && r.bottom <= a.bottom;})`)
+	}
+	// A newly received share appears on the next visit; revoking the last one
+	// restores the explanation without stranding the user in that space.
+	_, err = in.ro.cfg.Store.CreateGrant(ctx, in.ownerOne, in.artifactOne, in.ownerTwo)
+	require.NoError(t, err)
+	visit("/shared")
+	check(`document.querySelectorAll('.card').length === 1 && !document.querySelector('.empty')`)
+	require.NoError(t, in.ro.cfg.Store.DeleteGrant(ctx, in.ownerOne, in.artifactOne, in.ownerTwo))
+	visit("/")
+	visit("/shared")
+	check(`document.querySelectorAll('.card').length === 0 && document.querySelector('.empty').textContent === 'Nothing has been shared with you yet.' && document.querySelectorAll('.gallery-spaces a').length === 3`)
 }

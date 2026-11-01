@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"regexp"
 	"strings"
 	"testing"
@@ -38,35 +39,67 @@ func TestGallerySpacesCountsAndActivePage(t *testing.T) {
 	assert.NotContains(t, in.get(t, "/partials/gallery-grid/shared", in.cookieTwo).Body.String(), `Library spaces`)
 }
 
-func TestGalleryWithoutSharesKeepsOriginalPage(t *testing.T) {
+func TestGallerySpacesStayAvailableWithoutShares(t *testing.T) {
 	in := newTwoOwnerInstance(t)
 	before := in.get(t, "/", in.cookieTwo).Body.String()
-	assert.NotContains(t, before, `gallery-layout`)
-	assert.NotContains(t, before, `gallery-rail`)
-	assert.NotContains(t, before, `Library spaces`)
-	assert.Contains(t, before, "<main>")
-	// Other people's shares must not change this viewer's original page at all.
+	assert.Contains(t, before, `aria-label="Library spaces"`)
+	assert.Contains(t, before, `<span class="space-label">Library</span>`)
+	assert.Contains(t, before, `<span class="space-label">Shared with me</span>`)
+	assert.Contains(t, before, `<span class="space-label">Shared by me</span>`)
+	assert.Equal(t, 2, strings.Count(before, `class="space-count">0</span>`))
+	// Other people's shares must not affect this viewer's navigation or counts.
 	third, err := in.ro.cfg.Store.UpsertUser(context.Background(), "third", "third@example.test")
 	require.NoError(t, err)
 	_, err = in.ro.cfg.Store.CreateGrant(context.Background(), in.ownerOne, in.artifactOne, third.ID)
 	require.NoError(t, err)
-	after := in.get(t, "/", in.cookieTwo).Body.String()
-	assert.Equal(t, normalizePerRender(before), normalizePerRender(after))
-	// No private cards are needed to qualify: an incoming share alone is enough.
+	assert.Equal(t, normalizePerRender(before), normalizePerRender(in.get(t, "/", in.cookieTwo).Body.String()))
+	// Receiving and losing the last share changes counts, never destinations.
 	_, err = in.ro.cfg.Store.CreateGrant(context.Background(), in.ownerOne, in.artifactOne, in.ownerTwo)
 	require.NoError(t, err)
-	assert.Contains(t, in.get(t, "/", in.cookieTwo).Body.String(), `Library spaces`)
+	incoming := in.get(t, "/shared", in.cookieTwo).Body.String()
+	assert.Contains(t, incoming, `href="/shared" aria-current="page"`)
+	assert.Contains(t, incoming, `class="space-count">1</span>`)
+	assert.Contains(t, incoming, `data-gallery-read-only="true"`)
+	assert.NotContains(t, incoming, `data-duplicate-dialog`)
 	require.NoError(t, in.ro.cfg.Store.DeleteGrant(context.Background(), in.ownerOne, in.artifactOne, in.ownerTwo))
 	assert.Equal(t, normalizePerRender(before), normalizePerRender(in.get(t, "/", in.cookieTwo).Body.String()))
 }
 
-func TestGalleryPublicLinkEnablesSpaces(t *testing.T) {
+func TestGalleryPublicLinkKeepsSpacesAvailable(t *testing.T) {
 	ro := newTestRouter(t)
 	seedGalleryArtifacts(t, ro, 1)
-	assert.NotContains(t, getPage(t, ro, "/"), `Library spaces`)
-	_, err := ro.cfg.Store.CreateAnonymousLink(context.Background(), defaultOwnerID, "gallery-000")
-	require.NoError(t, err)
-	assert.Contains(t, getPage(t, ro, "/"), `Library spaces`)
+	var linkID string
+	for _, shared := range []bool{false, true, false} {
+		if shared {
+			link, err := ro.cfg.Store.CreateAnonymousLink(context.Background(), defaultOwnerID, "gallery-000")
+			require.NoError(t, err)
+			linkID = link.ID
+		} else if linkID != "" {
+			require.NoError(t, ro.cfg.Store.DeleteShare(context.Background(), defaultOwnerID, linkID))
+		}
+		body := getPage(t, ro, "/shared-by-me")
+		assert.Contains(t, body, `href="/shared-by-me" aria-current="page"`)
+		if shared {
+			assert.Contains(t, body, `class="space-count">1</span>`)
+		} else {
+			assert.Equal(t, 2, strings.Count(body, `class="space-count">0</span>`))
+			assert.Contains(t, body, "Share an artifact from its share panel.")
+		}
+	}
+}
+
+func TestGallerySpacesRequireSession(t *testing.T) {
+	in := newTwoOwnerInstance(t)
+	// Public mode does not make personal gallery routes anonymous.
+	in.ro.cfg.Public = PublicMode{Enabled: true, OwnerID: in.ownerOne}
+	for _, path := range []string{"/", "/shared", "/shared-by-me"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		w := httptest.NewRecorder()
+		in.ro.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusFound, w.Code)
+		assert.Contains(t, w.Header().Get("Location"), "/auth/login")
+		assert.NotContains(t, w.Body.String(), "Library spaces")
+	}
 }
 
 type unavailableSpaceCountsStore struct{ store.Store }

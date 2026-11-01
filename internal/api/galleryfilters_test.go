@@ -98,17 +98,17 @@ func TestGalleryFiltersValidationAndPaging(t *testing.T) {
 	assert.Contains(t, incoming.Body.String(), `aria-label="Active filters"`)
 }
 
-func TestGalleryFilterSoloLayoutAndEmptyLibrary(t *testing.T) {
+func TestGalleryFiltersAndEmptyLibrary(t *testing.T) {
 	ro := newTestRouter(t)
 	original := getPage(t, ro, "/")
-	assert.NotContains(t, original, "gallery-layout")
+	assert.Contains(t, original, `class="gallery-layout"`)
 	assert.NotContains(t, original, "gallery-filter-sheet")
 	assert.NotContains(t, original, "data-gallery-filter")
 	seedGalleryFilters(t, ro, defaultOwnerID)
 	page := getPage(t, ro, "/")
-	assert.Contains(t, page, `class="gallery-layout gallery-layout-solo"`)
+	assert.Contains(t, page, `class="gallery-layout"`)
 	assert.Contains(t, page, `class="gallery-rail"`)
-	assert.NotContains(t, page, `aria-label="Library spaces"`)
+	assert.Contains(t, page, `aria-label="Library spaces"`)
 	assert.Contains(t, page, "gallery-filter-sheet")
 	assert.Contains(t, page, "--tag-color:#2563eb")
 	// A collection ID cannot match another collection with the same name.
