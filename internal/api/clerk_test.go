@@ -2,8 +2,10 @@ package api
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -11,6 +13,7 @@ import (
 	"github.com/momja/Exhibit/internal/auth"
 	"github.com/momja/Exhibit/internal/store"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/net/html"
 )
 
 type hostedLoginStub struct{}
@@ -205,4 +208,40 @@ func TestClerkUnifiedAccountPages(t *testing.T) {
 	require.Equal(t, 200, get("/profile", "clerk:member").Code)
 	require.Equal(t, 302, get("/settings", "").Code)
 
+}
+
+func TestClerkLoginNextStaysOnOrigin(t *testing.T) {
+	ro, _ := newLoginTestRouter(t, nil, nil, func(c *Config) { c.Clerk = hostedLoginStub{} })
+	for _, path := range []string{"/auth/login", "/auth/signup"} {
+		for _, tc := range []struct{ next, want string }{
+			{"///evil.test", "/"},
+			{"////evil.test", "/"},
+			{"//evil.test", "/"},
+			{"https://evil.test", "/"},
+			{"/%2F/evil.test", "/%2F/evil.test"},
+			{"/ok", "/ok"},
+			{"/ok?x=//y", "/ok?x=//y"},
+		} {
+			t.Run(path+"/"+tc.next, func(t *testing.T) {
+				w := httptest.NewRecorder()
+				r := httptest.NewRequest("GET", "https://app.test"+path+"?next="+url.QueryEscape(tc.next), nil)
+				r.Header.Set("Test-Clerk-Subject", "clerk:user_one")
+				ro.ServeHTTP(w, r)
+				require.Equal(t, http.StatusOK, w.Code)
+				// Read the actual HTML-decoded Stimulus value, just as the
+				// controller does, rather than checking escaped page text.
+				z := html.NewTokenizer(w.Body)
+				var values []string
+				for z.Next() != html.ErrorToken {
+					for _, attr := range z.Token().Attr {
+						if attr.Key == "data-clerk-next-value" {
+							values = append(values, attr.Val)
+						}
+					}
+				}
+				require.ErrorIs(t, z.Err(), io.EOF)
+				require.Equal(t, []string{tc.want}, values)
+			})
+		}
+	}
 }

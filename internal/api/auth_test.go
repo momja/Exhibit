@@ -486,3 +486,63 @@ func TestSafeNextRejectsOffOriginDestinations(t *testing.T) {
 	}
 	assert.Equal(t, "/artifacts/abc?q=1", safeNext("/artifacts/abc?q=1"))
 }
+
+// Encoded slashes stay encoded at the redirect boundary; a browser treats
+// /%2F/evil.test as a path on this origin, not as an authority.
+func TestSafeNextPaths(t *testing.T) {
+	for _, tc := range []struct{ next, want string }{
+		{"///evil.test", ""},
+		{"////evil.test", ""},
+		{"//evil.test", ""},
+		{"/%2F/evil.test", "/%2F/evil.test"},
+		{"/ok", "/ok"},
+		{"/ok?x=//y", "/ok?x=//y"},
+	} {
+		t.Run(tc.next, func(t *testing.T) {
+			assert.Equal(t, tc.want, safeNext(tc.next))
+		})
+	}
+}
+
+func TestOIDCLoginHonoursNextButOnlyOnThisOrigin(t *testing.T) {
+	idp := &stubProvider{
+		loginURL:   "https://idp.test/authorize",
+		identities: []auth.Identity{{ExternalID: "sub-1", Email: "first@example.test"}},
+	}
+	ro, _ := newIdentityTestRouter(t, idp)
+	for _, tc := range []struct{ next, want string }{
+		{"///evil.test", "/"},
+		{"////evil.test", "/"},
+		{"//evil.test", "/"},
+		{"/%2F/evil.test", "/%2F/evil.test"},
+		{"/ok", "/ok"},
+		{"/ok?x=//y", "/ok?x=//y"},
+	} {
+		t.Run(tc.next, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			ro.ServeHTTP(w, httptest.NewRequest("GET", "/auth/login?next="+url.QueryEscape(tc.next), nil))
+			require.Equal(t, http.StatusFound, w.Code)
+			flow := cookiesFrom(w)
+			if tc.want == "/" {
+				assert.Nil(t, flow[nextCookieName], "unsafe next must not be stored")
+			} else {
+				require.NotNil(t, flow[nextCookieName])
+				assert.Equal(t, tc.want, flow[nextCookieName].Value)
+			}
+			// Check both the issued cookie and an independently supplied one:
+			// the callback must revalidate even a pre-fix or forged value.
+			for _, cookie := range []*http.Cookie{flow[nextCookieName], {Name: nextCookieName, Value: tc.next}} {
+				cb := httptest.NewRequest("GET", "/auth/callback?code=abc&state="+url.QueryEscape(flow[stateCookieName].Value), nil)
+				cb.AddCookie(flow[stateCookieName])
+				cb.AddCookie(flow[verifierCookieName])
+				if cookie != nil {
+					cb.AddCookie(cookie)
+				}
+				cw := httptest.NewRecorder()
+				ro.ServeHTTP(cw, cb)
+				require.Equal(t, http.StatusFound, cw.Code)
+				assert.Equal(t, tc.want, cw.Header().Get("Location"))
+			}
+		})
+	}
+}

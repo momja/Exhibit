@@ -530,8 +530,8 @@ func (ro *Router) cookieSecure() bool {
 }
 
 // safeNext keeps a post-login redirect on this origin. Anything that is not a
-// single-slash absolute path — an absolute URL, a protocol-relative "//host",
-// a backslash some browsers normalize to a slash — is discarded rather than
+// path starting with exactly one slash — an absolute URL, any "//" prefix,
+// or a backslash some browsers normalize to a slash — is discarded rather than
 // sanitized, since the only correct values are paths we emitted ourselves.
 func safeNext(next string) string {
 	if next == "" || !strings.HasPrefix(next, "/") {
@@ -545,6 +545,11 @@ func safeNext(next string) string {
 		if r < 0x20 || r == 0x7f || r == '\\' {
 			return ""
 		}
+	}
+	// Browsers treat three or more leading slashes as an authority too,
+	// even though url.Parse reports an empty Host for those values.
+	if strings.HasPrefix(next, "//") {
+		return ""
 	}
 	u, err := url.Parse(next)
 	if err != nil || u.Scheme != "" || u.Host != "" {
