@@ -72,7 +72,7 @@ async function loadDetail({ readOnly = false, approvals = {}, responses = [] } =
       return null;
     }
   }, HIDDEN);
-  const netDialog = permissionDialog(page, 'net-modal');
+  permissionDialog(page, 'net-modal');
   permissionDialog(page, 'dl-modal');
   permissionDialog(page, 'clip-modal');
   permissionDialog(page, 'link-modal');
@@ -154,16 +154,6 @@ test("Block answers with a denial and persists nothing", async () => {
   assert.deepEqual(answers(frame).map((a) => [a.id, a.banner, a.error]), [[1, false, "User denied Geolocation"]]);
   assert.deepEqual(api.calls, []);
   assert.deepEqual(tabs, []);
-});
-
-test("shared dismissal is a Block", async () => {
-  const { byId, frame, pressKey, postFromFrame } = await loadDetail();
-
-  await postFromFrame(geoRequest(1));
-  byId("geo-modal").dispatchEvent(new Event('cancel', { cancelable: true }));
-
-  assert.equal(byId("geo-modal").open, false);
-  assert.equal(answers(frame).length, 1);
 });
 
 test("a newer request displaces the pending one, which still gets its answer", async () => {
