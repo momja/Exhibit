@@ -142,15 +142,13 @@ func TestEnlargedFieldsBrowser(t *testing.T) {
 				b := newModalBrowser(t, width)
 				_, err := chromedp.Call(b.ctx, emulation.SetEmulatedMedia, emulation.SetEmulatedMediaParams{Features: []*emulation.MediaFeature{{Name: "prefers-color-scheme", Value: theme}}})
 				require.NoError(t, err)
-				_, err = chromedp.Call(b.ctx, emulation.SetTouchEmulationEnabled, emulation.SetTouchEmulationEnabledParams{Enabled: true})
-				require.NoError(t, err)
-				b.run(chromedp.EmulateViewport(width, 568), chromedp.Navigate(app.URL+"/agent"))
+				b.run(chromedp.EmulateViewport(width, 568, chromedp.EmulateTouch), chromedp.Navigate(app.URL+"/agent"))
 				b.wait(`window.closeKeyModal && document.getElementById('input')`)
 				b.eval(`window.closeKeyModal();document.documentElement.style.fontSize='200%';
      const input=document.getElementById('input');input.value='First line of a longer message\nSecond line of a longer message\nThird line';input.dispatchEvent(new Event('input',{bubbles:true}))`)
 				b.check(`(() => {
      const input=document.getElementById('input'), style=getComputedStyle(input), box=input.getBoundingClientRect(), row=input.closest('.compose-row').getBoundingClientRect(), send=document.getElementById('send-btn').getBoundingClientRect();
-     return parseFloat(style.fontSize)>=32 && parseFloat(style.lineHeight)>=parseFloat(style.fontSize)*1.2 && box.left>=row.left && box.right<=row.right && row.right<=innerWidth && box.top>=document.querySelector('.app-header').getBoundingClientRect().bottom && box.bottom<=innerHeight && send.top>=0 && send.bottom<=innerHeight;
+     return matchMedia('(pointer:coarse)').matches && parseFloat(style.fontSize)>=32 && parseFloat(style.lineHeight)>=parseFloat(style.fontSize)*1.2 && box.left>=row.left && box.right<=row.right && row.right<=innerWidth && box.top>=document.querySelector('.app-header').getBoundingClientRect().bottom && box.bottom<=innerHeight && send.top>=0 && send.bottom<=innerHeight;
     })()`)
 				b.capture("Exh-h9m4/agent-"+theme, width)
 				b.run(chromedp.Navigate(app.URL + "/artifacts/" + id))
