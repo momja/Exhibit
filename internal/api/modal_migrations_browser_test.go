@@ -415,6 +415,7 @@ func TestDownloadModalBrowser(t *testing.T) {
 			report := `permissionReport({__avDownload:true,filename:'report.csv',mime:'text/csv',bytes:new ArrayBuffer(3)})`
 			b.dialogCycle("#dl-modal", report, "#dl-block")
 			b.eval(report)
+			checkModalVisuals(t, b.ctx, "#dl-modal")
 			b.capture("Exh-fvzb", width)
 			// A late grant can persist, but cannot download discarded or replaced bytes.
 			b.eval(`window.downloads=[];HTMLAnchorElement.prototype.click=function(){downloads.push(this.download)};window.savedFetch=window.fetch;window.fetch=(url,opts)=>opts?.method==='PATCH'?new Promise(resolve=>window.finishDownload=(ok=true)=>resolve(new Response('{}',{status:ok?200:503}))):savedFetch(url,opts);document.getElementById('dl-allow').click()`)
