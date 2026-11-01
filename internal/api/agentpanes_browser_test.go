@@ -83,7 +83,7 @@ func TestAgentPanesBrowser(t *testing.T) {
 			check(`[...document.querySelectorAll('.pane-tab i')].every(el => el.getAttribute('aria-hidden') === 'true')`)
 			capture(fmt.Sprintf("%s-%d-chat", theme, width))
 			run(chromedp.Focus(chromedp.CSS(`#tab-chat`)), chromedp.KeyEvent(kb.ArrowRight))
-			check(`document.activeElement.id === 'tab-preview' && document.getElementById('tab-preview').getAttribute('aria-selected') === 'true' && document.getElementById('tab-chat').tabIndex === -1 && getComputedStyle(document.getElementById('pane-chat')).display === 'none'`)
+			check(`document.activeElement.id === 'tab-preview' && document.getElementById('tab-preview').getAttribute('aria-selected') === 'true' && document.getElementById('tab-chat').tabIndex === -1 && getComputedStyle(document.getElementById('pane-chat')).visibility === 'hidden' && document.getElementById('pane-chat').inert`)
 			run(chromedp.KeyEvent(kb.Tab))
 			check(`document.activeElement.id === 'pane-preview'`)
 			capture(fmt.Sprintf("%s-%d-preview", theme, width))
@@ -139,7 +139,13 @@ func TestAgentPanesBrowser(t *testing.T) {
 	run(chromedp.Click(chromedp.CSS(`#tab-preview`)),
 		chromedp.Evaluate[chromedp.Void](`retainedFrame.contentWindow.postMessage({readPreview: 'after-switch'}, '*')`))
 	wait(`window.previewState.request === 'after-switch'`)
-	check(`window.previewState.count === 1 && window.previewState.scroll === 120`)
+	state, err := chromedp.Run(ctx, chromedp.Evaluate[struct {
+		Count  int `json:"count"`
+		Scroll int `json:"scroll"`
+	}](`window.previewState`))
+	require.NoError(t, err)
+	require.Equal(t, 1, state.Count, "the live document must not reload")
+	require.Equal(t, 120, state.Scroll, "the preview must retain its scroll position")
 	check(`document.getElementById('pv-frame') === window.retainedFrame`)
 	run(chromedp.Evaluate[chromedp.Void](`showPane('chat'); document.getElementById('input').focus()`))
 	// Programmatic links/nudges move focus out of the pane they hide.
@@ -160,7 +166,7 @@ func TestAgentPanesBrowser(t *testing.T) {
 	// Desktop keeps two visible regions; resize never leaves focus hidden.
 	run(chromedp.Focus(chromedp.CSS(`#tab-preview`)), chromedp.EmulateViewport(1280, 800))
 	wait(`document.getElementById('pane-preview').getAttribute('role') === 'region'`)
-	check(`document.activeElement.id === 'pane-preview' && getComputedStyle(document.getElementById('pane-chat')).display !== 'none' && getComputedStyle(document.getElementById('pane-preview')).display !== 'none' && getComputedStyle(document.querySelector('.pane-switch')).display === 'none'`)
+	check(`document.activeElement.id === 'pane-preview' && !document.getElementById('pane-chat').inert && !document.getElementById('pane-preview').inert && getComputedStyle(document.getElementById('pane-chat')).display !== 'none' && getComputedStyle(document.getElementById('pane-preview')).display !== 'none' && getComputedStyle(document.querySelector('.pane-switch')).display === 'none'`)
 	run(chromedp.Focus(chromedp.CSS(`#input`)), chromedp.Evaluate[chromedp.Void](`showPane('preview')`))
 	check(`document.activeElement.id === 'input'`)
 	capture("desktop")

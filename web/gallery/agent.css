@@ -191,11 +191,13 @@ body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(-
   body{height:100dvh}
   .pane-switch{display:block}
   .pane-resizer{display:none}
-  .chat,.preview{width:100%;min-width:0;flex:1}
+  /* Keep the iframe laid out: display:none resets its document scroll. */
+  .layout{display:grid;grid-template:minmax(0,1fr)/minmax(0,1fr)}
+  .chat,.preview{grid-area:1/1;width:100%;min-width:0;min-height:0}
   .chat{border-right:none}
-  .preview{display:none}
-  body.show-preview .chat{display:none}
-  body.show-preview .preview{display:flex}
+  .preview{visibility:hidden}
+  body.show-preview .chat{visibility:hidden}
+  body.show-preview .preview{visibility:visible}
   .pv-nudge{display:inline-flex}
   #hint{display:none}
   /* The preview is full-screen here; the widget strip would only cost height. */
