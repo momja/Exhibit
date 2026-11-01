@@ -750,14 +750,16 @@ const nudgeEl = document.getElementById('pv-nudge');
 
 function showPane(pane) {
   const preview = pane === 'preview';
+  const changed = document.body.classList.contains('show-preview') !== preview;
   document.body.classList.toggle('show-preview', preview);
   tabChatEl.setAttribute('aria-selected', String(!preview));
   tabPreviewEl.setAttribute('aria-selected', String(preview));
   tabChatEl.tabIndex = preview ? -1 : 0;
   tabPreviewEl.tabIndex = preview ? 0 : -1;
   // A nudge or history link can hide its own pane. Keep focus on a visible
-  // control, but never move desktop focus into the hidden mobile tab strip.
-  if (mobileQuery.matches) (preview ? tabPreviewEl : tabChatEl).focus({preventScroll: true});
+  // control. Same-pane actions (such as toggling snippet mode) keep focus,
+  // and desktop never moves it into the hidden mobile tab strip.
+  if (mobileQuery.matches && changed) (preview ? tabPreviewEl : tabChatEl).focus({preventScroll: true});
   if (preview) clearPreviewNudge();
 }
 
