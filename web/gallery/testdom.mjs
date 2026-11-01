@@ -61,6 +61,7 @@ function makeElement(id, onFocus = () => {}) {
     focus() { el.focused = true; onFocus(el); },
     select() { el.selected = true; },
     setAttribute() {},
+    removeAttribute() {},
     getAttribute() { return null; },
     appendChild(child) { el.children.push(child); return child; },
     replaceChildren(...children) { el.children = children; },

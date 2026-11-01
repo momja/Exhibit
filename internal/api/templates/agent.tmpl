@@ -29,12 +29,12 @@
 {{if not .AgentEnabled}}<div class="banner-err">Agent support is disabled: the <code>pi</code> binary was not found on this server.</div>{{end}}
 <div class="pane-switch">
   <div class="pane-tabs" role="tablist" aria-label="Chat or preview">
-    <button type="button" class="pane-tab" id="tab-chat" role="tab" aria-selected="true" aria-controls="pane-chat" onclick="showPane('chat')"><i class="ph ph-chat-circle"></i> Chat</button>
-    <button type="button" class="pane-tab" id="tab-preview" role="tab" aria-selected="false" aria-controls="pane-preview" onclick="showPane('preview')"><i class="ph ph-monitor"></i> Preview <span class="dot" aria-hidden="true"></span></button>
+    <button type="button" class="pane-tab" id="tab-chat" role="tab" aria-selected="true" aria-controls="pane-chat" tabindex="0" onclick="showPane('chat')"><i class="ph ph-chat-circle" aria-hidden="true"></i> <span>Chat</span></button>
+    <button type="button" class="pane-tab" id="tab-preview" role="tab" aria-selected="false" aria-controls="pane-preview" tabindex="-1" onclick="showPane('preview')"><i class="ph ph-monitor" aria-hidden="true"></i> <span>Preview</span> <span class="dot" aria-hidden="true"></span></button>
   </div>
 </div>
 <div class="layout" id="agent-layout">
-  <div class="chat" id="pane-chat">
+  <div class="chat" id="pane-chat" role="region" aria-label="Chat" tabindex="-1">
     {{/* The chat's own controls. History lists the conversations kept with this
          artifact (av-y7td) in a pane that takes the place of the messages and
          the composer while it is open — a conversation you are only reading
@@ -69,7 +69,7 @@
        exhibit:artifact-saved event on <body>, htmx GETs the fragment for the
        session's current artifact, and swaps it in. The wiring lives here, in
        markup, so agent.js never rebuilds markup the template already owns. */}}
-  <div class="preview" id="pane-preview"
+  <div class="preview" id="pane-preview" role="region" aria-label="Preview" tabindex="-1"
        hx-get="/partials/agent-preview"
        hx-trigger="exhibit:artifact-saved from:body"
        hx-vals='js:{artifact: previewArtifactId()}'

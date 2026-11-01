@@ -735,8 +735,8 @@ document.addEventListener('exhibit:question-resolved', event => {
 
 // --- Mobile panes (av-td4y) ------------------------------------------------
 // Below 640px the chat and the preview each take the whole screen and the
-// segmented control picks between them; above it the media query never fires,
-// so every call here is inert bookkeeping on an invisible control.
+// segmented control picks between them. Desktop exposes two named regions,
+// not tab panels controlled by a hidden tablist.
 const mobileQuery = window.matchMedia('(max-width:640px)');
 const tabChatEl = document.getElementById('tab-chat');
 const tabPreviewEl = document.getElementById('tab-preview');
@@ -744,11 +744,56 @@ const nudgeEl = document.getElementById('pv-nudge');
 
 function showPane(pane) {
   const preview = pane === 'preview';
+  const changed = document.body.classList.contains('show-preview') !== preview;
   document.body.classList.toggle('show-preview', preview);
   tabChatEl.setAttribute('aria-selected', String(!preview));
   tabPreviewEl.setAttribute('aria-selected', String(preview));
+  tabChatEl.tabIndex = preview ? -1 : 0;
+  tabPreviewEl.tabIndex = preview ? 0 : -1;
+  syncPaneSemantics();
+  // A nudge or history link can hide its own pane. Keep focus on a visible
+  // control. Same-pane actions (such as toggling snippet mode) keep focus,
+  // and desktop never moves it into the hidden mobile tab strip.
+  if (mobileQuery.matches && changed) (preview ? tabPreviewEl : tabChatEl).focus({preventScroll: true});
   if (preview) clearPreviewNudge();
 }
+
+// Automatic activation: both panels are already loaded, so arrow keys can
+// select immediately. Tab leaves the strip for the selected panel's content.
+for (const tab of [tabChatEl, tabPreviewEl]) {
+  tab.addEventListener('keydown', event => {
+    let pane;
+    switch (event.key) {
+      case 'ArrowLeft':
+      case 'ArrowRight': pane = tab === tabChatEl ? 'preview' : 'chat'; break;
+      case 'Home': pane = 'chat'; break;
+      case 'End': pane = 'preview'; break;
+      default: return;
+    }
+    event.preventDefault();
+    showPane(pane);
+  });
+}
+
+function syncPaneSemantics() {
+  const preview = document.body.classList.contains('show-preview');
+  const activeTab = preview ? tabPreviewEl : tabChatEl;
+  const activePane = document.getElementById(preview ? 'pane-preview' : 'pane-chat');
+  const inactivePane = document.getElementById(preview ? 'pane-chat' : 'pane-preview');
+  const focused = document.activeElement;
+  for (const pane of [activePane, inactivePane]) {
+    pane.inert = mobileQuery.matches && pane === inactivePane;
+    pane.setAttribute('role', mobileQuery.matches ? 'tabpanel' : 'region');
+    pane.tabIndex = mobileQuery.matches ? 0 : -1;
+    if (mobileQuery.matches) pane.setAttribute('aria-labelledby', pane.id.replace('pane-', 'tab-'));
+    else pane.removeAttribute('aria-labelledby');
+  }
+  // Resizing must not strand keyboard focus in a panel or tab that CSS hides.
+  if (mobileQuery.matches && focused && inactivePane.contains(focused)) activeTab.focus({preventScroll: true});
+  if (!mobileQuery.matches && (focused === tabChatEl || focused === tabPreviewEl)) activePane.focus({preventScroll: true});
+}
+mobileQuery.addEventListener('change', syncPaneSemantics);
+syncPaneSemantics();
 
 // An agent save the user can't see — they're on the Chat pane — lights the
 // Preview segment so the new render isn't missed.
