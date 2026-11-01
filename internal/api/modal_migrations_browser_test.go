@@ -447,6 +447,7 @@ func TestClipboardModalBrowser(t *testing.T) {
 			report := `permissionReport({__avClipboard:true,id:'first',op:'read'})`
 			b.dialogCycle("#clip-modal", report, "#clip-block")
 			b.eval(report)
+			checkModalVisuals(t, b.ctx, "#clip-modal")
 			b.capture("Exh-3917", width)
 			b.eval(`window.clipGestures=[];Object.defineProperty(navigator,'clipboard',{value:{readText(){clipGestures.push(navigator.userActivation.isActive);return Promise.resolve('test clipboard')},writeText(){clipGestures.push(navigator.userActivation.isActive);return Promise.resolve()}}});window.savedFetch=window.fetch;window.fetch=(url,opts)=>opts?.method==='PATCH'?new Promise(resolve=>window.finishClip=()=>resolve(new Response('{}',{status:200}))):savedFetch(url,opts);permissionReplies=[]`)
 			b.run(chromedp.Click(chromedp.CSS(`#clip-allow`)))
