@@ -179,6 +179,3 @@ input.state-input{max-width:340px}
 .tag-create .btn{align-self:flex-start;margin-top:8px}
 .tag-error{color:var(--color-danger-hover);margin-top:8px}
 
-/* Edit-tag modal. */
-.tag-edit-dialog .modal-error{color:var(--color-danger-hover);font-size:12px;margin-top:10px}
-.tag-edit-dialog .modal-actions{display:flex;gap:8px;align-items:center;margin-top:18px}
