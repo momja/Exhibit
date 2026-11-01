@@ -405,3 +405,18 @@ Heading, body, checkbox and footer styling use shared defaults.
 
 [Long content at 390×400](screenshots/Exh-9xfp/short-content/390.png) ·
 [Expanded explanation and Done at 390×400](screenshots/Exh-9xfp/short-actions/390.png)
+
+The BYOK API-key dialog uses `modal`, initially focuses the secret field, and
+forgets its editable secret on close. Saving/deleting uses `run` and a native fieldset to lock the working copy
+until the request and key-status refresh settle; server errors retain the form. Platform mode renders no
+key dialog and never starts key operations. The native module binds the key
+controls; compatibility exports remain for other existing page integrations.
+`TestAgentKeyModalBrowser` exercises pending Escape and a server failure with
+an empty-field screenshot (no credentials).
+
+Key explanatory paragraphs use shared body typography. The current-key summary
+keeps its bordered metadata box so an existing masked credential is distinct
+from editable fields. Read-only fields use the shared state styling.
+
+[API key desktop](screenshots/Exh-uxyy/1280.png) ·
+[API key phone](screenshots/Exh-uxyy/390.png)
