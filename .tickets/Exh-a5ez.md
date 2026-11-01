@@ -1,6 +1,6 @@
 ---
 id: Exh-a5ez
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-01T21:40:15Z
@@ -22,3 +22,9 @@ Provide a compact segmented row with >=44px targets and less surrounding chrome.
 
 Validate relevant behavior at 320, 375, 390 and 430 CSS px, light/dark, and desktop. Check actual target rectangles, no body horizontal overflow, long labels and enlarged text; preserve safe areas and zoom. Run meaningful existing/targeted tests and project-required checks. Obtain independent Standards and Spec subagent reviews against a pinned base and this ticket, fix important findings, and document evidence/limitations in the PR. Never merge or deploy. Do not claim physical iPhone/VoiceOver testing without performing it.
 
+
+## Notes
+
+**2026-11-01T22:29:47Z**
+
+Implemented 51px mobile pane row with >=44px targets, wrapping enlarged labels, roving keyboard tabs, mobile tabpanel/desktop region semantics and decorative glyph hiding. Same-pane Snippet actions retain focus. Hidden/inert overlapping mobile panels preserve iframe scroll (fresh response regression exposed display:none resetting120px to0). Focused rebuilt-asset tests passed19.941s: AgentPanesBrowser, GalleryPageScriptSuite, AgentPreview*, DirectOpenPreviewSwapBrowser;320/375/390/430 light/dark, large labels,568px viewport, desktop, draft/scroll/state/htmx and keyboard. Independent Standards+Spec reviews and two fix reviews completed; no remaining findings at implementation7e26f5b24e259f672f7184dfc7fefc11b45f712d. Evidence docs/screenshots/Exh-a5ez. Full aggregate suite delegated to parent; no physical iPhone/VoiceOver testing. No merge or deployment.
