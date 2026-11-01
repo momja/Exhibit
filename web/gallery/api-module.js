@@ -7,3 +7,7 @@ export function apiFetch(path, options) {
 export function apiEventSource(path, ticket) {
   return window.apiEventSource(path, ticket);
 }
+
+export function apiStateFetch(path, options) {
+  return window.apiStateFetch(path, options);
+}

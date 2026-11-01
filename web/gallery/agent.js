@@ -1,4 +1,5 @@
 import { modalFor } from './modal.js';
+import { networkPrompt } from './network-prompt.js';
 import { apiFetch, apiEventSource } from './api-module.js';
 import { createSessionPreparation, createTypingPreparation } from './session-preparation.js';
 
@@ -1006,7 +1007,7 @@ document.addEventListener('keydown', (e) => {
 // one. reload re-renders the preview pane through that same htmx path rather
 // than reassigning src, so the fragment mints a fresh render token and the
 // pane keeps its one definition (av-6m3e).
-window.ExhibitNetworkPrompt.install({
+networkPrompt.install({
   frame: previewFrame,
   artifactId: previewArtifactId,
   // The transcript is this page's status line. #pv-title holds the artifact's
@@ -1021,9 +1022,9 @@ window.ExhibitNetworkPrompt.install({
 // page noticed the new frame would be lost, which is the failure mode the
 // handshake exists to remove.
 document.getElementById('pane-preview').addEventListener('htmx:after:swap', function () {
-  window.ExhibitNetworkPrompt.announceTo(previewFrame());
+  networkPrompt.announceTo(previewFrame());
 });
-window.ExhibitNetworkPrompt.announceTo(previewFrame());
+networkPrompt.announceTo(previewFrame());
 
 // State bridge (same contract as the detail page): the sandboxed preview
 // iframe can't call the API itself, so its storage shim posts writes here

@@ -10,6 +10,20 @@ const required = new Set([
   'TestShareModalBrowser',
   'TestShareModalTransactionsBrowser',
   'TestAgentKeyModalBrowser',
+  'TestFilterModalBrowser',
+  'TestAdminEntitlementModalBrowser',
+  'TestEditorLeaveModalBrowser',
+  'TestEditorModalLifecycleBrowser',
+  'TestNetworkModalBrowser',
+  'TestDownloadModalBrowser',
+  'TestClipboardModalBrowser',
+  'TestLinkModalBrowser',
+  'TestMediaModalBrowser',
+  'TestLocationModalBrowser',
+  'TestDirectOpenModalBrowser',
+  'TestPermissionModalStackBrowser',
+  'TestDirectOpenPendingBrowser',
+  'TestDirectOpenPreviewSwapBrowser',
 ]);
 for (const line of readFileSync(new URL('./artifacts/go-tests.jsonl', import.meta.url), 'utf8').split('\n').filter(Boolean)) {
   const event = JSON.parse(line);
