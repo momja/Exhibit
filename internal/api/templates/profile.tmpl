@@ -183,12 +183,25 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
 {{define "agentGrantsPanel"}}<section class="card" id="agent-grants-panel"{{if .MCPURL}} data-mcp-url="{{.MCPURL}}"{{end}} aria-labelledby="agent-grants-heading">
   <h3 class="settings-h3" id="agent-grants-heading"><i class="ph ph-robot" aria-hidden="true"></i> Connected agents</h3>
   {{if .MCPURL}}<p class="settings-copy">Connect your own agent to find, create and edit artifacts in your library. Each connection stays active until you revoke it.</p>
+  <label class="settings-label" for="agent-mcp-url">MCP endpoint</label>
+  <div class="agent-grant-create">
+    <input class="field agent-grant-token" id="agent-mcp-url" value="{{.MCPURL}}" readonly spellcheck="false">
+    <button class="btn btn-sec" id="agent-mcp-url-copy" type="button"><i class="ph ph-copy" aria-hidden="true"></i> Copy URL</button>
+  </div>
+  <label class="settings-label settings-note" for="agent-mcp-command">Claude Code</label>
+  <div class="agent-grant-create">
+    <input class="field agent-grant-token" id="agent-mcp-command" value="{{.ClaudeCommand}}" readonly spellcheck="false">
+    <button class="btn btn-sec" id="agent-mcp-command-copy" type="button"><i class="ph ph-copy" aria-hidden="true"></i> Copy command</button>
+  </div>
+  <p class="settings-copy settings-note">Then run /mcp in Claude Code, choose Authenticate, and approve the connection in your browser.</p>
+  <p class="settings-copy settings-note">Other MCP clients connect to the same URL and sign in the same way.</p>
   {{else}}<p class="settings-copy">MCP is not enabled on this instance.</p>{{end}}
   <div id="agent-grants-body" class="agent-grants-list"
        hx-get="/partials/agent-grants" hx-headers="{{.RefreshHeaders}}"
        hx-trigger="exhibit:agent-grants-changed from:body"
        hx-swap="innerHTML">{{template "agentGrantsPanelBody" .}}</div>
   {{if .MCPURL}}<form id="agent-grant-form" class="settings-form agent-grant-form">
+    <h4 class="settings-h4">For clients without browser sign-in</h4>
     <label class="settings-label" for="agent-grant-label">Connection label</label>
     <div class="agent-grant-create">
       <input class="field" id="agent-grant-label" name="label" maxlength="100" placeholder="External agent" autocomplete="off">
@@ -220,7 +233,7 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
   <table class="settings-table agent-grants-table">
     <thead><tr><th scope="col">Label</th><th scope="col">Client</th><th scope="col">Created</th><th scope="col">Last used</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
     <tbody>{{range .Grants}}<tr>
-      <td class="settings-name">{{.Label}}</td><td>{{.Client}}</td><td>{{.Created}}</td><td>{{.LastUsed}}</td>
+      <td class="settings-name"><bdi>{{.Label}}</bdi></td><td><bdi>{{.Client}}</bdi></td><td>{{.Created}}</td><td>{{.LastUsed}}</td>
       <td class="settings-actions"><button class="btn btn-sec" type="button" data-action="revoke-agent-grant" data-grant-id="{{.ID}}" aria-label="Revoke {{.Label}}"><i class="ph ph-trash" aria-hidden="true"></i> Revoke</button></td>
     </tr>{{end}}</tbody>
   </table>

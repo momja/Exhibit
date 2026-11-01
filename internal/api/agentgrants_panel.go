@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -11,6 +12,7 @@ import (
 // Newly issued grant tokens are never part of a page or fragment response.
 type agentGrantsPanelView struct {
 	MCPURL         string
+	ClaudeCommand  string
 	RefreshHeaders string
 	Grants         []agentGrantRowView
 }
@@ -46,6 +48,10 @@ func (ro *Router) agentGrantsPanel(r *http.Request) (*agentGrantsPanelView, erro
 		return nil, err
 	}
 	view := &agentGrantsPanelView{MCPURL: ro.cfg.MCPURL, RefreshHeaders: string(encodedHeaders)}
+	if view.MCPURL != "" {
+		// Keep operator-configured URLs literal even with shell metacharacters.
+		view.ClaudeCommand = "claude mcp add --transport http exhibit '" + strings.ReplaceAll(view.MCPURL, "'", "'\\''") + "'"
+	}
 	for _, grant := range grants {
 		row := agentGrantRowView{
 			ID: grant.ID, Label: grant.Label, Client: grant.Client,

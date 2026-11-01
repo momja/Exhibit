@@ -78,6 +78,8 @@ type pageOwnerRoute struct {
 // appOriginGETOwnerScope is every GET route the app mux registers. A route
 // missing from here fails the walk on purpose.
 var appOriginGETOwnerScope = []pageOwnerRoute{
+	{route: "/.well-known/oauth-authorization-server", why: "Public static metadata; reads no library"},
+	{route: "/oauth/authorize", scopedByHandler: true, coveredBy: "oauth_test.go", why: "Consent reads no artifacts; approval binds the grant to the session owner, or the no-login operator"},
 	{route: "/partials/agent-grants", scopedByHandler: true, coveredBy: "agentgrants_test.go", why: "Lists only the caller’s library grants, with no owner id accepted; tested with two owners and a no-login instance"},
 	{route: "/api/agent-grants", why: "API owner-only grant listing, covered by agentgrants_test.go"},
 	{route: "/api/agent/credential", why: "Describes only the authenticated agent credential, covered by agentgrants_test.go"},
@@ -393,6 +395,9 @@ func assertFramesName(t *testing.T, ro *Router, w *httptest.ResponseRecorder, wa
 
 func TestEveryAppOriginGETRouteDeclaresItsOwnerScope(t *testing.T) {
 	in := newTwoOwnerInstance(t)
+	cfg := in.ro.cfg
+	cfg.MCPURL = "https://agents.example.test/mcp"
+	in.ro = NewRouter(cfg)
 
 	declared := map[string]bool{}
 	for _, row := range appOriginGETOwnerScope {

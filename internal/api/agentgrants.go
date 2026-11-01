@@ -91,7 +91,11 @@ func (ro *Router) createAgentGrant(w http.ResponseWriter, r *http.Request) {
 		serverError(w, r, "mint agent grant token", err)
 		return
 	}
-	g, err := ro.cfg.Store.CreateAgentGrant(r.Context(), ownerIDFromCtx(r.Context()),
+	createGrant := ro.cfg.Store.CreateAgentGrant
+	if principalFromCtx(r.Context()).Kind == PrincipalSession {
+		createGrant = ro.cfg.Store.CreateAgentGrantForUser
+	}
+	g, err := createGrant(r.Context(), ownerIDFromCtx(r.Context()),
 		normalizeAgentGrantLabel(req.Label), "", digest)
 	if errors.Is(err, store.ErrNotFound) {
 		http.Error(w, "not found", http.StatusNotFound)

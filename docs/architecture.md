@@ -713,12 +713,12 @@ default. The agent mode is a form of named fields. The brief crosses to `/agent`
   `EXHIBIT_URL`) as the authorization server. Every 401 links to the path-inserted
   metadata URL through `WWW-Authenticate`; core outages remain 503. Metadata does
   not decide token validity: the core still verifies every bearer.
-  Core `MCP_URL` enables token
-  issuance and remote connection configuration in Settings. Without it, new grants
-  return 404 and the panel is hidden unless the owner has live grants; those remain
-  listed for revocation with a note that MCP is not enabled. The core has no
-  `/mcp` route or MCP transport.
-  The core's authorization-server endpoints are a subsequent story.
+  Core `MCP_URL` enables the authorization server, token issuance and remote
+  connection configuration in Settings. Without it, OAuth endpoints and new
+  grants return 404 and the panel is hidden unless the owner has live grants;
+  those remain listed for revocation with a note that MCP is not enabled. The
+  core has no `/mcp` route or MCP transport; its `/oauth/*` and authorization-server
+  metadata routes stay on the core.
   [Settings after issuance](screenshots/Exh-uhvu/connected-agents.png).
 
 ### 3.7 Agent sidecar (Pi harness, Exh-yvhp)
@@ -831,6 +831,32 @@ store lookup; the remote MCP service checks it on every request without caching.
 
 Screenshot: [Connected agents after issuance](screenshots/Exh-l2xj/01-connected-agents.png).
 
+### Built-in MCP authorization server (Exh-rhlq)
+
+With `MCP_URL` configured, the **core** serves RFC 8414 metadata at
+`/.well-known/oauth-authorization-server` and `/oauth/register`,
+`/oauth/authorize` (GET consent and POST decision), and `/oauth/token`.
+All return 404 without `MCP_URL`. The separate MCP service continues to serve
+only the MCP transport and its protected-resource metadata, naming `APP_ORIGIN`
+as issuer. Both authorization and token exchange require `resource=MCP_URL`.
+
+Open registration accepts public clients and signs their name and redirect URIs
+into an `exclient_…` id with `Secrets.DeriveKey("oauth-client-id")`; there is no
+client table or secret. Authorization codes are single-use, five-minute entries
+in a bounded in-memory store (1024), bound to client, redirect, owner, resource
+and PKCE S256 challenge. Restarting the core drops pending codes. Exchanging a
+session-issued code atomically requires its approving account to still exist and
+be enabled; no-login grants retain support for an owner without a users row.
+
+The page group supplies the existing local, OIDC or Clerk session, preserving
+the full consent URL through sign-in; on a no-login instance the operator may
+approve. Public/read-only visitors and agent credentials may not. Consent names
+the client and redirect host, describes whole-library access and offers Approve
+or Deny. It has no artifact picker and cannot be framed. Approval ultimately
+issues the same persisted library grant as Settings, with client name in both
+`label` and `client`: no expiry, no refresh token, ordinary API policy, and
+revocation in **Settings → Connected agents**. Saved data remains read-only.
+
 ### External-agent MCP tools (Exh-q6xo)
 
 `internal/mcpserver` implements the library tool surface using the official Go
@@ -926,7 +952,11 @@ type Identity struct{ ExternalID, Email string }
 
 - **The provider is login-time only.** Its code is exchanged once at
   `/auth/callback`; afterward a request is a lookup of our own session row. No
-  per-request token verification: that would make logout impossible.
+  per-request token verification: that would make logout impossible. The full
+  return URL is held server-side against the flow's random state, avoiding cookie
+  size and character restrictions for OAuth consent URLs. This store is bounded
+  to 1024 ten-minute entries, consumed once; eviction or a restart falls back to
+  the library after successful login.
 - **Generic OIDC only** (`auth.OIDCProvider`): Authorization Code + PKCE with
   discovery, via `coreos/go-oidc/v3` and `x/oauth2`. No vendor SDK.
 - **Session**: opaque id in an `HttpOnly`, `SameSite=Lax`, app-origin cookie, never

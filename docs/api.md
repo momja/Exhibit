@@ -5,9 +5,10 @@ Companion to `product_requirement_doc.md` (the *what* and the boundaries) and
 path). This document is the concrete HTTP API: every route, its auth, and the
 ingest, state, sharing, and render flows a client uses.
 
-All routes require `Authorization: Bearer <token>` except public share links.
-An agent session's own bearer token is accepted too, but only within its scope
-(see Agent, below).
+Unless noted otherwise, API routes require an authenticated session or
+`Authorization: Bearer <token>`. An agent's bearer token is accepted only within
+its scope (see Agent, below). Share links, OAuth discovery, registration and code
+exchange have their own access rules described here.
 
 ## External-agent credentials
 
@@ -53,7 +54,7 @@ retain their one-artifact scope and process lifetime.
 
 `exhibit-mcp` exposes Streamable HTTP at the path of `MCP_PUBLIC_URL`
 (normally `/mcp`), in a separate process. The core always returns 404 at `/mcp`.
-Setting the core's optional `MCP_URL` enables token issuance and displays the
+Setting the core's optional `MCP_URL` enables OAuth and token issuance, and displays the
 remote Claude Code command and HTTP JSON configuration after issuance in
 Settings. Deployment and proxy routing are described in
 [deployment.md §5.3](deployment.md#53-optional-remote-mcp-service).
@@ -88,8 +89,51 @@ service reaches the core at an internal address.
 Every 401 includes `WWW-Authenticate: Bearer resource_metadata="<metadata URL>"`,
 where the metadata URL uses `MCP_PUBLIC_URL`'s origin and the path-inserted form.
 A presented invalid token also adds `error="invalid_token"`. A core outage returns
-503 without that challenge. Discovery is served entirely by the MCP service;
-the core's authorization-server endpoints arrive in a subsequent story.
+503 without that challenge. Protected-resource discovery is served by the MCP
+service; authorization-server discovery and the OAuth flow stay on the core.
+
+### Built-in OAuth authorization server
+
+These core routes exist only when `MCP_URL` is set; otherwise they return 404:
+
+```
+GET  /.well-known/oauth-authorization-server    RFC 8414 metadata
+POST /oauth/register                          Open dynamic client registration
+GET  /oauth/authorize                         Sign in and review library access
+POST /oauth/authorize                         Approve or deny the connection
+POST /oauth/token                             Exchange an authorization code
+```
+
+Metadata names `APP_ORIGIN` as issuer and advertises the authorization-code grant,
+PKCE `S256`, public clients (`token_endpoint_auth_method: none`) and the RFC 9207
+`iss` authorization-response parameter. Registration accepts `client_name` and
+one to five `redirect_uris`: HTTPS, loopback HTTP or native private-use schemes,
+without fragments. The signed `exclient_…` client id carries the registration; no
+client secret or client row is created. Loopback redirects may vary their port.
+
+Authorization requires `response_type=code`, the registered `client_id` and
+`redirect_uri`, `code_challenge`, `code_challenge_method=S256`, and
+`resource` exactly equal to `MCP_URL`. Optional `state` is returned unchanged.
+The existing local, OIDC or Clerk login returns the person to the full consent
+URL. A session may approve, or the operator on a no-login instance; public
+visitors and agent credentials cannot. Consent names the client and redirect
+host and grants the owner's whole library, with no artifact picker. It allows
+searching, creating, reading and editing artifacts and widgets and reading saved
+data; sharing, deletion and saved-data changes remain forbidden. Denial returns
+`access_denied` to the registered redirect.
+
+The token endpoint accepts an URL-encoded form with `grant_type=authorization_code`,
+`code`, `client_id` (also accepted as the Basic username), `redirect_uri`,
+`code_verifier`, and the same `resource`. Codes are single-use, expire after five
+minutes and are held in memory (at most 1024 pending codes); a restart discards
+them. Exchange refuses a session-issued code if its approving account has been
+deleted or disabled. A wrong or missing resource is refused with `invalid_target`.
+The response is `{"access_token":"exgrant_…","token_type":"Bearer"}`, with no expiry or
+refresh token. It is an ordinary persisted library grant with both `label` and
+`client` set to the client name, listed and revoked in **Settings → Connected
+agents**. Revocation makes the next MCP request fail.
+
+Screenshot: [Library consent](screenshots/Exh-rhlq/01-consent.png).
 
 ## Artifacts
 

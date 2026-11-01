@@ -27,8 +27,9 @@ const (
 	// sized for an upload, not for an idle socket.
 	serverIdleTimeout = 2 * time.Minute
 	// serverMaxHeaderBytes caps the request line and headers together. The
-	// largest legitimate ones are a session cookie, a bearer token and a
-	// render token in a query string, each well under a kilobyte; 64 KiB is
+	// largest is an OAuth authorization URL, including a signed client ID
+	// capped at 16 KiB. Session cookies and bearer/render tokens are smaller.
+	// 64 KiB is
 	// already more than the proxies this sits behind accept by default.
 	serverMaxHeaderBytes = 64 << 10
 )

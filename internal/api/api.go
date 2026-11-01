@@ -53,8 +53,8 @@ type Config struct {
 	AppOrigin    string
 	RenderOrigin string
 	AuthToken    string
-	// MCPURL enables grant issuance and names the satellite's public endpoint
-	// in connection snippets. The core never serves an MCP transport.
+	// MCPURL enables grant issuance and the OAuth authorization server, and
+	// names the satellite in connection snippets. The core serves no MCP transport.
 	MCPURL string
 	// Agent chat support (Exh-yvhp). Agent is nil when the pi harness is
 	// unavailable; Secrets seals the BYO provider keys at rest.
@@ -154,9 +154,14 @@ type Router struct {
 	// contract, and attempt counters do not earn a table — see
 	// loginratelimit.go, which also holds the reasoning for what it keys on.
 	logins *loginLimiter
+	// Provider return URLs are kept server-side to preserve long OAuth queries.
+	loginReturns loginReturnStore
 	// sseTickets authenticates the agent event stream, the one route a
 	// browser cannot send a header on (av-rgp1). See ssetickets.go.
 	sseTickets *sseTicketStore
+	// OAuth client registrations are signed; pending codes are bounded memory.
+	oauthClientKey [32]byte
+	oauthCodes     *oauthCodeStore
 }
 
 // compressibleTypes is the explicit set of response content types worth
@@ -361,6 +366,10 @@ func NewRouter(cfg Config) *Router {
 		logins:     newLoginLimiter(nil),
 		sseTickets: newSSETicketStore(sseTicketTTL),
 	}
+	if cfg.MCPURL != "" {
+		r.oauthClientKey = oauthClientKey(cfg.Secrets)
+		r.oauthCodes = newOAuthCodeStore()
+	}
 	r.setupRoutes()
 	return r
 }
@@ -460,6 +469,11 @@ func (ro *Router) setupRoutes() {
 		r.Get("/settings", ro.profilePage)
 		r.Get("/profile", ro.profilePage) // compatibility with existing account links
 
+		if ro.cfg.MCPURL != "" {
+			r.Get(oauthAuthorizePath, ro.authorizePage)
+			r.Post(oauthAuthorizePath, ro.authorizeDecision)
+		}
+
 		// Server-rendered fragments, swapped into a live page by htmx
 		// (av-6m3e). They render the same template partials the full page
 		// render uses, and carry no authority the page they belong to
@@ -511,6 +525,13 @@ func (ro *Router) setupRoutes() {
 	// Public shared-widget route (av-ei5h) — no auth required, same
 	// share-row authorization, redirects to the render origin like above.
 	ro.Get("/s/{shareID}/widget", ro.serveShareWidget)
+
+	// Discovery and code exchange are public; consent uses the page session.
+	if ro.cfg.MCPURL != "" {
+		ro.Get(authServerMetadataPath, ro.authServerMetadata)
+		ro.Post(oauthRegisterPath, ro.registerOAuthClient)
+		ro.Post(oauthTokenPath, ro.exchangeOAuthCode)
+	}
 
 	// The instance's public identity (av-4ac9). Registered here, outside the
 	// authenticated API group, because a visitor with no credential is

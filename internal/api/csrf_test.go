@@ -73,6 +73,9 @@ type getRoute struct {
 // to the mux without adding a row here fails the suite on purpose: the point is
 // that someone states, once, whether the new handler reads or writes.
 var appOriginGETRoutes = []getRoute{
+	{route: "/.well-known/oauth-authorization-server"},
+	// Consent GET only displays authority; approval is a protected POST.
+	{route: "/oauth/authorize"},
 	{route: "/shared"},
 	{route: "/shared-by-me"},
 	{route: "/partials/gallery-grid/shared"},
@@ -242,6 +245,9 @@ func TestNoAppOriginGETRouteMutates(t *testing.T) {
 	// a credential (av-q30x) — and a route walked in none of them would slip
 	// past this test entirely.
 	plain := newTestRouter(t)
+	cfg := plain.cfg
+	cfg.MCPURL = "https://agents.example.test/mcp"
+	plain = NewRouter(cfg)
 	withIdentity, _ := newIdentityTestRouter(t, &stubProvider{})
 	withLocal, _ := newLocalLoginRouter(t)
 

@@ -50,7 +50,6 @@ const (
 	// The login-flow cookies, alive only for the round trip to the provider.
 	stateCookieName    = "exhibit_auth_state"
 	verifierCookieName = "exhibit_auth_verifier"
-	nextCookieName     = "exhibit_auth_next"
 
 	// loginFlowTTL bounds how long a half-finished login may sit.
 	loginFlowTTL = 10 * time.Minute
@@ -171,9 +170,10 @@ func (ro *Router) authStartSSO(w http.ResponseWriter, r *http.Request) {
 	}
 	ro.setCookie(w, stateCookieName, state, loginFlowTTL)
 	ro.setCookie(w, verifierCookieName, verifier, loginFlowTTL)
-	if next := safeNext(r.URL.Query().Get("next")); next != "" {
-		ro.setCookie(w, nextCookieName, next, loginFlowTTL)
-	}
+	// Keep the full URL on the server: an OAuth authorization request can
+	// exceed a browser's cookie limit, and cookie serialization strips some
+	// valid query characters. The existing random state binds it to this flow.
+	ro.loginReturns.put(state, safeNext(r.URL.Query().Get("next")))
 	http.Redirect(w, r, ro.cfg.Identity.AuthURL(state, verifier), http.StatusFound)
 }
 
@@ -212,7 +212,7 @@ func (ro *Router) authCallback(w http.ResponseWriter, r *http.Request) {
 	// The flow cookies have done their job whatever happens next.
 	ro.clearCookie(w, stateCookieName)
 	ro.clearCookie(w, verifierCookieName)
-	ro.clearCookie(w, nextCookieName)
+	next := ro.loginReturns.take(stateCookie.Value)
 
 	identity, err := ro.cfg.Identity.Exchange(r.Context(), code, verifierCookie.Value)
 	if err != nil {
@@ -244,10 +244,8 @@ func (ro *Router) authCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dest := "/"
-	if c, err := r.Cookie(nextCookieName); err == nil {
-		if next := safeNext(c.Value); next != "" {
-			dest = next
-		}
+	if next != "" {
+		dest = next
 	}
 	http.Redirect(w, r, dest, http.StatusFound)
 }

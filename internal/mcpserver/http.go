@@ -166,7 +166,7 @@ func requestBearer(r *http.Request) string {
 }
 
 // Every accepted token is a library grant verified by the core, never locally.
-// The core's authorization server (the next story) only issues grants for MCP_URL
+// The core's authorization server only issues grants for MCP_URL
 // as resource; this service does not introduce a separate token-validity policy.
 func verifyLibraryCredential(ctx context.Context, api *HTTPAPI) (string, int) {
 	response, err := api.Do(ctx, http.MethodGet, "/api/agent/credential", nil)
