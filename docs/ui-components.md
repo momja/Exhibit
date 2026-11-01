@@ -474,3 +474,23 @@ sizing or mobile padding remains.
 The browser measures that the three labels need more than the default 374px
 content area and fit the wide frame's 434px content area.
 [Actions at 390×240](screenshots/Exh-yrgf/short-actions/390.png)
+
+Runtime network prompts are one imported ES module used by detail and agent.
+`modal:closed` advances exactly one queued report, so a late block reply cannot
+consume the next origin. Allow clears the old queue and refreshes capabilities
+before reloading the current frame. Reports retain their artifact and frame
+identity; replies from a displaced preview cannot reload its replacement.
+Block once is initial focus; transient dismissal stays available while a block
+write is pending. `modal:disconnected` lets features discard transient requests
+without performing mutations or restoring a detached trigger.
+
+`TestNetworkModalBrowser` runs native keyboard/backdrop and delayed block
+settlement on both pages at both widths. Node feature fixtures import the actual page and dialog modules and drive
+the public handle/native cancellation; browser suites cover native focus,
+Escape, top-layer behavior, and Stimulus removal.
+
+Network uses the shared 480px wide frame for its three distinct decisions;
+its heading, explanation, status and wrapping footer use the same defaults.
+
+[Network prompt desktop](screenshots/Exh-1grc/1280.png) ·
+[Network prompt phone](screenshots/Exh-1grc/390.png)
