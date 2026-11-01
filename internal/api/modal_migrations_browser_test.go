@@ -281,6 +281,8 @@ func TestAdminEntitlementModalBrowser(t *testing.T) {
 			b.dialogCycle("#entitlement-dialog", open, "#entitlement-plan")
 			b.check(`document.activeElement.dataset.action==='entitlement'`)
 			b.eval(open)
+			checkModalVisuals(t, b.ctx, "#entitlement-dialog")
+			b.check(`document.querySelectorAll("#entitlement-dialog-title").length===1 && document.querySelector("#entitlement-dialog").getAttribute("aria-labelledby")==="entitlement-dialog-title"`)
 			b.capture("Exh-b98w", width)
 			for _, bad := range []string{"12e", "-", "5,000", "1.5", "9007199254740992"} {
 				b.eval(fmt.Sprintf(`document.getElementById('entitlement-storage').value=%q;document.getElementById('entitlement-save').click()`, bad))

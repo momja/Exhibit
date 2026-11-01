@@ -156,14 +156,14 @@
      three related values, one of which has a meaningful empty state ("put this
      account back on the instance default"), are not three unrelated questions.
      Native <dialog>, so the focus trap and the Escape key are the browser's. */}}
-<dialog id="entitlement-dialog" class="modal-dialog settings-dialog" aria-labelledby="entitlement-title"
+<dialog id="entitlement-dialog" class="modal-dialog settings-dialog" aria-labelledby="entitlement-dialog-title"
   data-controller="modal">
   <form>
-  <fieldset class="settings-form modal-fields">
-    <h3 id="entitlement-title" class="settings-h3">Entitlement for <span id="entitlement-who"></span></h3>
-    <label class="settings-label" for="entitlement-plan">Plan</label>
-    <input class="field" type="text" id="entitlement-plan" autofocus autocomplete="off" spellcheck="false" placeholder="A label — leave empty for the instance default">
-    <label class="settings-label" for="entitlement-storage">Storage limit (bytes)</label>
+  <fieldset class="modal-fields">
+    <h2 id="entitlement-dialog-title">Entitlement for <span id="entitlement-who"></span></h2>
+    <label for="entitlement-plan">Plan</label>
+    <input type="text" id="entitlement-plan" autofocus autocomplete="off" spellcheck="false" placeholder="A label — leave empty for the instance default">
+    <label for="entitlement-storage">Storage limit (bytes)</label>
     {{/* type="text", deliberately, with inputmode for the numeric keypad on a
          phone. An <input type="number"> sanitizes its own value: anything that
          is not a valid floating-point number reads back as the empty string,
@@ -171,17 +171,17 @@
          and blank here is a meaningful answer that clears the account's own
          ceiling. Keeping the raw text is what lets a typo be refused instead
          of silently applied as a downgrade. */}}
-    <input class="field" type="text" id="entitlement-storage" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="Leave empty for the instance default">
-    <span class="muted text-sm">Bytes, exactly — 5368709120 is 5 GiB. Empty puts this account back on the instance default; it does not make it unlimited.</span>
-    <label class="settings-label" for="entitlement-ref">External reference</label>
-    <input class="field" type="text" id="entitlement-ref" autocomplete="off" spellcheck="false" placeholder="Opaque — whatever your own system calls this account">
-    <span class="muted text-sm">Exhibit stores this and never reads it. It is here so it survives the system that wrote it.</span>
+    <input type="text" id="entitlement-storage" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="Leave empty for the instance default">
+    <p>Bytes, exactly — 5368709120 is 5 GiB. Empty puts this account back on the instance default; it does not make it unlimited.</p>
+    <label for="entitlement-ref">External reference</label>
+    <input type="text" id="entitlement-ref" autocomplete="off" spellcheck="false" placeholder="Opaque — whatever your own system calls this account">
+    <p>Exhibit stores this and never reads it. It is here so it survives the system that wrote it.</p>
     {{/* The dialog's own error line. The page's status region sits behind the
          modal backdrop, so a refusal reported there is a refusal nobody can
          read — and this is the one place where the fix for it is "correct what
          you typed", which needs what you typed still on screen. */}}
-    <p id="entitlement-error" class="settings-dialog-error" hidden></p>
-    <div class="settings-foot">
+    <p id="entitlement-error" class="modal-error" hidden></p>
+    <div class="modal-actions">
       <button class="btn btn-sec" type="button" id="entitlement-cancel" data-modal-dismiss>Cancel</button>
       <span class="spacer"></span>
       <button class="btn" type="submit" id="entitlement-save"><i class="ph ph-check"></i> Save entitlement</button>

@@ -443,5 +443,11 @@ failure. `run` locks buttons and the native fieldset while saving. The form subm
 ES module. `TestAdminEntitlementModalBrowser` checks malformed and blank input,
 server refusal, pending Escape, and account-specific return focus.
 
+The entitlement editor uses the standard 420px frame, heading, associated
+captions, body explanations, fields, error and action footer. Its dialog heading
+has a unique ID separate from the page's Entitlements section. Long account
+identifiers wrap through the shared heading rule; no private width or type
+scale is needed. Add-account page controls retain their page styles.
+
 [Entitlement desktop](screenshots/Exh-b98w/1280.png) ·
 [Entitlement phone](screenshots/Exh-b98w/390.png)
