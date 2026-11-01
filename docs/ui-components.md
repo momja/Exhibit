@@ -454,3 +454,23 @@ scale is needed. Add-account page controls retain their page styles.
 
 [Long account desktop](screenshots/Exh-b98w/long-account/1280.png) ·
 [Long account phone](screenshots/Exh-b98w/long-account/390.png)
+
+The editor's leave dialog composes `unsaved-changes` with `modal`. Keep editing
+is initial focus. Escape returns to the attempted navigation link; backdrop
+clicks intentionally leave this decision open. The close hook vetoes only backdrop dismissal. `run` owns the
+save/discard lock and the handle closes after the existing coordinator settles. Browser beforeunload and pageshow restoration remain with
+the editor coordinator. `TestEditorLeaveModalBrowser` covers this policy;
+`TestEditNavigationBrowser` and `TestEditNavigationPermissionSavesBrowser`
+exercise saves, discard, Back, permission edits and partial page refreshes.
+
+Unsaved changes uses the existing `.modal-wide` 480px content size for its three
+explicit decisions. Heading, body, padding and wrapping footer use the defaults;
+phone controls share the same 44px minimum as every dialog. No private button
+sizing or mobile padding remains.
+
+[Unsaved changes desktop](screenshots/Exh-yrgf/1280.png) ·
+[Unsaved changes phone](screenshots/Exh-yrgf/390.png)
+
+The browser measures that the three labels need more than the default 374px
+content area and fit the wide frame's 434px content area.
+[Actions at 390×240](screenshots/Exh-yrgf/short-actions/390.png)
