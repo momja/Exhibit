@@ -97,7 +97,7 @@ func TestGalleryMobileTabsBrowser(t *testing.T) {
 				require.NoError(t, chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](`window.scrollTo(0, document.documentElement.scrollHeight)`)))
 				// Wait for automatic paging's pending layout before measuring.
 				require.NoError(t, chromedp.Do(ctx,
-					chromedp.Poll[chromedp.Void](`document.querySelector('.gallery-more button').disabled`),
+					chromedp.Poll[chromedp.Void](`document.querySelector('.gallery-more button').classList.contains('htmx-request')`),
 					chromedp.Evaluate[chromedp.Void](`window.scrollTo(0, document.documentElement.scrollHeight)`)))
 				check(`document.querySelector('.gallery-more').getBoundingClientRect().bottom + 11 <= document.querySelector('.gallery-rail').getBoundingClientRect().top`, "Load more clears the actual enlarged bar and its inset with a content gap")
 				capture("large-labels-pagination")
