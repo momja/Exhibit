@@ -392,6 +392,7 @@ func TestNetworkModalBrowser(t *testing.T) {
 				report := `permissionReport({__avNetwork:true,origin:'https://first.example.test',directive:'connect-src'})`
 				b.dialogCycle("#net-modal", report, "#net-once")
 				b.eval(report)
+				checkModalVisuals(t, b.ctx, "#net-modal")
 				b.capture("Exh-1grc", width)
 				b.eval(`permissionReport({__avNetwork:true,origin:'https://second.example.test'});window.savedFetch=window.fetch;window.fetch=(url,opts)=>opts?.method==='POST'?new Promise(resolve=>window.finishNetwork=()=>resolve(new Response('{}',{status:200}))):savedFetch(url,opts);document.getElementById('net-never').click()`)
 				b.wait(`document.getElementById('net-never').disabled`)
