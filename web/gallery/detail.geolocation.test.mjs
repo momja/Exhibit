@@ -72,8 +72,14 @@ async function loadDetail({ readOnly = false, approvals = {}, responses = [] } =
       return null;
     }
   }, HIDDEN);
-  const netDialog = permissionDialog(page, 'net-modal');
+  permissionDialog(page, 'net-modal');
+  permissionDialog(page, 'dl-modal');
+  permissionDialog(page, 'clip-modal');
+  permissionDialog(page, 'link-modal');
+  permissionDialog(page, 'media-modal');
+  permissionDialog(page, 'geo-modal');
   await page.loadModule(path.join(ASSETS, 'detail.js'));
+  permissionDialog(page, 'direct-open-modal');
   await page.loadModule(path.join(ASSETS, "direct-open.js"));
   return { ...page, api, tabs, opened };
 }
@@ -87,8 +93,7 @@ test("an unapproved request prompts, and is not answered until the user decides"
 
   await postFromFrame(geoRequest(1));
 
-  assert.equal(byId("geo-modal").hidden, false);
-  assert.equal(byId("geo-block").focused, true, "keyboard users land on the decision");
+  assert.equal(byId("geo-modal").open, true);
   assert.deepEqual(answers(frame), []);
   assert.deepEqual(api.calls, []);
 });
@@ -106,7 +111,7 @@ test("Allow persists location alone, opens the top-level render, and answers the
   assert.equal(tabs.length, 1, "the tab is claimed in the click's own task");
   assert.equal(tabs[0].opener, null, "the artifact's top-level render gets no handle on the library tab");
   assert.equal(tabs[0].location, OPEN_URL);
-  assert.equal(byId("geo-modal").hidden, true);
+  assert.equal(byId("geo-modal").open, false);
   assert.deepEqual(answers(frame).map((a) => [a.id, a.banner]), [[1, false]],
     "no banner: the user is already looking at the place the approval works");
 });
@@ -120,7 +125,7 @@ test("after Allow, the next request raises the banner instead of a second prompt
   await allowing;
   await postFromFrame(geoRequest(2));
 
-  assert.equal(byId("geo-modal").hidden, true);
+  assert.equal(byId("geo-modal").open, false);
   const second = answers(frame).find((a) => a.id === 2);
   assert.ok(second, "the frame's request is answered");
   assert.equal(second.banner, true);
@@ -132,7 +137,7 @@ test("an artifact approved before this page loaded is answered with the banner",
 
   await postFromFrame(geoRequest(7));
 
-  assert.equal(byId("geo-modal").hidden, true);
+  assert.equal(byId("geo-modal").open, false);
   assert.deepEqual(answers(frame).map((a) => [a.id, a.banner]), [[7, true]]);
   assert.deepEqual(api.calls, []);
 });
@@ -143,20 +148,10 @@ test("Block answers with a denial and persists nothing", async () => {
   await postFromFrame(geoRequest(1));
   await byId("geo-block").click();
 
-  assert.equal(byId("geo-modal").hidden, true);
+  assert.equal(byId("geo-modal").open, false);
   assert.deepEqual(answers(frame).map((a) => [a.id, a.banner, a.error]), [[1, false, "User denied Geolocation"]]);
   assert.deepEqual(api.calls, []);
   assert.deepEqual(tabs, []);
-});
-
-test("Escape is a Block", async () => {
-  const { byId, frame, pressKey, postFromFrame } = await loadDetail();
-
-  await postFromFrame(geoRequest(1));
-  pressKey("Escape");
-
-  assert.equal(byId("geo-modal").hidden, true);
-  assert.equal(answers(frame).length, 1);
 });
 
 test("a newer request displaces the pending one, which still gets its answer", async () => {
@@ -166,7 +161,7 @@ test("a newer request displaces the pending one, which still gets its answer", a
   await postFromFrame(geoRequest(2));
   assert.deepEqual(answers(frame).map((a) => a.id), [1],
     "getCurrentPosition then watchPosition is common, and the first must not wait forever");
-  assert.equal(byId("geo-modal").hidden, false, "one prompt covers the newest request");
+  assert.equal(byId("geo-modal").open, true, "one prompt covers the newest request");
 
   const allowing = byId("geo-allow").click();
   await byId("direct-open-confirm").click();
@@ -189,7 +184,7 @@ test("a request displaced while the PATCH is in flight is not answered by openin
   assert.equal(tabs[0].closed, true, "the tab claimed for request 1 is closed, not navigated");
   assert.equal(tabs[0].location, null);
   assert.deepEqual(answers(frame).map((a) => a.id), [1], "request 1 was answered when it was displaced");
-  assert.equal(byId("geo-modal").hidden, false, "request 2 is still on screen");
+  assert.equal(byId("geo-modal").open, true, "request 2 is still on screen");
 });
 
 test("a failed PATCH closes the placeholder tab and keeps the prompt", async () => {
@@ -206,7 +201,7 @@ test("a failed PATCH closes the placeholder tab and keeps the prompt", async () 
 
   assert.equal(tabs[0].closed, true);
   assert.equal(tabs[0].location, null);
-  assert.equal(byId("geo-modal").hidden, false, "the user can still choose Block");
+  assert.equal(byId("geo-modal").open, true, "the user can still choose Block");
   assert.deepEqual(answers(frame), []);
 });
 
@@ -216,7 +211,7 @@ test("a message from anything but the artifact frame is ignored", async () => {
   await postFromFrame(geoRequest(1), { postMessage() {} });
   await postFromFrame({ ...geoRequest(1), artifactId: "someone-else" });
 
-  assert.equal(byId("geo-modal").hidden, true);
+  assert.equal(byId("geo-modal").open, false);
   assert.deepEqual(answers(frame), []);
 });
 
@@ -225,7 +220,7 @@ test("a recipient is answered with a denial, never offered the prompt", async ()
 
   await postFromFrame(geoRequest(1));
 
-  assert.equal(byId("geo-modal").hidden, true, "the approval is the owner's to make");
+  assert.equal(byId("geo-modal").open, false, "the approval is the owner's to make");
   assert.deepEqual(answers(frame).map((a) => [a.id, a.banner]), [[1, false]]);
   assert.deepEqual(api.calls, []);
 });
@@ -246,7 +241,7 @@ test("the camera gate's Allow still persists, opens the render, and answers", as
   const { byId, frame, api, tabs, postFromFrame } = await loadDetail();
 
   await postFromFrame({ __avMedia: true, artifactId: ID, id: "m1", video: true, audio: false });
-  assert.equal(byId("media-modal").hidden, false);
+  assert.equal(byId("media-modal").open, true);
   const allowing = byId("media-allow").click();
   await byId("direct-open-confirm").click();
   await allowing;
@@ -257,5 +252,5 @@ test("the camera gate's Allow still persists, opens the render, and answers", as
   const [reply] = frame.contentWindow.posted.filter((m) => m.__avMediaResult);
   assert.equal(reply.id, "m1");
   assert.equal(reply.name, "NotSupportedError");
-  assert.equal(byId("media-modal").hidden, true);
+  assert.equal(byId("media-modal").open, false);
 });

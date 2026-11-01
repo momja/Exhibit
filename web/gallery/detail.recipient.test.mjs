@@ -87,6 +87,11 @@ async function loadDetail({ readOnly, approvals = {} } = {}) {
     open: (url) => { opened.push(url); return null; }
   }, HIDDEN);
   const netDialog = permissionDialog(page, 'net-modal');
+  permissionDialog(page, 'dl-modal');
+  permissionDialog(page, 'clip-modal');
+  permissionDialog(page, 'link-modal');
+  permissionDialog(page, 'media-modal');
+  permissionDialog(page, 'geo-modal');
   await page.loadModule(path.join(ASSETS, 'detail.js'));
   return { ...page, api, opened };
 }
@@ -181,7 +186,7 @@ test("an unapproved download is dropped without a prompt", async () => {
 
   await postFromFrame(download());
 
-  assert.equal(byId("dl-modal").hidden, true);
+  assert.equal(byId("dl-modal").open, false);
   assert.deepEqual(api.calls, []);
 });
 
@@ -190,7 +195,7 @@ test("an unapproved clipboard call is rejected into the frame rather than left h
 
   await postFromFrame(clipboardRead());
 
-  assert.equal(byId("clip-modal").hidden, true);
+  assert.equal(byId("clip-modal").open, false);
   const [reply] = frame.contentWindow.posted.filter((m) => m.__avClipboardResult);
   assert.ok(reply, "an unanswered clipboard promise is a hang, which is worse than a denial");
   assert.equal(reply.ok, false);
@@ -203,7 +208,7 @@ test("an unapproved external link opens nothing and prompts for nothing", async 
 
   await postFromFrame(externalLink());
 
-  assert.equal(byId("link-modal").hidden, true);
+  assert.equal(byId("link-modal").open, false);
   assert.deepEqual(opened, []);
   assert.deepEqual(api.calls, []);
 });
@@ -213,7 +218,7 @@ test("an unapproved camera request is denied, not offered", async () => {
 
   await postFromFrame(cameraRequest());
 
-  assert.equal(byId("media-modal").hidden, true,
+  assert.equal(byId("media-modal").open, false,
     "Allow would open a tab on an approval this visitor cannot record");
   const [reply] = frame.contentWindow.posted.filter((m) => m.__avMediaResult);
   assert.ok(reply, "getUserMedia must settle; a pending promise looks like a hang");
@@ -262,7 +267,7 @@ test("a recipient's session issues no API call at all across every bridge", asyn
     "sending them is how a recipient learns the tool is broken instead of that " +
     "it is not theirs");
   for (const id of ["net-modal", "dl-modal", "clip-modal", "link-modal", "media-modal", "geo-modal"]) {
-    assert.equal(id === "net-modal" ? !byId(id).open : byId(id).hidden, true, id + " must not open for a visitor who cannot answer it");
+    assert.equal(["net-modal", "dl-modal", "clip-modal", "link-modal", "media-modal", "geo-modal"].includes(id) ? !byId(id).open : byId(id).hidden, true, id + " must not open for a visitor who cannot answer it");
   }
 });
 
@@ -275,7 +280,7 @@ test("the owner's session prompts and writes", async () => {
   await postFromFrame(blocked("https://api.example.com"));
   await byId("net-allow").click();
   await postFromFrame(download());
-  assert.equal(byId("dl-modal").hidden, false, "the owner is asked before the first download");
+  assert.equal(byId("dl-modal").open, true, "the owner is asked before the first download");
   await byId("dl-allow").click();
 
   const paths = api.calls.map((c) => c.method + " " + c.path);

@@ -63,6 +63,11 @@ async function loadDetail({ readOnly = false, responses = [], headline = "" } = 
   page.document.body.addEventListener("exhibit:capabilities-changed",
     (e) => capabilitiesChanged.push(e.type));
   permissionDialog(page, 'net-modal');
+  permissionDialog(page, 'dl-modal');
+  permissionDialog(page, 'clip-modal');
+  permissionDialog(page, 'link-modal');
+  permissionDialog(page, 'media-modal');
+  permissionDialog(page, 'geo-modal');
   await page.loadModule(path.join(ASSETS, 'detail.js'));
   return { ...page, api, capabilitiesChanged };
 }
@@ -287,3 +292,32 @@ test("a read-only visitor is not asked a question they cannot answer", async () 
   assert.deepEqual(capabilitiesChanged, [],
     "a visitor who cannot approve changes no posture");
 });
+
+for (const dismiss of [false, true]) for (const grant of [false, true]) {
+  test(`clipboard request stays exclusive until the browser operation settles (dismiss=${dismiss}, grant=${grant})`, async () => {
+    const page = await loadDetail({ responses: grant ? [] : [{ ok: false, status: 503 }] });
+    let finish;
+    let calls = 0;
+    page.context.navigator = { clipboard: { writeText: () => {
+      calls++;
+      return new Promise(resolve => { finish = resolve; });
+    } } };
+    await page.postFromFrame({ __avClipboard: true, artifactId: ID, id: 'slow-clipboard', op: 'write', text: 'fixture' });
+    const allowing = page.byId('clip-allow').click();
+    assert.equal(calls, 1, 'clipboard starts in the click stack');
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(page.byId('clip-allow').disabled, true, 'a persisted grant is not a completed clipboard operation');
+    await page.byId('clip-allow').click();
+    assert.equal(calls, 1, 'duplicate Allow does not touch the clipboard twice');
+    if (dismiss) await page.byId('clip-block').click();
+    finish();
+    await allowing;
+    const replies = page.frame.contentWindow.posted.filter(message => message.__avClipboardResult && message.id === 'slow-clipboard');
+    assert.equal(replies.length, dismiss || grant ? 1 : 0, 'completion and cancellation settle the request exactly once');
+    if (replies.length) assert.equal(replies[0].ok, !dismiss);
+    if (!dismiss && !grant) {
+      assert.equal(page.byId('clip-modal').open, true, 'failed grant remains retryable');
+      assert.equal(page.byId('clip-allow').disabled, false);
+    }
+  });
+}
