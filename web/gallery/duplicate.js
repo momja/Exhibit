@@ -46,6 +46,7 @@ export function initializeDuplication(root) {
     data.checked = false;
     pending = undefined;
     status.textContent = '';
+    status.classList.remove('modal-error');
     submit.textContent = 'Duplicate artifact';
     lockPayload();
     modal.show(event.detail.trigger);
@@ -55,6 +56,7 @@ export function initializeDuplication(root) {
     event.preventDefault();
     if (modal.pending) return;
     if (!pending && !title.value.trim()) {
+      status.classList.add('modal-error');
       status.textContent = 'Enter a title for the copy.';
       title.focus();
       return;
@@ -62,6 +64,7 @@ export function initializeDuplication(root) {
     pending ||= { title: title.value.trim(), copy_share_settings: share.checked, copy_data: data.checked, request_id: requestID() };
     lockPayload();
     const duplicated = await modal.run(async () => {
+      status.classList.remove('modal-error');
       status.textContent = 'Duplicating artifact…';
       try {
         const response = await apiFetch('/api/artifacts/' + encodeURIComponent(artifactID) + '/duplicate', {
@@ -71,6 +74,7 @@ export function initializeDuplication(root) {
         if (!response?.ok) {
           // A client refusal published nothing. A server/network failure may
           // have committed: preserve the payload and identity for a safe retry.
+          status.classList.add('modal-error');
           if (response && response.status < 500) {
             pending = undefined;
             const content = await response.json().catch(() => ({}));
@@ -89,6 +93,7 @@ export function initializeDuplication(root) {
         return true;
       } catch {
         if (!connected) return;
+        status.classList.add('modal-error');
         status.textContent = 'Could not confirm duplication. Try again to check the saved result.';
         submit.textContent = 'Try again';
       } finally {

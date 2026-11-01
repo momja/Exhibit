@@ -114,6 +114,7 @@ func TestTagModalBrowser(t *testing.T) {
 			b.dialogCycle("#tag-edit-modal", open, "#tag-edit-name")
 			b.check(`document.activeElement.matches('[data-action="edit-tag"]')`)
 			b.eval(open)
+			checkModalVisuals(t, b.ctx, "#tag-edit-modal")
 			b.capture("Exh-p3ah", width)
 			b.eval(`document.getElementById('tag-edit-name').value='';document.getElementById('tag-edit-save').click()`)
 			b.check(`document.querySelector('#tag-edit-modal').open && document.getElementById('tag-edit-error').textContent==='Name is required.'`)

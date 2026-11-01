@@ -170,7 +170,26 @@ with `exhibit:artifacts-changed`.
 The registered `modal` controller connects the dialog module in `modal.js`.
 Native `<dialog>` supplies the top layer and inert background. Keep the root
 outside any htmx region whose refresh must preserve its working copy. Feature
-Go partials own native fields and labels; `.modal-dialog` supplies visual defaults.
+Go partials own native fields and labels; `.modal-dialog` supplies visual defaults,
+including associated `label[for]` captions (also inside native forms and
+fieldsets), `.modal-error`, and `.modal-actions` footers.
+Migrated dialogs use the component defaults for the frame, 16px heading,
+13px body copy, field captions/controls/focus ring, and wrapping action footer
+with an 8px gap and 18px top spacing. Do not copy these into page styles.
+Use `label[for]` for captions and `.modal-check` for a wrapping checkbox label;
+an optional `small` inside its text holds a description. The two roles must
+not share caption styling. Read-only fields and disabled controls have shared
+states. Footer buttons and checkbox rows have a 44px minimum height on phones.
+Errors use `.modal-error`; a progress status uses ordinary body typography.
+
+`checkModalVisuals` compares rendered native dialogs with a plain shared
+reference under the same page styles at desktop and phone sizes. It checks
+heading/body/caption/field/checkbox/footer/error styles and horizontal overflow,
+without assuming that every dialog has the same content geometry.
+
+[Duplicate desktop](screenshots/Exh-p3ah/duplicate/1280.png) ·
+[Duplicate phone](screenshots/Exh-p3ah/duplicate/390.png)
+
 No lifecycle action list is needed:
 
 ```html

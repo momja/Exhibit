@@ -378,8 +378,9 @@ button.banner-action{background:none;border:0;padding:0;font:inherit;cursor:poin
 .color-custom-row input[type=color]{width:36px;height:30px;padding:0;border:1px solid var(--color-border);border-radius:6px;cursor:pointer}
 .color-custom-row input[type=text]{flex:1}
 
-/* Native dialogs share their frame; feature sheets style their contents. */
-.modal-dialog{margin:auto;width:420px;max-width:calc(100vw - 32px);max-height:calc(100dvh - 32px);overflow:auto;padding:22px;border:1px solid var(--color-hairline-strong);border-radius:var(--radius-lg);background:var(--color-panel);color:var(--color-ink);box-shadow:var(--shadow-modal)}
+/* Native dialogs share their frame and content defaults. Content geometry is
+ * the only feature-level variation; see docs/ui-components.md. */
+.modal-dialog{box-sizing:border-box;margin:auto;width:420px;max-width:calc(100vw - 32px);max-height:calc(100dvh - 32px);overflow:auto;padding:22px;border:1px solid var(--color-hairline-strong);border-radius:var(--radius-lg);background:var(--color-panel);color:var(--color-ink);box-shadow:var(--shadow-modal)}
 .modal-dialog::backdrop{background:var(--overlay)}
 /* One reusable hosted account control. Clerk supplies its avatar and menu. */
 .account-control{display:flex;align-items:center;gap:var(--space-3);min-width:0}
@@ -387,11 +388,28 @@ button.banner-action{background:none;border:0;padding:0;font:inherit;cursor:poin
 .account-control [hidden]{display:none!important}
 .account-control [data-clerk-target="status"]:empty{display:none}
 
-.modal-dialog h2{font-size:16px;font-weight:600;margin:0 0 12px}
-.tag-edit-dialog label{display:block;font-size:12px;color:var(--color-ink-mid);margin:12px 0 4px}
+.modal-dialog h2{font-size:16px;font-weight:600;margin:0 0 12px;overflow-wrap:anywhere}
+.modal-dialog label[for]{display:block;font-size:12px;color:var(--color-ink-mid);margin:12px 0 4px}
 .modal-dialog input[type=text],.modal-dialog input[type=password],.modal-dialog select{width:100%;padding:7px 10px;border:1px solid var(--color-border);border-radius:6px;font-size:var(--field-font-size);background:var(--color-panel);color:var(--color-ink)}
 .modal-dialog input:focus-visible,.modal-dialog select:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px}
 
+/* Direct fieldsets let a modal lock its native form as one working copy. */
+.modal-dialog > fieldset,.modal-fields{min-width:0;margin:0;padding:0;border:0}
+.modal-dialog p{font-size:13px;line-height:1.5;color:var(--color-ink-mid);margin:10px 0 0;overflow-wrap:anywhere}
+.modal-dialog code{background:var(--color-ground);padding:1px 5px;border-radius:3px;font-size:12px}
+.modal-dialog.modal-wide{width:480px}
+.modal-dialog .modal-check{display:flex;align-items:flex-start;gap:8px;margin-top:12px;font-size:13px;color:var(--color-ink-mid);cursor:pointer}
+.modal-check input[type=checkbox]{flex:0 0 auto;margin-top:3px;accent-color:var(--brand-blue)}
+.modal-check small{display:block;margin-top:4px;font-size:12px;line-height:1.5}
+.modal-dialog input:disabled,.modal-dialog select:disabled{opacity:.55;cursor:not-allowed}
+.modal-dialog input[readonly]{background:var(--color-ground);color:var(--color-ink-mid);cursor:default}
+.modal-dialog .modal-actions{display:flex;gap:8px;align-items:center;margin-top:18px;flex-wrap:wrap}
+
+
 .modal-dialog .modal-error,.modal-dialog [data-permission-status]{color:var(--color-danger-hover);font-size:12px;margin-top:10px}
-.modal-dialog [data-permission-status]:empty{display:none}
+.modal-dialog .modal-error:empty,.modal-dialog [data-permission-status]:empty{display:none}
 .modal-dialog .modal-actions .btn{white-space:nowrap}
+
+@media(max-width:600px){
+  .modal-dialog .modal-actions .btn,.modal-dialog .modal-check{min-height:44px}
+}
