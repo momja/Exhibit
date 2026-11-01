@@ -120,7 +120,8 @@ func TestNewPageModeSwitchBrowser(t *testing.T) {
 					return
 				}
 				if req.URL.Path == "/agent" {
-					fmt.Fprint(w, "Agent handoff")
+					w.Header().Set("Content-Type", "text/html; charset=utf-8")
+					fmt.Fprint(w, `<main id="agent-handoff">Agent handoff</main>`)
 					return
 				}
 				r.ServeHTTP(w, req)
@@ -186,9 +187,10 @@ func TestNewPageModeSwitchBrowser(t *testing.T) {
 			case <-ctx.Done():
 				t.Fatal("URL did not submit")
 			}
-			run(chromedp.Click(chromedp.CSS(`[data-mode="agent"]`)), chromedp.Click(chromedp.CSS(`#agent-panel button[type="submit"]`)),
-				chromedp.Poll[chromedp.Void](`location.pathname === '/agent'`))
-			check(`location.search === '' && JSON.parse(sessionStorage.getItem('exhibit:agent-brief')).description === 'Keep my session time' && JSON.parse(sessionStorage.getItem('exhibit:agent-brief')).title === 'Session timer'`)
+			run(chromedp.Click(chromedp.CSS(`[data-mode="agent"]`)))
+			_, err = chromedp.RunResponse(ctx, chromedp.Click(chromedp.CSS(`#agent-panel button[type="submit"]`)))
+			require.NoError(t, err)
+			check(`location.pathname === '/agent' && location.search === '' && JSON.parse(sessionStorage.getItem('exhibit:agent-brief')).description === 'Keep my session time' && JSON.parse(sessionStorage.getItem('exhibit:agent-brief')).title === 'Session timer'`)
 		})
 	}
 }
