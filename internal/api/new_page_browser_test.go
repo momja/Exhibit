@@ -55,7 +55,8 @@ func TestNewPageChooserBrowser(t *testing.T) {
 						return routes.every(el => !el.querySelector('.route-note').getClientRects().length) &&
 							note.textContent === selected.querySelector('.route-note').textContent &&
 							note.getBoundingClientRect().top >= document.querySelector('.routes').getBoundingClientRect().bottom &&
-							panel.getBoundingClientRect().top < 280 && action.bottom < innerHeight &&
+							panel.getBoundingClientRect().top >= note.getBoundingClientRect().bottom &&
+							panel.getBoundingClientRect().top - note.getBoundingClientRect().bottom <= 24 && action.bottom < innerHeight &&
 							[...panel.querySelectorAll('.field,.btn,.snapshot-row')].filter(el => el.getClientRects().length).every(el => el.getBoundingClientRect().height >= 44);
 					})()`))
 					require.NoError(t, err)
