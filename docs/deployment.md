@@ -51,6 +51,7 @@ Env vars, all optional except `AUTH_TOKEN`.
 | `AUTH_TOKEN` | `dev-token` | API bearer token — **change this** |
 | `APP_ORIGIN` | `http://localhost:8080` | Public URL of the gallery/API |
 | `RENDER_ORIGIN` | `http://localhost:8081` | Public URL of the artifact renderer (must differ from `APP_ORIGIN` — see [why](./architecture.md#4-trust-boundaries)) |
+| `MCP_URL` | *(unset)* | Public URL of the optional MCP service; enables token issuance and remote configurations in Settings → Connected agents. Unset disables issuance and hides the section unless grants remain for revocation. This does not start a service or register a core route; see [§5.3](#53-optional-remote-mcp-service) |
 | `DATA_DIR` | `./data` | Where the SQLite DB lives, and the artifact bodies too unless `BLOB_S3_BUCKET` is set |
 | `ADDR` | `:8080` | App listen address |
 | `RENDER_ADDR` | `:8081` | Render listen address |
@@ -937,6 +938,108 @@ Litestream, which streams the database to a bucket. Note it backs up the
 database only. Artifact bodies live on the same volume unless you set
 `BLOB_S3_BUCKET` (§7), so a restore from Litestream alone gives you every row
 and none of the files.
+
+### 5.3 Optional remote MCP service
+
+`exhibit-mcp` lets a remote agent connect to a person's library over
+Streamable HTTP. It runs beside the core and reaches it only through the HTTP
+API. It has no database, no operator token and no secrets of its own: each
+request supplies a library grant issued in **Settings → Connected agents**.
+The service verifies that bearer with the core on every request, so revocation
+takes effect on the next request. Cookies, Pi tokens and `AUTH_TOKEN` are not
+accepted. A core outage refuses requests with 503.
+
+The image ships both `/server` and `/exhibit-mcp` from the same revision. The
+Compose `mcp` profile selects the second entrypoint; keeping one release image
+avoids maintaining a second image and version pairing for this small binary.
+The MCP process does not start Pi or mount the core's data volume. Run
+`exhibit-mcp` without arguments to start the service. The core always returns
+404 at `/mcp`, even if `MCP_URL` is set; the reverse proxy routes that path to
+the separate service.
+
+Configure the service separately from the core:
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `EXHIBIT_URL` | **required** | How the service reaches the core API; Compose uses `http://app:8080`. This may be an internal address |
+| `MCP_PUBLIC_URL` | `http://localhost:8090/mcp` | The service's public URL, including the endpoint path. An omitted path means `/mcp`. Its origin is the only accepted browser `Origin`; non-browser clients may omit Origin |
+| `MCP_ADDR` | `:8090` | Service listen address |
+| `MAX_REQUEST_BODY_BYTES` | `33554432` (32 MiB) | Maximum MCP request body, a positive integer; invalid values fail startup |
+
+Set `MCP_URL` on the **core** to the same public endpoint as `MCP_PUBLIC_URL`
+on the **service**. These URLs name what clients reach, independently of the
+internal `EXHIBIT_URL`. Without `MCP_URL`, the instance offers no MCP connection:
+`POST /api/agent-grants` returns 404, and Connected agents is hidden for owners
+with no live grants. Existing grants remain visible for revocation only, with
+a note that MCP is not enabled; listing and revoking grants continue to work.
+For example, set these in Compose's `.env`:
+
+```bash
+MCP_URL=https://exhibit.example.com/mcp
+MCP_PUBLIC_URL=https://exhibit.example.com/mcp
+```
+
+Then start or update both processes:
+
+```bash
+docker compose --profile mcp up -d --build app mcp
+```
+
+`GET /healthz` on port 8090 is the service's process-health check, used by
+Compose. It does not contact the core or require a credential. MCP sessions live
+in memory and expire after 30 minutes idle; restarting the service requires
+clients to reconnect.
+
+#### Route a public path to the service
+
+The reverse proxy must send `/mcp` to port 8090 **without stripping the path**,
+and keep the remaining app routes on port 8080. Preserve Authorization and allow
+streamed responses. For Caddy, with the proxy running on the same host:
+
+```caddyfile
+exhibit.example.com {
+    handle /mcp {
+        reverse_proxy 127.0.0.1:8090 {
+            flush_interval -1
+        }
+    }
+    handle {
+        reverse_proxy 127.0.0.1:8080
+    }
+}
+artifacts.example.com {
+    reverse_proxy 127.0.0.1:8081
+}
+```
+
+For nginx, add this to the app hostname's existing TLS `server` block:
+
+```nginx
+location = /mcp {
+    client_max_body_size 32m;
+    proxy_pass http://127.0.0.1:8090;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header Authorization $http_authorization;
+    proxy_buffering off;
+    proxy_read_timeout 3600s;
+}
+```
+
+Keep the app's other locations and artifact hostname routing as in §5. If the
+proxy is itself on the Compose network, use `mcp:8090` and `app:8080`/`app:8081`
+as the upstreams. Match any proxy body cap to the configured service limit.
+The next OAuth story will also require
+`/.well-known/oauth-protected-resource/mcp` to reach the MCP service when using
+path routing; that metadata endpoint is not provided by this story.
+
+Alternatively, dedicate a hostname such as `mcp.example.com` to port 8090 and
+set both public URL variables to `https://mcp.example.com/mcp`. A whole-host
+reverse proxy then handles `/mcp` and future discovery paths together. Keep this
+hostname separate from the artifact renderer. With the service reachable, issue
+a grant in Settings. The token is shown once, together with a Claude Code
+`claude mcp add --transport http` command and HTTP JSON configuration for other
+clients. Copy the applicable remote configuration before leaving the page.
 
 ## 6. Backups (optional)
 

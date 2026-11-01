@@ -53,6 +53,9 @@ type Config struct {
 	AppOrigin    string
 	RenderOrigin string
 	AuthToken    string
+	// MCPURL enables grant issuance and names the satellite's public endpoint
+	// in connection snippets. The core never serves an MCP transport.
+	MCPURL string
 	// Agent chat support (Exh-yvhp). Agent is nil when the pi harness is
 	// unavailable; Secrets seals the BYO provider keys at rest.
 	// AgentCredentials resolves the per-session scoped tokens agent sidecars

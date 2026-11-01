@@ -57,6 +57,7 @@ func issueAgentGrant(t *testing.T, r *Router, label string) issuedAgentGrant {
 // more. Creating must never bind it to the new artifact as a Pi grant would.
 func TestLibraryGrantReachesOwnedArtifactsAndRecordsAgentVersions(t *testing.T) {
 	r := newTestRouter(t)
+	r.cfg.MCPURL = "https://agents.example.test/mcp"
 	first := createArtifact(t, r, map[string]any{"title": "Water tracker", "body": "<p>water</p>"})
 	second := createArtifact(t, r, map[string]any{"title": "Run logger", "body": "<p>run</p>"})
 	// Labels are trimmed on issue, but internal whitespace remains part of
@@ -124,6 +125,7 @@ func TestLibraryGrantReachesOwnedArtifactsAndRecordsAgentVersions(t *testing.T) 
 
 func TestLibraryGrantListsSearchesAndCreatesOnlyForItsOwner(t *testing.T) {
 	in := newTwoOwnerInstance(t)
+	in.ro.cfg.MCPURL = "https://agents.example.test/mcp"
 	// Owner two can view owner one's artifact as a person, but its agent cannot.
 	_, err := in.ro.cfg.Store.CreateGrant(context.Background(), in.ownerOne, in.artifactOne, in.ownerTwo)
 	require.NoError(t, err)
@@ -153,6 +155,7 @@ func TestLibraryGrantListsSearchesAndCreatesOnlyForItsOwner(t *testing.T) {
 // by returning a missing-resource 404 for an otherwise accessible artifact.
 func TestLibraryGrantRefusesSharedAndForeignArtifacts(t *testing.T) {
 	in := newTwoOwnerInstance(t)
+	in.ro.cfg.MCPURL = "https://agents.example.test/mcp"
 	ctx := context.Background()
 	sharedID := seedOwnedArtifact(t, in.ro, in.ownerOne, "shared-with-two", "Shared", "private-body", "private-state")
 	_, err := in.ro.cfg.Store.CreateGrant(ctx, in.ownerOne, sharedID, in.ownerTwo)
@@ -183,6 +186,7 @@ func TestLibraryGrantRefusesSharedAndForeignArtifacts(t *testing.T) {
 
 func TestLibraryGrantRefusesOtherRouteFamilies(t *testing.T) {
 	r := newTestRouter(t)
+	r.cfg.MCPURL = "https://agents.example.test/mcp"
 	id := createArtifact(t, r, map[string]any{"title": "A", "body": "<p>a</p>"})
 	issued := issueAgentGrant(t, r, "agent")
 	cases := []struct{ method, path string }{
@@ -215,6 +219,7 @@ func TestLibraryGrantRefusesOtherRouteFamilies(t *testing.T) {
 
 func TestAgentGrantRevocationAndDigestOnlyStorage(t *testing.T) {
 	r := newTestRouter(t)
+	r.cfg.MCPURL = "https://agents.example.test/mcp"
 	issued := issueAgentGrant(t, r, "agent")
 	keep := issueAgentGrant(t, r, "keep")
 	w := doJSON(t, r, "GET", "/api/agent-grants", nil)
@@ -243,6 +248,7 @@ func TestAgentGrantRevocationAndDigestOnlyStorage(t *testing.T) {
 
 func TestAgentGrantManagementRequiresTheOwnersSession(t *testing.T) {
 	in := newTwoOwnerInstance(t)
+	in.ro.cfg.MCPURL = "https://agents.example.test/mcp"
 	cookieOne := sessionCookieFor(t, in.ro.cfg.Store, in.ownerOne, "owner-one-grants")
 	issued := decodeIssuedAgentGrant(t, doWithCookie(t, in.ro, "POST", "/api/agent-grants", cookieOne, map[string]string{"label": "Private owner one grant"}))
 	ownTwo := decodeIssuedAgentGrant(t, doWithCookie(t, in.ro, "POST", "/api/agent-grants", in.cookieTwo, map[string]string{"label": "Private owner two grant"}))
@@ -262,6 +268,7 @@ func TestAgentGrantManagementRequiresTheOwnersSession(t *testing.T) {
 
 func TestAgentGrantLabelsAndNoLoginInstance(t *testing.T) {
 	r := newTestRouter(t)
+	r.cfg.MCPURL = "https://agents.example.test/mcp"
 	assert.Equal(t, "External agent", issueAgentGrant(t, r, " \n ").Grant.Label)
 	assert.Equal(t, strings.Repeat("x", 100), issueAgentGrant(t, r, strings.Repeat("x", 101)).Grant.Label)
 	assert.Equal(t, strings.Repeat("ø", 100), issueAgentGrant(t, r, strings.Repeat("ø", 100)).Grant.Label)
@@ -275,6 +282,7 @@ func TestAgentGrantLabelsAndNoLoginInstance(t *testing.T) {
 
 func TestAgentGrantPublicVisitorCannotManageCredentials(t *testing.T) {
 	r := newPublicModeRouter(t, PublicMode{Enabled: true, OwnerID: defaultOwnerID})
+	r.cfg.MCPURL = "https://agents.example.test/mcp"
 	issueAgentGrant(t, r, "Operator connection")
 	for _, path := range []string{"/settings", "/partials/agent-grants"} {
 		w := doJSON(t, r, "GET", path, nil)
@@ -297,6 +305,7 @@ func TestAgentGrantPublicVisitorCannotManageCredentials(t *testing.T) {
 
 func TestAgentGrantsPanelIsTheOwners(t *testing.T) {
 	r := newTestRouter(t)
+	r.cfg.MCPURL = "https://agents.example.test/mcp"
 	issued := issueAgentGrant(t, r, "<b>Cursor</b>")
 	w := doJSON(t, r, "GET", "/partials/agent-grants", nil)
 	require.Equal(t, 200, w.Code, w.Body.String())
@@ -314,6 +323,7 @@ func TestAgentGrantsPanelIsTheOwners(t *testing.T) {
 		assert.Contains(t, w.Body.String(), "gallery/agent-grants.js")
 	}
 	in := newTwoOwnerInstance(t)
+	in.ro.cfg.MCPURL = "https://agents.example.test/mcp"
 	cookieOne := sessionCookieFor(t, in.ro.cfg.Store, in.ownerOne, "one-panel")
 	decodeIssuedAgentGrant(t, doWithCookie(t, in.ro, "POST", "/api/agent-grants", cookieOne, map[string]string{"label": "OnePrivateGrant"}))
 	decodeIssuedAgentGrant(t, doWithCookie(t, in.ro, "POST", "/api/agent-grants", in.cookieTwo, map[string]string{"label": "TwoPrivateGrant"}))
@@ -343,6 +353,7 @@ func TestRevokedLibraryGrantNeverFallsBackToPublicOrNoLoginAccess(t *testing.T) 
 	for _, public := range []bool{false, true} {
 		t.Run(map[bool]string{false: "no login", true: "public"}[public], func(t *testing.T) {
 			base := newTestRouter(t)
+			base.cfg.MCPURL = "https://agents.example.test/mcp"
 			cfg := base.cfg
 			if !public {
 				cfg.AuthToken = ""
@@ -361,6 +372,7 @@ func TestRevokedLibraryGrantNeverFallsBackToPublicOrNoLoginAccess(t *testing.T) 
 func TestAgentGrantsSupportLocalAndHostedAccounts(t *testing.T) {
 	t.Run("local", func(t *testing.T) {
 		r, st := newLoginTestRouter(t, nil, newTestCredential(t, "owner", "password"))
+		r.cfg.MCPURL = "https://agents.example.test/mcp"
 		user, err := st.UpsertUser(context.Background(), "local:owner", "owner@example.test")
 		require.NoError(t, err)
 		cookie := sessionCookieFor(t, st, user.ID, "local-grants")
@@ -373,6 +385,7 @@ func TestAgentGrantsSupportLocalAndHostedAccounts(t *testing.T) {
 	})
 	t.Run("Clerk", func(t *testing.T) {
 		base := newTestRouter(t)
+		base.cfg.MCPURL = "https://agents.example.test/mcp"
 		cfg := base.cfg
 		cfg.Clerk = hostedLoginStub{}
 		cfg.ClerkPublishableKey = "pk_test_example"
@@ -410,6 +423,7 @@ func TestLibraryGrantScopeRejectsPathTricks(t *testing.T) {
 // policy's, before any handler, so it holds for every artifact alike.
 func TestLibraryGrantCannotWriteSavedData(t *testing.T) {
 	r := newTestRouter(t)
+	r.cfg.MCPURL = "https://agents.example.test/mcp"
 	id := createArtifact(t, r, map[string]any{"title": "Water tracker", "body": "<p>water</p>"})
 	path := "/api/artifacts/" + id + "/state"
 	require.Equal(t, 204, doJSON(t, r, "PUT", path, map[string]any{"key": "glasses", "value": "6"}).Code)
@@ -429,4 +443,19 @@ func TestLibraryGrantCannotWriteSavedData(t *testing.T) {
 	w := doWithToken(t, r, "GET", path, issued.Token, nil)
 	require.Equal(t, 200, w.Code)
 	assert.JSONEq(t, `{"glasses":"6"}`, w.Body.String())
+}
+
+func TestCoreNeverServesMCP(t *testing.T) {
+	for _, endpoint := range []string{"", "https://exhibit.example.test/mcp"} {
+		t.Run(endpoint, func(t *testing.T) {
+			r := newTestRouter(t)
+			r.cfg.MCPURL = endpoint
+			for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodDelete} {
+				for _, token := range []string{"", r.cfg.AuthToken} {
+					w := doWithToken(t, r, method, "/mcp", token, nil)
+					assert.Equal(t, http.StatusNotFound, w.Code, "%s bearer=%t: %s", method, token != "", w.Body.String())
+				}
+			}
+		})
+	}
 }

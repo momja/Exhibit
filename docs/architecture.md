@@ -692,7 +692,7 @@ default. The agent mode is a form of named fields. The brief crosses to `/agent`
 **`notfound.tmpl`** answers every app-origin HTML 404, escaping the echoed path.
 `/api/*` keeps plain errors.
 
-### 3.6 Optional satellites (composed around, not shipped in)
+### 3.6 Optional satellites (composed around the core)
 
 - **Litestream** sidecar: streams the WAL to a bucket and restores an empty volume.
   SQLite only: filesystem blobs need their own backup.
@@ -700,6 +700,18 @@ default. The agent mode is a form of named fields. The brief crosses to `/agent`
   `internal/chromium`), out of the main image and shared by server features,
   each in its own browser contexts. Share link previews are the first (av-rclm);
   unset, they use the logo card.
+- **Remote MCP service** (Exh-uhvu): `exhibit-mcp` runs separately under
+  Compose profile `mcp`, using a second binary shipped in the same image. It
+  holds no database or credentials of its own. Each request verifies the caller's
+  bearer through the core's `/api/agent/credential`; only library grants pass,
+  and sessions bind to the grant id. Tools use the ordinary HTTP API with that
+  bearer. `MCP_PUBLIC_URL` defines its endpoint and allowed browser origin;
+  `EXHIBIT_URL` may be an internal core address. Core `MCP_URL` enables token
+  issuance and remote connection configuration in Settings. Without it, new grants
+  return 404 and the panel is hidden unless the owner has live grants; those remain
+  listed for revocation with a note that MCP is not enabled. The core has no
+  `/mcp` route or MCP transport.
+  [Settings after issuance](screenshots/Exh-uhvu/connected-agents.png).
 
 ### 3.7 Agent sidecar (Pi harness, Exh-yvhp)
 
@@ -785,7 +797,9 @@ instances. `GET/POST /api/agent-grants` and `DELETE /api/agent-grants/:grantID`
 require a session, or operator authority when no login is configured. The panel
 refreshes `/partials/agent-grants` through htmx on
 `exhibit:agent-grants-changed`; a newly issued token is displayed only once
-with a copy button. Connection configuration belongs to the optional MCP service layer.
+with a copy button and remote connection configuration when `MCP_URL` is set.
+When unset, issuance returns 404; list and revoke remain available. The panel
+then shows only existing grants for revocation and disappears when none remain.
 
 Migration 043 stores `agent_grants`: owner, label, client, SHA-256 token digest,
 created and last-used timestamps. No artifact, expiry, or foreign key to users
@@ -805,7 +819,7 @@ refetch and import/export. Existing agent field restrictions remain in force.
 Versions record `origin=agent`, the owner's label as message, and `grant:<id>`
 as session. Pi retains its process-lifetime one-artifact scope.
 `GET /api/agent/credential` describes the authenticated scope without a second
-store lookup.
+store lookup; the remote MCP service checks it on every request without caching.
 
 Screenshot: [Connected agents after issuance](screenshots/Exh-l2xj/01-connected-agents.png).
 
@@ -813,18 +827,18 @@ Screenshot: [Connected agents after issuance](screenshots/Exh-l2xj/01-connected-
 
 `internal/mcpserver` implements the library tool surface using the official Go
 SDK. It reaches Exhibit only through its HTTP API, behind an `API` interface.
-The optional MCP service supplies the transport in the next layer; this layer
-adds no binary or routes to the core server.
+The optional MCP service supplies the transport; the tools add no routes to
+the core server.
 
 Tools search the owner's library, create artifacts, read/edit/write source and
-widgets, and read saved state. Every per-artifact tool requires `artifact_id`; search returns
-compact metadata (20 results by default, at most 50). Each connection gets its
-own MCP server and a revision map keyed by artifact id. Source/widget reads and
+widgets, and read saved state. Every per-artifact tool requires `artifact_id`;
+search returns compact metadata (20 results by default, at most 50). Each
+connection gets its own MCP server and a revision map keyed by artifact id. Source/widget reads and
 saves are serialized per artifact; saves require a remembered revision and advance
 it only on success. Creation remembers the returned source revision. Conflicts
 require a deliberate re-read and reconciliation, never an automatic retry.
-State retains the API's last-write-wins behavior. Network approvals remain with
-the owner.
+Saved state is read-only for library grants. Network approvals remain with the
+owner.
 
 `internal/agentguidance` shares the artifact, storage, widget and untrusted
 tool-result guidance with Pi without changing its prompt output. MCP adds

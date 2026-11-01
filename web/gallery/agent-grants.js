@@ -1,5 +1,5 @@
 // Account connections persist through the API. htmx owns the refreshed list;
-// only the newly issued secret lives in this module.
+// only the newly issued secret and its connection snippets live in this module.
 import { apiFetch } from './api-module.js';
 
 function initializeAgentGrantsPanel() {
@@ -22,8 +22,19 @@ function initializeAgentGrantsPanel() {
 
   function forgetToken() {
     issuedGrantID = '';
+    if (!byId('agent-grant-token')) return;
     byId('agent-grant-token').value = '';
+    if (panel.dataset.mcpUrl) {
+      byId('agent-grant-remote-command').textContent = '';
+      byId('agent-grant-remote-config').textContent = '';
+    }
     byId('agent-grant-issued').hidden = true;
+  }
+
+  // URLs are operator configuration; shell quoting keeps their bytes data
+  // in the command even if it contains shell metacharacters.
+  function shellQuote(value) {
+    return "'" + value.replaceAll("'", "'\\''") + "'";
   }
 
   async function mutate(operation, failureMessage) {
@@ -52,6 +63,14 @@ function initializeAgentGrantsPanel() {
       if (!data.token || !data.grant) throw new Error('missing token');
       issuedGrantID = data.grant.id;
       byId('agent-grant-token').value = data.token;
+      if (panel.dataset.mcpUrl) {
+        const authorization = 'Bearer ' + data.token;
+        byId('agent-grant-remote-command').textContent = 'claude mcp add --transport http exhibit ' +
+          shellQuote(panel.dataset.mcpUrl) + ' --header ' + shellQuote('Authorization: ' + authorization);
+        byId('agent-grant-remote-config').textContent = JSON.stringify({
+          type: 'http', url: panel.dataset.mcpUrl, headers: { Authorization: authorization }
+        }, null, 2);
+      }
       byId('agent-grant-issued').hidden = false;
       byId('agent-grant-label').value = '';
       return 'Token issued. Copy it before leaving this page.';

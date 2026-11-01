@@ -51,6 +51,7 @@ func TestAgentGrantsOperatorPanelRefreshKeepsItsCredential(t *testing.T) {
 	for _, public := range []bool{false, true} {
 		t.Run(map[bool]string{false: "private", true: "public"}[public], func(t *testing.T) {
 			base := newTestRouter(t)
+			base.cfg.MCPURL = "https://agents.example.test/mcp"
 			cfg := base.cfg
 			// Quotes and markup characters prove the JSON header survives HTML
 			// escaping and still supplies exactly the configured credential.
@@ -65,7 +66,7 @@ func TestAgentGrantsOperatorPanelRefreshKeepsItsCredential(t *testing.T) {
 
 			assert.Contains(t, page.Body.String(), "Copy token")
 			assert.NotContains(t, page.Body.String(), "go install")
-			assert.NotContains(t, page.Body.String(), "agent-grant-command")
+			assert.NotContains(t, page.Body.String(), `id="agent-grant-command"`)
 
 			// Change the persisted list after loading the page, then replay
 			// the request htmx will send in response to the change event.
@@ -92,6 +93,7 @@ func TestAgentGrantsOperatorPanelRefreshKeepsItsCredential(t *testing.T) {
 
 func TestAgentGrantsSessionPanelRefreshUsesOnlyItsCookie(t *testing.T) {
 	in := newProfileInstance(t, "panel-session", "person@example.test")
+	in.ro.cfg.MCPURL = "https://agents.example.test/mcp"
 	_, err := in.st.CreateAgentGrant(context.Background(), in.user.ID, "Session connection", "", "session-panel-digest")
 	require.NoError(t, err)
 	page := in.page(t)

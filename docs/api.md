@@ -27,6 +27,12 @@ nullable `last_used_at`. Only the issue response returns the token; the database
 stores its SHA-256 digest. Grants have no expiry. Revocation and disabled owners
 cause the next bearer request to return 401.
 
+Issuing a token requires `MCP_URL` on the core. When it is unset,
+`POST /api/agent-grants` returns 404, including for malformed request bodies.
+`GET` and `DELETE` remain available so existing connections can be listed and
+revoked. Settings hides Connected agents when the owner has no grants; existing
+grants appear for revocation only, with a note that MCP is not enabled.
+
 A persisted token can list/search/create and get/patch any artifact **owned by**
 its owner, read and write its widget, read (never write or erase) its saved
 state, and read asset metadata.
@@ -42,6 +48,25 @@ carry the grant label as message and `grant:<id>` as session with `origin=agent`
 `{"scope":"artifact","artifact_id":"…"}` for Pi credentials (empty artifact id
 while creating). Ordinary owner credentials receive 403. Pi credentials otherwise
 retain their one-artifact scope and process lifetime.
+
+### Remote MCP service
+
+`exhibit-mcp` exposes Streamable HTTP at the path of `MCP_PUBLIC_URL`
+(normally `/mcp`), in a separate process. The core always returns 404 at `/mcp`.
+Setting the core's optional `MCP_URL` enables token issuance and displays the
+remote Claude Code command and HTTP JSON configuration after issuance in
+Settings. Deployment and proxy routing are described in
+[deployment.md §5.3](deployment.md#53-optional-remote-mcp-service).
+
+Every MCP request requires `Authorization: Bearer <library grant>` and verifies
+it through `GET /api/agent/credential`; cookies, Pi credentials and `AUTH_TOKEN`
+cannot authenticate it. Revocation applies to the next request, and an unavailable
+core produces 503 rather than admitting a request. Sessions are bound to the
+grant id. A supplied `Origin` must match `MCP_PUBLIC_URL`'s origin (otherwise
+403); absent Origin is accepted. Bodies are bounded by `MAX_REQUEST_BODY_BYTES`
+(32 MiB default). Tools call the ordinary API with that same bearer, preserving
+owner scope, revisions and agent version provenance. The service's `GET /healthz`
+is an unauthenticated process-health check, not a core-readiness check.
 
 ## Artifacts
 
