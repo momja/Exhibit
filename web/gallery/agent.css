@@ -186,18 +186,20 @@ body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(-
 .pane-tab i,.pane-tab .dot{flex-shrink:0}
 .pane-tab .dot{display:none;width:8px;height:8px;border-radius:50%;background:var(--brand-blue)}
 .pane-tab.has-update .dot{display:block}
+/* Pane visibility changes with semantics/focus in syncPaneSemantics, not
+   ahead of its matchMedia callback. Keep the iframe laid out: display:none
+   resets its document scroll. */
+.mobile-panes .pane-switch{display:block}
+.mobile-panes .pane-resizer{display:none}
+.mobile-panes .layout{display:grid;grid-template:minmax(0,1fr)/minmax(0,1fr)}
+.mobile-panes .chat,.mobile-panes .preview{grid-area:1/1;width:100%;min-width:0;min-height:0}
+.mobile-panes .chat{border-right:none}
+.mobile-panes .preview{visibility:hidden}
+body.mobile-panes.show-preview .chat{visibility:hidden}
+body.mobile-panes.show-preview .preview{visibility:visible}
 @media (max-width:640px){
   /* dvh keeps the composer above the mobile URL bar instead of under it. */
   body{height:100dvh}
-  .pane-switch{display:block}
-  .pane-resizer{display:none}
-  /* Keep the iframe laid out: display:none resets its document scroll. */
-  .layout{display:grid;grid-template:minmax(0,1fr)/minmax(0,1fr)}
-  .chat,.preview{grid-area:1/1;width:100%;min-width:0;min-height:0}
-  .chat{border-right:none}
-  .preview{visibility:hidden}
-  body.show-preview .chat{visibility:hidden}
-  body.show-preview .preview{visibility:visible}
   .pv-nudge{display:inline-flex}
   #hint{display:none}
   /* The preview is full-screen here; the widget strip would only cost height. */
