@@ -897,7 +897,8 @@ An optional `connection_id` repairs that existing account in place, preserving
 grants, schedules and quota while invalidating response caches and stand-ins.
 Repair retains the pinned engine and reviewed policy, including its API origins;
 it does not silently adopt a new provider configuration. The original engine must
-remain configured. Remote cleanup failures leave the repair flow retryable.
+remain configured. Failure to retire the previous remote account leaves the
+repair flow retryable; failure to save a replacement queues its cleanup.
 
 Configured managed services appear by name in the trusted connection UI.
 Agent connection requests use a provider ID returned by `list_connections`;

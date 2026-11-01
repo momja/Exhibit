@@ -71,3 +71,7 @@ The decisions above supersede the earlier account-sharing opt-in and read/write 
 **2026-10-30T05:46:45Z**
 
 Completed required V1 corrections in Exh-k6gt: personal-only account access enforced in storage/relay and migration 050; saved results explained separately; custom setup gated under advanced configuration; contextual setup/authentication, actionable requests and same-ID reconnection. Rebased onto current origin/main (9b541f3), preserving the shared header and connected-data controls. Full Go suite, 439 gallery JS tests, browser journeys, assets build, vet and updated screenshots pass. The provider catalog remains future scope; credential-dependent live validation stays open in Exh-3kvx.
+
+**2026-11-01T18:06:15Z**
+
+Completed review hardening in Exh-o0gv: durable managed-account cleanup and restart retries, browser GET caching and HTTP cache directives, disabled-account schedule guards, bounded encrypted cache retention, and safe flow-lock lifecycle. Rebased onto main 3c45711; full Go suite, 439 gallery tests, vet, asset build and focused races pass. Current UI screenshots remain applicable. External provider validation and operator reconciliation of indeterminate responses stay tracked in Exh-3kvx.

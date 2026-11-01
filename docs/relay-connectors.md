@@ -128,7 +128,7 @@ grants, schedules and request quota; no second connection slot is needed.
 Cached responses and stand-ins are invalidated when the credential is replaced.
 It does not move an existing account to another vendor or expand its API origins.
 Keep the original engine's operator key configured until its connections are
-removed. A failed remote-account cleanup leaves repair retryable.
+removed. Failure to retire the previous remote account leaves repair retryable.
 Migration 048 pins earlier managed connections to Nango and resolves their
 legacy encrypted reference without transferring credentials between vendors.
 
