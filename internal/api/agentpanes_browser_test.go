@@ -3,9 +3,12 @@ package api
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -263,4 +266,54 @@ func TestAgentPaneBreakpointFocusBrowser(t *testing.T) {
 	check(`document.activeElement.id === 'agent-pane-resizer'`)
 	flushHandler()
 	check(`document.activeElement.id === 'tab-preview'`)
+}
+
+// A cold mobile navigation must fit before the deferred module arrives.
+// Hold its HTTP response while inspecting the actual server-rendered page.
+func TestAgentPaneInitialLayoutBrowser(t *testing.T) {
+	ro := newTestRouter(t)
+	enablePlatformMode(ro)
+	ro.cfg.Agent = &agent.Manager{}
+	ready := make(chan struct{})
+	var release sync.Once
+	unblock := func() { release.Do(func() { close(ready) }) }
+	app := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/gallery/agent.js") {
+			<-ready
+		}
+		ro.ServeHTTP(w, r)
+	}))
+	defer func() { unblock(); app.Close() }()
+	ro.cfg.AppOrigin = app.URL
+	browser, err := chromium.New(chromiumtest.Start(t))
+	require.NoError(t, err)
+	ctx, cancel, err := browser.Tab(context.Background())
+	require.NoError(t, err)
+	defer cancel()
+	ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	run := func(actions ...chromedp.Action[chromedp.Void]) {
+		t.Helper()
+		require.NoError(t, chromedp.Do(ctx, actions...))
+	}
+	check := func(expression string) {
+		t.Helper()
+		ok, err := chromedp.Run(ctx, chromedp.Evaluate[bool](expression))
+		require.NoError(t, err)
+		require.True(t, ok, expression)
+	}
+	run(chromedp.EmulateViewport(320, 568))
+	// Navigate without waiting for load: the module intentionally blocks it.
+	_, err = chromedp.Call(ctx, page.Navigate, page.NavigateParams{URL: app.URL + "/agent"})
+	require.NoError(t, err)
+	run(chromedp.Poll[chromedp.Void](`document.getElementById('input') && [...document.styleSheets].some(sheet => sheet.href?.endsWith('/gallery/agent.css') && sheet.cssRules.length)`),
+		chromedp.Evaluate[chromedp.Void](`new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))`, chromedp.EvalAwaitPromise))
+	check(`typeof window.showPane === 'undefined' && document.querySelector('.pane-switch').getBoundingClientRect().height === 51 && document.getElementById('pane-chat').getBoundingClientRect().width === innerWidth && getComputedStyle(document.getElementById('pane-preview')).visibility === 'hidden' && getComputedStyle(document.getElementById('agent-pane-resizer')).display === 'none' && document.documentElement.scrollWidth <= innerWidth`)
+	run(chromedp.EmulateViewport(1280, 800))
+	check(`typeof window.showPane === 'undefined' && document.querySelector('.pane-switch').getBoundingClientRect().height === 0 && getComputedStyle(document.getElementById('pane-preview')).visibility === 'visible' && document.getElementById('pane-chat').getBoundingClientRect().width < innerWidth`)
+	run(chromedp.EmulateViewport(390, 568), chromedp.Focus(chromedp.CSS(`#input`)))
+	check(`document.getElementById('pane-chat').getBoundingClientRect().width === innerWidth`)
+	unblock()
+	run(chromedp.Poll[chromedp.Void](`typeof window.showPane === 'function'`))
+	check(`document.activeElement.id === 'input' && document.getElementById('pane-chat').getAttribute('role') === 'tabpanel' && document.getElementById('pane-preview').inert`)
 }
