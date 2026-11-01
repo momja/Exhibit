@@ -1,5 +1,5 @@
 {{/* Own-account settings. Data: profilePageData (profile.go). Clerk owns
-     profile and security; this page owns storage and library deletion. All
+     profile and security; this page owns storage, connected agents and library deletion. All
      data is resolved from the session owner, never an account ID in the URL. */}}
 {{define "profile"}}<!DOCTYPE html>
 <html lang="en">
@@ -14,13 +14,14 @@
 <link rel="stylesheet" href="{{asset "gallery/tokens.css"}}">
 <link rel="stylesheet" href="{{asset "gallery/components.css"}}">
 <link rel="stylesheet" href="{{asset "gallery/settings.css"}}">
+{{if .AgentGrants}}<script src="{{asset "htmx/htmx.min.js"}}"></script>{{end}}
 </head>
 <body>
 {{template "appHeader" .Header}}
 <main class="settings">
 <div class="lede">
   <h2>Settings.</h2>
-  <p>Manage your storage and your Exhibit account.</p>
+  <p>Manage your storage, connected agents and Exhibit account.</p>
 </div>
 
 <div class="card">
@@ -66,6 +67,8 @@
 </section>
 {{end}}
 
+{{with .AgentGrants}}{{template "agentGrantsPanel" .}}{{end}}
+
 {{/* Sign out (nw-a1ef). The session was revocable from the first day it
      existed, since /auth/logout deletes the row, and nothing in the UI ever
      pointed at it. Clearing a cookie by hand was the only way out.
@@ -110,6 +113,7 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
 </script>
 <script src="{{asset "gallery/api.js"}}"></script>
 <script type="module" src="{{asset "gallery/profile.js"}}"></script>
+{{if .AgentGrants}}<script type="module" src="{{asset "gallery/agent-grants.js"}}"></script>{{end}}
 </body>
 </html>{{end}}
 
@@ -174,3 +178,45 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
   {{if .Clerk}}<a class="btn btn-sec" href="/auth/logout" data-account-deletion-target="finish" hidden>Return to sign in</a>{{end}}
   <div class="settings-status" id="profile-status" data-account-deletion-target="status" role="status" aria-live="polite" hidden></div>
 </div>{{end}}
+
+
+{{define "agentGrantsPanel"}}<section class="card" id="agent-grants-panel" aria-labelledby="agent-grants-heading">
+  <h3 class="settings-h3" id="agent-grants-heading"><i class="ph ph-robot" aria-hidden="true"></i> Connected agents</h3>
+  <p class="settings-copy">Connect your own agent to find, create and edit artifacts in your library. Each connection stays active until you revoke it.</p>
+  <div id="agent-grants-body" class="agent-grants-list"
+       hx-get="/partials/agent-grants" hx-headers="{{.RefreshHeaders}}"
+       hx-trigger="exhibit:agent-grants-changed from:body"
+       hx-swap="innerHTML">{{template "agentGrantsPanelBody" .}}</div>
+  <form id="agent-grant-form" class="settings-form agent-grant-form">
+    <label class="settings-label" for="agent-grant-label">Connection label</label>
+    <div class="agent-grant-create">
+      <input class="field" id="agent-grant-label" name="label" maxlength="100" placeholder="External agent" autocomplete="off">
+      <button class="btn" id="agent-grant-issue" type="submit"><i class="ph ph-plus" aria-hidden="true"></i> Issue token</button>
+    </div>
+  </form>
+  {{/* Browser-only output sits outside the swapped list. No plaintext token
+       can be recovered from the store or rendered in a later page request. */}}
+  <div class="agent-grant-issued" id="agent-grant-issued" hidden>
+    <h4 class="settings-h4">Your connection token</h4>
+    <p class="settings-copy">Copy this token now. Exhibit cannot show it again.</p>
+    <label class="settings-label" for="agent-grant-token">Token</label>
+    <div class="agent-grant-create">
+      <input class="field agent-grant-token" id="agent-grant-token" readonly autocomplete="off" spellcheck="false">
+      <button class="btn btn-sec" id="agent-grant-copy" type="button"><i class="ph ph-copy" aria-hidden="true"></i> Copy token</button>
+    </div>
+    <button class="btn btn-sec" id="agent-grant-dismiss" type="button">Done</button>
+  </div>
+  <p class="settings-status" id="agent-grants-status" role="status" aria-live="polite" hidden></p>
+</section>{{end}}
+
+{{define "agentGrantsPanelBody"}}{{if .Grants}}
+<div class="settings-table-wrap">
+  <table class="settings-table agent-grants-table">
+    <thead><tr><th scope="col">Label</th><th scope="col">Client</th><th scope="col">Created</th><th scope="col">Last used</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
+    <tbody>{{range .Grants}}<tr>
+      <td class="settings-name">{{.Label}}</td><td>{{.Client}}</td><td>{{.Created}}</td><td>{{.LastUsed}}</td>
+      <td class="settings-actions"><button class="btn btn-sec" type="button" data-action="revoke-agent-grant" data-grant-id="{{.ID}}" aria-label="Revoke {{.Label}}"><i class="ph ph-trash" aria-hidden="true"></i> Revoke</button></td>
+    </tr>{{end}}</tbody>
+  </table>
+</div>
+{{else}}<p class="muted text-sm">No agents connected yet.</p>{{end}}{{end}}

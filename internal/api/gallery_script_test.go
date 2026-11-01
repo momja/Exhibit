@@ -49,6 +49,7 @@ func TestGalleryPageScriptSuite(t *testing.T) {
 		"storage-import.test.mjs",
 		"state-import.test.mjs",
 		"share.test.mjs",
+		"agent-grants.test.mjs",
 		"tags.test.mjs",
 		"modal.test.mjs",
 		"agent.net.test.mjs",

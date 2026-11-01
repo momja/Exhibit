@@ -150,21 +150,21 @@ func (ro *Router) deleteState(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// artifactExists reports whether this viewer can reach the artifact at all,
-// having already written the 404/500 response when they cannot. State rows
-// outlive nothing: without this check a delete against an unknown id would
-// silently succeed, since removing rows that don't exist is a no-op.
-//
-// It reads through GetArtifactReadableBy, the same deny-by-default accessor the
-// detail page uses (av-lrae), because a granted recipient reaching their own
-// state is the point of av-v991 and an owner-scoped lookup here would 404 them
-// before the store was asked. It stays a courtesy 404 rather than the thing
-// enforcing the boundary: the ...AsViewer methods carry the identical predicate
-// themselves, so removing this would change what the caller is *told*, never
-// what they can touch. An artifact neither owned nor granted fails it exactly
-// like an unknown one — the store makes the two indistinguishable (av-ep8k).
+// artifactExists authorizes access and writes a 404/500 when it fails. Human
+// viewers may reach shared artifacts, just as the store's AsViewer methods
+// allow. Agent principals must own the artifact: this check is the additional
+// security boundary preventing a library grant from spending incoming shares.
+// Artifact ownership is immutable, so the subsequent AsViewer call cannot
+// switch to a different owner between this check and the state operation.
 func (ro *Router) artifactExists(w http.ResponseWriter, r *http.Request, artifactID, op string) bool {
-	a, err := ro.cfg.Store.GetArtifactReadableBy(r.Context(), stateViewer(r), artifactID)
+	var a *store.Artifact
+	var err error
+	if agentGrantFromCtx(r.Context()) != nil {
+		// Sharing with a person does not delegate that artifact to their agent.
+		a, err = ro.cfg.Store.GetArtifact(r.Context(), ownerIDFromCtx(r.Context()), artifactID)
+	} else {
+		a, err = ro.cfg.Store.GetArtifactReadableBy(r.Context(), stateViewer(r), artifactID)
+	}
 	if err != nil {
 		serverError(w, r, op+" artifact lookup", err)
 		return false

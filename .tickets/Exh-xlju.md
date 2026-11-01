@@ -1,6 +1,6 @@
 ---
 id: Exh-xlju
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-10-27T18:33:48Z
@@ -12,9 +12,9 @@ tags: [docs, security, mcp]
 ---
 # Document MCP access: security model, agent and API docs
 
-- security.md section 5: the external-agent trust argument (one artifact per credential, owner-issued, revocable, untrusted text as tool results only, prompt injection from artifact text into a user's own agent with its other tools).
-- agent.md: the external path next to Pi, and what each tool does.
-- api.md: agent-grant routes, /mcp, protected-resource metadata.
-- architecture.md section 3.7 and the evolution-seams table.
-- A user-facing setup page or section with config snippets for common clients.
-
+- security.md section 5: the external-agent trust argument as revised (a connected agent is the owner's signed-in device: library-wide, owner-issued, listable, revocable, ordinary API rules; securing the agent is the user's job; untrusted artifact text reaches it as tool results only; state erasure is not versioned).
+- agent.md: the external path next to Pi, finding artifacts with search_artifacts, and what each tool does.
+- api.md: agent-grant routes, GET /api/agent/credential, the OAuth endpoints.
+- architecture.md: section 3.7 (MCP service as a satellite), section 3.6 satellites, and the evolution-seams table.
+- deployment.md: running the MCP service (Compose profile, MCP_URL, proxy routing).
+- README: setup snippets for common clients (remote only).

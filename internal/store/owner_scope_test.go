@@ -546,6 +546,7 @@ func TestEveryArtifactScopedMethodTakesAnOwner(t *testing.T) {
 		"UpsertHostedUser":               "resolves a verified hosted identity with its durable erasure fence; no owner exists yet",
 		"GetUser":                        "keyed by user id, which *is* the owner id",
 		"CreateSession":                  "session rows carry their own UserID; the caller has just authenticated",
+		"ResolveAgentGrant":              "looks up a token digest to establish the owner, before owner scoping",
 		"GetSession":                     "looks up a bearer credential before any owner is known",
 		"DeleteSession":                  "revocation by session id; the holder need not be resolved first",
 		"DeleteExpiredSessions":          "a janitor over all rows, owned by no one",
@@ -643,4 +644,36 @@ func TestEveryArtifactScopedMethodTakesAnOwner(t *testing.T) {
 			"Store.%s must take the requesting ownerID (int64 or store.OwnerID) as its first argument after ctx, "+
 				"or be listed in this test's exemptions with a reason (av-ep8k AC#4)", m.Name)
 	}
+}
+
+// Library credentials carry authority for precisely the owner who issued them.
+// An incoming share does not make another owner's credentials visible or revocable.
+func TestAgentGrantManagementIsOwnerScoped(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	putOwnedArtifact(t, s, bob, "bobs")
+	_, err := s.CreateGrant(ctx, bob, "bobs", alice)
+	require.NoError(t, err)
+	mine, err := s.CreateAgentGrant(ctx, alice, "mine", "", "digest-alice")
+	require.NoError(t, err)
+	theirs, err := s.CreateAgentGrant(ctx, bob, "theirs", "", "digest-bob")
+	require.NoError(t, err)
+	for _, tc := range []struct {
+		owner      int64
+		own, other *AgentGrant
+	}{
+		{alice, mine, theirs}, {bob, theirs, mine},
+	} {
+		list, err := s.ListAgentGrants(ctx, tc.owner)
+		require.NoError(t, err)
+		require.Len(t, list, 1)
+		assert.Equal(t, tc.own.ID, list[0].ID)
+		assert.Equal(t, tc.owner, list[0].OwnerID)
+		assert.ErrorIs(t, s.DeleteAgentGrant(ctx, tc.owner, tc.other.ID), ErrNotFound)
+	}
+	empty, err := s.ListAgentGrants(ctx, 0)
+	require.NoError(t, err)
+	assert.Empty(t, empty)
+	assert.ErrorIs(t, s.DeleteAgentGrant(ctx, 0, mine.ID), ErrNotFound)
+	assert.ErrorIs(t, s.DeleteAgentGrant(ctx, alice, "unknown"), ErrNotFound)
 }

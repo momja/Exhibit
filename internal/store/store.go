@@ -775,6 +775,13 @@ type Store interface {
 	// commit. Take it before any blob locks or database transaction.
 	LockStorage(ownerID int64) func()
 
+	// Durable credentials for external agents, scoped to the owner's library.
+	// Only token digests enter the store; resolution establishes the owner in auth.
+	CreateAgentGrant(ctx context.Context, ownerID int64, label, client, tokenHash string) (*AgentGrant, error)
+	ListAgentGrants(ctx context.Context, ownerID int64) ([]AgentGrant, error)
+	DeleteAgentGrant(ctx context.Context, ownerID int64, grantID string) error
+	ResolveAgentGrant(ctx context.Context, tokenHash string) (*AgentGrant, error)
+
 	// Lifecycle
 	Close() error
 

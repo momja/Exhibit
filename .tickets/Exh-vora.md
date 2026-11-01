@@ -19,3 +19,13 @@ On hosted Exhibit, let MCP clients complete OAuth without a pasted token.
 - Artifact consent: during authorization the user picks one artifact on an Exhibit page; the result is a persisted artifact grant (Exh-l2xj) bound to that OAuth client, and the token verifier maps the Clerk token + client to that grant. A Clerk token with no grant is refused.
 - Grants created this way appear in the artifact's External agents list with the client name, and revoke there.
 
+
+## Notes
+
+**2026-10-30T08:00:23Z**
+
+Likely superseded by Exh-rhlq (2026-10-30). The built-in authorization server authenticates the person with whatever session the instance has, Clerk's included, so hosted MCP clients already complete OAuth without a pasted token, and every token is an artifact grant by construction. Using Clerk as the AS instead would need a Clerk-JWT verifier, a mapping from (Clerk user, OAuth client) to a grant, and an artifact-picking step Clerk's own consent screen cannot host. Left open for the owner to close or to keep if Clerk-issued tokens are wanted for another reason.
+
+**2026-10-31T05:40:08Z**
+
+Revised epic (2026-10-31): grants are now library-wide, so a Clerk OAuth token for a user would map onto a grant without an artifact step. The built-in authorization server (Exh-rhlq) still covers hosted instances through the Clerk session, so this remains superseded unless Clerk-issued tokens are wanted for another reason.

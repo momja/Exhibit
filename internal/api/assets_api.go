@@ -49,8 +49,11 @@ func toAssetViews(assets []store.ArtifactAsset) assetListResponse {
 // on first open rather than with the page: asset metadata is cold data nothing
 // else on that page needs.
 func (ro *Router) listAssets(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "artifactID")
+	id := urlParamID(r, "artifactID")
 	ownerID := ownerIDFromCtx(r.Context())
+	if agentGrantFromCtx(r.Context()) != nil && !ro.artifactExists(w, r, id, "list assets") {
+		return
+	}
 
 	assets, err := ro.cfg.Store.ListArtifactAssets(r.Context(), ownerID, id)
 	if err != nil {

@@ -68,6 +68,8 @@ var accountTables = map[string]accountTable{
 		"SELECT COUNT(*) FROM tags WHERE owner_id = ?1"},
 	"collections": {reachExplicit, "owner-scoped and reached by no cascade, for the same reason as tags",
 		"SELECT COUNT(*) FROM collections WHERE owner_id = ?1"},
+	"agent_grants": {reachExplicit, "owner-issued library credentials, removed explicitly because no users FK exists on no-login instances",
+		"SELECT COUNT(*) FROM agent_grants WHERE owner_id = ?1"},
 	"agent_keys": {reachExplicit, "the sealed BYO provider key, owner-scoped and reached by no cascade",
 		"SELECT COUNT(*) FROM agent_keys WHERE owner_id = ?1"},
 	// Not owner-scoped, and deliberately so (av-fw1b): a recorded length is a
@@ -249,6 +251,9 @@ func seedEverything(t *testing.T, s *SQLiteStore) accountFixture {
 		ID: deletedArtifact, OwnerID: member.ID, Title: "membersearchtoken tracker",
 		SourceBlobID: "member-body", WidgetBlobID: "member-widget", Tier: Tier1,
 	}))
+
+	_, err = s.CreateAgentGrant(ctx, member.ID, "External agent", "", "member-token-digest")
+	require.NoError(t, err)
 
 	tag := &Tag{ID: "member-tag", OwnerID: member.ID, Name: "fitness"}
 	require.NoError(t, s.CreateTag(ctx, tag))

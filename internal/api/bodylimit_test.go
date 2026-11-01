@@ -105,6 +105,8 @@ var writeRoutes = []struct {
 	{"POST", "/api/admin/users/", true},
 	{"PATCH", "/api/admin/users/{userID}", true},
 	{"DELETE", "/api/account", false},
+	{"POST", "/api/agent-grants", true},
+	{"DELETE", "/api/agent-grants/{grantID}", false},
 	{"POST", "/api/shares/", true},
 	{"DELETE", "/api/shares/{shareID}", false},
 	{"POST", "/auth/local", true},
@@ -214,6 +216,7 @@ func seedBodyLimitFixtures(t *testing.T, ro *Router) *strings.Replacer {
 		"{sessionID}", "missing",
 		"{seq}", "1",
 		"{shareID}", "missing",
+		"{grantID}", "missing",
 	)
 }
 

@@ -27,8 +27,9 @@ const defaultOwnerID int64 = 1
 //     logout immediate.
 //  2. The static bearer token — the API/CLI credential, and the only
 //     credential a single-user instance has. Full authority, every route.
-//  3. An agent session's scoped token (agentscope, av-e0yj): authority over
-//     exactly the artifact that session was opened against, and nothing else.
+//  3. An agent's scoped token (agentscope, av-e0yj): authority over exactly
+//     one artifact for a Pi session, or the owner’s library for a persisted
+//     external-agent grant (Exh-l2xj), until revoked.
 //     Agent sessions are steered by text Exhibit does not author, so their
 //     credential is deny-by-default and checked here rather than trusted to
 //     the tools the model calls.
@@ -36,8 +37,8 @@ const defaultOwnerID int64 = 1
 // The two restrictions compose rather than substitute for one another. The
 // grant names an owner, which becomes this request's ownerID and therefore
 // bounds every owner-scoped Store call (av-ep8k); the path check below bounds
-// it further to a single artifact *within* that owner. An agent session
-// reaches one artifact, and never another owner's anything.
+// it further to the allowed API operations and, for Pi, a single artifact.
+// Agent principals never reach another owner’s artifacts, even via a share.
 //
 // Requests carrying none of the three are rejected, with two exceptions, both
 // below the three credentials so neither can shadow one:
@@ -78,22 +79,27 @@ func (ro *Router) authMiddleware(next http.Handler) http.Handler {
 		}
 
 		if g := ro.resolveAgentGrant(token); g != nil {
-			scope := g.Scope()
-			if !agentScopeAllows(scope, r.Method, r.URL.EscapedPath()) {
-				slog.WarnContext(r.Context(), "agent credential refused outside its scope",
-					slog.String("method", r.Method),
-					slog.String("path", r.URL.Path),
-					slog.String("scoped_artifact_id", scope.ArtifactID),
-				)
-				writeError(w, http.StatusForbidden,
-					"this agent session may only act on the artifact it was opened against")
-				return
-			}
-			// The grant knows whose session this is, and every owner-scoped
-			// Store call downstream depends on it — resolved here, on the
-			// Principal, rather than deferred to ownerMiddleware.
-			ctx := withPrincipal(r.Context(), Principal{OwnerID: scope.OwnerID, Kind: PrincipalAgentGrant, Grant: g})
-			next.ServeHTTP(w, r.WithContext(ctx))
+			serveAgentGrant(w, r, g, next)
+			return
+		}
+
+		// An owner-issued grant for an agent outside the server (Exh-l2xj).
+		// It resolves to the same kind of Grant as a Pi session's and takes
+		// the same policy function from here on, with library scope.
+		g, err := ro.resolvePersistedGrant(r, token)
+		if err != nil {
+			serverError(w, r, "resolve agent grant", err)
+			return
+		}
+		if g != nil {
+			serveAgentGrant(w, r, g, next)
+			return
+		}
+
+		// A revoked or unknown persisted credential never degrades to anonymous
+		// access, even on an open or public instance.
+		if agentscope.IsPersistedToken(token) {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 
@@ -209,6 +215,45 @@ func (ro *Router) resolveAgentGrant(token string) *agentscope.Grant {
 	return ro.cfg.AgentCredentials.Resolve(token)
 }
 
+// resolvePersistedGrant looks up an owner-issued agent grant by its token's
+// digest (Exh-l2xj), or returns nil. A value without the grant prefix cannot
+// be one, so it costs no query.
+//
+// The version provenance is fixed here, from the row: the session id names
+// the grant, and the label the owner gave it is the message. Nothing the
+// agent sends can change either.
+func (ro *Router) resolvePersistedGrant(r *http.Request, token string) (*agentscope.Grant, error) {
+	if !agentscope.IsPersistedToken(token) {
+		return nil, nil
+	}
+	row, err := ro.cfg.Store.ResolveAgentGrant(r.Context(), agentscope.PersistedTokenDigest(token))
+	if err != nil || row == nil {
+		return nil, err
+	}
+	return agentscope.Persisted(row.OwnerID, row.ID, row.Label), nil
+}
+
+// serveAgentGrant admits a request made with an agent credential, of either
+// kind, if agentScopeAllows its route, and refuses it otherwise.
+func serveAgentGrant(w http.ResponseWriter, r *http.Request, g *agentscope.Grant, next http.Handler) {
+	scope := g.Scope()
+	if !agentScopeAllows(scope, r.Method, r.URL.EscapedPath()) {
+		slog.WarnContext(r.Context(), "agent credential refused outside its scope",
+			slog.String("method", r.Method),
+			slog.String("path", r.URL.Path),
+			slog.String("scoped_artifact_id", scope.ArtifactID),
+		)
+		writeError(w, http.StatusForbidden,
+			"this agent credential cannot access that route")
+		return
+	}
+	// The grant knows whose credential this is, and every owner-scoped
+	// Store call downstream depends on it — resolved here, on the
+	// Principal, rather than deferred to ownerMiddleware.
+	ctx := withPrincipal(r.Context(), Principal{OwnerID: scope.OwnerID, Kind: PrincipalAgentGrant, Grant: g})
+	next.ServeHTTP(w, r.WithContext(ctx))
+}
+
 // agentSubResources are the sub-paths of an artifact an agent session may
 // touch on its *own* artifact — one entry per tool the extension exposes
 // (state: av-lvi1, widget: av-fafu, assets: av-20fk), with the methods that
@@ -240,26 +285,17 @@ var agentSubResources = map[string][]string{
 	"assets": {http.MethodGet},
 }
 
-// agentScopeAllows is the entire reach of an agent session credential, written
-// as a deny-by-default allowlist so that adding a route to the API never
-// silently widens it.
-//
-// One artifact, a handful of routes:
-//
-//	POST   /api/artifacts               — only while the session is still unbound
-//	GET    /api/artifacts/{id}          — only the session's own artifact
-//	PATCH  /api/artifacts/{id}          — only the session's own artifact
-//	*      /api/artifacts/{id}/{sub}    — only the session's own artifact, and
-//	                                      only the subs in agentSubResources
-//
-// Everything else is refused: DELETE of the artifact itself, the BYO provider
-// key, shares, tags, collections, transcripts, and every other artifact in the
-// library. That is what bounds a prompt-injected session to the one artifact
-// the user opened rather than to the whole library.
-//
-// This is the per-*artifact* half of the boundary only. The per-*owner* half
-// is the grant's OwnerID flowing into ownerIDFromCtx and from there into the
-// owner-scoped Store methods (av-ep8k); neither half is sufficient alone.
+// libraryAgentSubResources narrow agentSubResources for an owner-issued
+// library grant (Exh-17a5): an external agent reads an artifact's saved data
+// but never writes or erases it. Saved data is what the person entered into
+// their tools; it is not versioned, so an agent's write could not be undone
+// the way a source or widget change can. Pi sessions keep their state tools.
+var libraryAgentSubResources = map[string][]string{
+	"state":  {http.MethodGet},
+	"widget": agentSubResources["widget"],
+	"assets": agentSubResources["assets"],
+}
+
 // urlParamID returns the decoded path parameter named key, so store lookups
 // resolve the same canonical id that agentScopeAllows already authorized.
 // chi routes off the escaped path (RoutePath falls back to r.URL.RawPath),
@@ -277,7 +313,15 @@ func urlParamID(r *http.Request, key string) string {
 	return raw
 }
 
+// agentScopeAllows is a deny-by-default route policy. Pi grants may create
+// once, then get/patch their bound artifact and use agentSubResources. Library
+// grants may list/search/create and use those same routes across their owner's
+// artifacts; downstream owner checks exclude foreign and shared artifacts.
+// Both may inspect their credential. Every other route is refused.
 func agentScopeAllows(scope agentscope.Scope, method, escapedPath string) bool {
+	if escapedPath == "/api/agent/credential" {
+		return method == http.MethodGet
+	}
 	rest, ok := artifactsSubPath(escapedPath)
 	if !ok {
 		return false
@@ -285,17 +329,17 @@ func agentScopeAllows(scope agentscope.Scope, method, escapedPath string) bool {
 	rest = strings.TrimPrefix(rest, "/")
 
 	if rest == "" {
-		// Create. Allowed only until the session binds: the artifact the
-		// first create returns becomes the scope, so a second create — or any
-		// create in a modify session — is refused here.
-		return method == http.MethodPost && scope.ArtifactID == ""
+		// Library grants may list and create repeatedly. Pi may create only
+		// until its first artifact binds the session.
+		return (scope.Library && (method == http.MethodGet || method == http.MethodPost)) ||
+			(!scope.Library && method == http.MethodPost && scope.ArtifactID == "")
 	}
 
 	// Compare the decoded segment, not the raw path: an id escaped past a
 	// literal-prefix check would otherwise read as a different route.
 	idSeg, sub, hasSub := strings.Cut(rest, "/")
 	id, err := url.PathUnescape(idSeg)
-	if err != nil || scope.ArtifactID == "" || id != scope.ArtifactID {
+	if err != nil || id == "" || strings.Contains(id, "/") || (!scope.Library && (scope.ArtifactID == "" || id != scope.ArtifactID)) {
 		return false
 	}
 
@@ -307,7 +351,11 @@ func agentScopeAllows(scope agentscope.Scope, method, escapedPath string) bool {
 	if strings.Contains(sub, "/") {
 		return false
 	}
-	for _, m := range agentSubResources[sub] {
+	allowed := agentSubResources
+	if scope.Library {
+		allowed = libraryAgentSubResources
+	}
+	for _, m := range allowed[sub] {
 		if m == method {
 			return true
 		}
@@ -394,6 +442,15 @@ var publicPathPrefixes = []string{
 // own scripts; neither substitutes for the other.
 func (ro *Router) sessionGate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Page routes do not use API authentication. Never let an agent bearer
+		// fall through to the no-login operator page (and its embedded token).
+		token := bearerToken(r)
+		if !isPublicPath(r.URL.Path) && (agentscope.IsPersistedToken(token) || strings.HasPrefix(token, "exagent_")) {
+			if _, ok := ro.sessionUser(r); !ok {
+				writeError(w, http.StatusForbidden, "agent credentials cannot access pages")
+				return
+			}
+		}
 		if !ro.loginEnabled() || isPublicPath(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
