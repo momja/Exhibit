@@ -1,56 +1,58 @@
+import { modalFor } from './modal.js';
+
 // App-origin gate for top-level artifact opens. Markup and copy live in the
 // template. /open also reloads frames, so the redirect itself stays ungated.
 const modal = document.getElementById('direct-open-modal');
+const dialog = modalFor(modal);
 const remember = document.getElementById('direct-open-remember');
-const cancel = document.getElementById('direct-open-cancel');
 const confirm = document.getElementById('direct-open-confirm');
 const status = document.getElementById('direct-open-status');
 const { viewer } = modal.dataset;
 let pending = null;
-let background = [];
 
 function remembered(preferenceKey) {
   try { return preferenceKey && localStorage.getItem(preferenceKey) === '1'; }
   catch (err) { return false; }
 }
 
+function focusTarget(request) {
+  const trigger = request.trigger;
+  if (trigger && trigger.isConnected !== false && !trigger.closest('[hidden], dialog:not([open])')) return trigger;
+  return document.getElementById('pv-open') || document.getElementById('pip-more');
+}
+
 function show(message = '') {
-  if (!modal.open) {
-    background = [...document.body.children]
-      .filter((element) => element !== modal && !element.inert);
-    for (const element of background) element.inert = true;
-  }
-  if (!modal.open) modal.showModal();
   status.textContent = message;
   status.hidden = !message;
   confirm.disabled = false;
   remember.disabled = false;
-  cancel.focus();
+  dialog.show(focusTarget(pending));
 }
 
-function finish(opened) {
+function finish(opened, disconnected = false) {
   const request = pending;
+  if (!request) return;
   pending = null;
   if (!opened && request.tab) request.tab.close();
-  if (modal.open) modal.close();
-  for (const element of background) element.inert = false;
-  background = [];
   remember.checked = false;
   confirm.disabled = false;
   remember.disabled = false;
-  // The toolbar menu closes when its button acts. Return to its visible
-  // trigger instead of focusing an item in the now-hidden popup.
-  const trigger = request.trigger;
-  const target = trigger && trigger.isConnected !== false && !trigger.closest('[hidden]') ? trigger
-    : document.getElementById('pv-open') || document.getElementById('pip-more');
-  target?.focus();
+  dialog.close();
+  // Shared modal returns to the original trigger. Resolve a feature fallback
+  // only when htmx or the toolbar menu has made that trigger unavailable.
+  const target = focusTarget(request);
+  if (!disconnected && target !== request.trigger && target?.isConnected !== false) target?.focus();
   request.resolve?.(opened);
 }
 
+modal.addEventListener('modal:closed', () => finish(false));
+modal.addEventListener('modal:disconnected', () => finish(false, true));
+
 async function open(request, saveChoice) {
-  if (pending !== request || request.busy) return;
+  if (pending !== request || request.tab) return;
   if (request.stillPending && !request.stillPending()) { finish(false); return; }
-  request.busy = true;
+  // Only the confirmation is unavailable while this placeholder awaits approval.
+  // Cancellation remains live and owns closing that exact tab.
   confirm.disabled = true;
   remember.disabled = true;
   status.hidden = true;
@@ -68,7 +70,6 @@ async function open(request, saveChoice) {
   }
   request.tab = tab;
   if (!tab) {
-    request.busy = false;
     show('Your browser blocked the new tab. Allow popups for Exhibit and try again.');
     return;
   }
@@ -92,13 +93,12 @@ async function open(request, saveChoice) {
     tab.close();
     if (pending !== request) return;
     request.tab = null;
-    request.busy = false;
     show('Unable to open the artifact. Try again.');
   }
 }
 
 function requestOpen(options = {}) {
-  if (pending) { options.resolve?.(false); return; }
+  if (pending || !modal.isConnected) { options.resolve?.(false); return; }
   const trigger = options.trigger || document.activeElement;
   // Agent controls are replaced by server-rendered preview swaps. Capture
   // their artifact and URL together for this decision, rather than at boot.
@@ -107,7 +107,7 @@ function requestOpen(options = {}) {
   if (!artifact || !openUrl) { options.resolve?.(false); return; }
   const preferenceKey = viewer
     ? 'exhibit:direct-open:v1:' + JSON.stringify([viewer, artifact]) : null;
-  pending = { ...options, trigger, openUrl, preferenceKey, tab: null, busy: false };
+  pending = { ...options, trigger, openUrl, preferenceKey, tab: null };
   remember.checked = false;
   if (remembered(preferenceKey)) open(pending, false);
   else show();
@@ -126,24 +126,3 @@ document.addEventListener('click', (event) => {
 // remember their own choice as well.
 document.addEventListener('exhibit:open-directly', (event) => requestOpen(event.detail));
 confirm.addEventListener('click', () => { if (pending) return open(pending, remember.checked); });
-cancel.addEventListener('click', () => { if (pending) finish(false); });
-modal.addEventListener('click', (event) => {
-  if (event.target === modal && pending) finish(false);
-});
-// Capture Escape before the underlying capability dialog handles it. Keep
-// keyboard navigation inside this dialog while its decision is on screen.
-document.addEventListener('keydown', (event) => {
-  if (!modal.open) return;
-  if (event.key === 'Escape') {
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    finish(false);
-  } else if (event.key === 'Tab') {
-    const controls = [remember, cancel, confirm].filter((control) => !control.disabled);
-    const index = controls.indexOf(document.activeElement);
-    if (index === -1 || (event.shiftKey ? index === 0 : index === controls.length - 1)) {
-      event.preventDefault();
-      controls[event.shiftKey ? controls.length - 1 : 0].focus();
-    }
-  }
-}, true);

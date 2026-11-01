@@ -555,3 +555,43 @@ and the successful continuation through direct-open.
 
 [Location desktop](screenshots/Exh-7hh4/1280.png) ·
 [Location phone](screenshots/Exh-7hh4/390.png)
+
+Direct-open uses the shared handle for both viewer and agent. The feature
+retains viewer/artifact-scoped preferences, synchronous blank-tab claiming,
+opener severance, blocked-popup retry, approval callbacks and exactly-once
+promise settlement. Cancellation/disconnection closes unused placeholders. Its
+fallback resolves the current preview or More actions trigger after htmx
+replaces/hides the original. Manual background inertness and the document
+keyboard trap have been removed, along with obsolete overlay styles.
+`TestDirectOpenModalBrowser` runs both pages at both widths;
+`TestPermissionModalStackBrowser` verifies topmost Escape across independent
+and nested prompts. Pending-approval and actual agent htmx-swap checks cover
+late settlement and the newly rendered preview URL.
+
+Every consumer tested through `dialogCycle` also removes/reconnects the same
+open dialog and verifies native modality is released. The editor separately
+checks removal/reconnection, navigation and pageshow because its backdrop policy
+is intentionally different.
+CI's `e2e/check-browser-tests.mjs` requires all migration browser suites to run,
+so skipped native-dialog coverage cannot silently pass CI.
+
+Direct-open uses the shared checkbox row and error presentation. Its explanation
+and remember choice wrap within the same default frame as the other small
+permission forms; it needs no private label/field styling.
+
+[Direct-open desktop](screenshots/Exh-sqny/1280.png) ·
+[Direct-open phone](screenshots/Exh-sqny/390.png)
+
+
+Run all modal integrations and refresh their screenshots with:
+
+```sh
+MODAL_SCREENSHOT_DIR="$PWD/docs/screenshots" go test ./internal/api -run 'Test(.*Modal.*Browser|DirectOpenPendingBrowser|DirectOpenPreviewSwapBrowser|GalleryActionMenuDuplicationBrowser|GalleryFilterBrowser)$' -count=1
+```
+
+Direct-open keeps Cancel live while its placeholder tab awaits approval. The tab
+itself guards duplicate confirmation; there is no second generic busy flag.
+Network, download, and clipboard likewise keep cancellation live and retain
+request-specific write guards. Use shared `pending` for non-dismissible work
+(tags, Duplicate, sharing, keys, entitlements, editor saves, and link approval);
+do not apply it to cancellable permission transactions.
