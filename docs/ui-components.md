@@ -289,6 +289,14 @@ go test ./internal/api -run 'TestGallerySpace(Navigation.*Browser|Fragments|Frag
 go test -tags screenshot ./internal/api -run '^TestCaptureGallerySpaceNavigation$' -count=1
 ```
 
+Empty sharing destinations retain navigation, including after the last share is
+revoked. `TestGalleryEmptySpacesBrowser` exercises both themes at 320, 375, 390,
+430 and 1280px, plus enlarged and long labels. Set `GALLERY_SCREENSHOT_DIR` to
+capture these empty states while running the test.
+
+[Empty sharing space at 320px](screenshots/Exh-1l70/empty-320-light.png) ·
+[Dark mode](screenshots/Exh-1l70/empty-320-dark.png)
+
 The browser suite uses the real htmx, Stimulus and Clerk loader/controller
 against local SDK doubles. It checks document/header/account node identity,
 load/reload/mount counts, history, permissions, duplication, widget remounts,
