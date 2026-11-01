@@ -451,3 +451,6 @@ scale is needed. Add-account page controls retain their page styles.
 
 [Entitlement desktop](screenshots/Exh-b98w/1280.png) ·
 [Entitlement phone](screenshots/Exh-b98w/390.png)
+
+[Long account desktop](screenshots/Exh-b98w/long-account/1280.png) ·
+[Long account phone](screenshots/Exh-b98w/long-account/390.png)
