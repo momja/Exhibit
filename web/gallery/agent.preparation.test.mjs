@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
-import { loadPageScript } from './testdom.mjs';
+import { loadPageScript, permissionDialog } from './testdom.mjs';
 const asset = name => fileURLToPath(new URL('../../internal/api/assets/gallery/' + name, import.meta.url));
 const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
 const json = body => ({ok: true, status: 201, json: async () => body});
@@ -10,7 +10,7 @@ async function boot(start, {prompt = () => json({}), restore = () => json({}), t
   const streams = [];
   const timers = new Map();
   let next = 0;
-  const page = loadPageScript([asset('state-api.js'), asset('network-prompt.js')], {
+  const page = loadPageScript([asset('state-api.js')], {
     TOKEN: '', READ_ONLY: false, BYOK: byok, artifact: {id: 'art-1', title: 'A'}, AbortController,
     apiFetch: async (path, options = {}) => {
       calls.push({path, ...options});
