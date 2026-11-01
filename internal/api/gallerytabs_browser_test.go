@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -33,8 +34,21 @@ func TestGalleryMobileTabsBrowser(t *testing.T) {
 	seedSharedGallery(t, in, 30)
 	_, err = in.ro.cfg.Store.CreateGrant(ctx, in.ownerTwo, in.artifactTwo, in.ownerOne)
 	require.NoError(t, err)
-	app := httptest.NewServer(in.ro)
+	// Revealed paging starts automatically when the sentinel scrolls into
+	// view. Hold its response while measuring the pending control's clearance.
+	pageResponses := make(chan struct{}, 1)
+	app := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/partials/gallery-grid/shared" && r.URL.Query().Get("offset") != "" {
+			select {
+			case <-pageResponses:
+			case <-r.Context().Done():
+				return
+			}
+		}
+		in.ro.ServeHTTP(w, r)
+	}))
 	defer app.Close()
+	defer close(pageResponses)
 	in.ro.cfg.AppOrigin = app.URL
 	_, err = chromedp.Call(ctx, network.SetCookie, network.SetCookieParams{Name: in.cookieTwo.Name, Value: in.cookieTwo.Value, URL: app.URL, Path: "/"})
 	require.NoError(t, err)
@@ -83,7 +97,8 @@ func TestGalleryMobileTabsBrowser(t *testing.T) {
 				require.NoError(t, chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](`window.scrollTo(0, document.documentElement.scrollHeight)`)))
 				check(`document.querySelector('.gallery-more').getBoundingClientRect().bottom + 11 <= document.querySelector('.gallery-rail').getBoundingClientRect().top`, "Load more clears the actual enlarged bar and its inset with a content gap")
 				capture("large-labels-pagination")
-				require.NoError(t, chromedp.Do(ctx, chromedp.Click(chromedp.CSS(`.gallery-more button`)), chromedp.Poll[chromedp.Void](`document.querySelectorAll('.card').length > 24 && !document.querySelector('.gallery-more')`), chromedp.Evaluate[chromedp.Void](`window.scrollTo(0, document.documentElement.scrollHeight)`)))
+				pageResponses <- struct{}{}
+				require.NoError(t, chromedp.Do(ctx, chromedp.Poll[chromedp.Void](`document.querySelectorAll('.card').length > 24 && !document.querySelector('.gallery-more')`), chromedp.Evaluate[chromedp.Void](`window.scrollTo(0, document.documentElement.scrollHeight)`)))
 				check(`Array.from(document.querySelectorAll('.card')).at(-1).getBoundingClientRect().bottom + 11 <= document.querySelector('.gallery-rail').getBoundingClientRect().top`, "the last appended card also clears the enlarged tabs")
 
 				// Returning to normal size must release the extra space too.
