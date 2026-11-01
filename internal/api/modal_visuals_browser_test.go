@@ -27,6 +27,8 @@ func checkModalVisuals(t *testing.T, ctx context.Context, selector string) {
      differences.push(actual.tagName+'.'+actual.className+' '+property+': '+a[property]+' (default '+b[property]+')');
  }
  compare(dialog, reference, ['backgroundColor','boxShadow']);
+ if (!dialog.classList.contains('gallery-filter-sheet'))
+   compare(dialog, reference, ['paddingTop','paddingRight','paddingBottom','paddingLeft','borderRadius']);
  compare(dialog.querySelector('h2'), reference.querySelector('h2'), ['fontSize','fontWeight','marginBottom']);
  for (const caption of dialog.querySelectorAll('label[for]'))
    compare(caption, reference.querySelector('label[for]'), ['fontSize','fontWeight','textTransform','color','marginTop','marginBottom']);
