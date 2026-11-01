@@ -96,3 +96,12 @@ a.btn{text-decoration:none}
   .ingest-foot .spacer{display:none}
   .ingest-foot .btn{width:100%;justify-content:center}
 }
+
+/* Prose scales with the reader's text preference; source fields keep their
+ * dedicated monospace font and field-size token. Method layout stays separate. */
+@media (max-width:767px){
+  .lede h2{font-size:1.5rem}
+  .lede p,.route b{font-size:var(--text-primary);line-height:1.5}
+  .route-note,.ingest-label,.snapshot-row,#status,#scan-result{font-size:var(--text-secondary);line-height:1.5}
+  .lede,.route,.ingest-label,#status,#scan-result{overflow-wrap:anywhere;min-width:0}
+}

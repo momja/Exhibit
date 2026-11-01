@@ -55,11 +55,10 @@ main{padding:10px 12px}
 .card:hover,.card:focus-within{border-color:var(--brand-blue);box-shadow:0 0 0 1px var(--brand-blue)}
 .card .card-widget{margin:0;border-radius:1px 1px 0 0;border-bottom-color:var(--color-hairline)}
 
-/* The meta row: one 26px line, title first and everything else packed after
- * it at the right. Only the title shrinks; it ellipses rather than wraps, so
- * every card in a row stays the same height. */
-.card-meta{display:flex;align-items:center;gap:6px;height:26px;padding:0 8px;min-width:0}
-.card-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px;font-weight:600;color:var(--color-ink);text-decoration:none}
+/* Keep the compact desktop row, but let it grow with enlarged text or
+ * taller metadata controls. Mobile titles wrap below. */
+.card-meta{display:flex;align-items:center;gap:6px;min-height:26px;padding:0 8px;min-width:0}
+.card-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.78125rem;font-weight:600;color:var(--color-ink);text-decoration:none}
 .card:hover .card-title,.card:focus-within .card-title{color:var(--brand-blue)}
 .card-title:hover{text-decoration:underline}
 
@@ -215,4 +214,14 @@ main{padding:10px 12px}
 
 @media (max-width:360px){
   #gallery-shell:has(.gallery-filter-trigger)>.app-header,#gallery-shell:has(.gallery-filter-trigger)>.app-header .app-header-actions{gap:4px}
+}
+
+/* Primary names remain readable in a narrow card, including unbroken names.
+ * No line clamp or fixed row height: metadata controls may grow independently. */
+@media (max-width:767px){
+  .card-title{font-size:var(--text-primary);line-height:1.4;white-space:normal;overflow-wrap:anywhere;overflow:visible;padding-block:6px}
+  .card-by{font-size:var(--text-secondary);line-height:1.5}
+  .card-owner-name{white-space:normal;overflow-wrap:anywhere}
+  .gallery-filter-section h3,.gallery-filter-section a,.gallery-filter-chips a{font-size:var(--text-secondary);line-height:1.5}
+  .gallery-filter-chips a{max-width:100%;overflow-wrap:anywhere}
 }
