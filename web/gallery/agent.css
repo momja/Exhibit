@@ -176,7 +176,6 @@ body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(-
 .modal-overlay{position:fixed;inset:0;background:var(--overlay);display:flex;align-items:center;justify-content:center;z-index:100}
 .modal-overlay[hidden]{display:none}
 .modal{background:var(--color-panel);border-radius:10px;padding:20px;width:380px;max-width:92vw;box-shadow:var(--shadow-modal)}
-#key-modal{max-height:calc(100dvh - 32px)}
 .modal h2{font-size:16px;font-weight:600}
 .modal label{display:block;font-size:12px;color:var(--color-ink-mid);margin:12px 0 4px}
 .modal input,.modal select{width:100%;padding:7px 10px;border:1px solid var(--color-border);border-radius:6px;font-size:var(--field-font-size);outline:none;background:var(--color-panel);color:var(--color-ink)}
