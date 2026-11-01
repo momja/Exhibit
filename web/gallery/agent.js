@@ -798,6 +798,7 @@ function syncPaneSemantics() {
   // Commit visibility only after capturing focus. A CSS media query could
   // otherwise blur the control before this matchMedia callback runs.
   document.body.classList.toggle('mobile-panes', mobile);
+  document.body.classList.add('pane-layout-ready');
   if (mobile && focused && (inactivePane.contains(focused) || focused.id === 'agent-pane-resizer')) activeTab.focus({preventScroll: true});
   if (!mobile && (focused === tabChatEl || focused === tabPreviewEl)) activePane.focus({preventScroll: true});
 }
