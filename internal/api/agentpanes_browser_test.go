@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/chromedp/cdproto/emulation"
+	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 	"github.com/chromedp/chromedp/kb"
 	"github.com/momja/Exhibit/internal/agent"
@@ -178,4 +179,88 @@ func TestAgentPanesBrowser(t *testing.T) {
 	wait(`typeof window.showPane === 'function'`)
 	run(chromedp.Click(chromedp.CSS(`#tab-preview`)), chromedp.KeyEvent(kb.Tab))
 	check(`document.activeElement.id === 'pane-preview' && document.getElementById('empty-preview') != null`)
+}
+
+// Let the browser render the new viewport before delivering the pane handler.
+// This deterministically exposes CSS hiding a focused control before the
+// handler can capture it, rather than depending on machine load/event timing.
+func TestAgentPaneBreakpointFocusBrowser(t *testing.T) {
+	ro := newTestRouter(t)
+	enablePlatformMode(ro)
+	ro.cfg.Agent = &agent.Manager{}
+	app := httptest.NewServer(ro)
+	defer app.Close()
+	ro.cfg.AppOrigin = app.URL
+	browser, err := chromium.New(chromiumtest.Start(t))
+	require.NoError(t, err)
+	ctx, cancel, err := browser.Tab(context.Background())
+	require.NoError(t, err)
+	defer cancel()
+	ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	_, err = chromedp.Call(ctx, page.AddScriptToEvaluateOnNewDocument, page.AddScriptToEvaluateOnNewDocumentParams{Source: `(() => {
+	  const matchMedia = window.matchMedia.bind(window);
+	  window.matchMedia = query => {
+	    const media = matchMedia(query);
+	    if (query === '(max-width:640px)') {
+	      const add = media.addEventListener.bind(media);
+	      media.addEventListener = (type, listener, options) => add(type, event => {
+	        window.pendingPaneChange = () => listener.call(media, event);
+	      }, options);
+	    }
+	    return media;
+	  };
+	})()`})
+	require.NoError(t, err)
+	run := func(actions ...chromedp.Action[chromedp.Void]) {
+		t.Helper()
+		require.NoError(t, chromedp.Do(ctx, actions...))
+	}
+	check := func(expression string) {
+		t.Helper()
+		ok, err := chromedp.Run(ctx, chromedp.Evaluate[bool](expression))
+		require.NoError(t, err)
+		require.True(t, ok, expression)
+	}
+	resizeBeforeHandler := func(width int64) {
+		t.Helper()
+		run(chromedp.EmulateViewport(width, 568),
+			chromedp.Poll[chromedp.Void](`typeof window.pendingPaneChange === 'function'`),
+			chromedp.Evaluate[chromedp.Void](`new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))`, chromedp.EvalAwaitPromise))
+	}
+	flushHandler := func() {
+		t.Helper()
+		run(chromedp.Evaluate[chromedp.Void](`window.pendingPaneChange(); window.pendingPaneChange = null`))
+	}
+	run(chromedp.EmulateViewport(1280, 800), chromedp.Navigate(app.URL+"/agent"),
+		chromedp.Poll[chromedp.Void](`typeof window.showPane === 'function'`),
+		chromedp.Evaluate[chromedp.Void](`showPane('preview')`), chromedp.Focus(chromedp.CSS(`#input`)))
+
+	// Desktop -> mobile: keep the input focused until its hide is handled.
+	resizeBeforeHandler(390)
+	check(`document.activeElement.id === 'input'`)
+	flushHandler()
+	check(`document.activeElement.id === 'tab-preview' && document.getElementById('pane-chat').inert && document.getElementById('pane-preview').getAttribute('role') === 'tabpanel'`)
+
+	// Mobile -> desktop: keep the selected tab focused until its hide is handled.
+	resizeBeforeHandler(1280)
+	check(`document.activeElement.id === 'tab-preview'`)
+	flushHandler()
+	check(`document.activeElement.id === 'pane-preview' && !document.getElementById('pane-chat').inert && !document.getElementById('pane-preview').inert && document.getElementById('pane-preview').getAttribute('role') === 'region'`)
+
+	// A deliberate focus change during the delay must win over the old input.
+	run(chromedp.Focus(chromedp.CSS(`#input`)))
+	resizeBeforeHandler(390)
+	run(chromedp.Focus(chromedp.CSS(`.app-header a`)))
+	flushHandler()
+	check(`document.activeElement.matches('.app-header a')`)
+
+	// The desktop divider also disappears at this breakpoint.
+	resizeBeforeHandler(1280)
+	flushHandler()
+	run(chromedp.Focus(chromedp.CSS(`#agent-pane-resizer`)))
+	resizeBeforeHandler(390)
+	check(`document.activeElement.id === 'agent-pane-resizer'`)
+	flushHandler()
+	check(`document.activeElement.id === 'tab-preview'`)
 }
