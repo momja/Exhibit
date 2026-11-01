@@ -31,6 +31,7 @@ type profileInstance struct {
 
 func TestProfileShowsResolvedConnectionAndScheduleLimits(t *testing.T) {
 	in := newProfileInstance(t, "connection-limits", "limits@example.test")
+	in.ro.cfg.MCPURL = "https://agents.example.test/mcp"
 	in.ro.cfg.Relay.Enabled = true
 	in.ro.cfg.Entitlements = Entitlements{Enforced: true, DefaultStorageBytes: 1 << 30, DefaultConnections: connectors.Limits{Native: 25, OAuth: 10, Vendor: 3}, DefaultSchedules: 10}
 	page := in.page(t)
