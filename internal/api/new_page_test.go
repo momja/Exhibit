@@ -34,7 +34,9 @@ func TestNewPageOffersThreeRoutes(t *testing.T) {
 	assert.Contains(t, page, `<button type="button" class="route is-selected" data-mode="agent" aria-pressed="true" onclick="setMode('agent')">`)
 	assert.Contains(t, page, `<button type="button" class="route" data-mode="paste" aria-pressed="false" onclick="setMode('paste')">`)
 	assert.Contains(t, page, `<button type="button" class="route" data-mode="url" aria-pressed="false" onclick="setMode('url')">`)
-	assert.Contains(t, page, `<b>Build with agent</b>`)
+	assert.Contains(t, page, `role="group" aria-label="Creation method"`)
+	assert.Contains(t, page, `<span class="route-label-compact">Agent</span>`)
+	assert.Contains(t, page, `id="route-description" aria-live="polite"`)
 
 	// The agent tile used to be an anchor straight to /agent. It is a mode now,
 	// so a click selects the brief below rather than leaving the page.
