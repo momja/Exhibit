@@ -180,6 +180,27 @@ func TestShareModalBrowser(t *testing.T) {
 			b.eval(open)
 			b.eval(`document.getElementById('share-close').scrollIntoView()`)
 			b.check(`document.getElementById('share-close').getBoundingClientRect().bottom<=400 && document.getElementById('share-add-input').value===''`)
+			// Real guest rows and explanatory copy must not bury the exit or
+			// overflow the viewport after typography changes.
+			var names []string
+			for n := 0; n < 12; n++ {
+				name := fmt.Sprintf("long-recipient-%02d-abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz", n)
+				seedLocalAccount(t, ro, name)
+				names = append(names, name)
+			}
+			grantTo(t, ro, id, names)
+			b.eval(`document.body.dispatchEvent(new Event('exhibit:shares-changed'))`)
+			b.wait(`document.querySelectorAll('.share-grant').length===12`)
+			b.eval(`document.getElementById('state-how-it-works').open=true; document.getElementById('share-panel').scrollTop=0`)
+			b.check(`document.querySelector('.share-people-list').clientHeight<=120 && document.querySelector('.share-people-list').scrollHeight>document.querySelector('.share-people-list').clientHeight`)
+			checkModalVisuals(t, b.ctx, "#share-panel")
+			b.capture("Exh-9xfp/short-content", width)
+			b.eval(`document.getElementById('share-status').textContent='Changes saved. The people listed above now have access to this artifact and its saved data.';document.getElementById('share-close').scrollIntoView()`)
+			b.check(`document.getElementById('share-close').getBoundingClientRect().bottom<=400 && document.getElementById('share-panel').scrollWidth===document.getElementById('share-panel').clientWidth`)
+			b.capture("Exh-9xfp/short-actions", width)
+			b.eval(`document.getElementById('share-close').click()`)
+			b.check(`!document.getElementById('share-panel').open`)
+
 		})
 	}
 }
