@@ -302,6 +302,15 @@ the 208px side rail. No observer or duplicate height token is needed.
 200% tab text with full labels, a simulated 34px inset, pagination, and short
 pages. `TestGallerySpacesBrowser` retains keyboard, focus and desktop checks.
 
+[Before at 390px](screenshots/Exh-0n90/before-390.png) ·
+[Compact tabs at 390px](screenshots/Exh-0n90/after-390.png) ·
+[Desktop rail](screenshots/Exh-0n90/desktop-1280.png) ·
+[Single-label compatibility fixture at 200% text](screenshots/Exh-0n90/single-labels-200-320-dark.png).
+The last capture temporarily uses the navigation story's full single labels,
+with a simulated 34px bottom inset. Those labels are not part of this change;
+full labels can wrap even at normal text size on a 320px screen. These are
+Chromium captures, not physical iPhone, VoiceOver or browser-zoom checks.
+
 ## Unsaved changes
 
 The editor's body uses the registered `unsaved-changes` controller with the

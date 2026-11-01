@@ -1,6 +1,6 @@
 ---
 id: Exh-0n90
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-01T21:40:15Z
@@ -22,3 +22,9 @@ Aim for 52-56px total bar content height excluding safe-area inset, retaining >=
 
 Validate relevant behavior at 320, 375, 390 and 430 CSS px, light/dark, and desktop. Check actual target rectangles, no body horizontal overflow, long labels and enlarged text; preserve safe areas and zoom. Run meaningful existing/targeted tests and project-required checks. Obtain independent Standards and Spec subagent reviews against a pinned base and this ticket, fix important findings, and document evidence/limitations in the PR. Never merge or deploy. Do not claim physical iPhone/VoiceOver testing without performing it.
 
+
+## Notes
+
+**2026-11-01T22:26:23Z**
+
+Implemented compact 54px mobile rail with 45px link targets and intrinsic bottom-sticky flow clearance. Existing filter/navigation/race/no-JS/desktop/focus suites passed; 16 sizing cases passed at320/375/390/430 light/dark including a temporary single-label navigation fixture at200% text, simulated34px inset, pagination and short pages. Independent Standards/Spec reviews completed; two P2 test-harness issues fixed and verified at8d510bb4. Screenshots in docs/screenshots/Exh-0n90. Actual browser zoom, physical iPhone and VoiceOver untested. Full aggregate checks reserved for parent per task instructions. No deployment or merge.
