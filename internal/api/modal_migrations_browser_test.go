@@ -506,6 +506,7 @@ func TestMediaModalBrowser(t *testing.T) {
 			report := `permissionReport({__avMedia:true,id:'camera',video:true,audio:false})`
 			b.dialogCycle("#media-modal", report, "#media-block")
 			b.eval(report)
+			checkModalVisuals(t, b.ctx, "#media-modal")
 			b.capture("Exh-w432", width)
 			b.run(chromedp.Click(chromedp.CSS(`#media-allow`)))
 			b.wait(`document.getElementById('direct-open-modal').open`)
