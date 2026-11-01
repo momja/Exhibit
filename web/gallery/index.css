@@ -172,16 +172,17 @@ main{padding:10px 12px}
 .space-count{flex:0 0 auto;margin-left:auto;font-size:12px;font-variant-numeric:tabular-nums}
 .space-label-short{display:none}
 
-/* At narrow widths, keep the last card and paging control above the fixed
- * tabs, including the home indicator on phones with a safe-area inset. */
+/* The bottom-sticky rail keeps its actual height in document flow, including
+ * wrapped/enlarged labels and the safe area. This reserves clearance for
+ * the last card and paging control as the tabs grow. */
 @media (max-width:767px){
-  .gallery-layout{display:block}
-  .gallery-layout main{padding-bottom:calc(80px + env(safe-area-inset-bottom,0px));padding-left:max(12px,env(safe-area-inset-left,0px));padding-right:max(12px,env(safe-area-inset-right,0px))}
-  .gallery-rail{position:fixed;inset:auto 0 0;z-index:30;border-right:0;border-top:1px solid var(--color-hairline-strong);padding:4px max(8px,env(safe-area-inset-right,0px)) calc(4px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px))}
+  .gallery-layout{display:flex;flex-direction:column}
+  .gallery-layout main{flex:1;padding-bottom:12px;padding-left:max(12px,env(safe-area-inset-left,0px));padding-right:max(12px,env(safe-area-inset-right,0px))}
+  .gallery-rail{position:sticky;bottom:0;order:1;flex-shrink:0;z-index:30;border-right:0;border-top:1px solid var(--color-hairline-strong);padding:4px max(8px,env(safe-area-inset-right,0px)) calc(4px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px))}
   .gallery-spaces ul{flex-direction:row;gap:8px}
-  .gallery-spaces li{flex:1;min-width:0}
-  .gallery-spaces a{flex-direction:column;justify-content:center;gap:4px;min-height:56px;padding:6px 4px;font-size:12px;line-height:16px}
-  .space-label-short{display:inline}
+  .gallery-spaces li{display:flex;flex:1;min-width:0}
+  .gallery-spaces a{flex:1;min-width:0;flex-direction:column;justify-content:center;gap:2px;min-height:44px;padding:4px;font-size:.75rem;line-height:1.25;text-align:center;overflow-wrap:anywhere}
+  .space-label-short{display:inline;max-width:100%}
   .space-count{display:none}
   .space-label-wide{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 }

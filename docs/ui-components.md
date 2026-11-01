@@ -292,6 +292,16 @@ load/reload/mount counts, history, permissions, duplication, widget remounts,
 request races, failures, modified clicks and no-JS links. Screenshot capture
 uses `shot-scraper` and verifies header identity after a real space click.
 
+On phones, the library rail becomes bottom-sticky tabs in a column layout.
+It keeps its rendered height in document flow, so wrapped labels, enlarged
+text and the bottom safe-area inset reserve their own clearance above the
+last card or Load more. At normal text size the bar is 54px before the inset,
+with 45px link targets; its height is a minimum, not a cap. Desktop retains
+the 208px side rail. No observer or duplicate height token is needed.
+`TestGalleryMobileTabsBrowser` checks 320/375/390/430px in light and dark,
+200% tab text with full labels, a simulated 34px inset, pagination, and short
+pages. `TestGallerySpacesBrowser` retains keyboard, focus and desktop checks.
+
 ## Unsaved changes
 
 The editor's body uses the registered `unsaved-changes` controller with the
