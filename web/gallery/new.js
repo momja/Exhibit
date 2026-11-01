@@ -38,6 +38,7 @@ function setMode(mode) {
     const on = tile.dataset.mode === mode;
     tile.classList.toggle('is-selected', on);
     tile.setAttribute('aria-pressed', on ? 'true' : 'false');
+    if (on) document.getElementById('route-description').textContent = tile.querySelector('.route-note').textContent;
   });
   const ingesting = mode !== 'agent';
   document.getElementById('agent-panel').hidden = ingesting;
