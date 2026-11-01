@@ -126,7 +126,18 @@ func TestAConversationIsKeptInPlaceAsItGoesOn(t *testing.T) {
 
 	kept := keptConversation(t, r, id, session, 2)
 	assert.Equal(t, "make the button purple", kept.Title, "a conversation is named by how it began")
-	assert.Equal(t, 3, kept.VersionSeq, "two agent writes on top of the first version")
+	head, err := r.cfg.Store.HeadVersionSeq(context.Background(), defaultOwnerID, id)
+	require.NoError(t, err)
+	require.Equal(t, 3, head, "two agent writes on top of the first version")
+	// The first turn's background save can include the next user message
+	// before that turn's edit. Two user messages alone therefore do not prove
+	// that the second settled turn's transcript has been persisted yet.
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		latest, err := r.cfg.Store.GetTranscript(context.Background(), defaultOwnerID, id, session)
+		require.NoError(c, err)
+		require.NotNil(c, latest)
+		assert.Equal(c, head, latest.VersionSeq, "the conversation must track the second turn's final version")
+	}, 30*time.Second, 10*time.Millisecond)
 
 	list, err := r.cfg.Store.ListTranscripts(context.Background(), defaultOwnerID, id)
 	require.NoError(t, err)

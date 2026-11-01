@@ -57,7 +57,7 @@ Env vars, all optional except `AUTH_TOKEN`.
 | `SINGLE_LISTENER` | `false` | Serve both origins from `ADDR` alone, choosing between them by the request's `Host` header. For platforms whose proxy routes by port and cannot map two hostnames to two ports (Fly.io); see [§5.1](#51-one-port-two-hostnames). Accepts `true`/`1`/`yes`/`on`. `RENDER_ADDR` is unused when it is on |
 | `MAX_REQUEST_BODY_BYTES` | `33554432` (32 MiB) | The largest request body any route accepts, in bytes. A bigger one is refused `413` before it is read. The default fits a snapshot that vendored a wasm runtime, exported and pasted back, with room to spare. A write peaks at about ten times its size in memory, so lower it on a small machine. Anything but a positive number is a **startup failure**; there is no value that turns the limit off |
 | `LOG_LEVEL` / `DEBUG` | `info` | `debug`/`info`/`warn`/`error`; `DEBUG=1` forces debug |
-| `PI_BIN` | `pi` | Path to the AI agent executable. The Docker image installs it; set this only when running from source with `pi` somewhere other than `PATH` |
+| `PI_BIN` | `pi` | Path to the AI agent executable. The Docker image ships pinned Pi Bolt under `pi` and `pi-bolt`; source installs may set an absolute path or `pi-bolt` |
 | `AGENT_THINKING_LEVEL` | `medium` | Thinking baseline: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`. Hosted/platform sessions use only this setting. BYOK owners may override it on the API-key page. Invalid values fail startup; Pi adjusts valid levels to the model's capabilities |
 | `EXHIBIT_SECRET` | auto | Encrypts stored agent API keys; auto-generated if unset |
 | `AGENT_API_KEY` | *(unset)* | The instance's **own** provider key for the AI agent. Unset = bring-your-own-key, the default and what every existing instance does. Set = platform mode; read [§4.1](#41-letting-the-instance-supply-the-agent-key-platform-mode) before you set it |
@@ -766,6 +766,11 @@ Off-topic use is allowed; only prohibited content is blocked. It does not
 screen what the agent writes back, or what it saves into an artifact.
 
 ### 4.3 If `pi` is missing
+
+The image ships Pi Bolt 1.0.8 (Pi 1.4.0), with the unchanged Exhibit extensions
+loaded at runtime. It needs no Node installation. Linux amd64 and arm64 archive
+hashes are pinned in the Dockerfile. For source installation, pin updates and
+rollback, see [Pi runtime compatibility](agent.md#pi-runtime-compatibility).
 
 The server still starts without `pi` on `PATH`, logs
 `pi binary not found; agent support disabled`, and answers every agent call
