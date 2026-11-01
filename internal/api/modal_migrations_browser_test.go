@@ -326,6 +326,17 @@ func TestEditorLeaveModalBrowser(t *testing.T) {
 			b.wait(`document.querySelector('.editor-leave-dialog').open`)
 			checkModalVisuals(t, b.ctx, ".editor-leave-dialog")
 			b.capture("Exh-yrgf", width)
+			if width == 1280 {
+				b.check(`(() => { const buttons=[...document.querySelectorAll('.editor-leave-dialog .btn')];const needed=buttons.reduce((sum,b)=>sum+b.getBoundingClientRect().width,16);return needed>420-46 && needed<=480-46 && buttons.every(b=>b.getBoundingClientRect().top===buttons[0].getBoundingClientRect().top); })()`)
+			}
+			_, err := chromedp.Call(b.ctx, emulation.SetDeviceMetricsOverride, emulation.SetDeviceMetricsOverrideParams{Width: width, Height: 240, DeviceScaleFactor: 1})
+			require.NoError(t, err)
+			b.eval(`document.querySelector('.editor-leave-dialog .btn:last-child').scrollIntoView()`)
+			b.check(`[...document.querySelectorAll('.editor-leave-dialog .btn')].every(b=>b.getBoundingClientRect().bottom<=240)`)
+			b.capture("Exh-yrgf/short-actions", width)
+			_, err = chromedp.Call(b.ctx, emulation.SetDeviceMetricsOverride, emulation.SetDeviceMetricsOverrideParams{Width: width, Height: 800, DeviceScaleFactor: 1})
+			require.NoError(t, err)
+
 			b.check(`document.activeElement.hasAttribute('data-keep-editing')`)
 			// This coordinator intentionally requires a decision on backdrop clicks.
 			b.eval(`document.querySelector('.editor-leave-dialog').dispatchEvent(new MouseEvent('click',{bubbles:true,clientX:-1,clientY:-1}))`)
