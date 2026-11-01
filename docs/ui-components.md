@@ -537,8 +537,8 @@ Camera and microphone share one `modal` consumer. The feature retains the
 requested device set, per-device PATCHes, denial/unsupported replies, and the
 direct-open continuation. Dismissal or displacement settles the matching call;
 frame navigation invalidates it. Cancelling direct-open leaves device consent
-available. Native nesting requires the direct-open shell to be a `<dialog>`;
-its remaining manual lifecycle is replaced in the final migration layer.
+available. Direct-open is also a shared native dialog, so its confirmation
+sits above device consent in the browser top layer.
 `TestMediaModalBrowser` covers camera-only persistence, microphone copy/denial,
 and nested Escape/focus without acquiring real devices.
 
