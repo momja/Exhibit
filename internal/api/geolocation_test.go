@@ -102,7 +102,7 @@ func TestDetailPageRendersGeolocationGate(t *testing.T) {
 	page, err := renderDetailPage(a, testRenderURLs("https://render.example.com"), testPageCreds, nil)
 	require.NoError(t, err)
 
-	assert.Contains(t, page, `<div id="geo-modal" class="modal-overlay" hidden>`)
+	assert.Contains(t, page, `<dialog id="geo-modal" class="modal-dialog"`)
 	assert.Contains(t, page, `aria-labelledby="geo-title"`)
 	assert.Contains(t, page, `<h2 id="geo-title">Allow location access?</h2>`)
 	assert.Contains(t, page, `id="geo-allow"`)

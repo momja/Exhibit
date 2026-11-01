@@ -48,25 +48,6 @@ body[data-pip-corner^=t] .pip-notices{top:auto;bottom:0}
 .share-grant-name{overflow-wrap:anywhere}
 .share-link-row{display:flex;gap:8px;align-items:center}
 .share-link-row .field{flex:1;min-width:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:var(--field-code-font-size)}
-.modal-overlay{position:fixed;inset:0;background:var(--overlay);display:flex;align-items:center;justify-content:center;z-index:100}
-.modal-overlay[hidden]{display:none}
-.modal{background:var(--color-panel);border-radius:10px;padding:20px;width:380px;max-width:90vw;box-shadow:var(--shadow-modal)}
-.modal h2{font-size:16px;font-weight:600}
-.modal p{font-size:13px;color:var(--color-ink-mid);margin-top:10px;overflow-wrap:anywhere}
-.modal code{background:var(--color-ground);padding:1px 5px;border-radius:3px;font-size:12px}
-.modal-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:18px}
-/* A button label that breaks mid-phrase reads as two ambiguous words stacked,
-   not as one choice — and these are the words the whole dialog turns on. */
-.modal-actions .btn{white-space:nowrap}
-#direct-open-modal{z-index:110}
-.direct-open-remember{display:flex;align-items:center;gap:8px;margin-top:16px;font-size:13px;color:var(--color-ink-mid)}
-.direct-open-remember input{flex-shrink:0}
-/* The network prompt (av-kmwj) offers three answers where every other dialog
-   offers two, and three of these labels do not fit 380px. The wider box is a
-   modifier rather than a new width for .modal, because widening every dialog
-   to suit the busiest one makes the simple ones look emptier than they are. */
-.modal-wide{width:460px}
-
 /* Saved-data choices persist as soon as a selection is confirmed. */
 .state-sharing{flex:0 0 auto;min-width:0;display:flex;flex-direction:column;gap:12px;border-top:1px solid var(--color-hairline);padding-top:16px}
 #share-state-mode{border:0;min-width:0}
