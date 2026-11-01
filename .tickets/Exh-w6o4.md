@@ -6,7 +6,6 @@ links: []
 created: 2026-11-01T21:40:15Z
 type: task
 priority: 2
-assignee: Max Omdal
 parent: Exh-hlio
 tags: [mobile, ui, accessibility]
 ---
