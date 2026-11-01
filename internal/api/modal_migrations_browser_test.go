@@ -7,14 +7,17 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/chromedp"
 	"github.com/chromedp/chromedp/kb"
+	"github.com/momja/Exhibit/internal/auth"
 	"github.com/momja/Exhibit/internal/chromium"
 	"github.com/momja/Exhibit/internal/chromium/chromiumtest"
+	"github.com/momja/Exhibit/internal/store"
 	"github.com/stretchr/testify/require"
 )
 
@@ -271,6 +274,9 @@ func TestAdminEntitlementModalBrowser(t *testing.T) {
 	for _, width := range []int64{1280, 390} {
 		t.Run(fmt.Sprint(width), func(t *testing.T) {
 			in := newAdminInstance(t)
+			longName := strings.Repeat("long-account-", 10)
+			longAccount, err := in.ro.cfg.Store.CreateLocalUser(context.Background(), store.NewLocalUser{ExternalID: auth.LocalExternalID(longName), Email: longName + "@example.test", PasswordHash: "x"})
+			require.NoError(t, err)
 			app := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { r.AddCookie(in.adminCookie); in.ro.ServeHTTP(w, r) }))
 			defer app.Close()
 			in.ro.cfg.AppOrigin = app.URL
@@ -296,6 +302,11 @@ func TestAdminEntitlementModalBrowser(t *testing.T) {
 			b.eval(`finishEntitlement()`)
 			b.wait(`document.getElementById('entitlement-error').textContent==='Not authorized'`)
 			b.check(`document.getElementById('entitlement-dialog').open && document.getElementById('entitlement-storage').value===''`)
+			b.eval(fmt.Sprintf(`window.fetch=savedFetch;document.getElementById('entitlement-cancel').click();document.querySelector('[data-action="entitlement"][data-user-id="%d"]').click()`, longAccount.ID))
+			checkModalVisuals(t, b.ctx, "#entitlement-dialog")
+			b.check(`document.getElementById('entitlement-dialog-title').scrollWidth<=document.getElementById('entitlement-dialog-title').clientWidth`)
+			b.capture("Exh-b98w/long-account", width)
+
 		})
 	}
 }
