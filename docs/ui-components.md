@@ -232,7 +232,9 @@ The interface has three methods and one read/write value:
   the same lock for promise-based work.
 
 Removing the dialog releases native modal state, listeners, pending controls,
-and return focus without a feature event. Reconnecting reuses the same handle;
+and return focus. One `modal:disconnected` lifecycle event lets permission
+features deny or drop their exact request and close unused placeholder tabs;
+it performs no mutation and never restores a detached trigger. Reconnecting reuses the same handle;
 an old completion cannot unlock a new operation. The feature still owns any
 network request and its effects; removal does not cancel an API mutation.
 
@@ -241,15 +243,19 @@ work whose completion already arrives through htmx. Do not wrap those events
 in a synthetic Promise.
 
 Optional feature escape hatches are cancellable `modal:before-close` and
-`modal:closed` events. Use them for domain decisions or cleanup, not generic
+`modal:closed` events. The before-close event includes `detail.reason`;
+backdrop-only domain decisions can veto `backdrop` without adding a configuration
+flag or duplicating native listeners. Use these hooks for domain decisions or cleanup, not generic
 busy handling. Duplicate uses `run` for in-flight work and retains only its uncertain-retry
 payload lock: title/options stay fixed until the server confirms or refuses the
 request. Buttons and dismissal use the shared pending lock. No old
 `exhibit:modal-open`/`exhibit:modal-close` event interface is retained.
 
 Features own errors, API calls, refresh events, and focus selection after an
-htmx replacement. They never rebuild server markup. Existing feature dialogs
-retain their implementations until explicitly migrated.
+htmx replacement. They never rebuild server markup. All thirteen application-owned dialog implementations and Duplicate use this
+handle. Native top-layer ordering owns Escape; features add neither a document
+keyboard trap nor manual background inertness. Browser-owned prompts and Clerk
+dialogs retain their own behavior.
 
 ## Gallery lifecycle and navigation
 
@@ -289,7 +295,7 @@ uses `shot-scraper` and verifies header identity after a real space click.
 ## Unsaved changes
 
 The editor's body uses the registered `unsaved-changes` controller with the
-`editorLeaveDialog` partial. Its `dialog` target supplies native focus
+`editorLeaveDialog` partial. Its `dialog` target composes the shared modal for focus
 containment; its `status` target reports whether there are unsaved edits.
 Escape and Keep editing close the dialog and return focus to the link.
 Browser reload, Back, and tab closure use the native beforeunload prompt.
@@ -396,3 +402,6 @@ Heading, body, checkbox and footer styling use shared defaults.
 
 [Sharing desktop](screenshots/Exh-9xfp/1280.png) ·
 [Sharing phone](screenshots/Exh-9xfp/390.png)
+
+[Long content at 390×400](screenshots/Exh-9xfp/short-content/390.png) ·
+[Expanded explanation and Done at 390×400](screenshots/Exh-9xfp/short-actions/390.png)
