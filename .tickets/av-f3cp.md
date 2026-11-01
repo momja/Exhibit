@@ -2,7 +2,7 @@
 id: av-f3cp
 status: in_progress
 deps: []
-links: []
+links: [Exh-g1kr, av-g8oa]
 created: 2026-07-06T22:06:39Z
 type: epic
 priority: 1
