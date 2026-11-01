@@ -69,7 +69,7 @@ func TestGalleryFilterBrowser(t *testing.T) {
 				poll(`!document.querySelector('.gallery-filter-sheet').open`)
 				check(`document.activeElement.matches('.gallery-filter-trigger')`)
 				require.NoError(t, chromedp.Do(ctx, chromedp.Click(chromedp.CSS(`.gallery-filter-trigger`))))
-				check(`getComputedStyle(document.querySelector('.gallery-rail')).display === 'none' && document.documentElement.scrollWidth <= innerWidth`)
+				check(`getComputedStyle(document.querySelector('.gallery-spaces')).display !== 'none' && document.documentElement.scrollWidth <= innerWidth`)
 			} else {
 				check(`document.querySelector('.gallery-rail').getBoundingClientRect().width === 208 && getComputedStyle(document.querySelector('.gallery-filter-trigger')).display === 'none'`)
 			}
@@ -98,7 +98,7 @@ func TestGalleryFilterBrowser(t *testing.T) {
 			empty := httptest.NewServer(newTestRouter(t))
 			defer empty.Close()
 			require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(empty.URL), chromedp.WaitVisible(chromedp.CSS("main"))))
-			check(`!document.querySelector('.gallery-rail, .gallery-filter-trigger, .gallery-filter-sheet') && document.documentElement.scrollWidth <= innerWidth`)
+			check(`document.querySelectorAll('.gallery-spaces a').length === 3 && !document.querySelector('.gallery-filter-trigger, .gallery-filter-sheet') && document.documentElement.scrollWidth <= innerWidth`)
 
 		})
 	}

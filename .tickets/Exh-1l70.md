@@ -1,6 +1,6 @@
 ---
 id: Exh-1l70
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-01T21:40:15Z
@@ -22,3 +22,9 @@ Signed-in library spaces remain available through zero/nonzero sharing counts wi
 
 Validate relevant behavior at 320, 375, 390 and 430 CSS px, light/dark, and desktop. Check actual target rectangles, no body horizontal overflow, long labels and enlarged text; preserve safe areas and zoom. Run meaningful existing/targeted tests and project-required checks. Obtain independent Standards and Spec subagent reviews against a pinned base and this ticket, fix important findings, and document evidence/limitations in the PR. Never merge or deploy. Do not claim physical iPhone/VoiceOver testing without performing it.
 
+
+## Notes
+
+**2026-11-01T22:11:28Z**
+
+Implemented persistent zero-count library destinations and full shared labels with scoped wrapping. Focused Go/Chromium navigation, filters, permissions, history and count-transition suite passed; screenshots refreshed and light/dark captures inspected at 320/375/390/430/1280. Independent Standards and Spec reviews report no must-fix findings; stale architecture text and screenshots corrected. Parent explicitly owns combined enlarged-text clearance with tabsize in-flow sticky rail; no sizing changes here. Full aggregate suite remains with parent after runtime interruptions; no physical iPhone/VoiceOver testing.
