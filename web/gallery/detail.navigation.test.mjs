@@ -63,9 +63,9 @@ async function loadNavigation({ approved = true, readOnly = false, publicNavigat
   for (const id of ['net-modal', 'dl-modal', 'clip-modal', 'link-modal', 'media-modal', 'geo-modal']) {
     permissionDialog(page, id);
   }
-  await page.loadModule(path.join(assets, 'detail.js'));
+  const detail = await page.loadModule(path.join(assets, 'detail.js'), ['apiFetch']);
   return {
-    ...page, calls, opened, tabs,
+    ...page, detail, calls, opened, tabs,
     deny(status = 403) { permitted = false; failureStatus = status; },
     pauseNextCheck() {
       let start, release;
@@ -173,8 +173,7 @@ test('all current-artifact state methods receive the app-owned policy header', a
     assert.equal(headers['X-Exhibit-Relay-Policy'], 'current-host-policy');
     assert.equal(headers['x-exhibit-relay-policy'], undefined);
   }
-  const { apiFetch } = await page.loadModule(path.join(assets, 'api-module.js'));
-  await apiFetch('/api/artifacts/app-1/state', { method: 'PUT', body: '{}' });
+  await page.detail.apiFetch('/api/artifacts/app-1/state', { method: 'PUT', body: '{}' });
   assert.equal(page.calls.at(-1).options.headers['X-Exhibit-Relay-Policy'], 'current-host-policy');
 });
 

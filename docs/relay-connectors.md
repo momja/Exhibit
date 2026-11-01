@@ -505,6 +505,11 @@ icons while GitHub relay requests return successfully, without clearing state
 or changing the saved approvals. Updated interface evidence is in
 [screenshots/Exh-s47o](screenshots/Exh-s47o).
 
+The shared native sharing dialog keeps account access separate from saved-result
+sharing. Viewer navigation checks connection-data policy before opening a link
+and again after permission, discards stale preview requests, and preserves
+no-referrer navigation.
+
 The personal-account and advanced-setup corrections are shown in
 [screenshots/Exh-k6gt](screenshots/Exh-k6gt):
 
