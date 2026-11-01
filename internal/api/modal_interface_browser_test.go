@@ -31,6 +31,7 @@ func TestModalInterfaceBrowser(t *testing.T) {
 import { modalFor } from '/assets/gallery/modal.js';
 window.dialogs = [...document.querySelectorAll('dialog')];
 window.first = modalFor(dialogs[0]); window.second = modalFor(dialogs[1]);
+window.disconnections=0; dialogs[0].addEventListener('modal:disconnected', () => disconnections++);
 window.trigger = document.querySelector('#trigger');
 // Opening works even before the controller module starts.
 window.earlyOpened = first.show(trigger) && dialogs[0].open;
@@ -77,7 +78,7 @@ window.ready = true;
 	// Disconnect cancels the old handle operation's completion, restores controls,
 	// and reconnects the same node without listeners or pending state accumulating.
 	b.eval(`window.old = first.run(() => new Promise(resolve => window.finishOld = resolve)); dialogs[0].remove()`)
-	b.wait(`!dialogs[0].open && !first.pending`)
+	b.wait(`!dialogs[0].open && !first.pending && disconnections===1`)
 	b.eval(`document.querySelector('#dialogs').append(dialogs[0]); first.show(trigger)`)
 	b.wait(`dialogs[0].open`)
 	b.eval(`window.current = first.run(() => new Promise(resolve => window.finishCurrent = resolve)); finishOld('stale'); old.then(value => window.oldIgnored = value===undefined)`)

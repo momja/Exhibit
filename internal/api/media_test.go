@@ -118,7 +118,7 @@ func TestDetailPageRendersMediaGate(t *testing.T) {
 	require.NoError(t, err)
 
 	// The first-use prompt: an accessible dialog naming the devices asked for.
-	assert.Contains(t, page, `<div id="media-modal" class="modal-overlay" hidden>`)
+	assert.Contains(t, page, `<dialog id="media-modal" class="modal-dialog"`)
 	assert.Contains(t, page, `aria-labelledby="media-title"`)
 	assert.Contains(t, page, `<h2 id="media-title">Allow device access?</h2>`)
 	assert.Contains(t, page, `<span id="media-devices">`)
@@ -138,16 +138,16 @@ func TestDetailPageRendersMediaGate(t *testing.T) {
 	require.NoError(t, err)
 	js := string(detailJS)
 	assert.Contains(t, js, "d.__avMedia !== true")
-	assert.Contains(t, js, "setCapabilityApproved('camera_approved', true, 'camera')")
-	assert.Contains(t, js, "setCapabilityApproved('microphone_approved', true, 'microphone')")
+	assert.Contains(t, js, "setCapabilityApproved('camera_approved', true, 'camera',")
+	assert.Contains(t, js, "setCapabilityApproved('microphone_approved', true, 'microphone',")
 	assert.Contains(t, js, "exhibit:open-directly")
 	// Every path settles the artifact's promise — a getUserMedia left pending is
 	// a hang, which is the failure this gate exists to remove. The three that
 	// are easy to forget: an already-approved request (no prompt to show), a
 	// request displaced by a newer one, and an outright denial.
-	assert.Contains(t, js, "if (pendingMedia) replyMedia(pendingMedia.id, false, 'Permission denied', 'NotAllowedError');")
-	assert.Contains(t, js, "if (deny && pendingMedia) replyMedia(pendingMedia.id, false, 'Permission denied', 'NotAllowedError');")
-	assert.Contains(t, js, "replyMedia(req.id, true, 'Capture devices are unavailable in the embedded preview")
+	assert.Contains(t, js, "if (pendingMedia) replyMedia(pendingMedia, false, 'Permission denied', 'NotAllowedError');")
+	assert.Contains(t, js, "if (req) replyMedia(req, false, 'Permission denied', 'NotAllowedError');")
+	assert.Contains(t, js, "replyMedia(req, true, 'Capture devices are unavailable in the embedded preview")
 
 	// An approved artifact renders with the approvals baked in.
 	a.CameraApproved, a.MicrophoneApproved = true, true

@@ -65,20 +65,6 @@ main{padding:var(--space-8);max-width:900px;margin:0 auto}
 .settings-ref{margin-top:2px;white-space:normal;word-break:break-all;max-width:220px}
 .settings-h4{font-size:13px;font-weight:600;margin:var(--space-7) 0 var(--space-5)}
 
-/* The entitlement editor. A native <dialog>, so the focus trap, the Escape
- * key and the inert background are the browser's rather than three more
- * listeners in settings.js. */
-/* margin:auto is not decoration — it is what centres a modal <dialog> in its
- * top layer, and the page's reset zeroes the UA's own. Without it the dialog
- * opens flush against the top-left corner. */
-.settings-dialog{margin:auto;border:1px solid var(--color-hairline);border-radius:var(--radius-md);background:var(--color-panel);color:var(--color-ink);padding:var(--space-7);max-width:440px;width:calc(100% - 2 * var(--space-5))}
-.settings-dialog::backdrop{background:var(--overlay)}
-.settings-dialog .settings-h3{margin-bottom:var(--space-5);word-break:break-all}
-/* The dialog's own refusal line. The page's status region is behind the
- * backdrop, so a modal that reports its refusals there reports them nowhere. */
-.settings-dialog-error{margin-top:var(--space-5);font-size:13px;line-height:1.5;color:var(--color-danger-hover)}
-.settings-dialog-error[hidden]{display:none}
-
 /* --- the add-account form ---------------------------------------------- */
 .settings-form{display:flex;flex-direction:column;gap:var(--space-3)}
 .settings-label{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--color-label);margin-top:var(--space-3)}
