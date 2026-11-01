@@ -1,13 +1,9 @@
 // Shared behavior for server-defined galleries. Endpoints and paging URLs live
 // in their templates; this module owns only typing, shortcuts and request races.
-import { initializeGalleryWidgets } from './gallery-widgets.js';
-import { initializeDuplication } from './duplicate.js';
-import { initializeGalleryReturn } from './gallery-return.js';
+import { eventScope } from './event-scope.js';
 
 export function initializeGallery(root) {
-  initializeGalleryWidgets(root);
-  initializeDuplication(root);
-  initializeGalleryReturn(root);
+  const events = eventScope();
   const form = root.querySelector('[data-gallery-search]');
   const input = root.querySelector('[data-gallery-query]');
   const clear = root.querySelector('[data-gallery-clear]');
@@ -26,7 +22,7 @@ export function initializeGallery(root) {
     clear.hidden = input.value.length === 0;
   }
 
-  input.addEventListener('input', () => {
+  events.on(input, 'input', () => {
     syncClear();
     if (query === input.value.trim()) return;
     query = input.value.trim();
@@ -34,15 +30,15 @@ export function initializeGallery(root) {
     clearTimeout(timer);
     timer = setTimeout(search, 220);
   });
-  form.addEventListener('submit', () => clearTimeout(timer));
-  clear.addEventListener('click', () => {
+  events.on(form, 'submit', () => clearTimeout(timer));
+  events.on(clear, 'click', () => {
     input.value = '';
     input.dispatchEvent(new Event('input', { bubbles: true }));
     input.focus();
     search();
   });
   syncClear();
-  root.addEventListener('exhibit:artifacts-changed', () => {
+  events.on(root, 'exhibit:artifacts-changed', () => {
     // A renamed copy may not match the active search. Return to the library's
     // first page so the newly-created artifact is visible after the swap.
     input.value = '';
@@ -53,7 +49,7 @@ export function initializeGallery(root) {
   });
 
   // Capture runs before the link's htmx handler records this request's revision.
-  root.addEventListener('click', (event) => {
+  events.on(root, 'click', (event) => {
     if (!event.target.closest('[data-gallery-filter]') || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     clearTimeout(timer);
     revision++;
@@ -62,9 +58,10 @@ export function initializeGallery(root) {
   // hx-sync coordinates searches and pages within this gallery. Revisions
   // also cover the debounce interval and a response already reading its body:
   // neither may swap old results or update the URL after the query changes.
-  root.addEventListener('htmx:before:request', (event) => {
+  events.on(root, 'htmx:before:request', (event) => {
     const { ctx } = event.detail;
     if (ctx.sourceElement.closest('[data-gallery]') !== root) return;
+    if (ctx.target?.id === 'gallery-content') return;
     const requestQuery = (new URL(ctx.request.action, window.location.href).searchParams.get('q') || '').trim();
     if (requestQuery !== query) {
       event.preventDefault();
@@ -76,34 +73,36 @@ export function initializeGallery(root) {
     if (error) error.hidden = true;
   });
   for (const name of ['htmx:before:response', 'htmx:after:request', 'htmx:before:swap']) {
-    root.addEventListener(name, (event) => {
+    events.on(root, name, (event) => {
       const { ctx } = event.detail;
       if (requests.has(ctx) && requests.get(ctx) !== revision) event.preventDefault();
     });
   }
-  root.addEventListener('htmx:error', (event) => {
+  events.on(root, 'htmx:error', (event) => {
     const { ctx } = event.detail;
     if (!requests.has(ctx) || requests.get(ctx) !== revision || ctx.request.signal.aborted) return;
     const error = ctx.sourceElement.closest('.gallery-more')?.querySelector('[data-gallery-load-error]');
     (error || searchError).hidden = false;
   });
 
-  root.addEventListener('click', (event) => {
+  events.on(root, 'click', (event) => {
     if (event.target.closest('a, button, .card-actions, [data-capability-trigger], .capability-popover')) return;
     const card = event.target.closest('.card');
     if (card?.dataset.href) window.location.href = card.dataset.href;
   });
+  return {
+    suspend() { clearTimeout(timer); revision++; },
+    disconnect() { clearTimeout(timer); revision++; events.disconnect(); },
+  };
 }
 
-export function initializeGalleries() {
-  const galleries = [...document.querySelectorAll('[data-gallery]')];
-  galleries.forEach(initializeGallery);
+export function initializeGalleryShortcut() {
   document.addEventListener('keydown', (event) => {
     if (event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented) return;
     const target = event.target;
     if (target.closest('dialog[open]')) return;
     if (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
-    const gallery = target.closest('[data-gallery]') || galleries[0];
+    const gallery = target.closest('[data-gallery]') || document.querySelector('[data-gallery]');
     if (!gallery) return;
     event.preventDefault();
     const input = gallery.querySelector('[data-gallery-query]');

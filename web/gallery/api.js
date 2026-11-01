@@ -40,6 +40,10 @@
   }
 
   function readOnly() {
+    // Space switches retain this credential client. Authority for the active
+    // gallery travels in its server-rendered region, never a stale bootstrap.
+    var space = document.querySelector('[data-gallery-read-only]');
+    if (space) return space.dataset.galleryReadOnly !== 'false';
     return typeof READ_ONLY === 'boolean' ? READ_ONLY : false;
   }
 

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/chromedp"
 	"github.com/chromedp/chromedp/kb"
 	"github.com/momja/Exhibit/internal/chromium"
@@ -175,6 +176,16 @@ func TestGalleryActionMenuDuplicationBrowser(t *testing.T) {
 	correct, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`document.querySelector('`+menu+`').hidden && document.querySelector('[data-duplicate-dialog] [name="title"]').value === 'Original (copy)'`))
 	require.NoError(t, err)
 	require.True(t, correct)
+	layout, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`getComputedStyle(document.querySelector('.modal-check')).display === 'flex'`))
+	require.NoError(t, err)
+	require.True(t, layout, "shared form styles preserve Duplicate's checkbox-and-description rows")
+	checkModalVisuals(t, ctx, "[data-duplicate-dialog]")
+	for _, width := range []int64{1280, 390} {
+		_, err := chromedp.Call(ctx, emulation.SetDeviceMetricsOverride, emulation.SetDeviceMetricsOverrideParams{Width: width, Height: 800, DeviceScaleFactor: 1})
+		require.NoError(t, err)
+		checkModalVisuals(t, ctx, "[data-duplicate-dialog]")
+		modalBrowser{t, ctx}.capture("Exh-p3ah/duplicate", width)
+	}
 	require.NoError(t, chromedp.Do(ctx, chromedp.KeyEvent(kb.Escape)))
 	correct, err = chromedp.Run(ctx, chromedp.Evaluate[bool](`document.activeElement.id === '`+trigger[1:]+`'`))
 	require.NoError(t, err)

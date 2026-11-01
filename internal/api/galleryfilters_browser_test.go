@@ -78,9 +78,16 @@ func TestGalleryFilterBrowser(t *testing.T) {
 			check(`document.querySelector('[data-gallery-search] input[name=tag]').value === 'Work' && document.querySelectorAll('a[data-active=true]').length === 2`)
 			require.NoError(t, chromedp.Do(ctx, chromedp.Click(chromedp.CSS(scope+` a[href="/?collection=collection-1-0&tag=Work"]`))))
 			poll(`new URL(location.href).searchParams.get('collection') === 'collection-1-0' && document.querySelector('.gallery-filter-clear')`)
+			if !phone {
+				require.NoError(t, chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](`document.querySelector('.gallery-filter-trigger').click()`)))
+			}
+			poll(`document.querySelector('.gallery-filter-sheet').open`)
+			checkModalVisuals(t, ctx, ".gallery-filter-sheet")
+			modalBrowser{t, ctx}.capture("Exh-gynk", width)
+			require.NoError(t, chromedp.Do(ctx, chromedp.KeyEvent(kb.Escape)))
+			poll(`!document.querySelector('.gallery-filter-sheet').open`)
 			if phone {
-				require.NoError(t, chromedp.Do(ctx, chromedp.KeyEvent(kb.Escape)))
-				poll(`!document.querySelector('.gallery-filter-sheet').open && document.activeElement.matches('.gallery-filter-trigger')`)
+				check(`document.activeElement.matches('.gallery-filter-trigger')`)
 			}
 			require.NoError(t, chromedp.Do(ctx, chromedp.Focus(chromedp.CSS(`[data-gallery-query]`)), chromedp.SendKeys(chromedp.CSS(`[data-gallery-query]`), "Artifact")))
 			poll(`new URL(location.href).searchParams.get('q') === 'Artifact'`)

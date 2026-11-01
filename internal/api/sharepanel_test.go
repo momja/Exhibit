@@ -250,7 +250,7 @@ func TestTheFragmentRendersTheSameListTheFullPageDoes(t *testing.T) {
 			"the public link appears above the people list on initial render and after refresh")
 	}
 	assert.Contains(t, page, `id="share-add-form" method="post" action="/api/shares"`)
-	assert.Contains(t, page, `id="share-close">Done</button>`)
+	assert.Contains(t, page, `id="share-close" data-modal-dismiss>Done</button>`)
 	assert.Contains(t, page, `hx-trigger="exhibit:shares-changed from:body"`)
 	assert.Contains(t, page, `enterkeyhint="done"`)
 	assert.Contains(t, page, `class="share-people-list" tabindex="0" role="region" aria-label="People with access"`)
@@ -278,7 +278,7 @@ func TestTheStateModeChoicesTrackSavedMode(t *testing.T) {
 	assert.Contains(t, page, "Everyone can view and update the same saved data. Changes affect everyone.")
 	assert.Contains(t, page, "Public visitors cannot save changes back to your data.")
 	assert.Contains(t, page, "Anyone with the link can view your existing saved data, in either data mode.")
-	assert.Contains(t, page, `id="share-close">Done</button>`)
+	assert.Contains(t, page, `id="share-close" data-modal-dismiss>Done</button>`)
 	assert.NotContains(t, page, `data-counter=`)
 	assert.NotContains(t, page, "see how it works")
 	assert.Equal(t, http.StatusOK, patchArtifactStatus(t, ro, artifactID, `{"share_state_mode":"shared"}`))

@@ -44,7 +44,7 @@ func TestGalleryWithoutSharesKeepsOriginalPage(t *testing.T) {
 	assert.NotContains(t, before, `gallery-layout`)
 	assert.NotContains(t, before, `gallery-rail`)
 	assert.NotContains(t, before, `Library spaces`)
-	assert.Contains(t, before, "</header>\n<main>")
+	assert.Contains(t, before, "<main>")
 	// Other people's shares must not change this viewer's original page at all.
 	third, err := in.ro.cfg.Store.UpsertUser(context.Background(), "third", "third@example.test")
 	require.NoError(t, err)

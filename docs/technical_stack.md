@@ -380,8 +380,8 @@ which a module script requires. The rules for getting there:
   with different parameters becomes one module that takes those parameters. A
   cohesive 600-line file stays one file.
 - Shared scripts convert last. A file containing `export` is a syntax error
-  when loaded as a classic script, so `api.js`, `components.js`,
-  `state-api.js` and `network-prompt.js` stay classic while any classic page
+  when loaded as a classic script, so `api.js`, `components.js`, and
+  `state-api.js` stay classic while any classic page
   still loads them. Until then a module can use them as globals, or import
   `api-module.js` to call the shared credential client through its compatibility
   bridge. Module scripts are deferred, so they run after every classic script
@@ -410,13 +410,17 @@ the app origin. Native imports need no gallery bundler or production Node
 runtime. The first consumer is the shared `actionMenu` partial and controller:
 gallery cards supply links and named feature events, and duplication listens
 for `exhibit:duplicate`. [UI component conventions](ui-components.md) cover
-defining different menus and adding the next modal controller.
+defining action menus and adopting the shared modal controller.
 
 Controller integration uses the existing Chromium test helper, rather than
 emulating DOM observation in `testdom.mjs`. `TestActionMenuBrowser` exercises
 multiple instances, keyboard/focus, actual htmx swaps, and disconnect/reconnect;
 `TestGalleryActionMenuDuplicationBrowser` covers the feature event and modal
-focus boundary. Set `CHROMIUM_TEST_BINARY` if the helper cannot find a locally
+focus boundary. The shared modal migration suites cover tags, sharing, keys,
+filters, entitlements, editor leave, runtime permissions and direct-open, including
+native nesting and reconnect. `network-prompt.js` is now imported by the detail
+and agent ES modules rather than loaded as a classic global. CI requires these
+browser suites to execute. Set `CHROMIUM_TEST_BINARY` if the helper cannot find a locally
 installed browser. The existing Node suites continue covering feature logic.
 
 **Page scripts are tested by running them (av-kmwj).** `web/gallery/testdom.mjs`
@@ -494,6 +498,14 @@ lifecycles. Gallery duplication dispatches the scoped,
 bubbling `exhibit:artifacts-changed` event; the gallery controller clears its
 search and resets paging before firing that form's existing htmx search trigger.
 The modal and card markup remain server templates (`artifact-duplication.md`).
+Space navigation uses the same htmx model: page URLs serve `gallerySpaceContent`
+and an out-of-band search/header-controls region for fragment requests. The app
+header and Clerk mount stay connected. Registered `gallery` and `gallery-space`
+controllers own request invalidation and per-space cleanup; browser Back/Forward
+refetches this content region rather than replacing the document. `api.js` reads
+its live server-rendered read-only flag instead of retaining the initial space's
+bootstrap decision. See `architecture.md` §3.5 and `ui-components.md` for the
+region boundary, history handling, component lifecycle and browser checks.
 
 **Home-screen app shell (av-fdcx).** Every app-origin page head includes the shared
 `pwaHead` partial: the `manifest.json` link plus the `apple-*` tags iOS reads instead

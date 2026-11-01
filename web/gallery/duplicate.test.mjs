@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { webcrypto } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { loadPageScript } from './testdom.mjs';
+import { loadPageScript, nativeDialog } from './testdom.mjs';
 
 const script = fileURLToPath(new URL('../../internal/api/assets/gallery/index.js', import.meta.url));
 
@@ -33,20 +33,12 @@ async function fixture(respond = async () => Response.json({ id: 'created-copy' 
   const query = el('query');
   const newLink = el('new-link');
   query.value = 'original';
-  dialog.open = false;
-  // Feature tests model only the shared modal event contract. Native focus,
-  // backdrop, Escape, and Stimulus lifecycle run in the real-browser suite.
-  dialog.addEventListener('exhibit:modal-open', () => { dialog.open = true; });
-  async function dismiss() {
-    const event = { type: 'modal:before-close', defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
-    await dialog.dispatchEvent(event);
-    if (event.defaultPrevented) return;
-    dialog.open = false;
-    await dialog.dispatchEvent({ type: 'modal:closed' });
-  }
-  dialog.addEventListener('exhibit:modal-close', dismiss);
-  cancel.addEventListener('click', dismiss);
-  dialog.querySelector = () => form;
+  submit.disabled = cancel.disabled = false;
+  nativeDialog(page, dialog, [submit, cancel]);
+  cancel.addEventListener('click', () => dialog.dispatchEvent({ type: 'click', target: {
+    closest: selector => selector === '[data-modal-dismiss]' ? cancel : null
+  } }));
+  dialog.querySelector = selector => selector === 'form' ? form : null;
   form.elements = { title, copy_data: data, copy_share_settings: share };
   form.querySelector = selector => ({
     '[type="submit"]': submit, '[data-duplicate-cancel]': cancel, '[data-duplicate-status]': status
@@ -62,7 +54,10 @@ async function fixture(respond = async () => Response.json({ id: 'created-copy' 
   page.document.querySelectorAll = () => [root];
   let refreshes = 0;
   search.addEventListener('exhibit:gallery-search', () => refreshes++);
-  await page.loadModule(script);
+  const { initializeGallery } = await page.loadModule(new URL('./gallery.js', 'file://' + script).pathname);
+  const { initializeDuplication } = await page.loadModule(new URL('./duplicate.js', 'file://' + script).pathname);
+  initializeGallery(root);
+  initializeDuplication(root);
   const open = () => root.dispatchEvent({ type: 'exhibit:duplicate', detail: {
     artifactID: 'original-id', title: 'Original <title>', trigger
   } });
