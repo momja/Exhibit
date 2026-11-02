@@ -33,7 +33,7 @@ This story tests that component when it ships; it does not implement the shared 
 3. WHEN valid input is submitted, THEN exactly one mutation succeeds, the server-rendered htmx region refreshes without full-page navigation, the saved result appears, and focus lands on the feature's intended surviving/new element. Use request/DOM conditions rather than fixed sleeps.
 4. WHEN the refreshed component is operated again by keyboard, THEN its menu and modal work with the new artifact data and one user action causes one feature action. Exercise at least two refresh cycles to catch accumulating handlers or stale targets.
 5. A failed save leaves actionable error feedback and a usable modal; retry follows the feature's existing idempotency contract and cancellation behavior. A controlled API error may be injected for this error-path case; the successful path uses the real API.
-6. The flow runs in the required hosted Chromium suite with failure traces. Existing Go/Node/component tests remain in place; no blanket local Playwright requirement is added.
+6. The flow runs in the post-merge hosted Chromium suite with failure traces; it is not an approval or merge requirement. Existing Go/Node/component tests remain in place; no blanket local Playwright requirement is added.
 
 ## Historical scope superseded — 2026-10-20
 
