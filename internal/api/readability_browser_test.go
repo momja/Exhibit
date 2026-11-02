@@ -9,8 +9,11 @@ import (
 
 	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/chromedp"
+	"github.com/momja/Exhibit/internal/agent"
 	"github.com/momja/Exhibit/internal/chromium"
 	"github.com/momja/Exhibit/internal/chromium/chromiumtest"
+	"github.com/momja/Exhibit/internal/connectors"
+	"github.com/momja/Exhibit/internal/store"
 	"github.com/stretchr/testify/require"
 )
 
@@ -163,6 +166,70 @@ func TestEnlargedFieldsBrowser(t *testing.T) {
      });
     })()`)
 				b.capture("Exh-h9m4/share-"+theme, width)
+			})
+		}
+	}
+}
+
+// Both notices load through their real htmx partials. Their combined height
+// must leave the enlarged composer usable, including on a short phone.
+func TestEnlargedComposerNoticesBrowser(t *testing.T) {
+	ro := newTestRouter(t)
+	st := ro.cfg.Store.(*store.SQLiteStore)
+	ro.cfg.Relay.Enabled = true
+	ro.cfg.Connections = connectors.New(connectors.Config{CustomEnabled: true, Store: st, Box: ro.cfg.Secrets})
+	app := httptest.NewServer(ro)
+	defer app.Close()
+	ro.cfg.AppOrigin = app.URL
+	for _, fixture := range []struct {
+		name, body, input string
+		warnings          int
+	}{
+		{"short", `<script>fetch('https://api.example.test/', {mode:'no-cors'})</script>`, "First\nSecond\nThird", 1},
+		{"wrapped", `<script>fetch('https://corsproxy.io/', {mode:'no-cors'})</script>`, "First line of a longer message\nSecond line of a longer message\nThird line", 2},
+	} {
+		id := createArtifact(t, ro, map[string]any{"title": "Composer notices", "body": fixture.body})
+		_, err := st.RequestArtifactConnection(context.Background(), 1, id, "bearer", "Show my saved reading list")
+		require.NoError(t, err)
+		for _, enabled := range []bool{true, false} {
+			t.Run(fmt.Sprintf("%s/agent-enabled=%t", fixture.name, enabled), func(t *testing.T) {
+				ro.cfg.Agent = nil
+				if enabled {
+					ro.cfg.Agent = &agent.Manager{} // Only presence is read; no sidecar starts.
+				}
+				b := newModalBrowser(t, 320)
+				b.run(chromedp.EmulateViewport(320, 568, chromedp.EmulateTouch), chromedp.Navigate(app.URL+"/agent?artifact="+id))
+				b.wait(fmt.Sprintf(`window.closeKeyModal && document.querySelectorAll('[data-network-warning]').length === %d && document.querySelectorAll('#agent-connection-requests a').length === 2`, fixture.warnings))
+				b.eval(fmt.Sprintf(`window.closeKeyModal();document.documentElement.style.fontSize='200%%';const input=document.getElementById('input');input.value=%q;input.dispatchEvent(new Event('input',{bubbles:true}))`, fixture.input))
+				b.capture("Exh-h9m4/notices-"+fixture.name+fmt.Sprintf("-%t", enabled), 320)
+				checkControls := func() {
+					t.Helper()
+					failures, err := chromedp.Run(b.ctx, chromedp.Evaluate[[]string](`(() => {
+     const failures=[];
+     if (!matchMedia('(pointer:coarse)').matches || parseFloat(getComputedStyle(document.getElementById('input')).fontSize)<32) failures.push('text enlargement not applied');
+     if (document.documentElement.scrollWidth>innerWidth) failures.push('horizontal overflow');
+     for (const id of ['input','send-btn']) {
+      const element=document.getElementById(id),box=element.getBoundingClientRect();
+      if (box.top<document.querySelector('.app-header').getBoundingClientRect().bottom || box.bottom>innerHeight || !element.contains(document.elementFromPoint(box.x+box.width/2,box.y+box.height/2))) failures.push(id+' clipped: '+box.top+'..'+box.bottom);
+     }
+     return failures;
+    })()`))
+					require.NoError(t, err)
+					require.Empty(t, failures)
+				}
+				checkControls()
+				// Native focus must reveal both account actions without moving the
+				// input or Send out of view. The warning and request text stay present.
+				for _, selector := range []string{"#agent-network-warnings strong", "#agent-network-warnings li:last-child", "#agent-connection-requests a:first-of-type", "#agent-connection-requests a:last-of-type"} {
+					b.eval(fmt.Sprintf(`{const item=document.querySelector(%q);item.focus();item.scrollIntoView({block:'nearest'})}`, selector))
+					b.check(fmt.Sprintf(`(() => {const item=document.querySelector(%q),box=item.getBoundingClientRect();return box.top>=0 && box.bottom<=innerHeight && [box.top+1,box.y+box.height/2,box.bottom-1].every(y=>item.contains(document.elementFromPoint(box.x+box.width/2,y)))})()`, selector))
+					checkControls()
+				}
+				b.check(`document.querySelector('.connection-request-notice').textContent.includes('Show my saved reading list') && document.querySelector('[data-network-warning="no_cors"]').textContent.includes('opaque, unreadable')`)
+				b.run(chromedp.Navigate(app.URL + "/agent"))
+				b.wait(`window.closeKeyModal && document.getElementById('input')`)
+				b.eval(`window.closeKeyModal()`)
+				b.check(`(() => {const composer=document.querySelector('.composer'),row=document.querySelector('.compose-row');return !document.querySelector('#agent-network-warnings section,#agent-connection-requests section') && row.getBoundingClientRect().top-composer.getBoundingClientRect().top<=20})()`)
 			})
 		}
 	}

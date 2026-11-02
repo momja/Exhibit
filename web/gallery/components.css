@@ -439,7 +439,6 @@ button.banner-action{background:none;border:0;padding:0;font:inherit;cursor:poin
 .network-warnings li+li{margin-top:var(--space-2)}
 .connection-request-notice{border-color:var(--color-info-tint-border);background:var(--color-info-tint);color:var(--color-info-ink)}
 .connection-request-notice p{margin:var(--space-2) 0}
-.composer .network-warnings,.composer .connection-request-notice{max-height:min(12rem,24vh);overflow:auto}
 .origin-row{display:block;margin:var(--space-1) 0}
 .scan-actions{display:flex;flex-wrap:wrap;gap:var(--space-3);margin-top:var(--space-4)}
 /* Dialog prose only: do not resize floating-header menus or code fields. */

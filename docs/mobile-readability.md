@@ -35,7 +35,30 @@ does not depend on any sibling branch.
 The agent stylesheet also contains a focused composer text fix; it does not
 change Chat/Preview segments. Sharing choice headings wrap within their cells.
 
+After the main refresh, populated composer notices needed a shared height
+limit. At 320×568, coarse touch and 200% root text, one saved `no-cors` warning,
+one pending bearer connection request and three short input lines put Send's
+bottom at 561.3px on main `9b8f08df`, 623.3px on readability `df667871`, and
+682.3px on combined `92f3f095`. The first case fits the viewport; the latter
+two clip. With two warnings and longer lines, main already clips too. These
+comparisons used each pinned revision's actual templates and gallery assets,
+with notices fetched from the saved artifact and connection-request partials.
+
+Both htmx targets now sit in one scroll area using the previous notice height
+cap. The composer can shrink its notice area around the enlarged input and
+Send. Warning text and account actions remain reachable by scrolling; empty
+notices reserve no space. The regression checks short and wrapped three-line
+input, enabled and disabled agent layouts, native focus reaching both account
+actions, control hit testing, retained warning text and empty notice spacing.
+It is required by the browser CI execution gate.
+
+[Before: readability `df667871`, enabled agent, 320×568, 200% text](screenshots/Exh-h9m4/composer-notices-before-320-200.png) ·
+[After: same artifact, request, input and viewport](screenshots/Exh-h9m4/composer-notices-after-320-200.png)
+
 ## Verification
+
+After the notice fix, `TestReadabilityBrowser`, `TestEnlargedFieldsBrowser`
+and `TestEnlargedComposerNoticesBrowser` passed in 9.364s with no skips.
 
 The final focused Chromium suite passed all eight selected tests (56.691s):
 
