@@ -125,13 +125,6 @@ func TestAppHeaderAccountStatesBrowser(t *testing.T) {
 		for _, path := range []string{"/settings", "/gallery"} {
 			t.Run(fmt.Sprintf("%d%s", width, path), func(t *testing.T) {
 				require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(app.URL+path)))
-				// Model the SDK's compact avatar trigger without a remote account.
-				require.NoError(t, chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](`document.querySelector('[data-clerk-target="mount"]').innerHTML = '<button style="width:28px;height:28px" aria-label="Account">A</button>'`)))
-				if width <= 767 {
-					ok, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`(() => {const r=document.querySelector('[data-clerk-target="mount"] button').getBoundingClientRect();return r.width>=44 && r.height>=44 && document.documentElement.scrollWidth<=innerWidth})()`))
-					require.NoError(t, err)
-					require.True(t, ok, "the hosted account trigger has a full mobile hit box")
-				}
 				hidden, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`(() => {
 					const recovery = document.querySelector('[data-clerk-target="recovery"]');
 					const placeholder = document.querySelector('.account-control-placeholder');
@@ -141,6 +134,16 @@ func TestAppHeaderAccountStatesBrowser(t *testing.T) {
 				})()`))
 				require.NoError(t, err)
 				require.True(t, hidden, "without JavaScript the first HTML reserves space, describes loading, and hides recovery actions")
+				// Model the SDK's compact avatar trigger without a remote account.
+				require.NoError(t, chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](`window.headerBeforeReady = document.querySelector('.app-header').getBoundingClientRect().toJSON(); document.querySelector('.account-control').dataset.clerkState = 'ready'; document.querySelector('[data-clerk-target="status"]').textContent = ''; document.querySelector('[data-clerk-target="mount"]').innerHTML = '<button style="width:28px;height:28px" aria-label="Account">A</button>'`)))
+				if width <= 767 {
+					ok, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`(() => {const r=document.querySelector('[data-clerk-target="mount"] button').getBoundingClientRect();return r.width>=44 && r.height>=44 && document.documentElement.scrollWidth<=innerWidth})()`))
+					require.NoError(t, err)
+					require.True(t, ok, "the hosted account trigger has a full mobile hit box")
+				}
+				stable, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`JSON.stringify(document.querySelector('.app-header').getBoundingClientRect().toJSON()) === JSON.stringify(headerBeforeReady) && getComputedStyle(document.querySelector('.account-control-placeholder')).display === 'none' && getComputedStyle(document.querySelector('[data-clerk-target="mount"]')).visibility === 'visible'`))
+				require.NoError(t, err)
+				require.True(t, stable, "the reserved account slot prevents layout shifts when its button appears")
 				require.NoError(t, chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](`
 					window.headerBeforeFailure = document.querySelector('.app-header').getBoundingClientRect().toJSON();
 					// Initial SDK load failure never mounts an avatar.
