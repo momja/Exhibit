@@ -263,7 +263,9 @@ dialogs retain their own behavior.
 The stable `#gallery-shell` uses the registered `gallery` controller. It owns
 space request generations, history restoration and the current search
 connection. Its `space` target is `#gallery-content`, which gets replaced when
-switching My library, Shared with me or Shared by me. The server sends the
+switching Library, Shared with me or Shared by me. These destinations remain
+available with zero sharing counts; phones show the same full labels, wrapping
+within each tab. The server sends the
 `gallerySpaceContent` partial plus an out-of-band `gallerySearchRegion` update.
 Keep the header and Clerk controller outside both regions.
 
@@ -287,11 +289,38 @@ go test ./internal/api -run 'TestGallerySpace(Navigation.*Browser|Fragments|Frag
 go test -tags screenshot ./internal/api -run '^TestCaptureGallerySpaceNavigation$' -count=1
 ```
 
+Empty sharing destinations retain navigation, including after the last share is
+revoked. `TestGalleryEmptySpacesBrowser` exercises both themes at 320, 375, 390,
+430 and 1280px, plus enlarged and long labels. Set `GALLERY_SCREENSHOT_DIR` to
+capture these empty states while running the test.
+
+[Empty sharing space at 320px](screenshots/Exh-1l70/empty-320-light.png) ·
+[Dark mode](screenshots/Exh-1l70/empty-320-dark.png)
+
 The browser suite uses the real htmx, Stimulus and Clerk loader/controller
 against local SDK doubles. It checks document/header/account node identity,
 load/reload/mount counts, history, permissions, duplication, widget remounts,
 request races, failures, modified clicks and no-JS links. Screenshot capture
 uses `shot-scraper` and verifies header identity after a real space click.
+
+On phones, the library rail becomes bottom-sticky tabs in a column layout.
+It keeps its rendered height in document flow, so wrapped labels, enlarged
+text and the bottom safe-area inset reserve their own clearance above the
+last card or Load more. At normal text size the bar is about 55px before the inset
+when labels fit one line, with at least 44px link targets. Full labels can wrap
+on a 320px screen; the bar grows to fit them. Desktop retains
+the 208px side rail. No observer or duplicate height token is needed.
+`TestGalleryMobileTabsBrowser` checks 320/375/390/430px in light and dark,
+200% tab text with full labels, a simulated 34px inset, pagination, and short
+pages. `TestGallerySpacesBrowser` retains keyboard, focus and desktop checks.
+
+[Before at 390px](screenshots/Exh-0n90/before-390.png) ·
+[Compact tabs at 390px](screenshots/Exh-0n90/after-390.png) ·
+[Desktop rail](screenshots/Exh-0n90/desktop-1280.png) ·
+[Single-label compatibility fixture at 200% text](screenshots/Exh-0n90/single-labels-200-320-dark.png).
+The last capture uses the full single labels with a simulated 34px bottom inset.
+The combined navigation regression checks the same markup at 200% text. These are
+Chromium captures, not physical iPhone, VoiceOver or browser-zoom checks.
 
 ## Unsaved changes
 

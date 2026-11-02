@@ -535,12 +535,13 @@ Screenshots after a space switch: [desktop](screenshots/Exh-xw54/01-space-switch
 and [phone](screenshots/Exh-xw54/02-space-switch-phone.png).
 
 **Spaces and filters** (Exh-2c2e, Exh-gx18): one `gallerySpaces` partial
-lays out My library, Shared with me, and Shared by me as a 208px desktop rail
-at widths of at least 768px, and fixed bottom tabs on phones. Per-viewer counts
-come from `SpaceCounts`, independently of search. The spaces nav appears when
-an incoming or outgoing share exists. The rail also appears for a solo library
-with tags or collections; a library with none of those or shares keeps its
-original page with no rail, tabs, or filter sheet.
+lays out Library, Shared with me, and Shared by me as a 208px desktop rail
+at widths of at least 768px, and bottom-sticky tabs on phones. Per-viewer counts
+come from `SpaceCounts`, independently of search. All three destinations remain
+available even when both sharing counts are zero. Empty sharing spaces explain
+what belongs there. Phones use the same full labels, wrapping as needed. Tags
+and collections share the desktop rail and appear in the phone filter sheet
+only when choices exist. The existing session gate protects personal galleries.
 
 My library and Shared by me accept repeated `?tag=<name>` and
 `?collection=<id>` parameters. Every selected tag and collection is required
