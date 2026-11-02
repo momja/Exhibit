@@ -83,6 +83,7 @@ func TestProfileNamesTheSignedInAccount(t *testing.T) {
 	page := in.page(t)
 
 	assert.Contains(t, page, "person@example.test")
+	assert.Contains(t, page, `href="/admin/users"`, "administration remains reachable through Settings on phones")
 	assert.Contains(t, page, "Identity provider",
 		"an account with no password here signs in through the provider, and the page says which")
 	assert.NotContains(t, page, "subject identifier",
@@ -241,6 +242,7 @@ func TestProfileNeedsASessionAndNothingMore(t *testing.T) {
 	w := httptest.NewRecorder()
 	in.ro.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code, "a member with no admin role owns their own account page")
+	assert.NotContains(t, w.Body.String(), `href="/admin/users"`)
 	assert.Contains(t, w.Body.String(), "second@example.test",
 		"and it is their account, resolved from the session rather than from the URL")
 
@@ -278,10 +280,9 @@ func TestGalleryHeaderCarriesBothIconControls(t *testing.T) {
 	assert.Contains(t, page, `href="/settings" aria-label="Settings" title="Settings"`)
 	assert.Contains(t, page, `href="/new" aria-label="Add artifact" title="Add artifact"`)
 	assert.Contains(t, page, "ph-user-circle")
-	assert.Contains(t, page, `class="btn btn-sec" href="/admin/users"`,
-		"the admin link keeps its box")
-	// The word stays in the markup, and so in the accessible name, even where
-	// a phone hides it visually to leave search room (av-uvc6).
+	assert.Contains(t, page, `class="btn btn-sec app-header-desktop-action" href="/admin/users"`,
+		"the desktop admin link keeps its box; phones reach Accounts through Settings")
+	// The desktop shortcut keeps its visible and accessible label.
 	assert.Contains(t, page, `<span class="header-link-label">Accounts</span></a>`)
 
 	// Sized as peers: one class, applied to both, so they cannot drift apart.

@@ -100,6 +100,10 @@ func TestClerkPlaceholderBrowser(t *testing.T) {
 	browser, err := chromium.New(chromiumtest.Start(t))
 	require.NoError(t, err)
 	for _, width := range []int64{1280, 768, 767, 390, 320} {
+		controlSize := 32
+		if width < 768 {
+			controlSize = 44
+		}
 		for _, theme := range []string{"light", "dark"} {
 			t.Run(fmt.Sprintf("%d/%s", width, theme), func(t *testing.T) {
 				ctx, cancel, err := browser.Tab(context.Background())
@@ -133,7 +137,7 @@ func TestClerkPlaceholderBrowser(t *testing.T) {
 						poll(`window.clerkIdleCallbacks?.length > 0`)
 						run(`window.account = document.querySelector('.account-control'); window.mount = account.querySelector('[data-clerk-target="mount"]'); window.placeholder = account.querySelector('.account-control-placeholder');`)
 						check(`!window.Clerk && !document.querySelector('script[src*="/npm/"]') && account.dataset.clerkState === 'loading' && account.getAttribute('aria-busy') === 'true' && mount.inert && placeholder.getAttribute('aria-hidden') === 'true' && !placeholder.matches('a,button,[tabindex]') && account.querySelector('[role="status"]').textContent === 'Loading your account…'`)
-						check(`account.getBoundingClientRect().width === 32 && account.getBoundingClientRect().height === 32 && placeholder.getBoundingClientRect().width === 32 && getComputedStyle(placeholder).display !== 'none'`)
+						check(fmt.Sprintf(`account.getBoundingClientRect().width === %[1]d && account.getBoundingClientRect().height === %[1]d && placeholder.getBoundingClientRect().width === %[1]d && placeholder.getBoundingClientRect().height === %[1]d && getComputedStyle(placeholder).display !== 'none'`, controlSize))
 						run(`window.before = ` + clerkPlaceholderGeometry)
 						checkStable := func() {
 							t.Helper()
@@ -154,7 +158,7 @@ func TestClerkPlaceholderBrowser(t *testing.T) {
 						poll(`account.dataset.clerkState === 'ready'`)
 						checkStable()
 						check(`account.getAttribute('aria-busy') === 'false' && !mount.inert && mount.getAttribute('aria-hidden') === 'false' && getComputedStyle(placeholder).display === 'none' && account.querySelector('[role="status"]').textContent === 'Account menu ready.' && account.querySelector('[data-clerk-target="recovery"]').hidden`)
-						check(`mount.querySelector('button').getBoundingClientRect().width === 32 && mount.querySelector('button').getBoundingClientRect().height === 32`)
+						check(fmt.Sprintf(`mount.querySelector('button').getBoundingClientRect().width === %[1]d && mount.querySelector('button').getBoundingClientRect().height === %[1]d`, controlSize))
 						require.NoError(t, chromedp.Do(ctx, chromedp.Click(chromedp.CSS(`.cl-userButtonTrigger`))))
 						check(`window.accountClicks === 1 && document.activeElement === mount.querySelector('button')`)
 					})
@@ -193,6 +197,11 @@ func TestClerkPlaceholderFailureBrowser(t *testing.T) {
 				  feedback.top >= document.querySelector('header').getBoundingClientRect().bottom && feedback.left >= 0 && feedback.right <= innerWidth && feedback.bottom <= innerHeight && document.documentElement.scrollWidth <= innerWidth;
 				})()`))
 				require.NoError(t, err)
+				if !ok {
+					detail, detailErr := chromedp.Run(ctx, chromedp.Evaluate[string](`JSON.stringify({before,after:`+clerkPlaceholderGeometry+`,feedback:document.querySelector('.account-control-feedback').getBoundingClientRect().toJSON(),header:document.querySelector('header').getBoundingClientRect().toJSON(),scrollWidth:document.documentElement.scrollWidth,viewport:{width:innerWidth,height:innerHeight}})`))
+					require.NoError(t, detailErr)
+					t.Log(detail)
+				}
 				require.True(t, ok, "failure feedback remains visible, accessible and outside the unchanged header layout")
 				if failure == "reload-timeout" {
 					require.NoError(t, chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](`finishReload()`)))
