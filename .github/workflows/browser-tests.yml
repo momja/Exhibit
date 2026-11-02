@@ -1,18 +1,12 @@
 name: Browser regression
 
 on:
-  pull_request:
-    branches: [main]
   push:
     branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
-
-concurrency:
-  group: browser-regression-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   browser-regression:
@@ -26,7 +20,7 @@ jobs:
       - name: Check for changes outside tickets
         id: changes
         env:
-          DIFF_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          DIFF_BASE: ${{ github.event.before }}
         run: |
           python3 <<'PY'
           import os
@@ -34,8 +28,7 @@ jobs:
 
           run_tests = True
           base = os.environ.get("DIFF_BASE", "")
-          if os.environ["GITHUB_EVENT_NAME"] in {"pull_request", "push"} and base and set(base) != {"0"}:
-              # PRs compare the tested merge to its base, covering the entire PR.
+          if os.environ["GITHUB_EVENT_NAME"] == "push" and base and set(base) != {"0"}:
               # Disable rename detection so moves into/out of tickets check both paths.
               result = subprocess.run(
                   ["git", "diff", "--name-only", "--no-renames", "-z", base, os.environ["GITHUB_SHA"], "--"],

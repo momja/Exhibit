@@ -17,13 +17,17 @@ import (
 // Start launches a headless Chromium with a DevTools port, stopped when the
 // test ends, and returns its websocket address. The binary comes from
 // CHROMIUM_TEST_BINARY, else a Playwright headless shell if one is installed.
-// flags are added to the command line.
+// flags are added to the command line. Short test runs skip browser integration
+// tests even when a binary is installed or explicitly configured.
 //
 // Local Network Access is off. It refuses some requests to loopback, where
 // every test server is, and it is Chromium's protection rather than ours: an
 // operator's browser may not apply it, so code under test must stand without it.
 func Start(t *testing.T, flags ...string) string {
 	t.Helper()
+	if testing.Short() {
+		t.Skip("Chromium integration disabled in short test runs")
+	}
 	bin := os.Getenv("CHROMIUM_TEST_BINARY")
 	if bin == "" {
 		home, _ := os.UserHomeDir()

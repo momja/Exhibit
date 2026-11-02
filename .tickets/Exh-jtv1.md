@@ -28,4 +28,4 @@ Use accessible locators, observable API/DOM conditions, fresh owner/anonymous co
 1. Ingest approval persists exactly the selected origins and the artifact works through its app iframe.
 2. The sharing panel yields a working credential-free link; revocation/replacement invalidates the old link. No expiry behavior is invented.
 3. Search/tag mutations update the actual server-rendered gallery without a manual full reload, persist after reload, and leave replaced components usable. Shared tags update every affected artifact.
-4. The implemented journeys run in the required hosted suite. Remaining bridge/edit journeys have explicit linked follow-ups with behavior-based criteria before this story closes.
+4. The implemented journeys run in the post-merge hosted browser suite, without becoming an approval or merge requirement. Remaining bridge/edit journeys have explicit linked follow-ups with behavior-based criteria before this story closes.

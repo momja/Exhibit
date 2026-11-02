@@ -1,0 +1,63 @@
+name: Go and Node tests
+
+on:
+  pull_request:
+    branches: [main]
+  merge_group:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: go-node-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Go and Node tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Check for changes outside tickets
+        id: changes
+        env:
+          DIFF_BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+        run: |
+          python3 <<'PY'
+          import os
+          import subprocess
+
+          run_tests = True
+          base = os.environ.get("DIFF_BASE", "")
+          if os.environ["GITHUB_EVENT_NAME"] in {"pull_request", "merge_group"} and base and set(base) != {"0"}:
+              # Disable rename detection so moves into/out of tickets check both paths.
+              result = subprocess.run(
+                  ["git", "diff", "--name-only", "--no-renames", "-z", base, os.environ["GITHUB_SHA"], "--"],
+                  check=True, capture_output=True,
+              )
+              paths = [path for path in result.stdout.split(b"\0") if path]
+              run_tests = not paths or any(not path.startswith(b".tickets/") for path in paths)
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write(f"run_tests={str(run_tests).lower()}\n")
+          PY
+      - name: Report ticket-only success
+        if: steps.changes.outputs.run_tests == 'false'
+        run: echo 'Only .tickets/ changed; test workload skipped.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/setup-go@v6
+        if: steps.changes.outputs.run_tests == 'true'
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v6
+        if: steps.changes.outputs.run_tests == 'true'
+        with:
+          node-version: '24'
+      - name: Build the application and embedded assets
+        if: steps.changes.outputs.run_tests == 'true'
+        run: make build
+      - name: Run Go and gallery Node tests without browsers
+        if: steps.changes.outputs.run_tests == 'true'
+        run: go test -short -count=1 ./...

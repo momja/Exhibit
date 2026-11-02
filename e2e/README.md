@@ -1,7 +1,7 @@
 # Browser regression tests
 
-Playwright runs in CI against its own built Exhibit server and scratch data.
-Run it locally when changing covered frontend behavior or investigating a CI
+Playwright runs in post-merge CI against its own built Exhibit server and scratch
+data. Run it locally when changing covered frontend behavior or investigating a CI
 failure. It is deliberately separate from ordinary `make test`, asset builds,
 and application startup. Node 24 and the Go version in `go.mod` are required.
 
@@ -61,23 +61,33 @@ run. CI forbids focused tests. One worker and zero retries keep the first
 failure visible; `retain-on-failure` preserves its trace. App startup and test
 execution have bounded timeouts.
 
-GitHub Actions reports **Browser regression** on every PR targeting main, pushes
-to main, and manual dispatch on GitHub-hosted Ubuntu 24.04. Automatic runs whose
-entire diff is confined to `.tickets/` report success without installing tools,
-building, or running tests. Mixed changes run the full suite; manual dispatch
-always runs it. The workflow itself stays unfiltered so ticket-only changes
-still receive the required check. PR comparisons cover the whole proposed merge,
-and renames into or out of `.tickets/` check both paths.
+GitHub Actions reports **Browser regression** on pushes to `main` (including
+merged changes) and manual dispatch on GitHub-hosted Ubuntu 24.04. It does not
+run automatically for PRs or merge-queue events and is not an approval or merge
+requirement. Browser integration runs take too long to require on every MR.
 
-For other changes, it installs Chromium,
-builds assets/server, runs Go tests (including the gallery Node suite), verifies
-the existing Stimulus Chromium tests passed rather than skipped, then runs
-Playwright. Missing optional S3/Pi integrations remain outside this gate.
-Failure artifacts retain reports, traces, screenshots, app logs, and Go JSON
-results for 14 days. Browser binaries are not cached; only dependency downloads
-are cached.
+Automatic runs whose entire diff is confined to `.tickets/` report success
+without installing tools, building, or running tests. Mixed changes run the full
+suite; manual dispatch always runs it. New pushes do not cancel earlier browser
+runs, so each merged result can finish. Push comparisons cover the complete
+change, and renames into or out of `.tickets/` check both paths. An unavailable
+comparison base runs the tests; a failed comparison fails the job.
 
-The repository's merge rule must require the **Browser regression** check from
-GitHub Actions after its first green hosted run. A workflow file alone does
-not enforce merges. Keep unrelated repository rules unchanged. Local Playwright
-execution remains explicit; CI is the enforcement point.
+For other changes, it installs Chromium, builds assets/server, runs Go tests
+(including the gallery Node suite), verifies the existing Stimulus Chromium
+tests passed rather than skipped, then runs Playwright. Missing optional S3/Pi
+integrations remain outside this suite. Failures remain failed checks; they are
+not converted into success to avoid blocking merges. Failure artifacts retain
+reports, traces, screenshots, app logs, and Go JSON results for 14 days. Browser
+binaries are not cached; only dependency downloads are cached.
+
+A separate **Go and Node tests** workflow preserves non-browser validation on
+PRs targeting `main` and merge-queue events. It runs `go test -short -count=1 ./...`
+(including gallery Node tests); short mode skips Chromium integration tests even
+when a browser is installed. Post-merge browser CI omits `-short` and verifies
+those component tests ran. Ticket-only PR/merge-queue changes skip this workload
+as well. The existing **Migration versions** merge requirement
+is unchanged.
+Repository branch protection and rulesets must not require **Browser regression**,
+since PRs no longer report that status. Local Playwright execution remains
+explicit through `make e2e` or `make e2e-ui`.
