@@ -726,7 +726,6 @@ inputEl.addEventListener('keydown', (e) => {
 function updateComposer() {
   const waiting = pendingQuestions.size > 0;
   inputEl.disabled = false;
-  inputEl.placeholder = waiting ? 'Message the agent…' : artifact ? 'Describe the change to make…' : 'Describe the tool to build…';
   document.getElementById('send-btn').disabled = sendingQuestionMessage || !inputEl.value.trim();
   document.getElementById('hint').hidden = waiting;
   inputEl.style.height = 'auto';
@@ -1152,10 +1151,6 @@ function briefToMessage(brief) {
   syncHistoryButton();
   const configured = await refreshKeyStatus();
   const brief = takeBrief();
-  if (artifact) {
-    // The preview is already rendered; only the composer needs its edit hint.
-    inputEl.placeholder = 'Describe the change to make…';
-  }
   // A brief only opens a *new* build. In modify mode the session already has a
   // subject, and a brief that somehow survived would ask for a second one.
   const opening = (!artifact && brief) ? briefToMessage(brief) : '';
