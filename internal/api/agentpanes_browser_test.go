@@ -317,3 +317,86 @@ func TestAgentPaneInitialLayoutBrowser(t *testing.T) {
 	run(chromedp.Poll[chromedp.Void](`typeof window.showPane === 'function'`))
 	check(`document.activeElement.id === 'input' && document.getElementById('pane-chat').getAttribute('role') === 'tabpanel' && document.getElementById('pane-preview').inert`)
 }
+
+// A background preview may ask for relay consent while Chat is selected.
+// Exercise the real nested dialog and controller both before and after the
+// pane module initializes; a hidden modal would make the whole page unusable.
+func TestAgentPaneRelayConsentBrowser(t *testing.T) {
+	for _, initialized := range []bool{false, true} {
+		t.Run(fmt.Sprintf("initialized=%t", initialized), func(t *testing.T) {
+			ro := newTestRouter(t)
+			enablePlatformMode(ro)
+			ro.cfg.Agent = &agent.Manager{}
+			ro.cfg.Relay.Enabled = true
+			id := createArtifact(t, ro, map[string]any{"title": "Consent from a background preview", "body": "<!doctype html><p>Preview</p>"})
+			ready := make(chan struct{})
+			unblock := sync.OnceFunc(func() { close(ready) })
+			if initialized {
+				unblock()
+			}
+			app := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasSuffix(r.URL.Path, "/gallery/agent.js") {
+					<-ready
+				}
+				ro.ServeHTTP(w, r)
+			}))
+			defer func() { unblock(); app.Close() }()
+			ro.cfg.AppOrigin = app.URL
+			render := httptest.NewServer(ro.RenderHandler())
+			defer render.Close()
+			ro.cfg.RenderOrigin = render.URL
+			browser, err := chromium.New(chromiumtest.Start(t))
+			require.NoError(t, err)
+			ctx, cancel, err := browser.Tab(context.Background())
+			require.NoError(t, err)
+			defer cancel()
+			ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
+			defer cancel()
+			run := func(actions ...chromedp.Action[chromedp.Void]) {
+				t.Helper()
+				require.NoError(t, chromedp.Do(ctx, actions...))
+			}
+			check := func(expression string) {
+				t.Helper()
+				ok, err := chromedp.Run(ctx, chromedp.Evaluate[bool](expression))
+				require.NoError(t, err)
+				require.True(t, ok, expression)
+			}
+			run(chromedp.EmulateViewport(320, 568))
+			_, err = chromedp.Call(ctx, page.Navigate, page.NavigateParams{URL: app.URL + "/agent?artifact=" + id})
+			require.NoError(t, err)
+			run(chromedp.Poll[chromedp.Void](`document.querySelector('.relay-consent') && [...document.styleSheets].some(sheet => sheet.href?.endsWith('/gallery/agent.css') && sheet.cssRules.length)`),
+				chromedp.Evaluate[chromedp.Void](`import(document.querySelector('script[src$="/gallery/controllers.js"]').src).then(({application}) => { window.relayApplication = application; })`, chromedp.EvalAwaitPromise),
+				chromedp.Poll[chromedp.Void](`!!(window.relayHost = relayApplication.getControllerForElementAndIdentifier(document.getElementById('frame-wrap'), 'relay-host'))`))
+			if initialized {
+				run(chromedp.Poll[chromedp.Void](`typeof window.showPane === 'function'`))
+				check(`document.getElementById('pane-preview').inert`)
+			} else {
+				check(`typeof window.showPane === 'undefined'`)
+			}
+			run(chromedp.Focus(chromedp.CSS(`#input`)),
+				chromedp.Evaluate[chromedp.Void](`void relayHost.askConsent({url:'https://api.example.test/data'}, new AbortController().signal).then(value => window.consentResult = value).catch(error => window.consentError = error.message)`),
+				chromedp.Poll[chromedp.Void](`document.querySelector('.relay-consent').open || window.consentError`))
+			check(`!window.consentError`)
+			state, err := chromedp.Run(ctx, chromedp.Evaluate[string](`JSON.stringify({visibility:getComputedStyle(document.querySelector('.relay-consent')).visibility,modal:document.querySelector('.relay-consent').matches(':modal'),focused:document.activeElement.outerHTML,paneInert:document.getElementById('pane-preview').inert})`))
+			require.NoError(t, err)
+			t.Log(state)
+			check(`(() => {
+				const dialog = document.querySelector('.relay-consent');
+				return dialog.matches(':modal') && getComputedStyle(dialog).visibility === 'visible' &&
+				  document.activeElement.matches('[data-action="relay-host#decline"]') &&
+				  [...dialog.querySelectorAll('button')].every(button => {
+				    const rect = button.getBoundingClientRect();
+				    return rect.width > 0 && rect.height > 0 && rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight &&
+				      button.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2));
+				  });
+			})()`)
+			run(chromedp.Click(chromedp.CSS(`.relay-consent [data-action="relay-host#decline"]`)),
+				chromedp.Poll[chromedp.Void](`window.consentResult === false`))
+			check(`!document.querySelector('.relay-consent').open && document.activeElement.id === 'input'`)
+			unblock()
+			run(chromedp.Poll[chromedp.Void](`typeof window.showPane === 'function'`))
+			check(`document.getElementById('pane-preview').inert && !document.body.classList.contains('show-preview')`)
+		})
+	}
+}
