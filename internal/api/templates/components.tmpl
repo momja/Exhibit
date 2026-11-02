@@ -35,7 +35,7 @@
   {{if .Account}}{{template "accountControl" .Clerk}}{{end}}
 </header>{{end}}{{end}}
 
-{{define "appHeaderAction"}}{{if .Href}}<a class="btn{{if not .Primary}} btn-sec{{end}}{{if .IconOnly}} icon-btn{{end}}" href="{{.Href}}" aria-label="{{.Label}}" title="{{.Label}}">{{template "appHeaderActionContent" .}}</a>
+{{define "appHeaderAction"}}{{if .Href}}<a class="btn{{if not .Primary}} btn-sec{{end}}{{if .IconOnly}} icon-btn{{end}}{{if .DesktopOnly}} app-header-desktop-action{{end}}" href="{{.Href}}" aria-label="{{.Label}}" title="{{.Label}}">{{template "appHeaderActionContent" .}}</a>
 {{else}}<button type="button" class="btn{{if not .Primary}} btn-sec{{end}}{{if .IconOnly}} icon-btn{{end}}"{{if .ID}} id="{{.ID}}"{{end}}{{if .SaveEditor}} data-save-editor{{end}} aria-label="{{.Label}}" title="{{.Label}}">{{template "appHeaderActionContent" .}}</button>{{end}}{{end}}
 
 {{define "appHeaderActionContent"}}{{if .Icon}}<i class="ph {{.Icon}}" aria-hidden="true"></i>{{end}}{{if not .IconOnly}}<span class="header-link-label"{{if .LabelID}} id="{{.LabelID}}"{{end}}>{{.Label}}</span>{{end}}{{end}}

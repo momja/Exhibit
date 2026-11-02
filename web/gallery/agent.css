@@ -123,7 +123,12 @@ body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(-
  * keeps spinning with the setting on too. */
 .thinking-spinner{width:13px;height:13px;flex-shrink:0;animation:thinking-spin 1s linear infinite}
 @keyframes thinking-spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
-.composer{border-top:1px solid var(--color-hairline);padding:10px 12px;display:flex;flex-direction:column;gap:8px;flex-shrink:0}
+.composer{border-top:1px solid var(--color-hairline);padding:10px 12px;display:flex;flex-direction:column;gap:8px;min-height:0}
+/* Notices share the height budget so enlarged input and Send stay in view.
+ * Their htmx targets remain independent; empty responses reserve no space. */
+.composer-notices{min-height:0;max-height:min(12rem,24vh);overflow-y:auto}
+.composer-notices:not(:has(>div:not(:empty))){display:none}
+.composer>:not(.composer-notices){flex-shrink:0}
 .pv-nudge{display:none;align-self:center;align-items:center;gap:6px;border:1px solid var(--color-accent-tint-border);background:var(--color-accent-tint);color:var(--brand-blue);border-radius:999px;padding:6px 14px;font:inherit;font-size:13px;cursor:pointer}
 #snippet-chips{display:flex;gap:8px;flex-wrap:wrap}
 .snippet-chip{display:flex;align-items:center;gap:8px;background:var(--color-accent-tint);border:1px solid var(--color-accent-tint-border);border-radius:8px;padding:5px 8px;font-size:12px;color:var(--color-accent-tint-ink)}
@@ -131,7 +136,7 @@ body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(-
 .snippet-chip code{background:var(--color-accent-tint-strong);padding:1px 5px;border-radius:3px}
 .snippet-chip button{border:none;background:transparent;cursor:pointer;color:var(--color-ink-mid);display:inline-flex}
 .compose-row{--compose-control-size:40px;display:flex;gap:8px;align-items:flex-end}
-#input{flex:1;resize:none;border:1px solid var(--color-border);border-radius:8px;padding:9px 11px;font-size:var(--field-font-size);font-family:inherit;line-height:20px;outline:none;max-height:140px;min-height:var(--compose-control-size)}
+#input{flex:1;min-width:0;resize:none;border:1px solid var(--color-border);border-radius:8px;padding:9px 11px;font-size:var(--field-font-size);font-family:inherit;line-height:max(20px,1.4em);outline:none;max-height:140px;min-height:var(--compose-control-size)}
 #input:focus{border-color:var(--brand-blue)}
 .compose-row>.btn:disabled{background:var(--color-accent-disabled);color:var(--color-on-accent-disabled);cursor:default}
 .btn-stop{background:var(--color-danger);color:var(--color-on-danger)}

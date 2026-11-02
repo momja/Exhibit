@@ -36,23 +36,27 @@
 {{/* Every tile carries data-mode: the agent tile used to be a bare link to
      /agent and is now the panel's default mode, so the brief below it is
      filled in before the session starts rather than after. */}}
-<div class="routes">
+<div class="routes" role="group" aria-label="Creation method">
   <button type="button" class="route is-selected" data-mode="agent" aria-pressed="true" onclick="setMode('agent')">
-    <span class="route-icon"><i class="ph ph-robot"></i></span>
-    <b>Build with agent</b>
+    <span class="route-icon" aria-hidden="true"><i class="ph ph-robot"></i></span>
+    <b><span class="route-label-wide">Build with agent</span><span class="route-label-compact">Agent</span></b>
     <span class="route-note">Describe the tool and iterate with an assistant until it works.</span>
   </button>
   <button type="button" class="route" data-mode="paste" aria-pressed="false" onclick="setMode('paste')">
-    <span class="route-icon"><i class="ph ph-code"></i></span>
-    <b>Paste HTML</b>
+    <span class="route-icon" aria-hidden="true"><i class="ph ph-code"></i></span>
+    <b><span class="route-label-wide">Paste HTML</span><span class="route-label-compact">Paste</span></b>
     <span class="route-note">Drop in source you already have from a chat or your editor.</span>
   </button>
   <button type="button" class="route" data-mode="url" aria-pressed="false" onclick="setMode('url')">
-    <span class="route-icon"><i class="ph ph-globe"></i></span>
-    <b>From URL</b>
+    <span class="route-icon" aria-hidden="true"><i class="ph ph-globe"></i></span>
+    <b><span class="route-label-wide">From URL</span><span class="route-label-compact">URL</span></b>
     <span class="route-note">Fetch a page once and keep your own copy. Assets inlined.</span>
   </button>
 </div>
+{{/* Phones show only the selected route note, outside the compact buttons.
+     The initial note matches the default agent route; setMode copies the
+     selected tile's server-rendered text without replacing any form fields. */}}
+<p class="route-description" id="route-description" aria-live="polite">Describe the tool and iterate with an assistant until it works.</p>
 
 {{/* The agent brief. Deliberately a form of named fields rather than one
      freeform prompt box: the answers are what the agent surface builds its

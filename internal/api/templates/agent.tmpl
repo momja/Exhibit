@@ -50,12 +50,14 @@
     <div id="messages"></div>
     <div id="history"></div>
     <div class="composer">
-      <div id="agent-network-warnings" hx-get="/partials/network-warnings"
-           hx-trigger="load, exhibit:artifact-saved from:body"
-           hx-vals='js:{artifact: previewArtifactId()}' hx-swap="innerHTML" hx-sync="this:replace"></div>
-      <div id="agent-connection-requests" hx-get="/partials/agent-connection-requests"
-           hx-trigger="load, exhibit:artifact-saved from:body, exhibit:connection-requested from:body"
-           hx-vals='js:{artifact: previewArtifactId()}' hx-swap="innerHTML" hx-sync="this:replace"></div>
+      <div class="composer-notices">
+        <div id="agent-network-warnings" hx-get="/partials/network-warnings"
+             hx-trigger="load, exhibit:artifact-saved from:body"
+             hx-vals='js:{artifact: previewArtifactId()}' hx-swap="innerHTML" hx-sync="this:replace"></div>
+        <div id="agent-connection-requests" hx-get="/partials/agent-connection-requests"
+             hx-trigger="load, exhibit:artifact-saved from:body, exhibit:connection-requested from:body"
+             hx-vals='js:{artifact: previewArtifactId()}' hx-swap="innerHTML" hx-sync="this:replace"></div>
+      </div>
       <div id="question-load-error" role="status" hidden>Could not load the questions. <button type="button" id="question-retry">Try again</button></div>
       <button type="button" class="pv-nudge" id="pv-nudge" hidden onclick="showPane('preview')"><i class="ph ph-check-circle"></i> Preview updated — tap Preview to view</button>
       <div id="snippet-chips"></div>

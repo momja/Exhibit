@@ -105,6 +105,7 @@ type profilePageData struct {
 	Account     profileAccount
 	AgentGrants *agentGrantsPanelView
 	Connections profileConnectionAllowance
+	IsAdmin     bool
 	pageCredentials
 }
 
@@ -193,6 +194,7 @@ func (ro *Router) profilePage(w http.ResponseWriter, r *http.Request) {
 		Account:         acct,
 		AgentGrants:     agentGrants,
 		Connections:     connectionAllowance,
+		IsAdmin:         ro.adminRequest(r),
 		pageCredentials: creds,
 	})
 	if err != nil {
