@@ -69,6 +69,8 @@
   .account-admin-link{min-height:44px}
   .app-header .account-control [data-clerk-target="mount"] button,
   .app-header .account-control [data-clerk-target="recovery"]{min-width:var(--header-control-size);min-height:var(--header-control-size);justify-content:center}
+  /* Offset from the bar's centre so feedback clears the taller phone header. */
+  .app-header .account-control-feedback{top:calc(50% + var(--header-height)/2 + var(--space-2))}
 }
 @media (max-width:600px){
   .app-header-actions .btn:not(.icon-btn){width:var(--header-control-size);padding:0;justify-content:center;font-size:17px}
