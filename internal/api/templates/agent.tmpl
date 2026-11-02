@@ -29,12 +29,12 @@
 {{if not .AgentEnabled}}<div class="banner-err">Agent support is disabled: the <code>pi</code> binary was not found on this server.</div>{{end}}
 <div class="pane-switch">
   <div class="pane-tabs" role="tablist" aria-label="Chat or preview">
-    <button type="button" class="pane-tab" id="tab-chat" role="tab" aria-selected="true" aria-controls="pane-chat" onclick="showPane('chat')"><i class="ph ph-chat-circle"></i> Chat</button>
-    <button type="button" class="pane-tab" id="tab-preview" role="tab" aria-selected="false" aria-controls="pane-preview" onclick="showPane('preview')"><i class="ph ph-monitor"></i> Preview <span class="dot" aria-hidden="true"></span></button>
+    <button type="button" class="pane-tab" id="tab-chat" role="tab" aria-selected="true" aria-controls="pane-chat" tabindex="0" onclick="showPane('chat')"><i class="ph ph-chat-circle" aria-hidden="true"></i> <span>Chat</span></button>
+    <button type="button" class="pane-tab" id="tab-preview" role="tab" aria-selected="false" aria-controls="pane-preview" tabindex="-1" onclick="showPane('preview')"><i class="ph ph-monitor" aria-hidden="true"></i> <span>Preview</span> <span class="dot" aria-hidden="true"></span></button>
   </div>
 </div>
 <div class="layout" id="agent-layout">
-  <div class="chat" id="pane-chat">
+  <div class="chat" id="pane-chat" role="region" aria-label="Chat" tabindex="-1">
     {{/* The chat's own controls. History lists the conversations kept with this
          artifact (av-y7td) in a pane that takes the place of the messages and
          the composer while it is open — a conversation you are only reading
@@ -50,12 +50,14 @@
     <div id="messages"></div>
     <div id="history"></div>
     <div class="composer">
-      <div id="agent-network-warnings" hx-get="/partials/network-warnings"
-           hx-trigger="load, exhibit:artifact-saved from:body"
-           hx-vals='js:{artifact: previewArtifactId()}' hx-swap="innerHTML" hx-sync="this:replace"></div>
-      <div id="agent-connection-requests" hx-get="/partials/agent-connection-requests"
-           hx-trigger="load, exhibit:artifact-saved from:body, exhibit:connection-requested from:body"
-           hx-vals='js:{artifact: previewArtifactId()}' hx-swap="innerHTML" hx-sync="this:replace"></div>
+      <div class="composer-notices">
+        <div id="agent-network-warnings" hx-get="/partials/network-warnings"
+             hx-trigger="load, exhibit:artifact-saved from:body"
+             hx-vals='js:{artifact: previewArtifactId()}' hx-swap="innerHTML" hx-sync="this:replace"></div>
+        <div id="agent-connection-requests" hx-get="/partials/agent-connection-requests"
+             hx-trigger="load, exhibit:artifact-saved from:body, exhibit:connection-requested from:body"
+             hx-vals='js:{artifact: previewArtifactId()}' hx-swap="innerHTML" hx-sync="this:replace"></div>
+      </div>
       <div id="question-load-error" role="status" hidden>Could not load the questions. <button type="button" id="question-retry">Try again</button></div>
       <button type="button" class="pv-nudge" id="pv-nudge" hidden onclick="showPane('preview')"><i class="ph ph-check-circle"></i> Preview updated — tap Preview to view</button>
       <div id="snippet-chips"></div>
@@ -75,7 +77,7 @@
        exhibit:artifact-saved event on <body>, htmx GETs the fragment for the
        session's current artifact, and swaps it in. The wiring lives here, in
        markup, so agent.js never rebuilds markup the template already owns. */}}
-  <div class="preview" id="pane-preview"
+  <div class="preview" id="pane-preview" role="region" aria-label="Preview" tabindex="-1"
        hx-get="/partials/agent-preview"
        hx-trigger="exhibit:artifact-saved from:body"
        hx-vals='js:{artifact: previewArtifactId()}'

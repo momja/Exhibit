@@ -44,14 +44,15 @@
 	--color-accent-tint-strong:#dbe7fb;
 	--color-accent-tint-ink:#223344;
 
-	/* neutrals */
+	/* Neutrals used for small text clear 4.5:1 on panel, ground, subtle
+	 * and hover surfaces. Faint is also text (optional-field hints). */
 	--color-ink:#111;             /* primary text */
 	--color-ink-soft:#333;        /* headings, strong secondary text */
 	--color-ink-mid:#555;         /* body copy that steps back */
-	--color-muted:#888;           /* metadata, secondary text */
-	--color-label:#7b828e;        /* small-caps field and column labels */
-	--color-faint:#aaa;           /* empty-state glyphs, optional-field hints */
-	--color-placeholder:#757575;  /* field placeholders (the browser's own light default) */
+	--color-muted:#656565;        /* metadata, secondary text */
+	--color-label:#626975;        /* small-caps field and column labels */
+	--color-faint:#656565;        /* empty-state glyphs, optional-field hints */
+	--color-placeholder:#656565;  /* field placeholders */
 	--color-ground:#f0f0f0;       /* page background */
 	--color-panel:#fff;           /* cards, header, modals */
 	--color-subtle:#f8f8f8;       /* a well inside a panel (scan results, chips) */
@@ -68,14 +69,14 @@
 	/* The 404 page's slate ramp. */
 	--color-slate-ink:#3a3f49;
 	--color-slate-body:#565c68;
-	--color-slate-medium:#6b717c;
-	--color-slate-muted:#6f7581;
-	--color-slate-placeholder:#7d838e;
+	--color-slate-medium:#646b76;
+	--color-slate-muted:#646b76;
+	--color-slate-placeholder:#676e79;
 	--color-slate-rule:#d6dae0;
 
 	/* feedback */
-	--color-danger:#e00;
-	--color-danger-hover:#c00;
+	--color-danger:#c00;
+	--color-danger-hover:#a00;
 	--color-on-danger:#fff;
 	--color-danger-tint:#fee;          /* error notices */
 	--color-danger-tint-border:#fbb;
@@ -115,8 +116,12 @@
 	/* Every form control sizes itself from one of these, never a literal px:
 	 * iOS zooms in on focusing a field under 16px and does not zoom back out
 	 * (av-3qmf). The -code- variant is the monospace fields. */
-	--field-font-size:14px;
-	--field-code-font-size:12px;
+	--field-font-size:.875rem;
+	--field-code-font-size:.75rem;
+
+	/* Scoped mobile prose: opt in without enlarging icons or source code. */
+	--text-primary:1rem;
+	--text-secondary:.875rem;
 
 	/* spacing scale */
 	--space-1:4px;
@@ -146,8 +151,8 @@
  * desktop window has no keyboard, a landscape tablet is wide and touched. */
 @media (pointer:coarse){
 	:root{
-		--field-font-size:16px;
-		--field-code-font-size:16px;
+		--field-font-size:max(16px,1rem);
+		--field-code-font-size:max(16px,1rem);
 	}
 }
 
@@ -172,9 +177,9 @@
 		--color-ink-soft:#ccd0d6;
 		--color-ink-mid:#abb0b8;
 		--color-muted:#9aa0a9;
-		--color-label:#9097a2;
-		--color-faint:#878c95;
-		--color-placeholder:#878c95;
+		--color-label:#979eaa;
+		--color-faint:#a0a6af;
+		--color-placeholder:#a0a6af;
 		--color-ground:#16181c;
 		--color-panel:#202328;
 		--color-subtle:#1a1d21;
@@ -233,4 +238,4 @@
 }
 
 /* Match the gallery bar at phone widths on every app page. */
-@media (max-width:767px){:root{--header-height:33px}}
+@media (max-width:767px){:root{--header-height:56px;--header-control-size:44px}}

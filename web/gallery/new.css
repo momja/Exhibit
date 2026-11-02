@@ -16,11 +16,12 @@ main{padding:var(--space-8);max-width:900px;margin:0 auto}
 .lede p{font-size:14px;color:var(--color-muted);margin-top:7px;line-height:1.55;max-width:620px}
 
 /* --- route tiles ------------------------------------------------------- */
-/* Three peers, whatever their mechanics: two are the ingest panel's modes,
- * the third is a link to the agent surface. Presenting them identically is
- * the point — the user picks how the file arrives, not which widget to use. */
+/* Three modes share the chooser; switching keeps each working copy intact.
+ * Desktop keeps the explanatory cards, while phones show one note below. */
 .routes{--route-tint:var(--color-accent-tint);display:grid;grid-template-columns:repeat(3,1fr);gap:var(--space-5);margin:26px 0 var(--space-8)}
 .route{display:flex;flex-direction:column;align-items:flex-start;gap:var(--space-3);padding:var(--space-6);border:1px solid var(--color-hairline);border-radius:var(--radius-lg);background:var(--color-panel);color:inherit;font:inherit;text-align:left;text-decoration:none;cursor:pointer}
+.route-label-compact,.route-description{display:none}
+.route:focus-visible{outline:2px solid var(--color-ink);outline-offset:4px}
 .route:hover{border-color:var(--color-border)}
 /* Selected reads as a ring rather than a fill, so the tile still shows its
  * own content at full contrast while it is the active mode. */
@@ -85,14 +86,29 @@ a.btn{text-decoration:none}
 .snapshot-bad{color:var(--color-danger-hover);margin-top:var(--space-2)}
 .snapshot-good{color:var(--color-success);margin-top:var(--space-2)}
 
-/* --- responsive: tiles stack, footer becomes full-width actions --------- */
+/* --- responsive: compact choices, then the selected method and form ----- */
 @media (max-width:640px){
-  main{padding:var(--space-5)}
+  main{padding:var(--space-5);padding-bottom:max(var(--space-5),env(safe-area-inset-bottom))}
   .lede h2{font-size:24px}
-  .routes{grid-template-columns:1fr;margin:var(--space-7) 0 var(--space-7)}
+  .routes{grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-2);margin:var(--space-6) 0 var(--space-3)}
+  .route{min-width:0;min-height:44px;padding:10px 6px;align-items:center;justify-content:center;text-align:center}
+  .route b{font-size:.875rem;overflow-wrap:anywhere}
+  .route-icon,.route-label-wide,.route-note{display:none}
+  .route-label-compact{display:inline}
+  .route-description{display:block;margin-bottom:var(--space-5);font-size:.875rem;line-height:1.5;color:var(--color-ink-mid);overflow-wrap:anywhere}
   .ingest-panel{padding:14px}
   .ingest-panel textarea,.ingest-panel .cm-editor{height:240px}
   .ingest-foot{flex-direction:column;align-items:stretch}
   .ingest-foot .spacer{display:none}
+  .ingest-panel .field,.ingest-panel .btn,.snapshot-row{min-height:44px}
   .ingest-foot .btn{width:100%;justify-content:center}
+}
+
+/* Prose scales with the reader's text preference; source fields keep their
+ * dedicated monospace font and field-size token. Method layout stays separate. */
+@media (max-width:767px){
+  .lede h2{font-size:1.5rem}
+  .lede p,.route b{font-size:var(--text-primary);line-height:1.5}
+  .route-note,.ingest-label,.snapshot-row,#status,#scan-result{font-size:var(--text-secondary);line-height:1.5}
+  .lede,.route,.ingest-label,#status,#scan-result{overflow-wrap:anywhere;min-width:0}
 }

@@ -22,3 +22,7 @@ Placeholder stays on one line at narrow panel widths and large font sizes, inclu
 **2026-11-02T01:45:49Z**
 
 Implemented a stable Ask Exhibit... placeholder in the server template and removed JS overrides. The empty field stays on one line with ellipsis, prevents horizontal scrollbars, and grows its minimum line height with larger fonts; entered messages retain normal wrapping and Shift+Enter. Regression reproduced with original CSS even with the shortened text (78px scroll height in a 38px field at desktop 280px/32px font). Validation: make assets; 113 agent JavaScript tests passed; focused agent page/versioned-assets Go checks passed; TestAgentComposerBrowser passed across build/modify, 320/390px phones and 280px desktop panel, 16/24/32px fonts, streaming, questions, settled state, and multiline typing. Six screenshots saved in docs/screenshots/Exh-pzvd.
+
+**2026-11-02T05:41:55Z**
+
+Integrated main after mobile PRs 258/260/261/263 merged. Resolved the composer CSS overlap by preserving main’s 1.4em line height and adding the placeholder fix’s scalable minimum height and empty-field ellipsis. Refreshed all six screenshots. Validation: 114 agent Node tests; composer/page/versioned-assets/mobile-target Go browser tests; enlarged fields, enlarged composer notices, and agent panes browser tests all passed. Read-only integration review found no substantive issues.
