@@ -1,6 +1,6 @@
 ---
 id: Exh-h9m4
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-01T21:40:15Z
@@ -22,3 +22,9 @@ Normal small text reaches >=4.5:1 on intended surfaces in both themes. Use rough
 
 Validate relevant behavior at 320, 375, 390 and 430 CSS px, light/dark, and desktop. Check actual target rectangles, no body horizontal overflow, long labels and enlarged text; preserve safe areas and zoom. Run meaningful existing/targeted tests and project-required checks. Obtain independent Standards and Spec subagent reviews against a pinned base and this ticket, fix important findings, and document evidence/limitations in the PR. Never merge or deploy. Do not claim physical iPhone/VoiceOver testing without performing it.
 
+
+## Notes
+
+**2026-11-01T22:24:11Z**
+
+Implemented palette contrast, relative scoped mobile prose, full card-title wrapping and growing metadata rows. Independent Standards review: zero findings. Spec review found two P2 enlarged-field misses; composer line spacing/shrinking and sharing-heading wrapping fixed in f50e0f30 and independently verified. Eight focused Chromium suites passed, including both themes at 320/375/390/430 and desktop plus 200% sizing; six Playwright journeys passed. Visual matrix64 states: no horizontal page/dialog overflow. See docs/mobile-readability.md and screenshots for evidence/limits. Preserve targets title min-width/min-height44 when combining; creation route typography and agent composer CSS overlap documented. No physical iPhone/VoiceOver claim, no merge/deploy.

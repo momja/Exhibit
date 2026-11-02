@@ -58,7 +58,7 @@ body[data-pip-corner^=t] .pip-notices{top:auto;bottom:0}
 .state-choice input:checked+span{border-color:var(--brand-blue);background:color-mix(in srgb,var(--brand-blue) 9%,var(--color-panel));color:var(--brand-blue);box-shadow:inset 0 0 0 1px var(--brand-blue)}
 .state-choice input:focus-visible+span{outline:2px solid var(--brand-blue);outline-offset:3px}
 .state-choice input:disabled+span{opacity:.6;cursor:wait}
-.state-choice strong{font-size:var(--field-font-size);font-weight:600}
+.state-choice strong{overflow-wrap:anywhere;font-size:var(--field-font-size);font-weight:600}
 .state-choice-description{font-size:12px;line-height:1.4;color:var(--color-ink-soft)}
 .state-mode-glyph{display:flex;flex-direction:column;width:108px;margin-bottom:4px;color:var(--brand-blue)}
 .state-glyph-people,.state-glyph-separate{display:grid;grid-template-columns:repeat(3,1fr)}

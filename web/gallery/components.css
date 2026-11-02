@@ -240,7 +240,7 @@ input,select,textarea{font-size:var(--field-font-size)}
 /* And a surface: with color-scheme set, an unstyled field takes the browser's
  * own dark field gray, which sits apart from every panel it is drawn on.
  * :where() keeps this at zero specificity so any rule naming a field wins. */
-::placeholder{color:var(--color-placeholder)}
+::placeholder{color:var(--color-placeholder);opacity:1}
 :where(input:not([type=checkbox],[type=radio],[type=color],[type=range],[type=file]),select,textarea){background-color:var(--color-panel);color:var(--color-ink)}
 
 .field{width:100%;padding:var(--space-3) var(--space-4);border:1px solid var(--color-border);border-radius:var(--radius-md);font-size:var(--field-font-size);outline:none;background:var(--color-panel);color:var(--color-ink)}
@@ -442,3 +442,10 @@ button.banner-action{background:none;border:0;padding:0;font:inherit;cursor:poin
 .composer .network-warnings,.composer .connection-request-notice{max-height:min(12rem,24vh);overflow:auto}
 .origin-row{display:block;margin:var(--space-1) 0}
 .scan-actions{display:flex;flex-wrap:wrap;gap:var(--space-3);margin-top:var(--space-4)}
+/* Dialog prose only: do not resize floating-header menus or code fields. */
+@media(max-width:767px){
+  .modal-dialog h2{font-size:var(--text-primary);line-height:1.4}
+  .modal-dialog p,.modal-dialog label[for],.modal-dialog .modal-check,.modal-check small,
+  .modal-dialog .modal-error,.modal-dialog [data-permission-status]{font-size:var(--text-secondary);line-height:1.5;overflow-wrap:anywhere}
+  .modal-dialog .modal-actions .btn{font-size:var(--text-secondary);white-space:normal;overflow-wrap:anywhere;max-width:100%}
+}
