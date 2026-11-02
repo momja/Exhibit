@@ -382,11 +382,19 @@ button.banner-action{background:none;border:0;padding:0;font:inherit;cursor:poin
  * the only feature-level variation; see docs/ui-components.md. */
 .modal-dialog{box-sizing:border-box;margin:auto;width:420px;max-width:calc(100vw - 32px);max-height:calc(100dvh - 32px);overflow:auto;padding:22px;border:1px solid var(--color-hairline-strong);border-radius:var(--radius-lg);background:var(--color-panel);color:var(--color-ink);box-shadow:var(--shadow-modal)}
 .modal-dialog::backdrop{background:var(--overlay)}
-/* One reusable hosted account control. Clerk supplies its avatar and menu. */
-.account-control{display:flex;align-items:center;gap:var(--space-3);min-width:0}
+/* Reserve Clerk's final trigger footprint from the server's first paint.
+ * The mount stays inert until its actual button renders, not just SDK load.
+ * Failure feedback is anchored below the slot, outside header layout. */
+.account-control{position:relative;flex:0 0 var(--header-control-size);width:var(--header-control-size);height:var(--header-control-size)}
+.account-control-placeholder{position:absolute;inset:0;box-sizing:border-box;border:1px solid var(--color-border);border-radius:var(--radius-pill);background:var(--color-subtle);pointer-events:none}
+.account-control-mount{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;visibility:hidden}
+.account-control[data-clerk-state="ready"] .account-control-mount{visibility:visible}
+.account-control[data-clerk-state="ready"] .account-control-placeholder{display:none}
+.account-control-feedback{position:absolute;top:calc(100% + var(--space-2));right:0}
+.account-control[data-clerk-state="error"] .account-control-feedback{box-sizing:border-box;width:min(20rem,calc(100vw - var(--space-8)));max-height:calc(100dvh - var(--header-height) - env(safe-area-inset-top,0px) - var(--space-8));overflow:auto;padding:var(--space-5);border:1px solid var(--color-border);border-radius:var(--radius-lg);background:var(--color-panel);box-shadow:var(--shadow-modal);color:var(--color-ink-soft);font-size:13px;line-height:1.5;overflow-wrap:anywhere}
+.account-control-recovery{display:flex;align-items:center;gap:var(--space-5);margin-top:var(--space-4)}
 /* Gallery header link styles must not reveal the Clerk recovery fallback. */
 .account-control [hidden]{display:none!important}
-.account-control [data-clerk-target="status"]:empty{display:none}
 
 .modal-dialog h2{font-size:16px;font-weight:600;margin:0 0 12px;overflow-wrap:anywhere}
 .modal-dialog label[for]{display:block;font-size:12px;color:var(--color-ink-mid);margin:12px 0 4px}

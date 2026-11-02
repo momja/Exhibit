@@ -151,7 +151,7 @@ func testClerkAccountBrowser(t *testing.T, pending bool) {
 		// Visibility follows the recovery state, not the header's anchor styling.
 		providerUnavailable.Store(true)
 		run(chromedp.Navigate(srv.URL), chromedp.WaitVisible(chromedp.CSS(`.account-control [data-clerk-target="recovery"]`)))
-		check(`!document.querySelector('.account-control [data-clerk-target="recovery"]').hidden && document.querySelector('.account-control [data-clerk-target="recovery"]').getAttribute('href') === '/settings' && !document.querySelector('#test-account-button')`)
+		check(`!document.querySelector('.account-control [data-clerk-target="recovery"]').hidden && document.querySelector('.account-control [data-clerk-target="recovery"] a').getAttribute('href') === '/settings' && !document.querySelector('#test-account-button')`)
 		providerUnavailable.Store(false)
 		run(chromedp.Navigate(srv.URL+"/settings"), chromedp.WaitVisible(chromedp.CSS(`#test-account-button`)))
 		check(`getComputedStyle(document.querySelector('.account-control [data-clerk-target="recovery"]')).display === 'none'`)
@@ -192,7 +192,7 @@ const clerk = {
  isSignedIn:true, user:{reload: async () => {}},
  openUserProfile(options) { window.profileOpens++; window.profileOptions = options; },
  mountUserButton(element, options) {
-  const button = document.createElement('button'); button.id = 'test-account-button'; button.setAttribute('aria-label', 'Your account'); button.className = 'btn btn-sec icon-btn'; const glyph = document.createElement('i'); glyph.className = 'ph ph-user-circle'; glyph.setAttribute('aria-hidden', 'true'); button.append(glyph);
+  const button = document.createElement('button'); button.id = 'test-account-button'; button.setAttribute('aria-label', 'Your account'); button.className = 'cl-userButtonTrigger btn btn-sec icon-btn'; const glyph = document.createElement('i'); glyph.className = 'ph ph-user-circle'; glyph.setAttribute('aria-hidden', 'true'); button.append(glyph);
   button.onclick = () => {
    if (document.querySelector('#test-account-menu')) return;
    const menu = document.createElement('nav'); menu.id = 'test-account-menu';

@@ -54,9 +54,10 @@ rendered gallery: 37px tall with 36px icon controls on desktop; 33px tall with
 32px controls at 767px and below, plus any phone top safe-area inset. Horizontal
 padding is 16px (8px at 360px and below), with 12px gaps. The gallery filter
 layout tightens gaps on narrow screens. Page styles only extend feature layout,
-not the bar's dimensions. `--header-height` supplies the shared minimum height;
-the bar grows when account-service errors need more room. Hidden account recovery links remain
-hidden until their controller reveals them.
+not the bar's dimensions. `--header-height` supplies the shared minimum height.
+Account-service errors appear in an anchored panel below the account slot without
+changing the bar or its neighbors. Hidden recovery actions remain hidden until
+their controller reveals them.
 
 The artifact viewer uses the `Floating` variant, populated by
 `artifactHeader`. Its `floatingHeaderView` carries the title, created date,
@@ -340,7 +341,46 @@ focused on feature logic.
 The gallery and Settings header render the same `accountControl` template partial.
 Hosted accounts have one Clerk user button. `clerk-menu.js` adds a Settings link
 using Clerk's supported custom menu API. Clerk's Profile and Security screens
-retain their standard content. Settings lives at `/settings` (`/profile` is a
+retain their standard content.
+
+The server renders a non-interactive circular placeholder and reserves the
+`--header-control-size` square (32px) for the account slot, matching the trigger's
+appearance options. The same theme tokens style the placeholder in light and
+dark mode. The mount remains hidden, inert, and excluded from the accessibility
+tree through deferred SDK startup, the permission reload, and asynchronous UI
+rendering. The `clerk` controller observes Clerk's supported
+`button.cl-userButtonTrigger` class; an enabled trigger reveals the control and
+removes the placeholder. A live status announces loading and readiness.
+
+SDK errors, a missing session, or a permission reload/button render that takes
+over 15 seconds show an anchored error panel with Try again and Settings actions.
+Try again reloads the page. The slot and surrounding controls retain their
+geometry. Disconnect cancels observation and the timeout, unmounts provider UI,
+and prevents a stale reload from mounting into a new connection. Non-Clerk
+accounts retain their ordinary Settings link with no placeholder slot. Library
+space navigation preserves the existing header and account controller.
+
+`TestClerkPlaceholderBrowser` compares header and neighboring control positions
+and sizes through manually held idle, reload, wrapper-only, disabled-trigger,
+and ready stages at 1280, 768, 767, 390, and 320px in both themes on gallery and
+Settings. The failure and reconnect suites exercise recovery by keyboard,
+timeouts, cancellation, and unmounting. These use the real app and loader with a
+local SDK double, and are required to execute in browser CI. They do not validate
+the live hosted Clerk UI. After upgrading Clerk, verify the supported trigger
+class, appearance sizing, and the hosted Profile/Security/Settings menu.
+
+Screenshots use that same SDK double (the ready account icon is simulated),
+captured with `go test -tags screenshot ./internal/api -run '^TestCaptureClerkPlaceholder$' -count=1`
+and `shot-scraper`:
+
+[Loading desktop](screenshots/Exh-j6wa/loading-desktop.png) ·
+[Loading phone](screenshots/Exh-j6wa/loading-phone.png) ·
+[Ready desktop](screenshots/Exh-j6wa/ready-desktop.png) ·
+[Ready phone](screenshots/Exh-j6wa/ready-phone.png) ·
+[Error desktop](screenshots/Exh-j6wa/error-desktop.png) ·
+[Error phone](screenshots/Exh-j6wa/error-phone.png).
+
+Settings lives at `/settings` (`/profile` is a
 compatibility alias) and offers storage usage, sign-out, and account deletion.
 Its Manage profile button opens the unmodified Clerk profile modal. The Settings
 header keeps that same account menu beside the Exhibit / Settings breadcrumb,

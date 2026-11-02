@@ -54,7 +54,7 @@ func galleryNavigationApp(t *testing.T, withoutScripts ...bool) (*httptest.Serve
 				fmt.Fprint(w, `window.clerkCalls = {load:0,reload:0,mount:0,unmount:0}; window.Clerk = {
      load:async()=>{clerkCalls.load++}, isSignedIn:true,
      user:{reload:async()=>{clerkCalls.reload++}},
-     mountUserButton:root=>{clerkCalls.mount++; const button=document.createElement('button'); button.textContent='Account';root.append(button)},
+     mountUserButton:root=>{clerkCalls.mount++; const button=document.createElement('button'); button.className='cl-userButtonTrigger'; button.textContent='Account';root.append(button)},
      unmountUserButton:root=>{clerkCalls.unmount++;root.replaceChildren()}
     };`)
 			} else {

@@ -43,7 +43,7 @@ test('only the account button defers loading Clerk', async () => {
   const { default: Controller } = await import(`data:text/javascript,${encodeURIComponent(deferred)}#modes`);
   for (const mode of ['user', 'signin']) {
     const controller = new Controller();
-    Object.assign(controller, { element: { isConnected: true }, modeValue: mode, nextValue: '/', statusTarget: { textContent: '' }, hasRecoveryTarget: false, mountTarget: {} });
+    Object.assign(controller, { element: { isConnected: true }, modeValue: mode, nextValue: '/', statusTarget: { textContent: '' }, hasRecoveryTarget: false, mountTarget: {}, setAccountState: () => {} });
     await controller.connect();
   }
   assert.deepEqual(calls, ['after-load', 'now']);

@@ -164,6 +164,21 @@ func TestClerkEmailChangeUpdatesProfileAndShareLookup(t *testing.T) {
 	require.Equal(t, h.email, u.Email)
 }
 
+func TestAccountControlInitialMarkup(t *testing.T) {
+	hosted, err := renderPage("accountControl", &clerkView{})
+	require.NoError(t, err)
+	require.Contains(t, hosted, `data-clerk-state="loading" aria-busy="true"`)
+	require.Contains(t, hosted, `<span class="account-control-placeholder" aria-hidden="true"></span>`)
+	require.Contains(t, hosted, `data-clerk-target="mount" inert aria-hidden="true"`)
+	require.Contains(t, hosted, `role="status" aria-atomic="true">Loading your account…`)
+	require.Contains(t, hosted, `data-clerk-target="recovery" hidden`)
+	local, err := renderPage("accountControl", nil)
+	require.NoError(t, err)
+	require.Contains(t, local, `href="/settings"`)
+	require.NotContains(t, local, `account-control`)
+	require.NotContains(t, local, `data-clerk-`)
+}
+
 func TestClerkUnifiedAccountPages(t *testing.T) {
 	ro, st := newLoginTestRouter(t, nil, nil, func(c *Config) {
 		c.Clerk = hostedLoginStub{}
