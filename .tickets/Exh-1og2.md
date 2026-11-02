@@ -1,6 +1,6 @@
 ---
 id: Exh-1og2
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-01T21:40:15Z
@@ -22,3 +22,9 @@ Mobile header has a 52-56px content band plus top inset; frequent header/search/
 
 Validate relevant behavior at 320, 375, 390 and 430 CSS px, light/dark, and desktop. Check actual target rectangles, no body horizontal overflow, long labels and enlarged text; preserve safe areas and zoom. Run meaningful existing/targeted tests and project-required checks. Obtain independent Standards and Spec subagent reviews against a pinned base and this ticket, fix important findings, and document evidence/limitations in the PR. Never merge or deploy. Do not claim physical iPhone/VoiceOver testing without performing it.
 
+
+## Notes
+
+**2026-11-01T22:19:04Z**
+
+Implemented 56px mobile headers, independent 44px targets, useful narrow search and Settings account administration. Focused Chromium/Go suite passed (68.988s), including edge activation, hosted recovery, title typography composition, safe-area and scroll checks. Standards and Spec independently reviewed pinned implementation 663bf5c0; important findings fixed and verified in fresh review rounds. Representative light/dark/desktop screenshots committed. Physical iPhone, VoiceOver, real Clerk login and pinch zoom not tested. Parent owns combined overlap review and aggregate suite.

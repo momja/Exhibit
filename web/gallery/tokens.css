@@ -238,4 +238,4 @@
 }
 
 /* Match the gallery bar at phone widths on every app page. */
-@media (max-width:767px){:root{--header-height:33px}}
+@media (max-width:767px){:root{--header-height:56px;--header-control-size:44px}}
