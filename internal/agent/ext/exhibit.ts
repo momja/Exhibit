@@ -313,7 +313,7 @@ export default function (pi: ExtensionAPI) {
 		label: "Create artifact",
 		description:
 			"Save a brand-new artifact into the Exhibit library and bind this session to it. " +
-			"body must be a complete, single-file HTML document: your own CSS/JS inline, plus any pinned CDN libraries the tool genuinely needs. " +
+			"body must be a complete HTML document. " +
 			"Available only until this session has an artifact; afterwards use edit_artifact (small changes) or write_artifact (full rewrite). " +
 			"Returns the artifact id, its render URL, and the scanned network footprint (origins " +
 			"the document references; they stay blocked until the user approves them).",
@@ -683,8 +683,8 @@ export default function (pi: ExtensionAPI) {
 		label: "Set widget",
 		description:
 			"Save (or replace) this session's artifact gallery widget — the small, glanceable tile its card " +
-			"shows in the library, like an iOS home-screen widget. body must be a complete, " +
-			"single-file HTML document. Prefer edit_widget for targeted changes to an existing " +
+			"shows in the library, like an iOS home-screen widget. body must be a complete " +
+			"HTML document. Prefer edit_widget for targeted changes to an existing " +
 			"tile — use this only for a new or full-rewrite widget. The widget reads the SAME localStorage keys the artifact " +
 			"writes (state is inlined before its scripts run, so synchronous getItem at startup is " +
 			"correct), but it CANNOT write state, download files, or use the clipboard, and it is " +
