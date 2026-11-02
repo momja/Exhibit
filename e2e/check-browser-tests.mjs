@@ -13,6 +13,7 @@ const required = new Set([
   'TestAgentPanesBrowser',
   'TestAgentPaneBreakpointFocusBrowser',
   'TestAgentPaneInitialLayoutBrowser',
+  'TestAgentPaneRelayConsentBrowser',
   'TestFilterModalBrowser',
   'TestAdminEntitlementModalBrowser',
   'TestEditorLeaveModalBrowser',
