@@ -61,8 +61,9 @@ account trigger also have a 44px minimum hit area. Card metadata grows to fit
 Page styles only extend feature layout, not the bar's dimensions.
 `--header-height` supplies the shared minimum height. Account-service errors
 appear in an anchored panel below the account slot without changing the bar or
-its neighbors. Hidden recovery actions remain hidden until their controller
-reveals them.
+its neighbors. On phones the feedback offset follows the full header height,
+keeping the panel clear of the bar's lower edge. Hidden recovery actions remain
+hidden until their controller reveals them.
 
 The artifact viewer uses the `Floating` variant, populated by
 `artifactHeader`. Its `floatingHeaderView` carries the title, created date,
