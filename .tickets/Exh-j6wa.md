@@ -1,12 +1,12 @@
 ---
 id: Exh-j6wa
-status: open
+status: in_progress
 deps: []
 links: [Exh-xw54]
 created: 2026-10-31T21:36:17Z
 type: bug
 priority: 2
-assignee: Max Omdal
+assignee: Codex subagent
 tags: [ui, auth, gallery, css]
 ---
 # Reserve space for the Clerk profile button while it loads
