@@ -118,7 +118,7 @@ type searchInput struct {
 
 type createInput struct {
 	Title string `json:"title" jsonschema:"the new artifact's title"`
-	Body  string `json:"body" jsonschema:"a complete self-contained HTML document"`
+	Body  string `json:"body" jsonschema:"a complete single-file HTML document"`
 }
 
 type editsInput struct {
@@ -147,7 +147,7 @@ func (t *tools) register(s *mcp.Server) {
 		Description: "Search the owner's library by title, visible text and tags. An empty query lists recent artifacts. Search first; never guess ids. When several results plausibly match, ask the user which one they mean.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, t.searchArtifacts)
 	mcp.AddTool(s, &mcp.Tool{Name: "create_artifact", Title: "Create artifact",
-		Description: "Create a new artifact with a title and complete self-contained HTML document. Returns its id; network origins require owner approval in Exhibit before the artifact can reach them."}, t.createArtifact)
+		Description: "Create a new artifact with a title and complete single-file HTML document. Returns its id; network origins require owner approval in Exhibit before the artifact can reach them."}, t.createArtifact)
 	mcp.AddTool(s, &mcp.Tool{Name: "get_artifact", Title: "Read artifact",
 		Description: "Read the artifact's current HTML source and metadata (title, network allowlist, " +
 			"stored assets). Read before editing: saves carry the revision this returns.",
@@ -158,7 +158,7 @@ func (t *tools) register(s *mcp.Server) {
 			"unique. Put several disjoint changes in one call; overlapping or touching edits must be merged. " +
 			"Prefer this over write_artifact for anything short of a full rewrite."}, t.editArtifact)
 	mcp.AddTool(s, &mcp.Tool{Name: "write_artifact", Title: "Write artifact",
-		Description: "Replace the artifact source wholesale with a complete, self-contained HTML document " +
+		Description: "Replace the artifact source wholesale with a complete, single-file HTML document " +
 			"(never a fragment or diff). Use only for a full rewrite; optionally retitle it."}, t.writeArtifact)
 	mcp.AddTool(s, &mcp.Tool{Name: "get_state", Title: "Read artifact state",
 		Description: "Read every key/value the artifact has stored (what its localStorage writes through to), " +
@@ -170,7 +170,7 @@ func (t *tools) register(s *mcp.Server) {
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, t.getWidget)
 	mcp.AddTool(s, &mcp.Tool{Name: "set_widget", Title: "Set widget",
 		Description: "Save or replace the artifact's gallery widget: the small glanceable tile its library card " +
-			"shows. body is a complete self-contained HTML document that reads the artifact's localStorage " +
+			"shows. body is a complete single-file HTML document that reads the artifact's localStorage " +
 			"keys, cannot write state and is not interactive. Read with get_widget or get_artifact first. " +
 			"Prefer edit_widget for small changes to an existing tile."}, t.setWidget)
 	mcp.AddTool(s, &mcp.Tool{Name: "edit_widget", Title: "Edit widget",
@@ -535,7 +535,7 @@ func (t *tools) saveWidget(ctx context.Context, id string, payload map[string]an
 		// artifact was never approved for is blocked at render. Say so
 		// rather than let it surface as a blank tile.
 		msg += " Warning: it references " + strings.Join(r.Unapproved, ", ") + ", which the artifact's network " +
-			"allowlist does not cover; the browser will block those. Prefer a widget with no external references."
+			"allowlist does not cover; the browser will block those. Load only from origins the artifact already uses, or inline it."
 	}
 	return text(msg), nil, nil
 }
