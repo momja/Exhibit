@@ -2,6 +2,9 @@
 // page, reached from this same account menu rather than a second header button.
 export function clerkUserButtonOptions() {
   return {
+    appearance: { elements: {
+      userButtonTrigger: { width: 'var(--header-control-size)', height: 'var(--header-control-size)', padding: 0, boxSizing: 'border-box' },
+    } },
     customMenuItems: [{
       label: 'Settings',
       href: '/settings',

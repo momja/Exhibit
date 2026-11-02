@@ -92,7 +92,7 @@ func TestAppHeaderBrowser(t *testing.T) {
 
 // Use the actual header partial and page styles without loading the remote
 // provider. Provider mounting and auth behavior have their own integration
-// coverage; these cases exercise the hidden recovery and failure layout.
+// coverage; these cases exercise the first HTML and anchored failure layout.
 func TestAppHeaderAccountStatesBrowser(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.Handle("/assets/", assetsHandler())
@@ -106,7 +106,7 @@ func TestAppHeaderAccountStatesBrowser(t *testing.T) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		w.Header().Set("Content-Type", "text/html")
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprintf(w, `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/assets/gallery/tokens.css"><link rel="stylesheet" href="/assets/gallery/components.css"><link rel="stylesheet" href="/assets/gallery/%s"></head><body>%s<main>Page content</main></body></html>`, stylesheet, markup)
 	})
 	app := httptest.NewServer(mux)
@@ -126,11 +126,17 @@ func TestAppHeaderAccountStatesBrowser(t *testing.T) {
 				require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(app.URL+path)))
 				hidden, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`(() => {
 					const recovery = document.querySelector('[data-clerk-target="recovery"]');
-					return recovery.hidden && getComputedStyle(recovery).display === 'none' && recovery.getClientRects().length === 0;
+					const placeholder = document.querySelector('.account-control-placeholder');
+					return recovery.hidden && getComputedStyle(recovery).display === 'none' && recovery.getClientRects().length === 0 &&
+						placeholder.getBoundingClientRect().width === 32 && placeholder.getBoundingClientRect().height === 32 &&
+						document.querySelector('[role="status"]').textContent === 'Loading your account…';
 				})()`))
 				require.NoError(t, err)
-				require.True(t, hidden, "successful account loading must not reveal the recovery link")
+				require.True(t, hidden, "without JavaScript the first HTML reserves space, describes loading, and hides recovery actions")
 				require.NoError(t, chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](`
+					window.headerBeforeFailure = document.querySelector('.app-header').getBoundingClientRect().toJSON();
+					document.querySelector('.account-control').dataset.clerkState = 'error';
+					document.querySelector('[data-clerk-target="status"]').classList.remove('sr-only');
 					document.querySelector('[data-clerk-target="status"]').textContent = 'The account service did not respond. Reload this page to retry. If this continues, check whether your browser or network is blocking Clerk.';
 					document.querySelector('[data-clerk-target="recovery"]').hidden = false;
 				`)))
@@ -138,13 +144,14 @@ func TestAppHeaderAccountStatesBrowser(t *testing.T) {
 					const header = document.querySelector('.app-header').getBoundingClientRect();
 					const status = document.querySelector('[data-clerk-target="status"]').getBoundingClientRect();
 					const recovery = document.querySelector('[data-clerk-target="recovery"]').getBoundingClientRect();
-					return status.top >= header.top && status.bottom <= header.bottom &&
-						recovery.width > 0 && recovery.top >= header.top && recovery.bottom <= header.bottom &&
+					return status.top >= header.bottom && status.left >= 0 && status.right <= innerWidth &&
+						recovery.width > 0 && recovery.top >= status.bottom && recovery.right <= innerWidth &&
+						JSON.stringify(header.toJSON()) === JSON.stringify(headerBeforeFailure) &&
 						document.querySelector('main').getBoundingClientRect().top >= header.bottom &&
 						document.documentElement.scrollWidth <= innerWidth;
 				})()`))
 				require.NoError(t, err)
-				require.True(t, fits, "account-service errors remain visible inside the bar and above page content")
+				require.True(t, fits, "account-service errors stay visible below the bar without moving the header or page content")
 			})
 		}
 	}
