@@ -183,22 +183,36 @@ body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(-
 /* Mobile (av-td4y): the two panes don't fit side by side, so a segmented
    control shows one at a time. Everything here is additive — above 640px the
    switch is hidden and the side-by-side sidecar is untouched. */
-.pane-switch{display:none;background:var(--color-panel);border-bottom:1px solid var(--color-hairline);padding:8px 12px;flex-shrink:0}
-.pane-tabs{display:flex;gap:4px;background:var(--color-ground);border-radius:10px;padding:4px}
-.pane-tab{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:9px 10px;border:none;border-radius:8px;background:transparent;color:var(--color-ink-mid);font:inherit;font-size:15px;font-weight:600;cursor:pointer}
+.pane-switch{display:none;background:var(--color-panel);border-bottom:1px solid var(--color-hairline);padding:1px 12px;flex-shrink:0}
+.pane-tabs{display:flex;gap:4px;background:var(--color-ground);border-radius:10px;padding:2px}
+.pane-tab{flex:1;min-width:0;min-height:44px;display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:6px 10px;border:none;border-radius:8px;background:transparent;color:var(--color-ink-mid);font:inherit;font-size:.9375rem;font-weight:600;line-height:1.3;overflow-wrap:anywhere;cursor:pointer}
 .pane-tab[aria-selected="true"]{background:var(--color-panel);color:var(--color-ink);box-shadow:var(--shadow-raised)}
+.pane-tab:focus-visible{outline:2px solid var(--brand-blue);outline-offset:-2px}
+.pane-tab i,.pane-tab .dot{flex-shrink:0}
 .pane-tab .dot{display:none;width:8px;height:8px;border-radius:50%;background:var(--brand-blue)}
 .pane-tab.has-update .dot{display:block}
+/* Pane visibility changes with semantics/focus in syncPaneSemantics, not
+   ahead of its matchMedia callback. Keep the iframe laid out: display:none
+   resets its document scroll. */
+.mobile-panes .pane-switch{display:block}
+.mobile-panes .pane-resizer{display:none}
+.mobile-panes .layout{display:grid;grid-template:minmax(0,1fr)/minmax(0,1fr)}
+.mobile-panes .chat,.mobile-panes .preview{grid-area:1/1;width:100%;min-width:0;min-height:0}
+.mobile-panes .chat{border-right:none}
+.mobile-panes .preview{visibility:hidden}
+body.mobile-panes.show-preview .chat{visibility:hidden}
+body.mobile-panes.show-preview .preview{visibility:visible}
 @media (max-width:640px){
+  /* Fit a cold navigation before the deferred module arrives. Once initialized,
+     only syncPaneSemantics owns pane visibility, including across resizes. */
+  body:not(.pane-layout-ready) .pane-switch{display:block}
+  body:not(.pane-layout-ready) .pane-resizer{display:none}
+  body:not(.pane-layout-ready) .layout{display:grid;grid-template:minmax(0,1fr)/minmax(0,1fr)}
+  body:not(.pane-layout-ready) .chat,body:not(.pane-layout-ready) .preview{grid-area:1/1;width:100%;min-width:0;min-height:0}
+  body:not(.pane-layout-ready) .chat{border-right:none}
+  body:not(.pane-layout-ready) .preview{visibility:hidden}
   /* dvh keeps the composer above the mobile URL bar instead of under it. */
   body{height:100dvh}
-  .pane-switch{display:block}
-  .pane-resizer{display:none}
-  .chat,.preview{width:100%;min-width:0;flex:1}
-  .chat{border-right:none}
-  .preview{display:none}
-  body.show-preview .chat{display:none}
-  body.show-preview .preview{display:flex}
   .pv-nudge{display:inline-flex}
   #hint{display:none}
   /* The preview is full-screen here; the widget strip would only cost height. */

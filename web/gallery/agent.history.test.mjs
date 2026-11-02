@@ -472,3 +472,27 @@ test('streamed response blocks keep their own message action shells', async () =
   assert.equal(shells[1].content.textContent, 'Another block');
   assert.equal(shells[0].content.textContent, 'First\nsecond');
 });
+
+test("preview updates stay indicated until the Preview pane is selected", async () => {
+  const { byId, context } = await loadAgent({ artifact: { id: "art-1", title: "Counter" } });
+  const previewTab = byId('tab-preview');
+  const attributes = new Map();
+  previewTab.setAttribute = (name, value) => attributes.set(name, value);
+  previewTab.removeAttribute = name => attributes.delete(name);
+
+  context.handleAgentEvent({type: 'exhibit_artifact_saved', artifactId: 'art-1', title: 'Counter'});
+  assert.equal(previewTab.classList.contains('has-update'), true);
+  assert.equal(attributes.get('aria-label'), 'Preview, updated');
+  assert.equal(byId('pv-nudge').hidden, false);
+
+  context.showPane('preview');
+  assert.equal(previewTab.classList.contains('has-update'), false);
+  assert.equal(attributes.has('aria-label'), false);
+  assert.equal(attributes.get('aria-selected'), 'true');
+  assert.equal(previewTab.tabIndex, 0);
+  assert.equal(byId('tab-chat').tabIndex, -1);
+  assert.equal(byId('pv-nudge').hidden, true);
+
+  context.handleAgentEvent({type: 'exhibit_artifact_saved', artifactId: 'art-1'});
+  assert.equal(previewTab.classList.contains('has-update'), false);
+});

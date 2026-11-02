@@ -912,6 +912,29 @@ clamp it so both panes keep at least 280 pixels. Mobile retains the Chat/Preview
 tabs and hides the divider. The divider lives outside the preview partial, so
 resizing never reloads the artifact.
 
+**Mobile pane switch.** At 640 CSS pixels and below, Chat and Preview are
+related tab panels. The row is normally 51px tall with 44px minimum targets;
+long labels and enlarged text grow the row instead of clipping. Left/Right
+wrap between tabs, Home/End select the first/last tab, and Tab enters the
+selected panel. Programmatic pane switches keep focus visible. Above that
+breakpoint, both panes are named regions and the tab strip is hidden. Switching
+panes does not recreate their content or preview frame. Inactive mobile panes
+stay laid out in the same grid cell, hidden and inert, to retain iframe scroll
+without exposing inactive controls. Pane, tab-strip and divider visibility changes
+together with roles, inertness and focus, so CSS cannot blur those focused controls
+before the handler captures them. A responsive CSS fallback supplies the initial
+mobile layout until the deferred module takes ownership of those transitions.
+`TestAgentPaneInitialLayoutBrowser` holds the module response to check that startup
+layout and focus-preserving handoff. `TestAgentPaneBreakpointFocusBrowser` deliberately
+delays the handler across rendered frames in both resize directions. `TestAgentPanesBrowser`
+covers the responsive geometry, keyboard focus, retained draft/scroll/frame
+state, htmx swaps, and short viewports in light and dark modes.
+
+[Phone Chat](screenshots/Exh-a5ez/light-390-chat.png) ·
+[Dark Preview](screenshots/Exh-a5ez/dark-430-preview.png) ·
+[Enlarged labels](screenshots/Exh-a5ez/light-320-large-labels.png) ·
+[Desktop](screenshots/Exh-a5ez/desktop.png)
+
 **The brief handoff (nw-d1dd).** A create session usually arrives from `/new`,
 whose Build-with-agent panel is now the page's default and is a *form* rather
 than a prompt box: a title and a description today, more answerable fields
