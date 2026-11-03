@@ -1,6 +1,6 @@
 ---
 id: Exh-t9bv
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-03T04:00:50Z
@@ -22,3 +22,9 @@ Cause: the phone tabs are position:sticky; bottom:0 inside .gallery-layout. A st
 - Desktop rail unchanged.
 - Browser tests cover a viewport extending past the content end.
 
+
+## Notes
+
+**2026-11-03T04:26:01Z**
+
+Fixed: phone tabs are position:fixed; space-tabs Stimulus controller observes the bar's border box (the safe-area inset is padding) and publishes --space-tabs-height for the layout's clearance. Regression check ends the content above the viewport bottom, the shape iOS rubber-banding produces.

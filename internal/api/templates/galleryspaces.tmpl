@@ -1,5 +1,5 @@
 {{/* Spaces and filters share a desktop rail. Only spaces become phone tabs. */}}
-{{define "gallerySpaces"}}<aside class="gallery-rail">
+{{define "gallerySpaces"}}<aside class="gallery-rail"{{if .Spaces}} data-controller="space-tabs"{{end}}>
   {{if .Spaces}}<nav class="gallery-spaces" aria-label="Library spaces">
     <ul>{{range .Spaces}}
       <li><a href="{{.Path}}"{{if .Active}} aria-current="page"{{end}} data-gallery-space-link
