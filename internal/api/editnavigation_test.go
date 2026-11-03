@@ -17,6 +17,7 @@ func TestEditorReturnDestinations(t *testing.T) {
 	for _, tc := range []struct{ target, path, label string }{
 		{"/", "/", "My library"},
 		{"/?q=chart&tag=Finance&visible=48", "/?q=chart&tag=Finance&visible=48", "My library"},
+		{"/search?q=chart", "/search?q=chart", "Search"},
 		{"/shared-by-me?q=chart", "/shared-by-me?q=chart", "Shared by me"},
 		{"/artifacts/tool", "/artifacts/tool", "My tool"},
 		{"https://elsewhere.test/", "/", "My library"},

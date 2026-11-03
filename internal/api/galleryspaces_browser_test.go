@@ -57,20 +57,24 @@ func TestGallerySpacesBrowser(t *testing.T) {
 				require.True(t, ok, message)
 			}
 			check(`document.querySelectorAll('nav[aria-label="Library spaces"]').length === 1 && document.querySelectorAll('.gallery-spaces [aria-current="page"]').length === 1 && document.querySelector('.gallery-spaces [aria-current="page"]').getAttribute('href') === '/shared'`, "one nav and the incoming space is active")
-			check(`Array.from(document.querySelectorAll('.gallery-spaces a')).every(a => a.getBoundingClientRect().width >= 44 && a.getBoundingClientRect().height >= 44) && document.documentElement.scrollWidth <= innerWidth`, "all targets are at least 44px and the page fits")
+			check(`Array.from(document.querySelectorAll('.gallery-spaces a')).filter(a => a.getClientRects().length).every(a => a.getBoundingClientRect().width >= 44 && a.getBoundingClientRect().height >= 44) && document.documentElement.scrollWidth <= innerWidth`, "all targets are at least 44px and the page fits")
 			check(fmt.Sprintf(`Array.from(document.querySelectorAll('.space-count')).every(el => (getComputedStyle(el).display === 'none') === %t)`, viewport.phone), "counts appear only in the rail")
 			if viewport.phone {
-				check(`getComputedStyle(document.querySelector('.gallery-rail')).paddingBottom === '38px' && document.querySelector('.gallery-rail').getBoundingClientRect().height >= 86 && document.querySelector('.gallery-rail').getBoundingClientRect().height <= 90`, "the compact tabs include the phone home-indicator inset")
+				check(`getComputedStyle(document.querySelector('.gallery-rail')).paddingBottom === '38px' && document.querySelector('.gallery-rail').getBoundingClientRect().height >= 100 && document.querySelector('.gallery-rail').getBoundingClientRect().height <= 108`, "the compact tabs include the phone home-indicator inset")
 				check(`getComputedStyle(document.querySelector('.gallery-rail')).position === 'fixed' && Math.abs(document.querySelector('.gallery-rail').getBoundingClientRect().bottom - innerHeight) < 1`, "phone tabs are pinned to the viewport bottom")
 				require.NoError(t, chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](`window.scrollTo(0, document.documentElement.scrollHeight)`)))
 				check(`Array.from(document.querySelectorAll('.card')).at(-1).getBoundingClientRect().bottom <= document.querySelector('.gallery-rail').getBoundingClientRect().top`, "the last card scrolls fully above the tabs")
 			} else {
 				check(`getComputedStyle(document.querySelector('.gallery-layout')).display === 'grid' && document.querySelector('.gallery-rail').getBoundingClientRect().width === 208 && document.querySelector('.gallery-rail').getBoundingClientRect().right <= document.querySelector('main').getBoundingClientRect().left`, "desktop rail sits beside the grid")
-				check(`Array.from(document.querySelectorAll('.space-label')).every(el => el.scrollWidth <= el.clientWidth)`, "desktop labels fit alongside two-digit counts")
+				check(`Array.from(document.querySelectorAll('.space-label')).filter(el => el.getClientRects().length).every(el => el.scrollWidth <= el.clientWidth)`, "desktop labels fit alongside two-digit counts")
 			}
 
 			// Ordinary Tab order and visible focus work in both layouts.
 			require.NoError(t, chromedp.Do(ctx, chromedp.Focus(chromedp.CSS(`.gallery-spaces a[href="/"]`)), chromedp.KeyEvent(kb.Tab)))
+			if viewport.phone {
+				check(`document.activeElement.getAttribute('href') === '/search'`, "Tab reaches Search second")
+				require.NoError(t, chromedp.Do(ctx, chromedp.KeyEvent(kb.Tab)))
+			}
 			check(`document.activeElement.getAttribute('href') === '/shared' && document.activeElement.matches(':focus-visible') && getComputedStyle(document.activeElement).outlineStyle === 'solid'`, "Tab reaches the incoming space with a visible outline")
 			require.NoError(t, chromedp.Do(ctx, chromedp.KeyEvent(kb.Tab)))
 			check(`document.activeElement.getAttribute('href') === '/shared-by-me'`, "Tab reaches outgoing shares next")
@@ -134,9 +138,9 @@ func TestGalleryEmptySpacesBrowser(t *testing.T) {
 			require.NoError(t, err)
 			visit("/shared")
 			check(`document.querySelector('.empty').textContent === 'Nothing has been shared with you yet.' && document.querySelector('#gallery-content').dataset.galleryReadOnly === 'true' && !document.querySelector('[data-duplicate-dialog],.card-actions')`)
-			check(`Array.from(document.querySelectorAll('.space-label')).map(el=>el.textContent).join('|') === 'Library|Shared with me|Shared by me'`)
-			check(`document.documentElement.scrollWidth <= innerWidth && Array.from(document.querySelectorAll('.gallery-spaces a')).every(a=>a.getBoundingClientRect().width >= 44 && a.getBoundingClientRect().height >= 44)`)
-			check(`Array.from(document.querySelectorAll('.space-label')).every(el=>getComputedStyle(el).visibility === 'visible' && el.scrollWidth <= el.clientWidth && el.scrollHeight <= el.clientHeight)`)
+			check(`Array.from(document.querySelectorAll('.space-label')).map(el=>el.textContent).join('|') === 'Library|Search|Shared with me|Shared by me'`)
+			check(`document.documentElement.scrollWidth <= innerWidth && Array.from(document.querySelectorAll('.gallery-spaces a')).filter(a => a.getClientRects().length).every(a=>a.getBoundingClientRect().width >= 44 && a.getBoundingClientRect().height >= 44)`)
+			check(`Array.from(document.querySelectorAll('.space-label')).filter(el => el.getClientRects().length).every(el=>getComputedStyle(el).visibility === 'visible' && el.scrollWidth <= el.clientWidth && el.scrollHeight <= el.clientHeight)`)
 			if dir := os.Getenv("GALLERY_SCREENSHOT_DIR"); dir != "" {
 				require.NoError(t, os.MkdirAll(dir, 0755))
 				shot, err := chromedp.Run(ctx, chromedp.Screenshot(chromedp.CSS("body")))
@@ -146,12 +150,12 @@ func TestGalleryEmptySpacesBrowser(t *testing.T) {
 			visit("/shared-by-me")
 			check(`document.querySelector('.empty').textContent.includes('Share an artifact from its share panel.') && document.querySelector('#gallery-content').dataset.galleryReadOnly === 'false'`)
 			visit("/")
-			check(`document.querySelector('header') === originalHeader && document.querySelectorAll('.gallery-spaces a').length === 3`)
+			check(`document.querySelector('header') === originalHeader && document.querySelectorAll('.gallery-spaces a').length === 4`)
 		}
 		// Enlarge navigation text independently of viewport zoom, then exercise
 		// a longer label. Its full text must remain inside its clickable link.
 		require.NoError(t, chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](`document.querySelectorAll('.space-label').forEach(el=>el.style.fontSize='24px');document.querySelector('.space-label').textContent='My personal artifact library'`)))
-		check(`document.documentElement.scrollWidth <= innerWidth && Array.from(document.querySelectorAll('.space-label')).every(el=>{const r=el.getBoundingClientRect(),a=el.closest('a').getBoundingClientRect();return el.scrollWidth <= el.clientWidth && el.scrollHeight <= el.clientHeight && r.left >= a.left && r.right <= a.right && r.bottom <= a.bottom;})`)
+		check(`document.documentElement.scrollWidth <= innerWidth && Array.from(document.querySelectorAll('.space-label')).filter(el => el.getClientRects().length).every(el=>{const r=el.getBoundingClientRect(),a=el.closest('a').getBoundingClientRect();return el.scrollWidth <= el.clientWidth && el.scrollHeight <= el.clientHeight && r.left >= a.left && r.right <= a.right && r.bottom <= a.bottom;})`)
 	}
 	// A newly received share appears on the next visit; revoking the last one
 	// restores the explanation without stranding the user in that space.
@@ -162,5 +166,5 @@ func TestGalleryEmptySpacesBrowser(t *testing.T) {
 	require.NoError(t, in.ro.cfg.Store.DeleteGrant(ctx, in.ownerOne, in.artifactOne, in.ownerTwo))
 	visit("/")
 	visit("/shared")
-	check(`document.querySelectorAll('.card').length === 0 && document.querySelector('.empty').textContent === 'Nothing has been shared with you yet.' && document.querySelectorAll('.gallery-spaces a').length === 3`)
+	check(`document.querySelectorAll('.card').length === 0 && document.querySelector('.empty').textContent === 'Nothing has been shared with you yet.' && document.querySelectorAll('.gallery-spaces a').length === 4`)
 }

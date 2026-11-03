@@ -13,7 +13,7 @@ import (
 
 func TestGallerySpaceFragments(t *testing.T) {
 	in := newGrantedInstance(t)
-	for _, gallery := range []galleryDefinition{libraryGallery, sharedGallery, sharedByGallery} {
+	for _, gallery := range []galleryDefinition{libraryGallery, searchGallery, sharedGallery, sharedByGallery} {
 		for _, history := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/history=%t", gallery.ID, history), func(t *testing.T) {
 				path := gallery.PagePath + "?q=absent"
@@ -55,7 +55,7 @@ func TestGallerySpaceFragments(t *testing.T) {
 
 func TestGallerySpaceFragmentExpiredSession(t *testing.T) {
 	in := newGrantedInstance(t)
-	for _, path := range []string{"/", "/shared", "/shared-by-me"} {
+	for _, path := range []string{"/", "/search", "/shared", "/shared-by-me"} {
 		r := httptest.NewRequest("GET", path, nil)
 		r.Header.Set("HX-Request", "true")
 		r.Header.Set("HX-Target", "div#gallery-content")

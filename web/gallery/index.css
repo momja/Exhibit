@@ -264,3 +264,14 @@ main{padding:10px 12px}
   .gallery-filter-section h3,.gallery-filter-section a,.gallery-filter-chips a{font-size:var(--text-secondary);line-height:1.5}
   .gallery-filter-chips a{max-width:100%;overflow-wrap:anywhere}
 }
+
+/* Search is a dedicated phone destination. Its form lives in the swapped page
+ * so the header/account island stays stable; desktop keeps its current search. */
+.gallery-page-search{margin-bottom:16px;max-width:640px}
+.gallery-page-search .search-row{width:100%}
+.gallery-spaces .space-mobile-only{display:none}
+@media (max-width:767px){
+  #gallery-search-region .search-row{display:none}
+  .app-header:has(.search-row)>.spacer{display:block}
+  .gallery-spaces .space-mobile-only{display:flex}
+}

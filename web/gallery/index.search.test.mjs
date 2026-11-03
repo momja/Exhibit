@@ -170,3 +170,30 @@ test('an artifact change clears a filtered gallery and invalidates in-flight old
   await root.dispatchEvent(stale);
   assert.equal(stale.defaultPrevented, true);
 });
+
+test('/ opens the Search tab when the gallery header field is hidden', async () => {
+  const { root, input, press } = await loadIndex();
+  input.getClientRects = () => [];
+  let clicks = 0;
+  const querySelector = root.querySelector;
+  root.querySelector = selector => selector === '[data-gallery-space-link][href="/search"]'
+    ? { click() { clicks++; } } : querySelector(selector);
+  const event = press('/');
+  assert.equal(clicks, 1);
+  assert.equal(input.focused, false);
+  assert.equal(event.prevented, true);
+});
+
+
+test('an artifact change refreshes dedicated Search without clearing its query', async () => {
+  const { root, form, input } = await loadIndex();
+  form.dataset.galleryPreserveQuery = 'true';
+  input.value = 'chart';
+  await input.dispatchEvent({ type: 'input' });
+  let requested = 0;
+  form.addEventListener('exhibit:gallery-search', () => requested++);
+  await root.dispatchEvent({ type: 'exhibit:artifacts-changed' });
+  assert.equal(input.value, 'chart');
+  assert.equal(requested, 1);
+  await form.dispatchEvent({ type: 'submit' });
+});

@@ -95,7 +95,7 @@ func TestGalleryMobileTabsBrowser(t *testing.T) {
 					require.NoError(t, chromedp.Do(ctx, chromedp.Poll[chromedp.Void](`Math.abs(parseFloat(getComputedStyle(document.querySelector('main')).paddingBottom) - 12 - document.querySelector('.gallery-rail').getBoundingClientRect().height) < 1`)))
 				}
 				settled()
-				check(`(() => { const r = document.querySelector('.gallery-rail').getBoundingClientRect(); return r.height >= 52 && r.height <= (innerWidth === 320 ? 72 : 56) && Math.abs(r.bottom - innerHeight) < 1; })()`, "normal tabs stay compact, allow full labels to wrap at 320px, and sit at the viewport bottom")
+				check(`(() => { const r = document.querySelector('.gallery-rail').getBoundingClientRect(); return r.height >= 52 && r.height <= 72 && Math.abs(r.bottom - innerHeight) < 1; })()`, "normal tabs stay compact, allow full labels to wrap at 320px, and sit at the viewport bottom")
 				check(`Array.from(document.querySelectorAll('.gallery-spaces a')).every(a => a.getBoundingClientRect().height >= 44 && a.getBoundingClientRect().width >= 44) && document.documentElement.scrollWidth <= innerWidth`, "targets stay at least 44×44px without horizontal overflow")
 				capture("normal")
 
@@ -105,10 +105,14 @@ func TestGalleryMobileTabsBrowser(t *testing.T) {
 				_, err = chromedp.Call(ctx, emulation.SetSafeAreaInsetsOverride, emulation.SetSafeAreaInsetsOverrideParams{Insets: &emulation.SafeAreaInsets{Bottom: &inset}})
 				require.NoError(t, err)
 				check(`parseFloat(getComputedStyle(document.querySelector('.gallery-spaces a')).fontSize) === 24 && document.querySelector('.gallery-rail').getBoundingClientRect().height > 90`, "200% text and full labels grow the bar beyond its normal height plus inset")
-				check(`document.querySelectorAll('.space-label').length === 3 && Array.from(document.querySelectorAll('.space-label')).every(label => { const r = label.getBoundingClientRect(), a = label.closest('a').getBoundingClientRect(); return label.scrollWidth <= label.clientWidth && r.left >= a.left && r.right <= a.right && r.top >= a.top && r.bottom <= a.bottom; }) && document.documentElement.scrollWidth <= innerWidth`, "enlarged full labels wrap inside their targets without clipping or horizontal overflow")
+				check(`document.querySelectorAll('.space-label').length === 4 && Array.from(document.querySelectorAll('.space-label')).every(label => { const r = label.getBoundingClientRect(), a = label.closest('a').getBoundingClientRect(); return label.scrollWidth <= label.clientWidth && r.left >= a.left && r.right <= a.right && r.top >= a.top && r.bottom <= a.bottom; }) && document.documentElement.scrollWidth <= innerWidth`, "enlarged full labels wrap inside their targets without clipping or horizontal overflow")
 				check(`getComputedStyle(document.querySelector('.gallery-rail')).paddingBottom === '38px' && Array.from(document.querySelectorAll('.gallery-spaces a')).every(a => a.getBoundingClientRect().bottom <= innerHeight - 34)`, "targets stay above the simulated home indicator")
 				settled()
-				require.NoError(t, chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](`window.scrollTo(0, document.documentElement.scrollHeight / 2)`)))
+				require.NoError(t, chromedp.Do(ctx,
+					chromedp.Evaluate[chromedp.Void](`window.scrollTo(0, document.documentElement.scrollHeight / 2)`),
+					chromedp.Poll[chromedp.Void](`document.querySelector('#gallery-shell').hasAttribute('data-chrome-hidden')`)))
+				// Wait for the down-scroll frame before reversing direction, so
+				// the browser cannot coalesce both scrolls into one down-scroll.
 				// Mid-document the rail returns to the viewport bottom on the way up.
 				require.NoError(t, chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](`window.scrollBy(0, -40)`),
 					chromedp.Poll[chromedp.Void](`Math.abs(document.querySelector('.gallery-rail').getBoundingClientRect().bottom - innerHeight) < 1`)))
