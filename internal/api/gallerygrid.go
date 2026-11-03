@@ -18,6 +18,7 @@ const galleryPageSize = 24
 // supply their own selection without teaching paging or the browser about
 // ownership or other selection rules. Filters is the default owner selection.
 type galleryDefinition struct {
+	SearchPage   bool
 	ReadOnly     bool
 	Title        string
 	Select       gallerySelection
@@ -45,6 +46,8 @@ type galleryEmptyState struct {
 }
 
 type galleryGridData struct {
+	PagePath     string
+	SearchPage   bool
 	Title        string
 	Filters      galleryFilters
 	Parameters   url.Values
@@ -60,7 +63,7 @@ type galleryGridData struct {
 
 func (ro *Router) loadGalleryGrid(r *http.Request, gallery galleryDefinition, offset int) (galleryGridData, error) {
 	grid := galleryGridData{
-		Title: gallery.Title, ID: gallery.ID, FragmentPath: gallery.FragmentPath,
+		PagePath: gallery.PagePath, SearchPage: gallery.SearchPage, Title: gallery.Title, ID: gallery.ID, FragmentPath: gallery.FragmentPath,
 		Query: strings.TrimSpace(r.URL.Query().Get("q")), Offset: offset,
 		Empty: gallery.Empty,
 	}
@@ -128,9 +131,13 @@ func (ro *Router) selectOwnedGallery(r *http.Request, options store.ListOptions,
 	var cards []galleryCard
 	urls := ro.renderURLs(r)
 	for _, a := range artifacts {
-		cards = append(cards, galleryCard{ArtifactID: a.ID, Title: a.Title, Tags: tagViews(a.Tags), Capability: newCardCapabilityView(a), Widget: newGalleryWidgetView(a, urls), Actions: galleryCardActions(a.ID, a.Title)})
+		cards = append(cards, ownedGalleryCard(a, urls))
 	}
 	return cards, nil
+}
+
+func ownedGalleryCard(a *store.Artifact, urls renderURLs) galleryCard {
+	return galleryCard{ArtifactID: a.ID, Title: a.Title, Tags: tagViews(a.Tags), Capability: newCardCapabilityView(a), Widget: newGalleryWidgetView(a, urls), Actions: galleryCardActions(a.ID, a.Title)}
 }
 
 func (grid galleryGridData) url(path string, offset int) string {
@@ -179,7 +186,7 @@ func (ro *Router) serveGalleryGrid(w http.ResponseWriter, r *http.Request, galle
 		status = http.StatusInternalServerError
 	}
 	partial := "galleryGrid"
-	if offset == 0 && r.Header.Get("HX-Request") != "" && status == http.StatusOK {
+	if offset == 0 && !gallery.SearchPage && r.Header.Get("HX-Request") != "" && status == http.StatusOK {
 		partial = "galleryFilterUpdate"
 	}
 	fragment, err := renderPage(partial, grid)

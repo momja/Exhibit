@@ -39,10 +39,12 @@ export function initializeGallery(root) {
   });
   syncClear();
   events.on(root, 'exhibit:artifacts-changed', () => {
-    // A renamed copy may not match the active search. Return to the library's
-    // first page so the newly-created artifact is visible after the swap.
-    input.value = '';
-    query = '';
+    // Ordinary galleries clear the query to reveal a renamed copy. The
+    // dedicated Search page keeps its query: clearing it shows only a prompt.
+    if (form.dataset.galleryPreserveQuery !== 'true') {
+      input.value = '';
+      query = '';
+    }
     revision++;
     syncClear();
     search();
@@ -106,6 +108,10 @@ export function initializeGalleryShortcut() {
     if (!gallery) return;
     event.preventDefault();
     const input = gallery.querySelector('[data-gallery-query]');
+    if (input.getClientRects && !input.getClientRects().length) {
+      gallery.querySelector('[data-gallery-space-link][href="/search"]')?.click();
+      return;
+    }
     input.focus();
     input.select();
   });

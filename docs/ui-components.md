@@ -45,8 +45,9 @@ status. An optional `TitleIcon` decorates the page title.
 visually hidden at 600px and below. Accessible names and tooltips remain.
 `Primary` selects the primary button style. The editor's `SaveEditor` flag
 retains its existing `data-save-editor` binding and unsaved-changes workflow.
-Gallery search and filter markup stays in `galleryHeaderSearch`; its existing
-Stimulus and htmx behavior remains attached to the stable gallery root.
+Desktop gallery search and the mobile filter trigger live in
+`galleryHeaderSearch`. Mobile search lives on the dedicated `/search` page,
+using the same `gallerySearch` partial and gallery controller.
 
 `.app-header` and its child classes in `components.css` own the layout, including
 when the bar is nested inside a gallery controller. The baseline is the
@@ -54,7 +55,7 @@ rendered gallery: 37px tall with 36px icon controls on desktop; 56px tall with
 44px controls at 767px and below, plus any phone top safe-area inset. Horizontal
 padding is 16px (8px at 360px and below), with 12px gaps. The gallery filter
 layout tightens gaps on narrow screens. On phones the filter label is visually
-hidden, search clearing occupies a separate 44px box, and the Accounts shortcut
+hidden, Search-page clearing occupies a separate 44px box, and the Accounts shortcut
 moves to Settings (the desktop header retains it). Back links and the hosted
 account trigger also have a 44px minimum hit area. Card metadata grows to fit
 44px title, posture and overflow targets without overlapping their neighbors.
@@ -280,11 +281,21 @@ dialogs retain their own behavior.
 The stable `#gallery-shell` uses the registered `gallery` controller. It owns
 space request generations, history restoration and the current search
 connection. Its `space` target is `#gallery-content`, which gets replaced when
-switching Library, Shared with me or Shared by me. These destinations remain
+switching Library, Search, Shared with me or Shared by me. Search is the second
+phone tab; desktop retains its current per-space header search. These destinations remain
 available with zero sharing counts; phones show the same full labels, wrapping
 within each tab. The server sends the
 `gallerySpaceContent` partial plus an out-of-band `gallerySearchRegion` update.
 Keep the header and Clerk controller outside both regions.
+
+`/search` and `/partials/gallery-grid/search` share one selection and card
+partial. The search covers owned artifacts and incoming account grants, using
+the existing title, visible source and tag index with one stable paginated order.
+Shared cards retain recipient-scoped widget URLs and omit owner actions. A blank
+query shows a prompt. Search does not inherit the source space’s filters.
+Owned cards carry `/search?q=…` as their editor return destination. Tab clicks
+and the `/` shortcut focus the Search field after the successful htmx swap;
+history restoration keeps its existing focus behavior.
 
 Each content root uses `gallery-space`. Its connection initializes widget
 visibility, duplication and edit-return behavior; disconnect releases their
@@ -302,8 +313,8 @@ Run the actual navigation and lifecycle checks with:
 
 ```sh
 make assets
-go test ./internal/api -run 'TestGallerySpace(Navigation.*Browser|Fragments|FragmentExpiredSession)$' -count=1
-go test -tags screenshot ./internal/api -run '^TestCaptureGallerySpaceNavigation$' -count=1
+go test ./internal/api -run 'Test(SearchTabBrowser|SearchGallery.*|GallerySpace(Navigation.*Browser|Fragments|FragmentExpiredSession))$' -count=1
+go test -tags screenshot ./internal/api -run '^TestCapture(GallerySpaceNavigation|SearchTab)$' -count=1
 ```
 
 Empty sharing destinations retain navigation, including after the last share is

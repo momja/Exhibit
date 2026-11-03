@@ -60,12 +60,16 @@ func selectSharedWith(ro *Router, r *http.Request, offset, limit int, query stri
 	}
 	var cards []galleryCard
 	for _, a := range artifacts {
-		initial, _ := utf8.DecodeRuneInString(a.OwnerName)
-		widget := newGalleryWidgetView(a.Artifact, ro.renderURLs(r).ownedBy(a.OwnerID))
-		if widget.ReloadURL != "" {
-			widget.ReloadURL = "/artifacts/" + a.ID + "/widget/viewer/open"
-		}
-		cards = append(cards, galleryCard{ReadOnly: true, ArtifactID: a.ID, Title: a.Title, OwnerName: a.OwnerName, OwnerInitial: string(unicode.ToUpper(initial)), Widget: widget})
+		cards = append(cards, sharedGalleryCard(a, ro.renderURLs(r)))
 	}
 	return cards, params, nil
+}
+
+func sharedGalleryCard(a *store.SharedArtifact, urls renderURLs) galleryCard {
+	initial, _ := utf8.DecodeRuneInString(a.OwnerName)
+	widget := newGalleryWidgetView(a.Artifact, urls.ownedBy(a.OwnerID))
+	if widget.ReloadURL != "" {
+		widget.ReloadURL = "/artifacts/" + a.ID + "/widget/viewer/open"
+	}
+	return galleryCard{ReadOnly: true, ArtifactID: a.ID, Title: a.Title, OwnerName: a.OwnerName, OwnerInitial: string(unicode.ToUpper(initial)), Widget: widget}
 }

@@ -151,10 +151,19 @@ func TestGallerySpaceNavigationBrowser(t *testing.T) {
 			poll(`!document.querySelector('[data-duplicate-dialog]').open`)
 			visit("/")
 			poll(`Array.from(document.querySelectorAll('.card-title')).some(a=>a.textContent === 'Owned tool (copy)')`)
-			run(`document.body.dispatchEvent(new KeyboardEvent('keydown',{key:'/',bubbles:true}));document.querySelector('[data-gallery-query]').value='not-a-match';document.querySelector('[data-gallery-query]').dispatchEvent(new Event('input',{bubbles:true}))`)
+			run(`document.body.dispatchEvent(new KeyboardEvent('keydown',{key:'/',bubbles:true}))`)
+			if phone {
+				poll(`location.pathname === '/search' && document.querySelector('.gallery-page-search')`)
+			}
+			check(`document.activeElement.matches('[data-gallery-query]')`)
+			run(`document.querySelector('[data-gallery-query]').value='not-a-match';document.querySelector('[data-gallery-query]').dispatchEvent(new Event('input',{bubbles:true}))`)
 			poll(`document.querySelectorAll('.card').length === 0 && document.querySelector('.empty')?.textContent === 'No artifacts match your search.'`)
 			check(`document.activeElement.matches('[data-gallery-query]')`)
 			run(`document.querySelector('[data-gallery-clear]').click()`)
+			if phone {
+				poll(`!document.querySelector('.card') && location.search === ''`)
+				visit("/")
+			}
 			poll(`document.querySelectorAll('.card').length === 2 && location.search === ''`)
 			// A live widget can dispose and remount using the destination's URL.
 			poll(`document.querySelector('.card-widget-frame')`)

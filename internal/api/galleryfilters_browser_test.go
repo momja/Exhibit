@@ -42,7 +42,7 @@ func TestGalleryFilterBrowser(t *testing.T) {
 			}
 			_, err = chromedp.Call(ctx, emulation.SetDeviceMetricsOverride, emulation.SetDeviceMetricsOverrideParams{Width: width, Height: 844, DeviceScaleFactor: 1, Mobile: phone})
 			require.NoError(t, err)
-			require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(app.URL), chromedp.WaitVisible(chromedp.CSS(`[data-gallery-query]`))))
+			require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(app.URL), chromedp.WaitVisible(chromedp.CSS(`main`))))
 			check := func(script string) {
 				t.Helper()
 				ok, err := chromedp.Run(ctx, chromedp.Evaluate[bool](script))
@@ -89,16 +89,27 @@ func TestGalleryFilterBrowser(t *testing.T) {
 			if phone {
 				check(`document.activeElement.matches('.gallery-filter-trigger')`)
 			}
-			require.NoError(t, chromedp.Do(ctx, chromedp.Focus(chromedp.CSS(`[data-gallery-query]`)), chromedp.SendKeys(chromedp.CSS(`[data-gallery-query]`), "Artifact")))
-			poll(`new URL(location.href).searchParams.get('q') === 'Artifact'`)
-			check(`new URL(location.href).searchParams.get('tag') === 'Work' && new URL(location.href).searchParams.get('collection') === 'collection-1-0' && document.querySelectorAll('.card').length === 1`)
-			require.NoError(t, chromedp.Do(ctx, chromedp.Click(chromedp.CSS(`.gallery-filter-clear`))))
-			poll(`location.search === '?q=Artifact' && !document.querySelector('.gallery-filter-chips') && document.querySelectorAll('.card').length === 2`)
-			check(`document.querySelectorAll('[data-gallery-search] input[type=hidden]').length === 0 && document.querySelectorAll('a[data-active=true]').length === 0`)
+			if phone {
+				// Filters remain in Library; Search is its own unfiltered destination.
+				require.NoError(t, chromedp.Do(ctx, chromedp.Click(chromedp.CSS(`.gallery-filter-clear`))))
+				poll(`location.search === '' && !document.querySelector('.gallery-filter-chips') && document.querySelectorAll('.card').length === 2`)
+				require.NoError(t, chromedp.Do(ctx, chromedp.Click(chromedp.CSS(`.gallery-spaces a[href="/search"]`))))
+				poll(`location.pathname === '/search' && document.querySelector('.gallery-page-search')`)
+				require.NoError(t, chromedp.Do(ctx, chromedp.SendKeys(chromedp.CSS(`[data-gallery-query]`), "Artifact")))
+				poll(`location.search === '?q=Artifact' && document.querySelectorAll('.card').length === 2`)
+			} else {
+				require.NoError(t, chromedp.Do(ctx, chromedp.Focus(chromedp.CSS(`[data-gallery-query]`)), chromedp.SendKeys(chromedp.CSS(`[data-gallery-query]`), "Artifact")))
+				poll(`new URL(location.href).searchParams.get('q') === 'Artifact'`)
+				check(`new URL(location.href).searchParams.get('tag') === 'Work' && new URL(location.href).searchParams.get('collection') === 'collection-1-0' && document.querySelectorAll('.card').length === 1`)
+				require.NoError(t, chromedp.Do(ctx, chromedp.Click(chromedp.CSS(`.gallery-filter-clear`))))
+				poll(`location.search === '?q=Artifact' && !document.querySelector('.gallery-filter-chips') && document.querySelectorAll('.card').length === 2`)
+				check(`document.querySelectorAll('[data-gallery-search] input[type=hidden]').length === 0 && document.querySelectorAll('a[data-active=true]').length === 0`)
+			}
+
 			empty := httptest.NewServer(newTestRouter(t))
 			defer empty.Close()
 			require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(empty.URL), chromedp.WaitVisible(chromedp.CSS("main"))))
-			check(`document.querySelectorAll('.gallery-spaces a').length === 3 && !document.querySelector('.gallery-filter-trigger, .gallery-filter-sheet') && document.documentElement.scrollWidth <= innerWidth`)
+			check(`document.querySelectorAll('.gallery-spaces a').length === 4 && !document.querySelector('.gallery-filter-trigger, .gallery-filter-sheet') && document.documentElement.scrollWidth <= innerWidth`)
 
 		})
 	}

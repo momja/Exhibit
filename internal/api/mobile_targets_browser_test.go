@@ -57,7 +57,7 @@ func TestMobileTargetsBrowser(t *testing.T) {
      if (r.width < 44 || r.height < 44) return false;
      return all.slice(i+1).every(other => {const s=other.getBoundingClientRect();return r.right<=s.left || s.right<=r.left || r.bottom<=s.top || s.bottom<=r.top});
     });
-    return apart(header) && apart(card) && document.documentElement.scrollWidth <= innerWidth && document.querySelector('[data-gallery-query]').getBoundingClientRect().width >= 80;
+    return apart(header) && apart(card) && document.documentElement.scrollWidth <= innerWidth && !document.querySelector('header [data-gallery-query]').getClientRects().length;
    })()`)
 			for _, scheme := range []string{"light", "dark"} {
 				_, err := chromedp.Call(ctx, emulation.SetEmulatedMedia, emulation.SetEmulatedMediaParams{Features: []*emulation.MediaFeature{{Name: "prefers-color-scheme", Value: scheme}}})
