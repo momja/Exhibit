@@ -202,6 +202,22 @@ main{padding:10px 12px}
   .space-label{max-width:100%;text-align:center}
 }
 
+/* While a phone user scrolls down, the header and space tabs slide off screen
+ * to give the cards the whole height (scroll-chrome-controller.js sets the
+ * attribute). Transform only: neither bar moves in layout, so the page never
+ * jumps and the tabs' clearance below the last card stays reserved. The header
+ * stops at the top safe-area inset, keeping its background behind the status
+ * bar. The shown state carries no transform at all, because a transformed
+ * header would become the containing block of any fixed popup inside it. */
+@media (max-width:767px){
+  #gallery-shell>.app-header,#gallery-shell .gallery-rail{transition:transform .2s ease,box-shadow .2s ease}
+  #gallery-shell[data-chrome-hidden]>.app-header{transform:translateY(calc(-100% + env(safe-area-inset-top,0px)));box-shadow:none}
+  #gallery-shell[data-chrome-hidden] .gallery-rail{transform:translateY(100%)}
+}
+@media (max-width:767px) and (prefers-reduced-motion:reduce){
+  #gallery-shell>.app-header,#gallery-shell .gallery-rail{transition:none}
+}
+
 /* Filters share server markup in the rail and native phone dialog. */
 .gallery-filter-trigger{display:none}
 .gallery-filter-section{margin:20px 0 12px}

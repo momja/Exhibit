@@ -537,7 +537,8 @@ and [phone](screenshots/Exh-xw54/02-space-switch-phone.png).
 **Spaces and filters** (Exh-2c2e, Exh-gx18): one `gallerySpaces` partial
 lays out Library, Shared with me, and Shared by me as a 208px desktop rail
 at widths of at least 768px, and tabs fixed to the viewport bottom on phones
-(Exh-t9bv; `ui-components.md`). Per-viewer counts
+(Exh-t9bv; `ui-components.md`). On phones the header and tabs slide away
+while scrolling down and return on the way up (Exh-se4n). Per-viewer counts
 come from `SpaceCounts`, independently of search. All three destinations remain
 available even when both sharing counts are zero. Empty sharing spaces explain
 what belongs there. Phones use the same full labels, wrapping as needed. Tags

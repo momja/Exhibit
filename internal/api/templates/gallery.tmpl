@@ -14,7 +14,7 @@
 <link rel="stylesheet" href="{{asset "gallery/index.css"}}">
 </head>
 <body>
-<div id="gallery-shell" data-gallery data-controller="gallery filter-sheet">
+<div id="gallery-shell" data-gallery data-controller="gallery filter-sheet scroll-chrome">
 {{template "appHeader" .Header}}
 <p class="gallery-error" data-gallery-navigation-error role="alert" hidden>Couldn’t switch spaces. Try again.</p>
 {{template "gallerySpaceContent" .}}
