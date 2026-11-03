@@ -320,16 +320,21 @@ load/reload/mount counts, history, permissions, duplication, widget remounts,
 request races, failures, modified clicks and no-JS links. Screenshot capture
 uses `shot-scraper` and verifies header identity after a real space click.
 
-On phones, the library rail becomes bottom-sticky tabs in a column layout.
-It keeps its rendered height in document flow, so wrapped labels, enlarged
-text and the bottom safe-area inset reserve their own clearance above the
-last card or Load more. At normal text size the bar is about 55px before the inset
+On phones, the library rail becomes tabs fixed to the bottom of the viewport
+([Exh-t9bv](../.tickets/Exh-t9bv.md)). They are not sticky: a sticky bar
+cannot leave its container, so when iOS rubber-bands past the end of the page
+it rides up with the content and leaves an empty band beneath it. The
+registered `space-tabs` controller observes the bar's border box and publishes
+`--space-tabs-height` on the layout, which reserves that much clearance above
+the last card or Load more. Wrapped labels, enlarged text and the bottom
+safe-area inset (padding, hence the border box) are therefore all measured,
+not estimated; the compact bar plus inset is the fallback until the first
+measurement. At normal text size the bar is about 55px before the inset
 when labels fit one line, with at least 44px link targets. Full labels can wrap
-on a 320px screen; the bar grows to fit them. Desktop retains
-the 208px side rail. No observer or duplicate height token is needed.
-`TestGalleryMobileTabsBrowser` checks 320/375/390/430px in light and dark,
-200% tab text with full labels, a simulated 34px inset, pagination, and short
-pages. `TestGallerySpacesBrowser` retains keyboard, focus and desktop checks.
+on a 320px screen; the bar grows to fit them. Desktop retains the 208px side
+rail. `TestGalleryMobileTabsBrowser` checks 320/375/390/430px in light and
+dark, 200% tab text with full labels, a simulated 34px inset, pagination, short
+pages, and a screen extending past the end of the content. `TestGallerySpacesBrowser` retains keyboard, focus and desktop checks.
 
 [Before at 390px](screenshots/Exh-0n90/before-390.png) ·
 [Compact tabs at 390px](screenshots/Exh-0n90/after-390.png) ·
