@@ -69,6 +69,7 @@ func TestActionMenuBrowser(t *testing.T) {
 <button id="replace" hx-get="/menus" hx-target="#menus" hx-swap="innerHTML">Replace</button>
 <button id="append" hx-get="/append" hx-target="#menus" hx-swap="beforeend">Append</button>
 <button id="after">After</button><div id="edit">Edit destination</div>
+<a id="card-link" href="#opened" style="display:block;padding:20px">Another card</a>
 <script type="module" src="/assets/gallery/controllers.js"></script>
 <script type="module">
 import { application } from '/assets/gallery/controllers.js';
@@ -120,13 +121,37 @@ for (const name of ['example:duplicate', 'example:rename', 'example:sort']) {
 	check(`document.querySelector('#artifact-actions').hidden && document.activeElement.id === 'collection-actions-trigger'`)
 
 	// Opening another instance closes the first. A null Safari focusout keeps
-	// its pending click available, while clicking outside closes the menu.
-	run(chromedp.Click(chromedp.CSS(`#artifact-actions-trigger`)), chromedp.Click(chromedp.CSS(`#collection-actions-trigger`)))
+	// its pending click available.
+	run(chromedp.Click(chromedp.CSS(`#artifact-actions-trigger`)),
+		chromedp.Evaluate[chromedp.Void](`document.querySelector('#collection-actions-trigger').click()`))
 	check(`document.querySelector('#artifact-actions').hidden && !document.querySelector('#collection-actions').hidden`)
 	run(chromedp.Evaluate[chromedp.Void](`document.activeElement.dispatchEvent(new FocusEvent('focusout', { bubbles: true, relatedTarget: null }))`))
 	check(`!document.querySelector('#collection-actions').hidden`)
-	run(chromedp.Click(chromedp.CSS(`#after`)))
-	check(`document.querySelector('#collection-actions').hidden && document.activeElement.id === 'after'`)
+
+	// A press outside only dismisses (Exh-bb37): it neither follows the link
+	// it landed on nor runs that element's click handlers. Pressing another
+	// menu's trigger closes the open menu without opening the other one.
+	run(chromedp.Evaluate[chromedp.Void](`window.outsideClicks = 0; document.querySelector('#card-link').addEventListener('click', () => outsideClicks++)`),
+		chromedp.Click(chromedp.CSS(`#card-link`)))
+	check(`document.querySelector('#collection-actions').hidden && location.hash === '' && outsideClicks === 0`)
+	run(chromedp.Click(chromedp.CSS(`#card-link`)))
+	check(`location.hash === '#opened' && outsideClicks === 1`)
+	run(chromedp.Evaluate[chromedp.Void](`history.replaceState(null, '', location.pathname)`),
+		chromedp.Click(chromedp.CSS(`#collection-actions-trigger`)), chromedp.Click(chromedp.CSS(`#artifact-actions-trigger`)))
+	check(`document.querySelector('#collection-actions').hidden && document.querySelector('#artifact-actions').hidden`)
+
+	// A touch that becomes a scroll is cancelled and produces no click; the
+	// menu closes and the next, unrelated click still goes through.
+	run(chromedp.Click(chromedp.CSS(`#collection-actions-trigger`)),
+		chromedp.Evaluate[chromedp.Void](`(() => {
+		  const link = document.querySelector('#card-link');
+		  link.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch' }));
+		  link.dispatchEvent(new PointerEvent('pointercancel', { bubbles: true, pointerType: 'touch' }));
+		})()`))
+	check(`document.querySelector('#collection-actions').hidden`)
+	run(chromedp.Evaluate[chromedp.Void](`document.querySelector('#card-link').click()`))
+	check(`location.hash === '#opened' && outsideClicks === 2`)
+	run(chromedp.Evaluate[chromedp.Void](`history.replaceState(null, '', location.pathname)`))
 
 	// Real htmx insertion/replacement: no manual initialization or swap hook.
 	run(chromedp.Evaluate[chromedp.Void](`window.oldMenu = document.querySelector('[data-controller="action-menu"]')`),
