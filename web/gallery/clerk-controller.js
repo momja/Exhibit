@@ -2,6 +2,7 @@ import { Controller } from '../stimulus/stimulus.js';
 import { clerkClient, clerkClientAfterLoad } from './clerk-client.js';
 import { clerkAuthAppearance } from './clerk-appearance.js';
 import { clerkUserButtonOptions } from './clerk-menu.js';
+import { consumeOutsidePress } from './outside-press.js';
 
 export default class extends Controller {
   static targets = ['mount', 'status', 'recovery'];
@@ -87,12 +88,21 @@ export default class extends Controller {
         if (finished) return;
         this.userButtonMounted = true;
         clerk.mountUserButton(mount, clerkUserButtonOptions());
+        // Clerk portals the menu out of the mount and closes it itself on
+        // the same pointerdown; Exhibit only consumes the click that follows.
+        this.releaseOutsidePress = consumeOutsidePress({
+          isOpen: () => mount.querySelector('.cl-userButtonTrigger')?.getAttribute('aria-expanded') === 'true',
+          contains: target => mount.contains(target) || Boolean(target.closest?.('.cl-userButtonPopoverRootBox')),
+          dismiss() {},
+        });
         rendered();
       }).catch(finish);
     });
   }
 
   unmountUserButton() {
+    this.releaseOutsidePress?.();
+    this.releaseOutsidePress = null;
     if (this.userButtonMounted) this.clerk.unmountUserButton(this.mountTarget);
     this.userButtonMounted = false;
   }

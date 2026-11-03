@@ -65,7 +65,10 @@ func TestAgentComposerBrowser(t *testing.T) {
 		} {
 			for _, fontSize := range []int{16, 24, 32} {
 				t.Run(fmt.Sprintf("%s/%s/font-%d", mode, scenario.name, fontSize), func(t *testing.T) {
-					run(chromedp.EmulateViewport(scenario.width, 900))
+					// The pane layout follows a matchMedia change event, which
+					// lands after the resize; wait for it before using the panes.
+					run(chromedp.EmulateViewport(scenario.width, 900),
+						chromedp.Poll[chromedp.Void](`document.body.classList.contains('mobile-panes') === matchMedia('(max-width:640px)').matches`))
 					if scenario.width > 640 {
 						run(chromedp.Focus(chromedp.CSS(`#agent-pane-resizer`)), chromedp.KeyEvent(kb.Home),
 							chromedp.Poll[chromedp.Void](`document.querySelector('#pane-chat').getBoundingClientRect().width === 280`))
