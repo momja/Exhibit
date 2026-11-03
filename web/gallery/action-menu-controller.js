@@ -1,4 +1,5 @@
 import { Controller } from '../stimulus/stimulus.js';
+import { consumeOutsidePress } from './outside-press.js';
 
 // Markup comes from the actionMenu Go partial. Each instance owns only its
 // open/focus state; feature actions are bubbling events, not API calls here.
@@ -7,9 +8,15 @@ export default class extends Controller {
 
   connect() {
     this.close();
+    this.releaseOutsidePress = consumeOutsidePress({
+      isOpen: () => this.hasMenuTarget && !this.menuTarget.hidden,
+      contains: target => this.element.contains(target),
+      dismiss: () => this.close(),
+    });
   }
 
   disconnect() {
+    this.releaseOutsidePress();
     this.close();
   }
 
@@ -41,10 +48,6 @@ export default class extends Controller {
 
   closeOther(event) {
     if (event.target !== this.element) this.close();
-  }
-
-  dismiss(event) {
-    if (!this.element.contains(event.target)) this.close();
   }
 
   focusOut(event) {
