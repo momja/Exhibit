@@ -151,7 +151,16 @@ root.addEventListener('exhibit:rename-collection', event => {
 
 The controller handles toggling, dismissal, one open menu per document, arrow
 keys, Home/End, typeahead, Tab exit, and Escape focus restoration. Features own
-API calls and refresh events. Gallery duplication listens for
+API calls and refresh events.
+
+A press outside an open menu only dismisses it (Exh-bb37): it does not follow
+the link or run the control it landed on, as with native menus. That rule
+lives in `web/gallery/outside-press.js`, which decides at `pointerdown` while
+the menu is still open and consumes the click that follows; a touch that
+becomes a scroll consumes nothing. Any popup with the same need registers
+`consumeOutsidePress({ isOpen, contains, dismiss })` on connect and calls the
+returned release on disconnect. The Clerk account menu is registered this way
+by `clerk-controller.js`; Clerk closes its own popover on that same press. Gallery duplication listens for
 `exhibit:duplicate`; its form still uses `apiFetch` and requests its htmx refresh
 with `exhibit:artifacts-changed`.
 
@@ -368,7 +377,8 @@ go test ./internal/api -run 'Test(AppHeaderBrowser|ActionMenuBrowser|GalleryActi
 
 The helper finds a locally installed Playwright Chromium headless shell, or
 uses `CHROMIUM_TEST_BINARY`. It skips browser tests when neither is available.
-Cases cover two different menus, escaped payloads, keyboard/focus, actual htmx
+Cases cover two different menus, escaped payloads, keyboard/focus, presses
+outside that dismiss without activating what they land on, actual htmx
 replacements and appends, disconnect/reconnect, and the existing duplication
 dialog, including modal removal/reconnection. The full application journeys in
 `e2e/` cover persisted state and Duplicate's save/htmx replacement, cancellation,

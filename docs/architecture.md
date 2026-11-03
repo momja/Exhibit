@@ -588,7 +588,9 @@ tests: [ui-components.md](ui-components.md).
 sharing `.action-menu` styles with the detail pill. The `actionMenu` Go partial
 gets its items from `galleryCardActions`; `action-menu-controller.js` handles each
 instance, including cards inserted or replaced by htmx.
-Outside clicks, focus leaving and Escape close it; Escape restores trigger focus.
+Outside presses, focus leaving and Escape close it; Escape restores trigger focus.
+An outside press only dismisses, never activating the card or control under it
+(Exh-bb37, `outside-press.js`, shared with the Clerk account menu).
 Keyboard and touch expose the trigger without hover. Links navigate normally;
 event items dispatch their named feature event with data and the visible trigger.
 Duplication listens for `exhibit:duplicate`, then dispatches
