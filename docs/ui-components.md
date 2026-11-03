@@ -327,6 +327,26 @@ rail. `TestGalleryMobileTabsBrowser` checks 320/375/390/430px in light and
 dark, 200% tab text with full labels, a simulated 34px inset, pagination, short
 pages, and a screen extending past the end of the content. `TestGallerySpacesBrowser` retains keyboard, focus and desktop checks.
 
+While a phone user scrolls down, the header and these tabs slide off screen
+and return on the way back up ([Exh-se4n](../.tickets/Exh-se4n.md)). The
+registered `scroll-chrome` controller on `#gallery-shell` only sets
+`data-chrome-hidden`; `index.css` applies it inside the phone breakpoint as a
+transform, so layout and the tabs' reserved clearance never move, and the
+shown state carries no transform that would capture fixed popups in the header.
+The attribute sits on the shell, which outlives space switches, so swapped-in
+tabs inherit it. The direction rules are the pure `scroll-chrome.js`: a 12px
+tolerance measured from the furthest point reached, the bars always shown
+within a header's height of the top and at the end of the list, and positions
+clamped to the scrollable range so iOS rubber-banding reads as no movement.
+Focus entering a hidden bar reveals it, and restores the scroll position the
+browser already changed to bring the sticky header's field into view. A
+`:focus-visible` control in a bar (a search field being typed in) keeps them
+shown. Reduced motion drops the slide. `scroll-chrome.test.mjs` covers the
+rules; `TestGalleryPhoneChromeBrowser` covers positions, focus, a space switch
+and desktop. Set `GALLERY_CHROME_SCREENSHOT_DIR` to refresh
+[scrolling down](screenshots/Exh-se4n/01-scrolling-down-390.png) and
+[scrolling back up](screenshots/Exh-se4n/02-scrolling-up-390.png) at 390px.
+
 [Before at 390px](screenshots/Exh-0n90/before-390.png) ·
 [Compact tabs at 390px](screenshots/Exh-0n90/after-390.png) ·
 [Desktop rail](screenshots/Exh-0n90/desktop-1280.png) ·
