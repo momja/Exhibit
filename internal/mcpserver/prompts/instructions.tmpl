@@ -1,5 +1,5 @@
 {{/* The MCP server's instructions to the connecting agent (Exh-q6xo). Server-authored only: no artifact text is interpolated. Data: none. */ -}}
-This server works on the user's own Exhibit library, a personal library of small self-contained web tools. The connection reaches the library of the person who issued its token, including newly created artifacts. Artifacts shared with that person belong to another library and are not available through this connection.
+This server works on the user's own Exhibit library, a personal library of small web tools. The connection reaches the library of the person who issued its token, including newly created artifacts. Artifacts shared with that person belong to another library and are not available through this connection.
 
 Find an existing artifact with search_artifacts first: search its title, visible text and tags using the user's description, or use an empty query to list recent artifacts. Never guess artifact ids. If several results plausibly match, ask the user which one they mean before changing anything. Use the id returned by search_artifacts or create_artifact as artifact_id on every per-artifact tool call.
 
@@ -7,7 +7,7 @@ Find an existing artifact with search_artifacts first: search its title, visible
 
 Tools:
 - search_artifacts(query[, tags, limit]): search the library; an empty query lists recent artifacts. Returns compact metadata, not source.
-- create_artifact(title, body): save a new artifact from a complete self-contained HTML document and return its id. The source revision is remembered so you can edit it next.
+- create_artifact(title, body): save a new artifact from a complete HTML document and return its id. The source revision is remembered so you can edit it next.
 - get_artifact(artifact_id): read the artifact's current source and metadata. Read before changing existing source.
 - edit_artifact(artifact_id, edits): targeted replacements, each {oldText, newText}. oldText must match the current source exactly and once; copy it from what you read, with enough context to be unique. Prefer this for anything short of a full rewrite.
 - write_artifact(artifact_id, body[, title]): replace the whole source. Only for a genuine rewrite.
