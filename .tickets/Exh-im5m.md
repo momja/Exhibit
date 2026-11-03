@@ -23,3 +23,7 @@ On mobile Search is the second tab after Library; its own /search page swaps thr
 **2026-11-03T06:34:26Z**
 
 Implemented /search as the second mobile tab using the gallery htmx shell and shared search/card components. One access-aware indexed query pages owned artifacts and incoming grants; shared cards retain recipient widget permissions. Mobile top search is hidden; desktop per-space search remains until the later port. Verified focused Go/store/API/Node/Chromium checks, 320–1280px layouts, history, clearing, no-script form fallback, shared widget state and revoked access. All six Playwright journeys pass on isolated scratch ports 18840/18841 (standard ports were occupied). Captured four screenshots under docs/screenshots/Exh-im5m. review-agent found missing mobile shortcut focus; fixed and verified with unmasked browser assertions. Follow-up review: No findings.
+
+**2026-11-03T06:39:12Z**
+
+Final regression audit also updates route credential/owner-scope inventories and existing mobile target/tab tests for the dedicated Search destination. Route security invariants, four-tab/200% text/home-indicator checks, and real mobile query/clear hit-box flows pass. Complete store suite passed; initial full runs exceeded the default ten-minute API test budget, so the complete non-browser API suite is being rerun with a longer timeout.

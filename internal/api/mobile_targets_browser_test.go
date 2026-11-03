@@ -72,13 +72,19 @@ func TestMobileTargetsBrowser(t *testing.T) {
 				check(`location.pathname === '/'`)
 				run(chromedp.KeyEvent(kb.Escape))
 			}
+			// Query controls now live on Search, outside the mobile header.
+			run(chromedp.Click(chromedp.CSS(`.gallery-spaces a[href="/search"]`)), chromedp.Poll[chromedp.Void](`location.pathname === '/search' && document.querySelector('.gallery-page-search')`))
+			run(chromedp.SendKeys(chromedp.CSS(`[data-gallery-query]`), "long"), chromedp.Poll[chromedp.Void](`document.querySelector('.card-title') && location.search === '?q=long'`))
 			run(chromedp.Click(chromedp.CSS(`[data-gallery-clear]`)), chromedp.Poll[chromedp.Void](`document.querySelector('[data-gallery-query]').value === '' && document.querySelector('[data-gallery-clear]').hidden`))
 			check(`document.activeElement.matches('[data-gallery-query]')`)
+			run(chromedp.Evaluate[chromedp.Void](`document.querySelector('[data-gallery-query]').style.fontSize='32px'`))
+			check(`document.documentElement.scrollWidth <= innerWidth`)
+			run(chromedp.Click(chromedp.CSS(`.gallery-spaces a[href="/"]`)), chromedp.Poll[chromedp.Void](`location.pathname === '/' && document.querySelector('.card-title')`))
 			// Typography may wrap the title or change its leading/padding. The
 			// anchor's target floor must not depend on any of those choices.
 			run(chromedp.Evaluate[chromedp.Void](`Object.assign(document.querySelector('.card-title').style,{fontSize:'16px',lineHeight:'1.4',paddingBlock:'6px'})`))
 			check(`document.querySelector('.card-title').getBoundingClientRect().height >= 44`)
-			run(chromedp.Evaluate[chromedp.Void](`document.querySelector('.card-title').style.fontSize='25px'; document.querySelector('[data-gallery-query]').style.fontSize='32px'`))
+			run(chromedp.Evaluate[chromedp.Void](`document.querySelector('.card-title').style.fontSize='25px';`))
 			check(`document.documentElement.scrollWidth <= innerWidth`)
 			modalBrowser{t, ctx}.capture("Exh-1og2/gallery-large-text", width)
 			// Text-only enlargement, including a long editor return label, must not
