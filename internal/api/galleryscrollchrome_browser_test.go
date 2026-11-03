@@ -89,18 +89,18 @@ func TestGalleryPhoneChromeBrowser(t *testing.T) {
 	eval(`window.scrollTo(0, 0)`)
 	poll(shown, "the top of the page always shows them")
 
-	// Focus entering a hidden bar brings it back where the reader is, and
-	// typing pins it. Left alone, focus would scroll the sticky header's
-	// field into view, which is the top of the page.
+	// Keyboard focus entering a hidden bar brings it back where the reader
+	// is and pins it. The mobile search field lives on its own page, so use
+	// the header's Add artifact link to exercise the shared bar behavior.
 	eval(`window.scrollTo(0, 600)`)
-	poll(hidden, "hidden before the search field takes focus")
-	eval(`document.querySelector('[data-app-header] input[name=q]').focus()`)
-	poll(shown, "focusing the search field reveals the bars")
+	poll(hidden, "hidden before a header control takes focus")
+	eval(`document.querySelector('[data-app-header] a[href="/new"]').focus()`)
+	poll(shown, "focusing a header control reveals the bars")
 	poll(`window.scrollY === 600`, "focusing a hidden field keeps the reader's place")
 	eval(`window.scrollBy(0, 400)`)
 	poll(`window.scrollY === 1000`, "the page scrolled further")
 	require.NoError(t, chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](`new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done)))`, chromedp.EvalAwaitPromise)))
-	poll(shown, "the bars stay while the search field has focus")
+	poll(shown, "the bars stay while a header control has keyboard focus")
 	eval(`document.activeElement.blur(); window.scrollBy(0, 100)`)
 	poll(hidden, "once focus leaves, scrolling down hides them again")
 

@@ -108,7 +108,11 @@ func TestGalleryMobileTabsBrowser(t *testing.T) {
 				check(`document.querySelectorAll('.space-label').length === 4 && Array.from(document.querySelectorAll('.space-label')).every(label => { const r = label.getBoundingClientRect(), a = label.closest('a').getBoundingClientRect(); return label.scrollWidth <= label.clientWidth && r.left >= a.left && r.right <= a.right && r.top >= a.top && r.bottom <= a.bottom; }) && document.documentElement.scrollWidth <= innerWidth`, "enlarged full labels wrap inside their targets without clipping or horizontal overflow")
 				check(`getComputedStyle(document.querySelector('.gallery-rail')).paddingBottom === '38px' && Array.from(document.querySelectorAll('.gallery-spaces a')).every(a => a.getBoundingClientRect().bottom <= innerHeight - 34)`, "targets stay above the simulated home indicator")
 				settled()
-				require.NoError(t, chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](`window.scrollTo(0, document.documentElement.scrollHeight / 2)`)))
+				require.NoError(t, chromedp.Do(ctx,
+					chromedp.Evaluate[chromedp.Void](`window.scrollTo(0, document.documentElement.scrollHeight / 2)`),
+					chromedp.Poll[chromedp.Void](`document.querySelector('#gallery-shell').hasAttribute('data-chrome-hidden')`)))
+				// Wait for the down-scroll frame before reversing direction, so
+				// the browser cannot coalesce both scrolls into one down-scroll.
 				// Mid-document the rail returns to the viewport bottom on the way up.
 				require.NoError(t, chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](`window.scrollBy(0, -40)`),
 					chromedp.Poll[chromedp.Void](`Math.abs(document.querySelector('.gallery-rail').getBoundingClientRect().bottom - innerHeight) < 1`)))

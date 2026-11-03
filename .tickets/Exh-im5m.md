@@ -31,3 +31,7 @@ Final regression audit also updates route credential/owner-scope inventories and
 **2026-11-03T06:44:13Z**
 
 Final validation complete: go test -short -timeout=25m ./internal/api passed (complete API + gallery Node suite); go test -short -count=1 ./internal/store passed (complete store suite); combined gallery/search/sharing/header/mobile/browser/route-invariant API regressions passed; all 6 Playwright journeys passed; screenshot capture and production build passed. review-agent follow-up reports No findings. Main worktree stays clean on main.
+
+**2026-11-03T15:27:07Z**
+
+Rebased onto origin/main at a8702772, preserving the fixed tabs and scrolling chrome. Resolved navigation-test conflicts for four tabs, updated the chrome focus test to the visible Add artifact control, and made the down/up scroll test wait for its down-scroll frame. Targeted chrome and mobile-tab browser checks pass.
