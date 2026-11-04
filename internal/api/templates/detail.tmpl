@@ -283,6 +283,7 @@ let geolocationApproved = {{if .Capability.GeolocationApproved}}true{{else}}fals
 {{/* The runtime network prompt (av-kmwj), shared with the agent chat page
      (av-6xvs). Before detail.js, which installs it at load. */}}
 {{template "componentScripts"}}
+{{if .StateWritable}}<script type="module" src="{{asset "gallery/artifact-opened.js"}}" data-artifact-opened="{{.ID}}"></script>{{end}}
 <script type="module" src="{{asset "gallery/detail.js"}}"></script>
 <script type="module" src="{{asset "gallery/direct-open.js"}}"></script>
 {{/* The share panel's script, loaded only where the panel exists. It resolves

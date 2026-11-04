@@ -238,7 +238,7 @@ func TestDuplicateArtifactFailurePublishesNothingAndReclaimsStaging(t *testing.T
 func TestDuplicateGalleryModalAndRefreshPartial(t *testing.T) {
 	ro := newTestRouter(t)
 	id := createArtifact(t, ro, map[string]any{"title": "Original", "body": "source"})
-	page := getPage(t, ro, "/")
+	page := getPage(t, ro, "/search")
 	assert.Contains(t, page, `data-action-menu-event-param="exhibit:duplicate"`)
 	assert.Contains(t, page, `&#34;artifactID&#34;:&#34;`+id+`&#34;`)
 	assert.Contains(t, page, `<dialog class="modal-dialog duplicate-dialog"`)
@@ -249,7 +249,7 @@ func TestDuplicateGalleryModalAndRefreshPartial(t *testing.T) {
 	assert.Contains(t, page, `name="copy_data" type="checkbox">`)
 	assert.Contains(t, page, `name="copy_share_settings" type="checkbox">`)
 	a := duplicateResult(t, ro, id, duplicateRequest("Renamed copy"))
-	fragment := getPage(t, ro, "/partials/gallery-grid")
+	fragment := getPage(t, ro, "/partials/gallery-grid/search")
 	assert.Contains(t, fragment, `data-href="/artifacts/`+a.ID+`"`)
 	assert.Contains(t, fragment, "Renamed copy")
 	assert.NotContains(t, fragment, "<html")

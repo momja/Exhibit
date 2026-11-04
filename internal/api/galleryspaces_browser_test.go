@@ -60,7 +60,7 @@ func TestGallerySpacesBrowser(t *testing.T) {
 			check(`Array.from(document.querySelectorAll('.gallery-spaces a')).filter(a => a.getClientRects().length).every(a => a.getBoundingClientRect().width >= 44 && a.getBoundingClientRect().height >= 44) && document.documentElement.scrollWidth <= innerWidth`, "all targets are at least 44px and the page fits")
 			check(fmt.Sprintf(`Array.from(document.querySelectorAll('.space-count')).every(el => (getComputedStyle(el).display === 'none') === %t)`, viewport.phone), "counts appear only in the rail")
 			if viewport.phone {
-				check(`getComputedStyle(document.querySelector('.gallery-rail')).paddingBottom === '38px' && document.querySelector('.gallery-rail').getBoundingClientRect().height >= 100 && document.querySelector('.gallery-rail').getBoundingClientRect().height <= 108`, "the compact tabs include the phone home-indicator inset")
+				check(`getComputedStyle(document.querySelector('.gallery-rail')).paddingBottom === '38px' && document.querySelector('.gallery-rail').getBoundingClientRect().height >= 87 && document.querySelector('.gallery-rail').getBoundingClientRect().height <= 96`, "the compact tabs include the phone home-indicator inset")
 				check(`getComputedStyle(document.querySelector('.gallery-rail')).position === 'fixed' && Math.abs(document.querySelector('.gallery-rail').getBoundingClientRect().bottom - innerHeight) < 1`, "phone tabs are pinned to the viewport bottom")
 				require.NoError(t, chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](`window.scrollTo(0, document.documentElement.scrollHeight)`)))
 				check(`Array.from(document.querySelectorAll('.card')).at(-1).getBoundingClientRect().bottom <= document.querySelector('.gallery-rail').getBoundingClientRect().top`, "the last card scrolls fully above the tabs")
@@ -71,16 +71,16 @@ func TestGallerySpacesBrowser(t *testing.T) {
 
 			// Ordinary Tab order and visible focus work in both layouts.
 			require.NoError(t, chromedp.Do(ctx, chromedp.Focus(chromedp.CSS(`.gallery-spaces a[href="/"]`)), chromedp.KeyEvent(kb.Tab)))
-			if viewport.phone {
+			{
 				check(`document.activeElement.getAttribute('href') === '/search'`, "Tab reaches Search second")
 				require.NoError(t, chromedp.Do(ctx, chromedp.KeyEvent(kb.Tab)))
 			}
 			check(`document.activeElement.getAttribute('href') === '/shared' && document.activeElement.matches(':focus-visible') && getComputedStyle(document.activeElement).outlineStyle === 'solid'`, "Tab reaches the incoming space with a visible outline")
 			require.NoError(t, chromedp.Do(ctx, chromedp.KeyEvent(kb.Tab)))
-			check(`document.activeElement.getAttribute('href') === '/shared-by-me'`, "Tab reaches outgoing shares next")
-			err = chromedp.Do(ctx, chromedp.KeyEvent(kb.Enter), chromedp.Poll[chromedp.Void](`location.pathname === "/shared-by-me"`))
+			check(`document.activeElement.getAttribute('href') === '/activity'`, "Tab reaches Activity next")
+			err = chromedp.Do(ctx, chromedp.KeyEvent(kb.Enter), chromedp.Poll[chromedp.Void](`location.pathname === "/activity"`))
 			require.NoError(t, err)
-			check(`location.pathname === '/shared-by-me' && document.querySelector('.gallery-spaces [aria-current="page"]').getAttribute('href') === '/shared-by-me'`, "keyboard activation navigates to outgoing shares")
+			check(`location.pathname === '/activity' && document.querySelector('.gallery-spaces [aria-current="page"]').getAttribute('href') === '/activity'`, "keyboard activation navigates to Activity")
 			for _, path := range []string{"/", "/shared"} {
 				// Load can finish before pagereveal starts the cross-document
 				// transition, when getAnimations() is still empty. Wait for the
@@ -137,8 +137,8 @@ func TestGalleryEmptySpacesBrowser(t *testing.T) {
 			_, err = chromedp.Call(ctx, emulation.SetEmulatedMedia, emulation.SetEmulatedMediaParams{Features: []*emulation.MediaFeature{{Name: "prefers-color-scheme", Value: scheme}}})
 			require.NoError(t, err)
 			visit("/shared")
-			check(`document.querySelector('.empty').textContent === 'Nothing has been shared with you yet.' && document.querySelector('#gallery-content').dataset.galleryReadOnly === 'true' && !document.querySelector('[data-duplicate-dialog],.card-actions')`)
-			check(`Array.from(document.querySelectorAll('.space-label')).map(el=>el.textContent).join('|') === 'Library|Search|Shared with me|Shared by me'`)
+			check(`document.querySelector('.empty').textContent === 'Shared artifacts will appear here. Share one of yours, or ask someone to share with you.' && document.querySelector('#gallery-content').dataset.galleryReadOnly === 'false' && !document.querySelector('.card-actions')`)
+			check(`Array.from(document.querySelectorAll('.space-label')).map(el=>el.textContent).join('|') === 'Starred|Search|Shared|Activity'`)
 			check(`document.documentElement.scrollWidth <= innerWidth && Array.from(document.querySelectorAll('.gallery-spaces a')).filter(a => a.getClientRects().length).every(a=>a.getBoundingClientRect().width >= 44 && a.getBoundingClientRect().height >= 44)`)
 			check(`Array.from(document.querySelectorAll('.space-label')).filter(el => el.getClientRects().length).every(el=>getComputedStyle(el).visibility === 'visible' && el.scrollWidth <= el.clientWidth && el.scrollHeight <= el.clientHeight)`)
 			if dir := os.Getenv("GALLERY_SCREENSHOT_DIR"); dir != "" {
@@ -147,8 +147,8 @@ func TestGalleryEmptySpacesBrowser(t *testing.T) {
 				require.NoError(t, err)
 				require.NoError(t, os.WriteFile(filepath.Join(dir, fmt.Sprintf("empty-%d-%s.png", width, scheme)), shot, 0644))
 			}
-			visit("/shared-by-me")
-			check(`document.querySelector('.empty').textContent.includes('Share an artifact from its share panel.') && document.querySelector('#gallery-content').dataset.galleryReadOnly === 'false'`)
+			visit("/activity")
+			check(`document.querySelector('.activity-placeholder').textContent.includes('Coming soon') && document.querySelector('#gallery-content').dataset.galleryReadOnly === 'false'`)
 			visit("/")
 			check(`document.querySelector('header') === originalHeader && document.querySelectorAll('.gallery-spaces a').length === 4`)
 		}
@@ -166,5 +166,5 @@ func TestGalleryEmptySpacesBrowser(t *testing.T) {
 	require.NoError(t, in.ro.cfg.Store.DeleteGrant(ctx, in.ownerOne, in.artifactOne, in.ownerTwo))
 	visit("/")
 	visit("/shared")
-	check(`document.querySelectorAll('.card').length === 0 && document.querySelector('.empty').textContent === 'Nothing has been shared with you yet.' && document.querySelectorAll('.gallery-spaces a').length === 4`)
+	check(`document.querySelectorAll('.card').length === 0 && document.querySelector('.empty').textContent === 'Shared artifacts will appear here. Share one of yours, or ask someone to share with you.' && document.querySelectorAll('.gallery-spaces a').length === 4`)
 }

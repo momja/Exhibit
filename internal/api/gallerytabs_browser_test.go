@@ -138,7 +138,7 @@ func TestGalleryMobileTabsBrowser(t *testing.T) {
 				atEnd()
 				check(`(() => { const gap = document.querySelector('.gallery-rail').getBoundingClientRect().top - Array.from(document.querySelectorAll('.card')).at(-1).getBoundingClientRect().bottom; return gap >= 11 && gap <= 24; })()`, "content clearance follows shrinking tabs")
 				// One outgoing artifact exercises a page shorter than the viewport.
-				require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(app.URL+"/shared-by-me"), chromedp.WaitVisible(chromedp.CSS(`.gallery-spaces`))))
+				require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(app.URL+"/"), chromedp.WaitVisible(chromedp.CSS(`.gallery-spaces`))))
 				check(`Math.abs(document.querySelector('.gallery-rail').getBoundingClientRect().bottom - innerHeight) < 1 && document.documentElement.scrollHeight <= innerHeight + 1`, "short galleries keep tabs at the bottom without a spurious scroll range")
 				// iOS rubber-banding shows the screen past the end of the content.
 				// Ending the content above the viewport bottom stands in for that:

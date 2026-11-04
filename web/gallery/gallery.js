@@ -4,7 +4,13 @@ import { eventScope } from './event-scope.js';
 
 export function initializeGallery(root) {
   const events = eventScope();
+  events.on(root, 'click', (event) => {
+    if (event.target.closest('a, button, .card-actions, [data-capability-trigger], .capability-popover')) return;
+    const card = event.target.closest('.card');
+    if (card?.dataset.href) window.location.href = card.dataset.href;
+  });
   const form = root.querySelector('[data-gallery-search]');
+  if (!form) return {suspend() {}, disconnect() { events.disconnect(); }};
   const input = root.querySelector('[data-gallery-query]');
   const clear = root.querySelector('[data-gallery-clear]');
   const searchError = root.querySelector('[data-gallery-search-error]');
@@ -87,11 +93,6 @@ export function initializeGallery(root) {
     (error || searchError).hidden = false;
   });
 
-  events.on(root, 'click', (event) => {
-    if (event.target.closest('a, button, .card-actions, [data-capability-trigger], .capability-popover')) return;
-    const card = event.target.closest('.card');
-    if (card?.dataset.href) window.location.href = card.dataset.href;
-  });
   return {
     suspend() { clearTimeout(timer); revision++; },
     disconnect() { clearTimeout(timer); revision++; events.disconnect(); },
@@ -108,7 +109,7 @@ export function initializeGalleryShortcut() {
     if (!gallery) return;
     event.preventDefault();
     const input = gallery.querySelector('[data-gallery-query]');
-    if (input.getClientRects && !input.getClientRects().length) {
+    if (!input || (input.getClientRects && !input.getClientRects().length)) {
       gallery.querySelector('[data-gallery-space-link][href="/search"]')?.click();
       return;
     }

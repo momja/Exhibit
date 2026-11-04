@@ -380,14 +380,14 @@ func TestASharedArtifactsCardCarriesItsMarkInTheMarkup(t *testing.T) {
 	ro := newTestRouter(t)
 	artifactID := seedShareableArtifact(t, ro, "Tool")
 
-	before := getPage(t, ro, "/")
+	before := getPage(t, ro, "/search")
 	assert.NotContains(t, before, "capability-share",
 		"a private artifact gets no marker; the absence is the signal")
 	assert.NotContains(t, before, "capability-cluster",
 		"sandboxed and private, the card has nothing to report")
 
 	mintLink(t, ro, artifactID, false)
-	after := getPage(t, ro, "/")
+	after := getPage(t, ro, "/search")
 
 	// The trigger renders for sharing alone: no capability glyphs, no
 	// "Sandboxed" label, the link glyph, and a name that says what it opens.

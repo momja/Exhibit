@@ -1,3 +1,4 @@
+import ArtifactStarsController from './artifact-stars-controller.js';
 // One application per document. ES modules run once, including when multiple
 // page scripts import this entry point. Register new shared controllers here.
 import { Application } from '../stimulus/stimulus.js';
@@ -35,3 +36,5 @@ import ScrollChromeController from './scroll-chrome-controller.js';
 application.register('scroll-chrome', ScrollChromeController);
 application.register('relay-host', RelayHostController);
 application.register('connections', ConnectionsController);
+
+application.register('artifact-stars', ArtifactStarsController);

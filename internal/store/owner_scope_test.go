@@ -490,6 +490,10 @@ func TestEveryArtifactScopedMethodTakesAnOwner(t *testing.T) {
 		// row names on it, and nothing else. What keeps that narrow is that it
 		// is a *separate* accessor rather than a wider predicate inside
 		// ownedArtifact, which every mutating query would have inherited.
+		"ArtifactPreferences":       "takes the VIEWER; personal preferences never grant access to the underlying artifact",
+		"SetArtifactStarred":        "takes the VIEWER; writes only that viewer's preferences after a readable-artifact check",
+		"RecordArtifactOpened":      "takes the VIEWER; records only that viewer's opening history after checking access",
+		"ListViewerGallery":         "takes the VIEWER; selects owned and explicitly granted artifacts, including personal stars",
 		"SearchArtifactsReadableBy": "takes the VIEWER; searches only owned artifacts and explicit incoming grants (Exh-im5m)",
 		"GetArtifactReadableBy":     "takes the VIEWER, deliberately not the owner; read-only by construction (av-lrae)",
 		"ListArtifactsSharedWith":   "takes the VIEWER; lists only incoming grants, never widens the owner predicate (Exh-wcxf)",
