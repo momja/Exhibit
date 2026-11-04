@@ -243,8 +243,8 @@ export function loadPageScript(scriptPaths, globals = {}, initial = {}) {
   // Drives a window-level event. pagehide is the one that matters: it is how
   // the chat closes its session when the page is left, and a test cannot
   // close a tab any other way.
-  const dispatchOnWindow = async (type) => {
-    await Promise.all((windowListeners[type] || []).map((fn) => fn({ type })));
+  const dispatchOnWindow = async (type, properties = {}) => {
+    await Promise.all((windowListeners[type] || []).map((fn) => fn({ type, ...properties })));
     await settle();
   };
 

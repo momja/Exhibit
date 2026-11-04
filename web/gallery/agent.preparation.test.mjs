@@ -786,6 +786,125 @@ test('an Activity link observes the live conversation without starting or closin
   assert.equal(page.streams[0].closed, true);
 });
 
+test('sending while an Activity connection loads waits for that conversation', async () => {
+  let finishTicket;
+  const page = await boot(() => json({id: 'wrong-conversation'}), {
+    chatData: {agentLiveSession: 'running-chat'},
+    ticket: () => new Promise(resolve => { finishTicket = resolve; }),
+  });
+  await page.type('Follow up here');
+  await page.tick(300);
+  const sent = page.window.send();
+  await flush();
+  assert.equal(starts(page).length, 0, 'typing and Send must not start a different conversation');
+  assert.equal(prompts(page).length, 0, 'the draft waits for the live connection');
+  assert.equal(page.byId('input').value, 'Follow up here');
+  finishTicket(json({sse_ticket: 'viewer-ticket'}));
+  await sent;
+  assert.equal(prompts(page)[0].path, '/api/agent/sessions/running-chat/prompt');
+  assert.equal(page.streams.length, 1, 'boot and Send share one connection');
+});
+
+test('a failed Activity connection retains the draft and retries the selected conversation', async () => {
+  let attempts = 0;
+  const page = await boot(() => json({id: 'wrong-conversation'}), {
+    chatData: {agentLiveSession: 'running-chat'},
+    ticket: () => ++attempts < 3
+      ? {ok: false, status: 503, json: async () => ({})} : json({sse_ticket: 'viewer-ticket'}),
+  });
+  await page.type('Keep this reply');
+  await page.window.send();
+  assert.equal(starts(page).length, 0);
+  assert.equal(prompts(page).length, 0);
+  assert.equal(page.byId('input').value, 'Keep this reply');
+  await page.window.send();
+  assert.equal(prompts(page)[0].path, '/api/agent/sessions/running-chat/prompt');
+  assert.equal(attempts, 3);
+});
+
+test('a late Activity ticket cannot replace an explicitly continued conversation', async () => {
+  let finishTicket;
+  const page = await boot(body => json({id: body.resume_session_id}), {
+    chatData: {agentLiveSession: 'running-chat'},
+    ticket: () => new Promise(resolve => { finishTicket = resolve; }),
+  });
+  await page.resume('selected-history', 0);
+  finishTicket(json({sse_ticket: 'late-ticket'}));
+  await flush();
+  assert.equal(page.streams.length, 1);
+  await page.type('Continue the selected history');
+  await page.window.send();
+  assert.equal(prompts(page)[0].path, '/api/agent/sessions/selected-history/prompt');
+  assert.equal(deletes(page).length, 0);
+});
+
+test('Activity replies appear once and messages sent from another panel still appear', async () => {
+  const page = await boot(() => json({id: 'wrong-conversation'}), {
+    chatData: {agentLiveSession: 'running-chat'}, ticket: () => json({sse_ticket: 'viewer-ticket'}),
+  });
+  const message = {type: 'message_end', message: {role: 'user', content: 'Follow up'}};
+  const userMessages = () => page.byId('messages').children.filter(message => message.className === 'msg user');
+  await page.type('Follow up');
+  await page.window.send();
+  emit(page, message);
+  assert.equal(userMessages().length, 1);
+  emit(page, {type: 'agent_settled'});
+  // Identical text from another panel is a distinct message, not a duplicate.
+  emit(page, message);
+  assert.equal(userMessages().length, 2);
+});
+
+test('a rejected Activity reply keeps its draft available to retry', async () => {
+  const page = await boot(() => json({id: 'wrong-conversation'}), {
+    chatData: {agentLiveSession: 'running-chat'}, ticket: () => json({sse_ticket: 'viewer-ticket'}),
+    prompt: () => ({ok: false, status: 409, json: async () => ({error: 'Try again shortly.'})}),
+  });
+  await page.type('Preserve this reply');
+  await page.window.send();
+  assert.equal(page.byId('input').value, 'Preserve this reply');
+  assert.equal(page.byId('messages').children.filter(message => message.className === 'msg user').length, 0);
+  assert.equal(errors(page)[0].textContent, 'Try again shortly.');
+});
+
+test('leaving Activity cancels a waiting Send and ignores a late connection ticket', async () => {
+  let finishTicket;
+  const page = await boot(() => json({id: 'wrong-conversation'}), {
+    chatData: {agentLiveSession: 'running-chat'},
+    ticket: () => new Promise(resolve => { finishTicket = resolve; }),
+  });
+  await page.type('Unsent draft');
+  const sent = page.window.send();
+  await page.dispatchOnWindow('pagehide');
+  await sent;
+  finishTicket(json({sse_ticket: 'late-ticket'}));
+  await flush();
+  assert.equal(page.streams.length, 0);
+  assert.equal(starts(page).length, 0);
+  assert.equal(prompts(page).length, 0);
+  assert.equal(deletes(page).length, 0);
+  assert.equal(page.byId('input').value, 'Unsent draft');
+});
+
+test('browser history restoration reconnects Activity and replaces the replayed transcript', async () => {
+  const page = await boot(() => json({id: 'wrong-conversation'}), {
+    chatData: {agentLiveSession: 'running-chat'}, ticket: () => json({sse_ticket: 'viewer-ticket'}),
+  });
+  const replay = {type: 'message_end', message: {role: 'user', content: 'Earlier request'}};
+  emit(page, replay);
+  await page.dispatchOnWindow('pagehide', {persisted: true});
+  await page.dispatchOnWindow('pageshow', {persisted: true});
+  assert.equal(page.streams.length, 2);
+  assert.equal(page.streams[0].closed, true);
+  assert.equal(page.streams[1].closed, false);
+  emit(page, replay);
+  assert.equal(page.byId('messages').children.filter(message => message.className === 'msg user').length, 1);
+  await page.type('Reply after Back');
+  await page.window.send();
+  assert.equal(prompts(page)[0].path, '/api/agent/sessions/running-chat/prompt');
+  assert.equal(starts(page).length, 0);
+  assert.equal(deletes(page).length, 0);
+});
+
 test('opening a saved conversation from Activity never starts or resumes an agent', async () => {
   const page = await boot(() => { throw new Error('must not start'); }, {chatData: {agentConversation: 'true'}});
   assert.equal(starts(page).length, 0);
