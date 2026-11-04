@@ -115,7 +115,7 @@ func TestPlatformModeAgentPageHasNoKeyUI(t *testing.T) {
 
 	for _, absent := range []string{
 		"key-btn", "key-modal", "key-provider", "key-model", "key-secret", "key-thinking",
-		"openKeyModal()", "Bring your own key",
+		"openKeyModal()", "Your key is encrypted on the Exhibit server",
 		"exhibit-mock", "platform-secret-key",
 	} {
 		assert.NotContains(t, body, absent, "platform mode must not render %q", absent)
@@ -137,7 +137,7 @@ func TestBYOKAgentPageRendersKeyUI(t *testing.T) {
 
 	for _, present := range []string{
 		"key-btn", "key-modal", "key-provider", "key-model", "key-secret", "key-thinking",
-		"Bring your own key", "const BYOK = true",
+		"Your key is encrypted on the Exhibit server", "const BYOK = true",
 	} {
 		assert.Contains(t, body, present)
 	}

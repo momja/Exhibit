@@ -83,7 +83,7 @@ func TestGalleryPublicLinkKeepsSpacesAvailable(t *testing.T) {
 			assert.Contains(t, body, `class="space-count">1</span>`)
 		} else {
 			assert.Equal(t, 2, strings.Count(body, `class="space-count">0</span>`))
-			assert.Contains(t, body, "Share an artifact from its share panel.")
+			assert.Contains(t, body, "Open an artifact and choose Share.")
 		}
 	}
 }

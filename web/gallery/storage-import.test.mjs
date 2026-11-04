@@ -47,7 +47,7 @@ for (const kind of ['state', 'assets']) {
     const t = await setup(kind, [conflict(), success()]);
     await t.upload();
     assert.equal(t.prompts.length, 1);
-    assert.match(t.prompts[0], /erase all existing stored/);
+    assert.match(t.prompts[0], /current contents will be permanently replaced/);
     assert.equal(t.calls[1].url, '/api/artifacts/artifact-1/' + kind + '/import?replace=true');
     assert.equal(t.calls[1].options.body, t.file);
     assert.equal(t.status.textContent, 'Imported.');

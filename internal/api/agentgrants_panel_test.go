@@ -148,7 +148,7 @@ func TestAgentGrantsBrowserConnectionInstructionsBeforeIssuing(t *testing.T) {
 					`id="agent-mcp-url-copy"`, `id="agent-mcp-command-copy"`,
 					"Then run /mcp in Claude Code, choose Authenticate, and approve the connection in your browser.",
 					"Other MCP clients connect to the same URL and sign in the same way.",
-					"For clients without browser sign-in", "No agents connected yet.",
+					"Use a token instead", "No agents connected yet.",
 				} {
 					assert.Contains(t, page, text)
 				}

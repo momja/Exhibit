@@ -295,7 +295,10 @@ window.addEventListener('message', function(e) {
   const detail = document.getElementById('capability-warning-detail');
   if (detail && !detail.textContent) {
     const copy = CAPABILITY_COPY[d.capability] || CAPABILITY_COPY_FALLBACK;
-    detail.textContent = copy.detail;
+    const connectedPreview = typeof CONNECTION_PROTECTED === 'boolean' && CONNECTION_PROTECTED;
+    detail.textContent = connectedPreview && d.capability !== 'redirected-origin'
+      ? 'This feature is unavailable while the artifact uses connected accounts or private saved data in Exhibit.'
+      : copy.detail;
     // Most capabilities share the banner's headline ("open it directly to run
     // it"), which is true of every failure the sandbox causes. A capability
     // that opening directly does NOT fix supplies its own rather than leaving
@@ -888,9 +891,9 @@ function explainBlockedOrigin(origin) {
   const headline = document.getElementById('origin-blocked-headline');
   if (headline) {
     headline.textContent = blockedOrigins.length === 1
-      ? 'This tool tried to reach ' + origin + '. Its owner has not allowed that.'
-      : 'This tool tried to reach ' + blockedOrigins.length +
-        ' origins its owner has not allowed.';
+      ? 'This artifact tried to reach ' + origin + '. The owner has not allowed it.'
+      : 'This artifact tried to reach ' + blockedOrigins.length +
+        ' sites the owner has not allowed.';
   }
   const list = document.getElementById('origin-blocked-list');
   if (list) {
@@ -954,31 +957,31 @@ async function refetchSource() {
     });
     if (!r.ok) {
       const txt = await r.text().catch(() => '');
-      st.textContent = '✗ Error: ' + (txt.trim() || r.statusText);
+      st.textContent = 'Couldn’t update: ' + (txt.trim() || r.statusText);
       return;
     }
     const data = await r.json().catch(() => ({}));
     if (data.updated === false) {
-      st.textContent = '✓ Already up to date.';
+      st.textContent = 'Already up to date.';
       return;
     }
     sourceRevision = data.artifact.source_revision;
     const note = refetchNote(data);
     if (!note) {
-      st.textContent = '✓ Updated — reloading…';
+      st.textContent = 'Updated. Reloading…';
       window.location.reload();
       return;
     }
     // Something here needs reading, so the page stays until the user is done
     // with it rather than reloading out from under them.
-    st.textContent = '✓ Updated. ' + note + ' ';
+    st.textContent = 'Updated. ' + note + ' ';
     const reload = document.createElement('button');
     reload.type = 'button';
     reload.textContent = 'Reload';
     reload.addEventListener('click', () => window.location.reload());
     st.appendChild(reload);
   } catch (e) {
-    st.textContent = '✗ Error: ' + e.message;
+    st.textContent = 'Couldn’t update: ' + e.message;
   }
 }
 

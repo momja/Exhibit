@@ -257,18 +257,18 @@ func TestTheCardPutsTheRollbackToThePersonAndKeepsTheEscapeSecondary(t *testing.
 
 	// What is true: which version the conversation was working against, and where
 	// the artifact is now.
-	assert.Contains(t, frag, "last working against <strong>v1</strong>")
+	assert.Contains(t, frag, "last used <strong>v1</strong>")
 	assert.Contains(t, frag, "now at <strong>v2</strong>")
 
 	// The rollback is the primary button, and says what it costs beside it.
-	rollback := `<button type="button" class="btn" data-resume="sess-1" data-rollback="1"><i class="ph ph-arrow-counter-clockwise"></i> Roll back to v1 and continue</button>`
+	rollback := `<button type="button" class="btn" data-resume="sess-1" data-rollback="1"><i class="ph ph-arrow-counter-clockwise"></i> Restore v1 and continue</button>`
 	assert.Contains(t, frag, rollback)
 	assert.Contains(t, frag, "recorded as a new version, so nothing is lost")
 	assert.Contains(t, frag, "undo it from the Versions list")
 
 	// The escape is a plain secondary button — never the primary one — and leaves the
 	// artifact alone.
-	escape := `<button type="button" class="btn btn-sec" data-resume="sess-1" data-rollback="0">Continue without rolling back</button>`
+	escape := `<button type="button" class="btn btn-sec" data-resume="sess-1" data-rollback="0">Continue with current version</button>`
 	assert.Contains(t, frag, escape)
 	assert.Contains(t, frag, "Leaves the artifact as it is now")
 	assert.Contains(t, frag, "reads it again before changing anything")
@@ -298,7 +298,7 @@ func TestTheCardIsANoteWhereAConversationCannotBeContinued(t *testing.T) {
 	require.NoError(t, err)
 
 	frag := getPage(t, r, "/partials/agent-transcript?artifact="+id+"&session=old")
-	assert.Contains(t, frag, "kept before conversations could be continued, so it can only be read")
+	assert.Contains(t, frag, "This older conversation can be read but not continued.")
 	assert.NotContains(t, frag, "data-resume")
 	// It can still be read.
 	assert.Contains(t, frag, `<div class="msg user">hello</div>`)
@@ -310,6 +310,6 @@ func TestTheCardIsANoteOnAnInstanceWithNoAgent(t *testing.T) {
 	keepConversation(t, r, id, "sess-1", "t", piFile)
 
 	frag := getPage(t, r, "/partials/agent-transcript?artifact="+id+"&session=sess-1")
-	assert.Contains(t, frag, "Agent support is off on this server")
+	assert.Contains(t, frag, "The agent is unavailable.")
 	assert.NotContains(t, frag, "data-resume")
 }

@@ -259,7 +259,7 @@ async function approveOrigins(id) {
     method: 'PATCH',
     body: JSON.stringify({network_allowlist: selected})
   });
-  if (!r.ok) { status.textContent = '✗ Failed to update allowlist'; return; }
+  if (!r.ok) { status.textContent = 'Couldn’t update allowed sites.'; return; }
   finishIngest(id);
 }
 

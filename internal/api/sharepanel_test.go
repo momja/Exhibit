@@ -244,9 +244,9 @@ func TestTheFragmentRendersTheSameListTheFullPageDoes(t *testing.T) {
 	fragment := getPage(t, ro, "/partials/share-panel?artifact="+artifactID)
 	page := getPage(t, ro, "/artifacts/"+artifactID)
 	for _, html := range []string{page, fragment} {
-		require.Contains(t, html, "Link Access")
+		require.Contains(t, html, "Public link")
 		require.Contains(t, html, `id="share-add-form"`)
-		assert.Less(t, strings.Index(html, "Link Access"), strings.Index(html, `id="share-add-form"`),
+		assert.Less(t, strings.Index(html, "Public link"), strings.Index(html, `id="share-add-form"`),
 			"the public link appears above the people list on initial render and after refresh")
 	}
 	assert.Contains(t, page, `id="share-add-form" method="post" action="/api/shares"`)
@@ -274,14 +274,14 @@ func TestTheStateModeChoicesTrackSavedMode(t *testing.T) {
 	page := getPage(t, ro, "/artifacts/"+artifactID)
 	assert.Contains(t, page, `data-saved-mode="own"`)
 	assert.Contains(t, page, `id="state-how-it-works">`)
-	assert.Contains(t, page, "What Happens When I Switch?")
-	assert.Contains(t, page, "Everyone can view and update the same saved data. Changes affect everyone.")
-	assert.Contains(t, page, "Public visitors cannot save changes back to your data.")
-	assert.Contains(t, page, "Anyone with the link can view your existing saved data, in either data mode.")
+	assert.Contains(t, page, "What happens when I switch?")
+	assert.Contains(t, page, "People you add can view and update your saved data. Changes affect everyone with access.")
+	assert.Contains(t, page, "Visitors can view your saved data but cannot change it, in either data mode.")
+	assert.Contains(t, page, "Anyone with the link can open this artifact")
 	assert.Contains(t, page, `id="share-close" data-modal-dismiss>Done</button>`)
-	assert.Contains(t, page, "This includes results saved from connected accounts.")
-	assert.Contains(t, page, "Sharing this tool never lets someone use your connected accounts. Each person connects their own accounts.")
-	assert.Contains(t, page, "Shared data includes results this tool saves from connected accounts.")
+	assert.Contains(t, page, "Sharing can expose saved results from connected accounts, but never grants account access.")
+	assert.Contains(t, page, `aria-describedby="share-add-help"`)
+	assert.Contains(t, page, "Review your saved data before sharing.")
 	assert.NotContains(t, page, `data-counter=`)
 	assert.NotContains(t, page, "see how it works")
 	assert.Equal(t, http.StatusOK, patchArtifactStatus(t, ro, artifactID, `{"share_state_mode":"shared"}`))
@@ -313,7 +313,7 @@ func TestThePanelEmbedsTheWidgetWheneverTheLinkExists(t *testing.T) {
 		"a link to an artifact with no widget embeds its default tile")
 	assert.Contains(t, got, `<details class="state-how-it-works" id="share-widget-details">`,
 		"embed controls start collapsed behind a native disclosure")
-	assert.Contains(t, got, "Embed tile</summary>")
+	assert.Contains(t, got, "Embed widget</summary>")
 	assert.Contains(t, got, `/widget`, "the snippet must name the shared-widget route")
 	assert.Contains(t, got, `&lt;iframe`, "the snippet is an iframe, escaped into the value attribute")
 
@@ -351,14 +351,14 @@ func TestTheCardBadgeNamesTheStrongestThingTrue(t *testing.T) {
 			// cluster means network origins (av-uvc6).
 			level: "public", icon: "ph-link-simple", label: "Public link",
 			detail: "3 people can open this artifact. Each keeps their own data. " +
-				"Anyone with its public link can open it and read the owner's saved data.",
+				"Anyone with its public link can open it and read the owner’s saved data, but cannot save changes.",
 		},
 		{
 			name:  "writing the owner's data outranks anyone reading it",
 			a:     store.Artifact{ShareGrantCount: 2, SharePublicLink: link, ShareStateMode: store.ShareStateShared},
 			level: "shared-data", icon: "ph-users-three", label: "Shared data",
-			detail: "2 people can open this artifact, and everyone using it reads and writes " +
-				"one shared copy of its data. Anyone with its public link can open it and read the owner's saved data.",
+			detail: "2 people can open this artifact and view and update the owner’s saved data. " +
+				"Anyone with its public link can open it and read the owner’s saved data, but cannot save changes.",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -391,13 +391,13 @@ func TestASharedArtifactsCardCarriesItsMarkInTheMarkup(t *testing.T) {
 
 	// The trigger renders for sharing alone: no capability glyphs, no
 	// "Sandboxed" label, the link glyph, and a name that says what it opens.
-	assert.Contains(t, after, `<div class="capability-cluster" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-`+artifactID+`" data-capability-trigger aria-label="Sandbox posture and sharing"><span class="capability-glyph capability-share capability-share-public"><i class="ph ph-link-simple"></i></span></div>`)
+	assert.Contains(t, after, `<div class="capability-cluster" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-`+artifactID+`" data-capability-trigger aria-label="Permissions and sharing"><span class="capability-glyph capability-share capability-share-public"><i class="ph ph-link-simple"></i></span></div>`)
 	assert.NotContains(t, after, "Sandboxed")
 
 	// The popover keeps its posture receipt and adds a Sharing section with
 	// the strongest level and every fact that is true.
 	assert.Contains(t, after, "Fully contained")
-	assert.Contains(t, after, `<div class="capability-popover-section"><div class="capability-popover-header">Sharing</div><div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-link-simple"></i></span><div><div class="capability-popover-label">Public link</div><div>Anyone with its public link can open it and read the owner&#39;s saved data.</div></div></div></div>`)
+	assert.Contains(t, after, `<div class="capability-popover-section"><div class="capability-popover-header">Sharing</div><div class="capability-popover-row"><span class="capability-glyph"><i class="ph ph-link-simple"></i></span><div><div class="capability-popover-label">Public link</div><div>Anyone with its public link can open it and read the owner’s saved data, but cannot save changes.</div></div></div></div>`)
 	assert.NotContains(t, after, "share-badge", "the separate badge is gone from the card")
 }
 

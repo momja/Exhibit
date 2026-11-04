@@ -271,7 +271,7 @@ async function save() {
   if (!resp.ok) {
     status.textContent = resp.status === 409
       ? '✗ Source changed elsewhere. Your edits are still here. Copy them before reloading, then compare and retry.'
-      : '✗ Error: ' + (data.error || resp.statusText);
+      : 'Couldn’t save: ' + (data.error || resp.statusText);
     return false;
   }
   document.getElementById('body').dataset.revision = data.artifact?.source_revision;
@@ -305,7 +305,7 @@ async function save() {
       document.getElementById('widget-status').textContent;
     return false;
   }
-  status.textContent = '✓ Saved';
+  status.textContent = 'Saved';
   // If the edited body changed the network footprint, the server re-ran the
   // scan and returned it. Re-run the explicit-approval flow so the user can
   // review/enable new origins — the same gate ingest uses. The allowlist is
@@ -337,7 +337,7 @@ async function forgetBlockedOrigins(status, submitted) {
       method: 'DELETE'
     }).catch(() => null);
     if (!r || !r.ok) {
-      status.textContent = '✗ Saved, but could not forget ' + origin;
+      status.textContent = 'Saved, but couldn’t reset the block on ' + origin + '.';
       return false;
     }
     forgotten = forgotten.filter(o => o !== origin);
@@ -366,7 +366,7 @@ async function approveOrigins() {
     method: 'PATCH',
     body: JSON.stringify({network_allowlist: merged})
   });
-  if (!r.ok) { status.textContent = '✗ Failed to update allowlist'; return; }
+  if (!r.ok) { status.textContent = 'Couldn’t update allowed sites.'; return; }
   applySavedAllowlist(previousAllowlist, merged);
   savedArtifact.allowlist = [...merged];
   Object.assign(savedArtifact, originGroups(merged, savedArtifact.blocked));
@@ -379,7 +379,7 @@ function finishEdit() {
   pendingSourceWarnings = [];
   document.getElementById('source-network-warnings').hidden = false;
   document.getElementById('scan-result').style.display = 'none';
-  document.getElementById('status').textContent = '✓ Saved';
+  document.getElementById('status').textContent = 'Saved';
   editorChanged();
 }
 
@@ -397,13 +397,13 @@ async function deleteArtifact() {
     });
     if (!resp.ok) {
       const txt = await resp.text().catch(() => '');
-      status.textContent = '✗ Error: ' + (txt.trim() || resp.statusText);
+      status.textContent = 'Couldn’t delete the artifact: ' + (txt.trim() || resp.statusText);
       return;
     }
     document.body.dispatchEvent(new CustomEvent('exhibit:editor-exit'));
     window.location.href = '/';
   } catch (e) {
-    status.textContent = '✗ Error: ' + e.message;
+    status.textContent = 'Couldn’t delete the artifact: ' + e.message;
   }
 }
 
@@ -432,7 +432,7 @@ const widgetPanel = (function() {
   function setHasWidget(has) {
     hasWidget = has;
     const summary = document.getElementById('widget-summary-text');
-    if (summary) summary.textContent = has ? 'custom tile' : 'default tile';
+    if (summary) summary.textContent = has ? 'custom' : 'default';
     const label = document.getElementById('widget-generate-label');
     if (label) label.textContent = has ? 'Regenerate' : 'Generate widget';
   }
@@ -464,8 +464,8 @@ const widgetPanel = (function() {
       // is already blocked at render — a fact to report, not a pending
       // approval. The allowlist panel above is where it would be granted.
       status.textContent = (data.unapproved_origins || []).length
-        ? '✓ Saved — but ' + data.unapproved_origins.join(', ') + ' is not on the allowlist and will be blocked.'
-        : '✓ Saved';
+        ? 'Saved. Network access to ' + data.unapproved_origins.join(', ') + ' is blocked. Allow these sites under Permissions.'
+        : 'Saved';
       setHasWidget(true);
       refreshPreview();
       editorChanged();
@@ -493,7 +493,7 @@ const widgetPanel = (function() {
       src.dataset.revision = r.headers.get('X-Widget-Revision');
       setSource('widget-src', '');
       savedWidget = '';
-      status.textContent = '✓ Removed';
+      status.textContent = 'Removed';
       setHasWidget(false);
       refreshPreview();
       editorChanged();
@@ -573,8 +573,8 @@ const widgetPanel = (function() {
             setHasWidget(true);
             refreshPreview();
             finish((ev.unapproved || []).length
-              ? '✓ Generated — but ' + ev.unapproved.join(', ') + ' is not on the allowlist and will be blocked.'
-              : '✓ Generated');
+              ? 'Widget generated. Network access to ' + ev.unapproved.join(', ') + ' is blocked. Allow these sites under Permissions.'
+              : 'Widget generated');
             // One-shot session: the work is done, so don't leave a subprocess
             // alive until the idle reaper gets to it.
             apiFetch('/api/agent/sessions/' + encodeURIComponent(sessionId), {

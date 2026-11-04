@@ -241,7 +241,7 @@ test("a failed forget is reported rather than passed off as a clean save", async
   page.clickRow("forget", BLOCKED);
   await saveButton(page)();
 
-  assert.match(page.byId("status").textContent, /could not forget/,
+  assert.match(page.byId("status").textContent, /couldn’t reset the block on/,
     "the row is already gone from the panel; silence would show it as undecided");
 });
 
@@ -271,5 +271,5 @@ test("the location select ships only when it was touched", async () => {
   await saveButton(touched)();
   const [second] = touched.api.calls.filter((c) => c.method === "PATCH");
   assert.equal(JSON.parse(second.body).geolocation_approved, true);
-  assert.match(touched.byId("security-summary-text").textContent, /location: always allow/);
+  assert.match(touched.byId("security-summary-text").textContent, /1 feature allowed/);
 });

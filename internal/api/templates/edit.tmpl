@@ -62,7 +62,7 @@
         </div>
       </div>
       <div class="security-col">
-        <h3 class="text-sm muted">Capabilities</h3>
+        <h3 class="text-sm muted">Features</h3>
         <label class="row">
           <span class="spacer">Downloads</span>
           <select id="dl-select" class="select">
@@ -217,7 +217,7 @@
        reload (which would drop both editors) and without page JS rebuilding
        markup the partial already owns. */}}
   <details class="details-panel" id="widget-panel">
-    <summary>{{template "panelCaret"}} Card widget — <span id="widget-summary-text">{{if .WidgetSrc}}custom tile{{else}}default tile{{end}}</span></summary>
+    <summary>{{template "panelCaret"}} Card widget — <span id="widget-summary-text">{{if .WidgetSrc}}custom{{else}}default{{end}}</span></summary>
     <div class="panel-body widget-body">
       <div class="widget-preview">
         <div id="widget-preview-slot"
@@ -227,7 +227,9 @@
         <p class="text-sm muted">A read-only preview on this artifact’s library card. It can show saved data; clicking it opens the artifact.</p>
       </div>
       <div class="widget-source">
-        <textarea id="widget-src" data-revision="{{.WidgetRevision}}" spellcheck="false" placeholder="A complete HTML document for the tile. Leave this empty to keep the default tile.">{{.WidgetSrc}}</textarea>
+        <label class="text-sm muted" for="widget-src">Widget HTML</label>
+        <textarea id="widget-src" data-revision="{{.WidgetRevision}}" spellcheck="false" aria-describedby="widget-source-help">{{.WidgetSrc}}</textarea>
+        <p class="text-sm muted" id="widget-source-help">Enter a complete HTML document for the card widget. Leave it empty to use the default.</p>
         {{/* Generate takes no prompt: the button IS the request, and the whole
              instruction lives server-side (agent.GenerateWidgetPrompt, prompts/generate_widget.tmpl
              plus the session's WidgetOnly system prompt), so there is nothing

@@ -24,12 +24,13 @@ const ID = "art-1";
 const OPEN_URL = "/artifacts/art-1/open";
 
 // Loads detail.js with the bootstrap globals its page template renders.
-async function loadDetail({ readOnly = false, responses = [], headline = "" } = {}) {
+async function loadDetail({ readOnly = false, responses = [], headline = "", protectedPreview = false } = {}) {
   const api = recordingApi(responses);
   const capabilitiesChanged = [];
   const page = loadPageScript([], {
     TOKEN: "",
     READ_ONLY: readOnly,
+    CONNECTION_PROTECTED: protectedPreview,
     STATE_WRITABLE: !readOnly,
     SHARED_STATE: false,
     ID,
@@ -262,8 +263,8 @@ test("a blocked redirect replaces the banner headline rather than promising a fi
   });
 
   assert.equal(byId("capability-warning-banner").hidden, false);
-  assert.match(byId("capability-warning-headline").textContent, /redirected to an unapproved origin/);
-  assert.match(byId("capability-warning-detail").textContent, /forwarded the request somewhere else/);
+  assert.match(byId("capability-warning-headline").textContent, /redirected to a site that is not allowed/);
+  assert.match(byId("capability-warning-detail").textContent, /redirected this request to another site/);
   assert.match(byId("capability-warning-detail").textContent, /Network panel/,
     "the devtools Network panel is where a redirect chain is visible; the console is not");
   assert.equal(byId("net-modal").open, false, "the redirect case must never open the prompt");
@@ -321,3 +322,16 @@ for (const dismiss of [false, true]) for (const grant of [false, true]) {
     }
   });
 }
+
+
+test("a connected preview explains unavailable features without prescribing a disabled new tab", async () => {
+  for (const capability of ["camera", "geolocation", "module-worker", "future-feature"]) {
+    const { byId, postFromFrame } = await loadDetail({ protectedPreview: true });
+    await postFromFrame({ __avCapabilityWarning: true, artifactId: ID, capability });
+    assert.match(byId("capability-warning-detail").textContent, /unavailable while the artifact uses connected accounts or private saved data/);
+    assert.doesNotMatch(byId("capability-warning-detail").textContent, /new tab/);
+  }
+  const { byId, postFromFrame } = await loadDetail({ protectedPreview: true });
+  await postFromFrame({ __avCapabilityWarning: true, artifactId: ID, capability: "redirected-origin" });
+  assert.match(byId("capability-warning-detail").textContent, /redirected this request/);
+});

@@ -128,7 +128,7 @@ export default class extends Controller {
   revoke(event) {
     this.action(event, async () => {
       const { connectionId, connectionName } = event.currentTarget.dataset;
-      if (!window.confirm('Disconnect ' + connectionName + '? Tools using this account will lose access. Saved results will remain.')) return;
+      if (!window.confirm('Disconnect ' + connectionName + '? Artifacts using this account will lose access. Saved results will remain.')) return;
       await this.request('/api/connections/' + encodeURIComponent(connectionId), { method: 'DELETE' });
       this.changed('Account disconnected. Saved results remain.');
     });
@@ -144,7 +144,7 @@ export default class extends Controller {
         if (!connection) throw new Error('Choose a current connection.');
         for (const origin of connection.origins) {
           const response = await apiFetch('/api/artifacts/' + encodeURIComponent(this.artifactIdValue) + '/origins', { method: 'POST', body: JSON.stringify({ origin, decision: 'allow', source: 'connection-consent' }) });
-          if (!response.ok) throw new Error('Could not approve the connection origin.');
+          if (!response.ok) throw new Error('Could not allow the account’s service.');
         }
       }
       await this.request(this.artifactPath('/connections'), { method: 'POST', body: JSON.stringify({ connection_id: connectionId }) });

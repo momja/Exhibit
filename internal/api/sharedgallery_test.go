@@ -190,7 +190,7 @@ func TestSharedGalleryRoutesResolveSingleUserOwner(t *testing.T) {
 
 func TestSharedGalleryEmptyStates(t *testing.T) {
 	ro := newTestRouter(t)
-	for _, space := range []struct{ path, message string }{{"shared", "Nothing has been shared with you yet."}, {"shared-by-me", "Share an artifact from its share panel."}} {
+	for _, space := range []struct{ path, message string }{{"shared", "Nothing has been shared with you yet."}, {"shared-by-me", "Open an artifact and choose Share."}} {
 		full := getPage(t, ro, "/"+space.path)
 		fragment := getPage(t, ro, "/partials/gallery-grid/"+space.path)
 		assert.Contains(t, full, space.message)

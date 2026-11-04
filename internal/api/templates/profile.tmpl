@@ -77,6 +77,9 @@
   <h3 class="settings-h3">Connected accounts <span class="muted text-sm">Experimental</span></h3>
   <p class="settings-copy">Choose which artifacts can use your accounts. Account access stays personal when you share an artifact.</p>
   <div class="settings-foot"><a class="btn btn-sec" href="/connections"><i class="ph ph-key" aria-hidden="true"></i> Manage connections</a></div>
+  <details class="settings-note"><summary>Connection limits</summary>
+    <dl class="settings-facts"><dt>Custom connections</dt><dd>{{.Connections.Native}}</dd><dt>Service accounts</dt><dd>{{.Connections.OAuth}}</dd><dt>Managed accounts</dt><dd>{{.Connections.Vendor}}</dd><dt>Scheduled fetches</dt><dd>{{.Connections.Schedules}}</dd></dl>
+  </details>
 </div>
 {{end}}
 

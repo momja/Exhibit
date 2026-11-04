@@ -156,7 +156,7 @@ func TestNewPageModeSwitchBrowser(t *testing.T) {
 			run(chromedp.KeyEvent(kb.Enter), chromedp.WaitVisible(chromedp.CSS(`.cm-editor`)))
 			check(`document.activeElement.dataset.mode === 'paste' && document.querySelector('#snapshot-row').hidden && document.querySelector('#url-field').hidden`)
 			run(chromedp.Click(chromedp.CSS(`#ingest-panel .ingest-foot button`)))
-			check(`document.querySelector('#status').textContent === 'Paste an artifact first.'`)
+			check(`document.querySelector('#status').textContent === 'Paste HTML first.'`)
 			run(chromedp.SendKeys(chromedp.CSS(`#title`), "Saved source"), chromedp.SendKeys(chromedp.CSS(`.cm-content`), "Preserved source"),
 				chromedp.Evaluate[chromedp.Void](`window.originalEditor = document.querySelector('.cm-editor')`),
 				chromedp.Focus(chromedp.CSS(`[data-mode="paste"]`)), chromedp.KeyEvent(kb.Tab), chromedp.KeyEvent(" "))

@@ -291,6 +291,7 @@
 
      Data: sharePanelView (gallery.go). */}}
 {{define "sharePanelBody"}}<div class="share-cols" data-artifact-id="{{.ArtifactID}}">
+  <p class="share-help">Sharing can expose saved results from connected accounts, but never grants account access.</p>
   <section class="share-col">
     <h3 class="text-sm muted">Public link</h3>
     {{/* A toggle, not a create button, because an artifact has exactly one
@@ -305,7 +306,7 @@
       <input type="checkbox" id="share-link-toggle" aria-describedby="share-link-permissions"{{if .Shares.Link}} checked data-share-id="{{.Shares.Link.ID}}"{{end}}>
       <span class="spacer">Anyone with the link can open this artifact</span>
     </label>
-    <p id="share-link-permissions">Visitors see your saved data, including results from connected accounts. They can’t change your saved data or use your accounts. This applies in either data mode.</p>
+    <p id="share-link-permissions">Visitors can view your saved data but cannot change it, in either data mode.</p>
     {{if .Shares.Link}}
     <div class="share-link-row">
       <input type="text" id="share-link-url" class="field" readonly value="{{.Shares.Link.URL}}" aria-label="Public link">
@@ -337,7 +338,6 @@
 
   <section class="share-col">
     <h3 class="text-sm muted">People</h3>
-    <p class="share-help">Sharing this artifact never lets someone use your connected accounts. Each person connects their own accounts.</p>
     {{/* One field taking several names and one submit: "gave friends access,
          dropped the link in the group chat" is one gesture, not three. The
          field confirms existence deliberately — answering "added" for a name
@@ -389,7 +389,7 @@
         </label>
       </div>
     </fieldset>
-    <p class="share-help">Shared data includes results saved from connected accounts. Review it before sharing.</p>
+    <p class="share-help">Review your saved data before sharing.</p>
     <details class="state-how-it-works" id="state-how-it-works">
       <summary><i class="ph ph-caret-right state-how-closed" aria-hidden="true"></i><i class="ph ph-caret-down state-how-open" aria-hidden="true"></i> What happens when I switch?</summary>
       <p><strong>Switch to separate data:</strong> you keep using your saved data. Each person returns to their own previously saved data, or starts empty if they have none. Your shared data is not copied to them.</p>

@@ -29,7 +29,7 @@ func TestNewPageOffersThreeRoutes(t *testing.T) {
 	page := getPage(t, r, "/new")
 
 	assert.Contains(t, page, "<title>Add artifact — Exhibit</title>")
-	assert.Contains(t, page, `<h2>Three ways in.</h2>`)
+	assert.Contains(t, page, `<h2>Add to your library</h2>`)
 
 	assert.Contains(t, page, `<button type="button" class="route is-selected" data-mode="agent" aria-pressed="true" onclick="setMode('agent')">`)
 	assert.Contains(t, page, `<button type="button" class="route" data-mode="paste" aria-pressed="false" onclick="setMode('paste')">`)
@@ -43,7 +43,7 @@ func TestNewPageOffersThreeRoutes(t *testing.T) {
 	assert.NotContains(t, page, `<a class="route" href="/agent">`)
 
 	// The shared app header retains the gallery return and page title.
-	assert.Contains(t, page, `class="app-header-back app-header-back-collapse" href="/" title="Gallery"`)
+	assert.Contains(t, page, `class="app-header-back app-header-back-collapse" href="/" title="Library"`)
 	assert.Contains(t, page, `<h1 class="app-header-title">Add artifact</h1>`)
 }
 
@@ -206,9 +206,9 @@ func TestGalleryEmptyStateLinksToNewPage(t *testing.T) {
 	r := newTestRouter(t)
 	page := getPage(t, r, "/")
 
-	assert.Contains(t, page, `Welcome to Exhibit`)
+	assert.Contains(t, page, `Your library is empty`)
 	assert.Contains(t, page, `href="/new"><i class="ph ph-palette" aria-hidden="true"></i>Create your first artifact`)
-	assert.Contains(t, getPage(t, r, "/partials/gallery-grid"), `Welcome to Exhibit`)
+	assert.Contains(t, getPage(t, r, "/partials/gallery-grid"), `Your library is empty`)
 }
 
 // The 404 page's second action used to point at a /#upload fragment on the
@@ -222,7 +222,7 @@ func TestNotFoundAddArtifactButtonTargetsNewPage(t *testing.T) {
 	page := w.Body.String()
 
 	assert.NotContains(t, page, `href="/#upload"`)
-	assert.Contains(t, page, `<a class="btn btn-sec" href="/new">`)
+	assert.Contains(t, page, `href="/new" aria-label="Add artifact"`)
 
 	req := httptest.NewRequest("GET", "/new", nil)
 	w2 := httptest.NewRecorder()

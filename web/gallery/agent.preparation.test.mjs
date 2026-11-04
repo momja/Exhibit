@@ -50,7 +50,7 @@ test('a provider authentication failure after source preparation appears once wh
   await page.window.send();
   emit(page, {type: 'agent_start'});
   emit(page, {type: 'exhibit_source_prepared'});
-  assert.ok(page.byId('messages').children.some(message => message.textContent === 'Prepared artifact source.'));
+  assert.equal(page.byId('messages').children.some(message => message.textContent === 'Prepared artifact source.'), false);
   const message = {role: 'assistant', stopReason: 'error', content: [],
     errorMessage: '401: {"message":"User not found.","code":401}'};
   emit(page, {type: 'message_start', message});

@@ -61,3 +61,24 @@
 </div>
 </body>
 </html>{{end}}
+
+{{define "loginFailure"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sign-in failed — Exhibit</title>
+<link rel="icon" type="image/svg+xml" href="{{.Favicon}}">
+<link rel="stylesheet" href="{{asset "phosphor/regular.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/tokens.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/components.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/login.css"}}">
+</head>
+<body class="login-page">
+{{template "appHeader" .Header}}
+<div class="login-content"><main class="login">
+  <p class="login-error" role="alert">{{.Error}}</p>
+  <a class="btn login-submit" href="/auth/login">Return to sign in</a>
+</main></div>
+</body>
+</html>{{end}}

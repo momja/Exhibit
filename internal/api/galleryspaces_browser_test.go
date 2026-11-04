@@ -148,7 +148,7 @@ func TestGalleryEmptySpacesBrowser(t *testing.T) {
 				require.NoError(t, os.WriteFile(filepath.Join(dir, fmt.Sprintf("empty-%d-%s.png", width, scheme)), shot, 0644))
 			}
 			visit("/shared-by-me")
-			check(`document.querySelector('.empty').textContent.includes('Share an artifact from its share panel.') && document.querySelector('#gallery-content').dataset.galleryReadOnly === 'false'`)
+			check(`document.querySelector('.empty').textContent.includes('Open an artifact and choose Share.') && document.querySelector('#gallery-content').dataset.galleryReadOnly === 'false'`)
 			visit("/")
 			check(`document.querySelector('header') === originalHeader && document.querySelectorAll('.gallery-spaces a').length === 4`)
 		}

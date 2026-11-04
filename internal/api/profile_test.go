@@ -86,7 +86,7 @@ func TestProfileNamesTheSignedInAccount(t *testing.T) {
 	assert.Contains(t, page, `href="/admin/users"`, "administration remains reachable through Settings on phones")
 	assert.Contains(t, page, "Identity provider",
 		"an account with no password here signs in through the provider, and the page says which")
-	assert.NotContains(t, page, "subject identifier",
+	assert.NotContains(t, page, "account ID",
 		"the fallback note belongs only to a name that actually came from external_id")
 }
 
@@ -125,7 +125,7 @@ func TestProfileFallsBackToTheProviderSubjectWhenThereIsNoEmail(t *testing.T) {
 
 	assert.Contains(t, page, "sub-no-email-9f3c",
 		"with no email the page must still name the account — this section IS the name")
-	assert.Contains(t, page, "subject identifier",
+	assert.Contains(t, page, "account ID",
 		"an opaque identifier offered as 'you' reads as a bug; the same one labelled reads as an answer")
 }
 

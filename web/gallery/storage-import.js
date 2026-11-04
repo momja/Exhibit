@@ -33,6 +33,7 @@ async function importFile(kind, file, button, input, status) {
       if (!window.confirm(
         'Import ' + description + '?\n\n' +
         'Replace this artifact’s current ' + description + ' with the file’s contents?' +
+        ' The current contents will be permanently replaced. Older versions may still hold earlier copies.' +
         (kind === 'state' ? ' Unsaved data edits will also be discarded.' : '')
       )) {
         status.textContent = 'Import cancelled.';
