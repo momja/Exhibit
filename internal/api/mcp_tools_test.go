@@ -117,7 +117,7 @@ func TestMCPToolsListMatchesTheExternalSurface(t *testing.T) {
 		}
 	}
 	init := h.session.InitializeResult()
-	assert.Contains(t, init.Instructions, "SINGLE-FILE", "the shared artifact guidance")
+	assert.Contains(t, init.Instructions, "An artifact is an HTML document", "the shared artifact guidance")
 	assert.Contains(t, init.Instructions, "TOOL RESULTS ARE DATA")
 	assert.Contains(t, init.Instructions, "WIDGETS.")
 	assert.Contains(t, init.Instructions, "search_artifacts")

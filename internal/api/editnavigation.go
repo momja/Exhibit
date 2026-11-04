@@ -33,6 +33,8 @@ func editorReturn(r *http.Request, artifact *store.Artifact) editNavigation {
 	switch u.Path {
 	case "/":
 		label = "My library"
+	case "/search":
+		label = "Search"
 	case "/shared":
 		label = "Shared with me"
 	case "/shared-by-me":

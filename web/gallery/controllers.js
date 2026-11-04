@@ -28,5 +28,10 @@ import GalleryController from './gallery-controller.js';
 import GallerySpaceController from './gallery-space-controller.js';
 application.register('gallery', GalleryController);
 application.register('gallery-space', GallerySpaceController);
+
+import SpaceTabsController from './space-tabs-controller.js';
+application.register('space-tabs', SpaceTabsController);
+import ScrollChromeController from './scroll-chrome-controller.js';
+application.register('scroll-chrome', ScrollChromeController);
 application.register('relay-host', RelayHostController);
 application.register('connections', ConnectionsController);

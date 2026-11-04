@@ -451,6 +451,9 @@ type Store interface {
 	// own artifacts, in the same order and with the same search/paging as
 	// ListArtifacts. Like GetArtifactReadableBy, it includes disabled owners.
 	ListArtifactsSharedWith(ctx context.Context, viewer ViewerID, opts SharedListOptions) ([]*SharedArtifact, error)
+	// SearchArtifactsReadableBy searches owned artifacts and incoming grants in
+	// one stable page. Anonymous links alone do not authorize discovery.
+	SearchArtifactsReadableBy(ctx context.Context, viewer ViewerID, query string, limit, offset int) ([]*SharedArtifact, error)
 	// SharedWithOwners counts incoming artifacts per owner, ordered by display
 	// name then ID. SpaceCounts counts incoming artifacts and owned artifacts
 	// with any share, respectively; neither count depends on list filters.

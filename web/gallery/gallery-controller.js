@@ -2,7 +2,7 @@ import { Controller } from '../stimulus/stimulus.js';
 import { initializeGallery } from './gallery.js';
 import { eventScope } from './event-scope.js';
 
-const spacePaths = new Set(['/', '/shared', '/shared-by-me']);
+const spacePaths = new Set(['/', '/search', '/shared', '/shared-by-me']);
 
 // The controller, header and account island live for the whole document.
 // htmx owns requests, history and markup; this boundary invalidates work that
@@ -64,7 +64,10 @@ export default class extends Controller {
       event.preventDefault();
       return;
     }
-    this.requests.set(ctx, { revision: this.revision, navigation });
+    this.requests.set(ctx, {
+      revision: this.revision, navigation,
+      focusSearch: navigation && path === '/search' && ctx.sourceElement.matches('[data-gallery-space-link]'),
+    });
   }
 
   beforeResponse(event) {
@@ -95,6 +98,13 @@ export default class extends Controller {
     } else {
       this.currentURL = location.pathname + location.search;
       window.scrollTo(0, 0);
+      // A Search-tab click (including the / shortcut) carries its focus intent
+      // through the async swap. History restores keep their own focus context.
+      if (request.focusSearch) {
+        const input = this.element.querySelector('[data-gallery-query]');
+        input.focus({ preventScroll: true });
+        input.select();
+      }
     }
   }
 
