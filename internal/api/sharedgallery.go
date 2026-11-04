@@ -1,68 +1,25 @@
 package api
 
 import (
-	"errors"
 	"net/http"
 	"net/url"
-	"strconv"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/momja/Exhibit/internal/store"
 )
 
-var errGalleryOwner = errors.New("invalid gallery owner")
-
 var sharedGallery = galleryDefinition{
-	ID: "shared-gallery", Title: "Shared with me", PagePath: "/shared", FragmentPath: "/partials/gallery-grid/shared",
-	Select: selectSharedWith, ReadOnly: true,
-	Empty: galleryEmptyState{Message: "Nothing has been shared with you yet."},
+	ID: "shared-gallery", Title: "Shared", PagePath: "/shared", FragmentPath: "/partials/gallery-grid/shared",
+	Description: "Artifacts shared with you and artifacts you’ve shared with others.",
+	Select:      selectAllShared, NoFilters: true,
+	Empty: galleryEmptyState{Message: "Shared artifacts will appear here. Share one of yours, or ask someone to share with you."},
 }
 
-var sharedByGallery = galleryDefinition{
-	ID: "shared-by-me-gallery", Title: "Shared by me", PagePath: "/shared-by-me", FragmentPath: "/partials/gallery-grid/shared-by-me",
-	Filters: store.ListOptions{SharedOnly: true},
-	Empty:   galleryEmptyState{Message: "Nothing shared yet. Share an artifact from its share panel."},
-}
-
-func selectSharedWith(ro *Router, r *http.Request, offset, limit int, query string) ([]galleryCard, url.Values, error) {
-	params := url.Values{}
-	// Preserve requested filters on a transient owner-list failure too.
-	for _, raw := range r.URL.Query()["owner"] {
-		params.Add("owner", raw)
-	}
-	viewer := store.ViewerID(ownerIDFromCtx(r.Context()))
-	owners, err := ro.cfg.Store.SharedWithOwners(r.Context(), viewer)
-	if err != nil {
-		return nil, params, err
-	}
-	allowed := map[int64]bool{}
-	for _, owner := range owners {
-		allowed[owner.ID] = true
-	}
-	var ids []int64
-	params = url.Values{}
-	seen := map[int64]bool{}
-	for _, raw := range r.URL.Query()["owner"] {
-		id, err := strconv.ParseInt(raw, 10, 64)
-		if err != nil || !allowed[id] {
-			return nil, params, errGalleryOwner
-		}
-		if !seen[id] {
-			ids = append(ids, id)
-			params.Add("owner", strconv.FormatInt(id, 10))
-			seen[id] = true
-		}
-	}
-	artifacts, err := ro.cfg.Store.ListArtifactsSharedWith(r.Context(), viewer, store.SharedListOptions{OwnerIDs: ids, Query: query, Offset: offset, Limit: limit})
-	if err != nil {
-		return nil, params, err
-	}
-	var cards []galleryCard
-	for _, a := range artifacts {
-		cards = append(cards, sharedGalleryCard(a, ro.renderURLs(r)))
-	}
-	return cards, params, nil
+func selectAllShared(ro *Router, r *http.Request, offset, limit int, query string) ([]galleryCard, url.Values, error) {
+	viewer := ownerIDFromCtx(r.Context())
+	artifacts, err := ro.cfg.Store.ListViewerGallery(r.Context(), store.ViewerID(viewer), store.ViewerGalleryOptions{Query: query, SharedOnly: true, Limit: limit, Offset: offset})
+	return readableGalleryCards(artifacts, viewer, ro.renderURLs(r)), url.Values{}, err
 }
 
 func sharedGalleryCard(a *store.SharedArtifact, urls renderURLs) galleryCard {

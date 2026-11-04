@@ -1,0 +1,17 @@
+{{define "activityOverview"}}
+<div class="activity-toolbar"><h3>Running agents</h3><a class="btn btn-sec" href="/activity" data-gallery-space-link hx-get="/activity" hx-target="#gallery-content" hx-swap="outerHTML" hx-sync="#gallery-shell:replace"><i class="ph ph-arrow-clockwise" aria-hidden="true"></i>Refresh</a></div>
+{{if .Activity.Running}}<div class="activity-running">{{range .Activity.Running}}{{template "activityItem" .}}{{end}}</div>{{else}}<p class="activity-idle"><i class="ph ph-check-circle" aria-hidden="true"></i>No agents are running right now.</p>{{end}}
+<aside class="activity-placeholder"><i class="ph ph-database" aria-hidden="true"></i><div><strong>Data change history <span>Coming soon</span></strong><p>Artifact versions are recorded below. A detailed audit of saved-data edits, deletions, and other account changes isn’t available yet.</p></div></aside>
+<h3 class="activity-heading">Recent changes</h3>
+{{end}}
+
+{{define "activityItems"}}{{range .Activity.Items}}{{template "activityItem" .}}{{else}}{{if eq .Offset 0}}<p class="empty">No changes yet. Saved artifact versions and agent changes will appear here.</p>{{end}}{{end}}
+{{if or .NextURL .RetryURL}}{{template "galleryMore" .}}{{end}}{{end}}
+
+{{define "activityItem"}}<a class="activity-item" href="{{.URL}}">
+  <span class="activity-icon"><i class="ph {{.Icon}}" aria-hidden="true"></i></span>
+  <div class="activity-detail"><div class="activity-meta"><span>{{.Label}}</span>{{if .Version}}<span class="activity-version">v{{.Version}}</span>{{end}}{{if .When}}<time datetime="{{.WhenISO}}">{{.When}}</time>{{end}}</div>
+    <h4>{{.Title}}</h4><p>{{.Description}}</p>
+    <span class="activity-destination">{{if .Conversation}}Open conversation{{else}}View artifact history{{end}} <i class="ph ph-arrow-up-right" aria-hidden="true"></i></span>
+  </div>
+</a>{{end}}

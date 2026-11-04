@@ -534,49 +534,56 @@ swapped region would repeat its user reload and mount.
 Screenshots after a space switch: [desktop](screenshots/Exh-xw54/01-space-switch-desktop.png)
 and [phone](screenshots/Exh-xw54/02-space-switch-phone.png).
 
-**Spaces and filters** (Exh-2c2e, Exh-gx18): one `gallerySpaces` partial
-lays out Library, Shared with me, and Shared by me as a 208px desktop rail
-at widths of at least 768px, and tabs fixed to the viewport bottom on phones
-(Exh-t9bv; `ui-components.md`). On phones the header and tabs slide away
-while scrolling down and return on the way up (Exh-se4n). Per-viewer counts
-come from `SpaceCounts`, independently of search. All three destinations remain
-available even when both sharing counts are zero. Empty sharing spaces explain
-what belongs there. Phones use the same full labels, wrapping as needed. Tags
-and collections share the desktop rail and appear in the phone filter sheet
-only when choices exist. The existing session gate protects personal galleries.
+**Gallery destinations** (Exh-77m9): `gallerySpaces` renders **Starred,
+Search, Shared, Activity** in the 208px desktop rail and fixed phone tab bar.
+All four remain available when empty. Phone tabs preserve safe-area clearance,
+large-text wrapping, and scroll-chrome behavior. Navigation keeps the app header
+and account island mounted and uses the existing htmx history boundary.
 
-My library and Shared by me accept repeated `?tag=<name>` and
-`?collection=<id>` parameters. Every selected tag and collection is required
-(AND). Unknown, empty, or foreign values return 400; duplicates are removed.
-Collection IDs distinguish collections even when their names are identical.
-The store's `MatchAllFilters` and `CollectionIDs` options provide this selection
-without changing the API's existing any-name-per-axis behavior. Migration 041
-adds reverse membership indexes; query-plan tests guard against scans of
-`artifact_tags` and `artifact_collections`.
+- `/` is Starred: no visible search or filters; last opened first, followed by
+  never-opened stars in stable creation order. Migration 054 stores
+  `artifact_preferences(viewer_id, artifact_id, starred, last_opened_at)`.
+  `PUT /api/artifacts/:id/starred` accepts a strict boolean; the card action
+  menu dispatches `exhibit:star`, the `artifact-stars` controller writes the
+  preference, then dispatches `exhibit:artifacts-changed` for a server-rendered
+  grid refresh. Stars belong to the viewer, including on received artifacts.
+  `artifact-opened.js` records viewer loads through `POST …/opened`, without
+  changing the artifact, its saved data, or its version. Grant revocation removes
+  discoverability immediately, even if a preference row remains.
+- `/search` searches and browses all owned and granted artifacts in one stable,
+  paginated selection. Empty queries browse everything accessible; anonymous
+  links alone never authorize discovery. Owner tags and collections remain as
+  optional filters: every selected value is required; unknown, empty, and
+  foreign values return 400. Tag/collection filters select only artifacts in
+  the viewer's own organization. Filters use the desktop rail or phone sheet,
+  with server-rendered chips and out-of-band hidden-parameter/option updates.
+- `/shared` combines incoming grants and owned artifacts with any outgoing
+  grant or public link. Incoming cards show their owner and personal Star
+  action; file editing and duplication remain owner-only. The count combines
+  incoming and outgoing artifact counts. `/shared-by-me` redirects here,
+  preserving its query; the old fragment endpoint uses the combined selection.
+- `/activity` lists owner-scoped version metadata (origin, description, sequence,
+  timestamp) in 24-row pages without loading bodies or transcript files. Agent
+  changes link to `/agent?artifact=…&conversation=…`, which server-renders the
+  saved conversation in the history pane without starting/resuming a process.
+  Running-session snapshots come from the process manager and link with `live=…`;
+  the agent panel attaches to that session's existing SSE stream. Closing this
+  observer does not stop the original agent. Expired live links fall back to
+  saved history when available. Refresh reloads the activity region. Missing
+  conversations link to artifact history instead. Detailed saved-data and
+  account-change audit events are not stored today; the page labels that gap
+  with a Coming soon placeholder, never fabricated events.
 
-Desktop Collections and Tags sections sit below spaces, with normalized tag
-color dots. Incoming shares show Owners in that same UI instead of private tags
-or collections. On phones, Filter beside search opens a native bottom-sheet
-`dialog`, managed by the registered `filter-sheet` Stimulus controller. Native
-modal focus containment, initial focus, Escape, backdrop and Done dismissal,
-and return focus to Filter share one close path.
+Old `/?q=…`, tag, and collection bookmarks redirect to Search. The `/` keyboard
+shortcut opens Search from another destination and focuses its page-level field.
+Search and star refreshes retain the current query; mutations do not construct
+card markup in JavaScript.
 
-Filter links restart the grid at offset zero in the same htmx sync scope as
-search; filter clicks advance the query revision before htmx handles the click.
-Search parameters, next/retry URLs and `HX-Replace-Url` retain the selection.
-The grid partial renders removable active chips, plus Clear all for multiple
-filters. Successful first-page htmx responses also swap the search's hidden
-parameters and both sets of filter options out of band, using the same Go
-partials as the full page. htmx 4 request settings are explicitly inherited on
-the option containers. Paging only replaces its sentinel, without duplicating
-chips or touching the controls.
-
-Screenshots: [Filters in the desktop rail](screenshots/Exh-gx18/01-filters-desktop.png)
-and [phone filter sheet](screenshots/Exh-gx18/02-filters-phone.png).
-
-Screenshots: [Shared with me](screenshots/Exh-u9b1/01-shared-with-me-desktop.png),
-[phone](screenshots/Exh-u9b1/02-shared-with-me-mobile.png), and
-[Shared by me](screenshots/Exh-u9b1/03-shared-by-me-desktop.png).
+Screenshots: [Starred](screenshots/Exh-77m9/starred-desktop.png),
+[Search](screenshots/Exh-77m9/search-desktop.png),
+[Shared](screenshots/Exh-77m9/shared-desktop.png),
+[Activity](screenshots/Exh-77m9/activity-desktop.png), and
+[phone Activity](screenshots/Exh-77m9/activity-phone.png).
 
 **Reusable UI behavior** (Exh-16ds): Go partials own markup, shared CSS owns style,
 and Stimulus controllers own browser state and lifecycle. Register controllers in
@@ -595,7 +602,7 @@ An outside press only dismisses, never activating the card or control under it
 Keyboard and touch expose the trigger without hover. Links navigate normally;
 event items dispatch their named feature event with data and the visible trigger.
 Duplication listens for `exhibit:duplicate`, then dispatches
-`exhibit:artifacts-changed` after saving to clear search and reset paging through
+`exhibit:artifacts-changed` after saving to retain the query and reset paging through
 the existing htmx form (`artifact-duplication.md`).
 
 **Live widget bounds** (av-1a9m): `gallery-widgets.js` unloads widget documents
@@ -624,11 +631,11 @@ button. `/artifacts/:id/open` uses the same accessor. Recipients write state per
 
 **Edit navigation**: the editor names its return destination, carried in a
 validated `return_to` query parameter. It accepts library spaces and the same
-artifact, defaults to My library, and uses a same-origin referrer for legacy
+artifact, defaults to Search, and uses a same-origin referrer for legacy
 entry links. Its ES module records that answer in the address for reloads and
 bookmarks. Gallery Edit links retain the search and filters; a per-tab scroll
 record and a bounded `visible` count restore up to 480 freshly rendered cards.
-The artifact pill's icon-only squares-four control always opens My library;
+The artifact pill's icon-only star control always opens Starred;
 Edit remains in its action menu.
 
 Save changes stays in the editor. Source and widget writes retain their

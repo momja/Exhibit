@@ -24,7 +24,12 @@ const MODEL_SUGGESTIONS = {
   'exhibit-mock':['exhibit-mock-1']
 };
 
+const chatEl = document.getElementById('pane-chat');
 let sessionId = null;
+// An Activity link observes a session owned by another open agent panel.
+// Closing this observer must not terminate that panel's running work.
+let observingSession = false;
+let observedSessionId = chatEl.dataset?.agentLiveSession || null;
 let eventSource = null;
 let streaming = false;
 const pendingQuestions = new Set();
@@ -273,6 +278,13 @@ let sending = null;
 let leaving = false;
 const preparation = createSessionPreparation({
   async start() {
+    if (observedSessionId) {
+      const id = observedSessionId;
+      const response = await apiFetch('/api/agent/sessions/' + encodeURIComponent(id) + '/ticket', {method: 'POST'});
+      if (!response.ok) throw new Error('Could not connect to this agent. Try again, or return to Activity and refresh.');
+      const data = await response.json();
+      return {id, sse_ticket: data.sse_ticket, observed: true};
+    }
     const body = artifact ? {artifact_id: artifact.id} : {};
     const r = await apiFetch('/api/agent/sessions', {method: 'POST', body: JSON.stringify(body)});
     const d = await r.json().catch(() => ({}));
@@ -284,13 +296,14 @@ const preparation = createSessionPreparation({
     return d;
   },
   close(session) {
+    if (session.observed) return;
     apiFetch('/api/agent/sessions/' + encodeURIComponent(session.id),
       {method: 'DELETE', keepalive: leaving}).catch(() => {});
   }
 });
 const typingPreparation = createTypingPreparation({
   prepare: preparation.prepare,
-  ready: () => keyConfigured && !sessionId && !sending && !switchingConversation && !leaving
+  ready: () => keyConfigured && !sessionId && !observedSessionId && !sending && !switchingConversation && !leaving
     && !document.getElementById('pane-chat').classList.contains('history-open')
 });
 function invalidatePreparation() {
@@ -309,23 +322,32 @@ function setSession(id) {
   updateComposer();
 }
 
-function resetSession() {
+function resetSession({keepObservedSession = false} = {}) {
   invalidatePreparation();
   closeEvents();
-  if (sessionId) { apiFetch('/api/agent/sessions/' + sessionId, {method:'DELETE', keepalive: leaving}).catch(()=>{}); }
+  if (sessionId && !observingSession) { apiFetch('/api/agent/sessions/' + sessionId, {method:'DELETE', keepalive: leaving}).catch(()=>{}); }
+  if (!keepObservedSession) observedSessionId = null;
+  observingSession = false;
   setSession(null);
   setStreaming(false);
 }
-window.addEventListener('pagehide', () => { leaving = true; resetSession(); });
-window.addEventListener('pageshow', () => { leaving = false; });
+window.addEventListener('pagehide', () => { leaving = true; resetSession({keepObservedSession: true}); });
+window.addEventListener('pageshow', (event) => {
+  leaving = false;
+  if (event.persisted && observedSessionId) return ensureSession();
+});
 
 async function ensureSession() {
+  if (leaving) return false;
   if (sessionId) return true;
   const current = lifecycle;
   try {
     const d = await preparation.claim();
     if (!d || current !== lifecycle) return false;
     preparation.release();
+    // Boot and Send may both be waiting for the same Activity connection.
+    if (sessionId === d.id) return true;
+    observingSession = !!d.observed;
     setSession(d.id);
     connectEvents(d.sse_ticket);
     return true;
@@ -360,6 +382,15 @@ function closeEvents() {
 }
 
 function connectEvents(ticket) {
+  if (observingSession) {
+    // Each subscription replays the backlog. Rebuild the observed transcript
+    // from that stream, including after a cached page or lost connection returns.
+    messagesEl.replaceChildren();
+    curAssistantEl = null;
+    thinkingEl = null;
+    toolChips = {};
+    setStreaming(false);
+  }
   const watching = sessionId;
   const source = apiEventSource(
     '/api/agent/sessions/' + encodeURIComponent(watching) + '/events', ticket);
@@ -428,6 +459,14 @@ function handleAgentEvent(ev) {
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
   switch (ev.type) {
+    case 'message_end':
+      if (observingSession && ev.message?.role === 'user') {
+        const content = ev.message.content;
+        const text = typeof content === 'string' ? content
+          : Array.isArray(content) ? content.filter(part => part.type === 'text').map(part => part.text).join('\n') : '';
+        if (text) addMsg('user', text);
+      }
+      break;
     case 'exhibit_questions':
       if (ev.pending) pendingQuestions.add(ev.requestId);
       else pendingQuestions.delete(ev.requestId);
@@ -582,6 +621,8 @@ function handleAgentEvent(ev) {
       setStreaming(false);
       if (ended) addMsg('sys', 'Agent session ended. Your next message starts a new one.');
       closeEvents();
+      observingSession = false;
+      if (observedSessionId === ended) observedSessionId = null;
       setSession(null);
       break;
     }
@@ -679,19 +720,27 @@ async function send() {
     // here would hand it to the model as part of the user's instruction.
     const snippets = acceptedSnippets.map(s => describeSnippet(s.descriptor));
 
-    const bubble = addMsg('user', text);
-    acceptedSnippets.forEach(s => {
-      if (s.thumbUrl) {
-        const img = document.createElement('img');
-        img.className = 'snip-thumb';
-        img.src = s.thumbUrl;
-        bubble.appendChild(img);
-      }
-    });
-    pendingSnippets = pendingSnippets.filter(s => !acceptedSnippets.includes(s));
-    renderSnippetChips();
-    if (inputEl.value.trim() === text) inputEl.value = '';
-    updateComposer();
+    const observed = observingSession;
+    // An observer receives all user messages through SSE, including its own
+    // replies. Only the panel that owns the session needs a local echo.
+    if (!observed) {
+      const bubble = addMsg('user', text);
+      acceptedSnippets.forEach(s => {
+        if (s.thumbUrl) {
+          const img = document.createElement('img');
+          img.className = 'snip-thumb';
+          img.src = s.thumbUrl;
+          bubble.appendChild(img);
+        }
+      });
+    }
+    function clearAcceptedDraft() {
+      pendingSnippets = pendingSnippets.filter(s => !acceptedSnippets.includes(s));
+      renderSnippetChips();
+      if (inputEl.value.trim() === text) inputEl.value = '';
+      updateComposer();
+    }
+    if (!observed) clearAcceptedDraft();
 
     const r = await apiFetch('/api/agent/sessions/' + acceptedSession + '/prompt', {
       method: 'POST',
@@ -701,6 +750,7 @@ async function send() {
       const d = await r.json().catch(() => ({}));
       if (current === lifecycle) addMsg('err', d.error || 'The agent rejected the message.');
     }
+    if (r.ok && observed && current === lifecycle) clearAcceptedDraft();
   } catch (error) {
     if (current === lifecycle) addMsg('err', error.message || 'Could not send the message.');
   } finally {
@@ -839,7 +889,6 @@ function refreshPreview() {
 // server-rendered fragments (agentHistory, agentTranscript) that htmx swaps
 // into #history, so all that is left for script is showing and hiding it, and
 // knowing when there is an artifact to have a history of.
-const chatEl = document.getElementById('pane-chat');
 const historyBtn = document.getElementById('history-btn');
 
 // History is of an artifact, so there is none until the session has one: the
@@ -938,7 +987,9 @@ async function resumeConversation(conversationId, rollbackTo) {
     if (started.id !== sessionId) {
       const previous = sessionId;
       closeEvents();
-      if (previous) apiFetch('/api/agent/sessions/' + previous, {method: 'DELETE'}).catch(() => {});
+      if (previous && !observingSession) apiFetch('/api/agent/sessions/' + previous, {method: 'DELETE'}).catch(() => {});
+      observingSession = false;
+      observedSessionId = null;
       setSession(started.id);
       connectEvents(started.sse_ticket);
     }
@@ -1199,6 +1250,11 @@ function briefToMessage(brief) {
 (async function boot() {
   syncHistoryButton();
   const configured = await refreshKeyStatus();
+  if (chatEl.dataset?.agentConversation === 'true') return;
+  if (observedSessionId) {
+    await ensureSession();
+    return;
+  }
   const brief = takeBrief();
   // A brief only opens a *new* build. In modify mode the session already has a
   // subject, and a brief that somehow survived would ask for a second one.

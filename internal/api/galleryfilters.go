@@ -34,7 +34,7 @@ type galleryFilters struct {
 // of search and the selected space. Incoming shares expose their owners instead.
 func (ro *Router) loadGalleryFilters(r *http.Request, gallery galleryDefinition, grid *galleryGridData) error {
 	// Global search deliberately has no provenance or owner-only filters.
-	if gallery.SearchPage {
+	if gallery.NoFilters {
 		grid.Parameters = url.Values{}
 		return nil
 	}
@@ -74,7 +74,7 @@ func (ro *Router) loadGalleryFilters(r *http.Request, gallery galleryDefinition,
 			grid.Filters.Sections = append(grid.Filters.Sections, section)
 		}
 	}
-	// Incoming owner validation/canonicalization belongs to selectSharedWith.
+	// Read-only selections own their parameter validation.
 	if gallery.ReadOnly {
 		return nil
 	}

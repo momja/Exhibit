@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"net/url"
+	"slices"
 
 	"github.com/momja/Exhibit/internal/store"
 )
@@ -10,27 +11,23 @@ import (
 var searchGallery = galleryDefinition{
 	ID: "search-gallery", Title: "Search", PagePath: "/search", FragmentPath: "/partials/gallery-grid/search",
 	Select: selectSearchResults, SearchPage: true,
-	Empty: galleryEmptyState{Message: "Search your library and artifacts shared with you."},
+	Description: "All your artifacts, including those shared with you.",
+	Empty:       galleryEmptyState{Welcome: true, Message: "Welcome to Exhibit", ActionURL: "/new", ActionLabel: "Create your first artifact"},
 }
 
 func selectSearchResults(ro *Router, r *http.Request, offset, limit int, query string) ([]galleryCard, url.Values, error) {
 	params := url.Values{}
-	if query == "" {
-		return nil, params, nil
+	for _, name := range []string{"tag", "collection"} {
+		for _, value := range r.URL.Query()[name] {
+			if !slices.Contains(params[name], value) {
+				params.Add(name, value)
+			}
+		}
 	}
 	viewer := ownerIDFromCtx(r.Context())
-	artifacts, err := ro.cfg.Store.SearchArtifactsReadableBy(r.Context(), store.ViewerID(viewer), query, limit, offset)
+	artifacts, err := ro.cfg.Store.ListViewerGallery(r.Context(), store.ViewerID(viewer), store.ViewerGalleryOptions{Query: query, Tags: params["tag"], CollectionIDs: params["collection"], Limit: limit, Offset: offset})
 	if err != nil {
 		return nil, params, err
 	}
-	urls := ro.renderURLs(r)
-	var cards []galleryCard
-	for _, a := range artifacts {
-		if a.OwnerID == viewer {
-			cards = append(cards, ownedGalleryCard(a.Artifact, urls))
-		} else {
-			cards = append(cards, sharedGalleryCard(a, urls))
-		}
-	}
-	return cards, params, nil
+	return readableGalleryCards(artifacts, viewer, ro.renderURLs(r)), params, nil
 }

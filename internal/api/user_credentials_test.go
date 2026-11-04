@@ -100,11 +100,11 @@ func TestEachLocalAccountSeesOnlyItsOwnLibrary(t *testing.T) {
 	bobCookie := loginAs(t, ro, "bob@example.test", "bob-long-passphrase")
 
 	// The gallery each one is served.
-	aliceGallery := getWithCookie(t, ro, "/", aliceCookie).Body.String()
+	aliceGallery := getWithCookie(t, ro, "/search", aliceCookie).Body.String()
 	assert.Contains(t, aliceGallery, "Alice&#39;s ledger")
 	assert.NotContains(t, aliceGallery, "Bob&#39;s ledger")
 
-	bobGallery := getWithCookie(t, ro, "/", bobCookie).Body.String()
+	bobGallery := getWithCookie(t, ro, "/search", bobCookie).Body.String()
 	assert.Contains(t, bobGallery, "Bob&#39;s ledger")
 	assert.NotContains(t, bobGallery, "Alice&#39;s ledger")
 

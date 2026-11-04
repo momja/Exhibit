@@ -27,7 +27,7 @@ func TestGalleryWidgetReloadMintsAFreshCredential(t *testing.T) {
 	assert.Equal(t, "no-store", w.Header().Get("Cache-Control"))
 	assert.Equal(t, http.StatusOK, renderGet(t, ro, strings.TrimPrefix(location, "http://render.test")).Code)
 
-	gallery := getPage(t, ro, "/")
+	gallery := getPage(t, ro, "/search")
 	assert.Contains(t, gallery, `data-gallery-widget data-widget-reload="/artifacts/`+id+`/widget/open"`)
 	assert.NotContains(t, getPage(t, ro, "/partials/card-widget?artifact="+id), "data-gallery-widget",
 		"the edit and agent previews keep their existing lifecycle")

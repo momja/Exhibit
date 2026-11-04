@@ -47,7 +47,7 @@ func seedGalleryArtifacts(t *testing.T, ro *Router, count int) {
 func TestGalleryPagesReachEveryArtifactExactlyOnce(t *testing.T) {
 	ro := newTestRouter(t)
 	seedGalleryArtifacts(t, ro, 250)
-	path := "/"
+	path := "/search"
 	var all []string
 	for page := 0; path != ""; page++ {
 		require.Less(t, page, 12, "paging did not terminate")
@@ -71,30 +71,30 @@ func TestGalleryPagesReachEveryArtifactExactlyOnce(t *testing.T) {
 func TestGalleryExactPageHasNoSentinelAndPastEndIsEmpty(t *testing.T) {
 	ro := newTestRouter(t)
 	seedGalleryArtifacts(t, ro, galleryPageSize)
-	ids, next := galleryCardsAndNext(getPage(t, ro, "/"))
+	ids, next := galleryCardsAndNext(getPage(t, ro, "/search"))
 	assert.Len(t, ids, galleryPageSize)
 	assert.Empty(t, next)
-	assert.Empty(t, strings.TrimSpace(getPage(t, ro, "/partials/gallery-grid?offset=24")))
+	assert.Empty(t, strings.TrimSpace(getPage(t, ro, "/partials/gallery-grid/search?offset=24")))
 }
 
 func TestGallerySearchFragmentResetsPagingAndEscapesQuery(t *testing.T) {
 	ro := newTestRouter(t)
 	seedGalleryArtifacts(t, ro, 30)
-	req := httptest.NewRequest(http.MethodGet, "/partials/gallery-grid?q=Artifact", nil)
+	req := httptest.NewRequest(http.MethodGet, "/partials/gallery-grid/search?q=Artifact", nil)
 	w := httptest.NewRecorder()
 	ro.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
 	ids, next := galleryCardsAndNext(w.Body.String())
 	assert.Len(t, ids, galleryPageSize)
-	assert.Equal(t, "/partials/gallery-grid?offset=24&q=Artifact", next)
-	assert.Equal(t, "/?q=Artifact", w.Header().Get("HX-Replace-Url"))
+	assert.Equal(t, "/partials/gallery-grid/search?offset=24&q=Artifact", next)
+	assert.Equal(t, "/search?q=Artifact", w.Header().Get("HX-Replace-Url"))
 	assert.Equal(t, "no-store", w.Header().Get("Cache-Control"))
 	assert.NotContains(t, w.Body.String(), "<html")
-	assert.Contains(t, getPage(t, ro, "/partials/gallery-grid?q=missing"), "No artifacts match your search.")
+	assert.Contains(t, getPage(t, ro, "/partials/gallery-grid/search?q=missing"), "No artifacts match your search.")
 	assert.Equal(t, "/other?offset=24&q=a%26b%3C", (galleryGridData{Query: "a&b<"}).url("/other", 24))
 	// A filtered first page is the same partial the full page embeds.
-	fragment := getPage(t, ro, "/partials/gallery-grid?q=Artifact")
-	assert.Contains(t, normalizePerRender(getPage(t, ro, "/?q=Artifact")), normalizePerRender(fragment))
+	fragment := getPage(t, ro, "/partials/gallery-grid/search?q=Artifact")
+	assert.Contains(t, normalizePerRender(getPage(t, ro, "/search?q=Artifact")), normalizePerRender(fragment))
 }
 
 // The second gallery is deliberately test-only: no new user-facing feature is
@@ -121,7 +121,7 @@ func TestGalleryDefinitionKeepsItsOwnFiltersPathsAndEmptyState(t *testing.T) {
 	assert.Equal(t, "/partials/reading?offset=24&q=Artifact", next)
 	assert.Equal(t, "/reading?q=Artifact", w.Header().Get("HX-Replace-Url"))
 	assert.Contains(t, w.Body.String(), `hx-sync="#reading-gallery:abort"`)
-	assert.NotContains(t, w.Body.String(), "library-gallery")
+	assert.NotContains(t, w.Body.String(), "search-gallery")
 	grid, err := ro.loadGalleryGrid(req, gallery, 24)
 	require.NoError(t, err)
 	assert.Len(t, grid.Cards, 2)
@@ -137,6 +137,10 @@ func TestGalleryDefinitionKeepsItsOwnFiltersPathsAndEmptyState(t *testing.T) {
 
 type unavailableGalleryStore struct{ store.Store }
 
+func (s unavailableGalleryStore) ListViewerGallery(context.Context, store.ViewerID, store.ViewerGalleryOptions) ([]*store.SharedArtifact, error) {
+	return nil, errors.New("private database error")
+}
+
 func (s unavailableGalleryStore) ListArtifacts(context.Context, store.ListOptions) ([]*store.Artifact, error) {
 	return nil, errors.New("private database error")
 }
@@ -145,10 +149,10 @@ func TestGalleryFailedPageHasAnExplicitRetryAtTheSameOffset(t *testing.T) {
 	ro := newTestRouter(t)
 	ro.cfg.Store = unavailableGalleryStore{ro.cfg.Store}
 	w := httptest.NewRecorder()
-	ro.ServeHTTP(w, httptest.NewRequest("GET", "/partials/gallery-grid?offset=48&q=chart", nil))
+	ro.ServeHTTP(w, httptest.NewRequest("GET", "/partials/gallery-grid/search?offset=48&q=chart", nil))
 	require.Equal(t, http.StatusInternalServerError, w.Code)
 	_, next := galleryCardsAndNext(w.Body.String())
-	assert.Equal(t, "/partials/gallery-grid?offset=48&q=chart", next)
+	assert.Equal(t, "/partials/gallery-grid/search?offset=48&q=chart", next)
 	assert.Contains(t, w.Body.String(), `hx-trigger="click"`)
 	assert.NotContains(t, w.Body.String(), "revealed")
 	assert.NotContains(t, w.Body.String(), "private database error")
@@ -159,7 +163,7 @@ func TestGalleryRejectsInvalidOffsets(t *testing.T) {
 	ro := newTestRouter(t)
 	for _, offset := range []string{"-1", "nope", "9223372036854775807", "99999999999999999999"} {
 		w := httptest.NewRecorder()
-		ro.ServeHTTP(w, httptest.NewRequest("GET", "/partials/gallery-grid?offset="+offset, nil))
+		ro.ServeHTTP(w, httptest.NewRequest("GET", "/partials/gallery-grid/search?offset="+offset, nil))
 		assert.Equal(t, http.StatusBadRequest, w.Code, offset)
 	}
 }
