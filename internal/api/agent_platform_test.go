@@ -176,11 +176,11 @@ func TestPlatformModeEnablesWidgetGeneration(t *testing.T) {
 	r := newTestRouter(t)
 	req := httptest.NewRequest("GET", "/", nil)
 
-	// With no agent manager at all, availability is still about pi, in either
-	// mode — the message a user can act on.
+	// With no agent manager, either mode offers manual widget editing.
 	ok, why := r.widgetGenerateAvailability(req)
 	require.False(t, ok)
-	assert.Contains(t, why, "pi binary")
+	assert.Contains(t, why, "The agent is unavailable.")
+	assert.Contains(t, why, "Widget HTML manually")
 
 	r.cfg.Agent = &agent.Manager{}
 	ok, why = r.widgetGenerateAvailability(req)

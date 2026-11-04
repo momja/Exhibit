@@ -53,7 +53,7 @@ test('the page Save persists both documents and stays in the editor', async()=>{
  assert.equal(refreshed,1);
  assert.equal(p.byId('status').textContent,'Saved');
  assert.equal(p.byId('widget-src').dataset.revision,'widget-v2');
- assert.equal(p.byId('widget-summary-text').textContent,'custom tile');
+ assert.equal(p.byId('widget-summary-text').textContent,'custom');
  assert.equal(p.timers.length,0);
  assert.equal(p.window.location.href,undefined);
 });
@@ -173,7 +173,7 @@ test('clearing an existing widget requires explicit removal', async()=>{
  p.byId('widget-src').value='';
  await p.context.save();
  assert.equal(p.api.calls.length,1);
- assert.match(p.byId('status').textContent,/Use Remove/);
+ assert.match(p.byId('status').textContent,/Choose Remove/);
  assert.equal(p.timers.length,0);
 });
 

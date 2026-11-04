@@ -53,7 +53,7 @@ Sources: [network.tmpl](../../internal/api/templates/network.tmpl), [editorigins
 
 ## Editor — `/artifacts/{id}/edit`
 
-Sources: [edit.tmpl](../../internal/api/templates/edit.tmpl), [editnavigation.tmpl](../../internal/api/templates/editnavigation.tmpl), [edit.js](../../web/gallery/edit.js), [state.js](../../web/gallery/state.js), [state-export.js](../../web/gallery/state-export.js), [storage-import.js](../../web/gallery/storage-import.js).
+Sources: [edit.tmpl](../../internal/api/templates/edit.tmpl), [editnavigation.tmpl](../../internal/api/templates/editnavigation.tmpl), [edit.js](../../web/gallery/edit.js), [widget.go](../../internal/api/widget.go), [state.js](../../web/gallery/state.js), [state-export.js](../../web/gallery/state-export.js), [storage-import.js](../../web/gallery/storage-import.js).
 
 - Removed the **Editing artifact** eyebrow and the redundant Title placeholder.
 - Empty source validation says **“HTML source cannot be empty.”**
@@ -94,7 +94,7 @@ Sources: [edit.tmpl](../../internal/api/templates/edit.tmpl), [editnavigation.tm
 - Renamed **Gallery widget** to **Card widget**. Its summary now says **custom/default**, replacing custom tile/default tile.
 - Widget explanation now describes a read-only preview on the library card that can show saved data; clicking opens the artifact.
 - Added a persistent **Widget HTML** label and help below the source field. The helper correctly directs users to **Remove** to use the default widget; it no longer promises that saving an empty custom widget will do that.
-- Empty-widget validation and removal confirmation use **widget** consistently and explain the default-widget outcome.
+- Empty-widget validation and removal confirmation use **widget** consistently and explain the default-widget outcome. The disabled generation tooltip now says the agent is unavailable and offers entering Widget HTML manually, instead of exposing a missing binary diagnostic.
 - Widget save/generation warnings now say network access is blocked and point to **Permissions**, replacing “not on the allowlist.”
 - Shortened the Versions introduction to what a version contains and the fact that restoring adds a version while retaining the current one.
 - Version-preview guidance consistently says **Restore**, replacing the competing “Roll back” name. Shortened its details while preserving the fact that preview edits are discarded.
