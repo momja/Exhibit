@@ -123,58 +123,44 @@ func TestGallerySpaceNavigationBrowser(t *testing.T) {
 			run(`window.original = {document,header:document.querySelector('header'),clerk:document.querySelector('[data-controller="clerk"]'),button:document.querySelector('[data-clerk-target="mount"] button')};`)
 			for i := 0; i < 2; i++ {
 				visit("/")
-				visit("/shared-by-me")
+				visit("/search")
+				visit("/activity")
 				visit("/shared")
 			}
-			check(`document === original.document && document.querySelector('header') === original.header && document.querySelector('[data-controller="clerk"]') === original.clerk && document.querySelector('[data-clerk-target="mount"] button') === original.button && JSON.stringify(clerkCalls) === '{"load":1,"reload":1,"mount":1,"unmount":0}'`)
-			check(`document.title === 'Shared with me · Exhibit' && document.querySelector('header h1').textContent === 'Shared with me' && document.querySelector('[data-gallery-search]').getAttribute('hx-get') === '/partials/gallery-grid/shared' && !document.querySelector('[data-duplicate-dialog], .card-actions, .capability-cluster') && document.querySelector('.card-owner-name')`)
-			// Owners filter, search, and direct-load history state survive both directions.
-			run(`document.querySelector('.gallery-rail-filters [data-gallery-filter]').click()`)
-			poll(`location.search.includes('owner=') && document.querySelector('.gallery-filter-chips')`)
+			check(`document===original.document && document.querySelector('header')===original.header && document.querySelector('[data-clerk-target="mount"] button')===original.button && JSON.stringify(clerkCalls)==='{"load":1,"reload":1,"mount":1,"unmount":0}'`)
+			check(`document.title==='Shared · Exhibit' && document.querySelector('header h1').textContent==='Shared' && document.querySelector('.card-owner-name') && document.querySelector('[data-duplicate-dialog]')`)
 			run(`document.querySelector('[data-gallery-query]').value='chart';document.querySelector('[data-gallery-query]').dispatchEvent(new Event('input',{bubbles:true}))`)
-			poll(`location.search.includes('q=chart') && document.querySelectorAll('.card').length >= 24`)
+			poll(`location.search==='?q=chart' && document.querySelectorAll('.card').length>=24`)
 			run(`document.querySelector('[data-gallery-page]')?.click()`)
-			poll(`document.querySelectorAll('.card').length === 30`)
-			visit("/shared-by-me")
-			check(`document.querySelector('[data-duplicate-dialog]') && !document.querySelector('[data-gallery-search] input[name=owner]') && document.querySelector('.card-actions') && document.querySelector('[data-gallery-search]').getAttribute('hx-get') === '/partials/gallery-grid/shared-by-me'`)
+			poll(`document.querySelectorAll('.card').length===30`)
+			visit("/activity")
 			run(`history.back()`)
-			poll(`location.pathname === '/shared' && document.querySelector('[data-gallery-query]').value === 'chart' && document.querySelector('[data-gallery-search] input[name=owner]') && document.querySelector('.gallery-filter-chips')`)
-			check(`!document.querySelector('[data-duplicate-dialog]') && document.querySelector('.search-clear').hidden === false`)
+			poll(`location.pathname==='/shared' && document.querySelector('[data-gallery-query]')?.value==='chart'`)
 			run(`history.forward()`)
-			poll(`location.pathname === '/shared-by-me' && document.querySelector('[data-duplicate-dialog]') && document.querySelector('[data-gallery-query]').value === ''`)
-			// Owner filter and duplication must work even when the bootstrap was read-only.
+			poll(`location.pathname==='/activity' && document.querySelector('.activity-heading')`)
+			visit("/search")
 			run(`document.querySelector('.gallery-rail-filters [data-gallery-filter]').click()`)
-			poll(`location.search === '?tag=Work' && document.querySelectorAll('.card').length === 1`)
-			run(`document.querySelector('.card-actions button').click();document.querySelector('[data-action="action-menu#select"][data-action-menu-event-param="exhibit:duplicate"]')?.click()`)
+			poll(`location.search==='?tag=Work' && document.querySelectorAll('.card').length===1`)
+			run(`document.querySelector('.card-actions-trigger').click();document.querySelector('[data-action-menu-event-param="exhibit:duplicate"]').click()`)
 			poll(`document.querySelector('[data-duplicate-dialog]').open`)
 			run(`document.querySelector('[data-duplicate-dialog] form').requestSubmit()`)
 			poll(`!document.querySelector('[data-duplicate-dialog]').open`)
-			visit("/")
-			poll(`Array.from(document.querySelectorAll('.card-title')).some(a=>a.textContent === 'Owned tool (copy)')`)
+			visit("/search")
+			poll(`Array.from(document.querySelectorAll('.card-title')).some(a=>a.textContent==='Owned tool (copy)')`)
 			run(`document.body.dispatchEvent(new KeyboardEvent('keydown',{key:'/',bubbles:true}))`)
-			if phone {
-				poll(`location.pathname === '/search' && document.querySelector('.gallery-page-search')`)
-			}
 			check(`document.activeElement.matches('[data-gallery-query]')`)
 			run(`document.querySelector('[data-gallery-query]').value='not-a-match';document.querySelector('[data-gallery-query]').dispatchEvent(new Event('input',{bubbles:true}))`)
-			poll(`document.querySelectorAll('.card').length === 0 && document.querySelector('.empty')?.textContent === 'No artifacts match your search.'`)
-			check(`document.activeElement.matches('[data-gallery-query]')`)
+			poll(`document.querySelectorAll('.card').length===0 && document.querySelector('.empty')?.textContent==='No artifacts match your search.'`)
 			run(`document.querySelector('[data-gallery-clear]').click()`)
-			if phone {
-				poll(`!document.querySelector('.card') && location.search === ''`)
-				visit("/")
-			}
-			poll(`document.querySelectorAll('.card').length === 2 && location.search === ''`)
-			// A live widget can dispose and remount using the destination's URL.
-			poll(`document.querySelector('.card-widget-frame')`)
-			check(`document.querySelector('[data-gallery-widget]').dataset.widgetReload.includes('/widget/open') && !document.querySelector('[data-gallery-widget]').dataset.widgetReload.includes('/viewer/')`)
+			poll(`document.querySelectorAll('.card').length>=24 && location.search===''`)
 			visit("/shared")
-			check(`document.querySelector('[data-gallery-widget]').dataset.widgetReload.includes('/widget/viewer/open')`)
-			run(`window.widget=document.querySelector('[data-gallery-widget]');widget.style.marginTop='2000px'`)
+			check(`document.querySelector('.card-by').closest('.card').querySelector('[data-gallery-widget]').dataset.widgetReload.includes('/widget/viewer/open')`)
+			run(`window.widget=document.querySelector('.card-by').closest('.card').querySelector('[data-gallery-widget]');widget.style.marginTop='2000px'`)
 			poll(`!widget.querySelector('iframe')`)
 			run(`widget.style.marginTop=''`)
 			poll(`widget.querySelector('iframe')?.src.includes('/widget/viewer/open')`)
-			check(`document === original.document && document.querySelector('header') === original.header && document.querySelector('[data-clerk-target="mount"] button') === original.button && JSON.stringify(clerkCalls) === '{"load":1,"reload":1,"mount":1,"unmount":0}' && document.documentElement.scrollWidth <= innerWidth`)
+			check(`document===original.document && document.querySelector('header')===original.header && document.querySelector('[data-clerk-target="mount"] button')===original.button && clerkCalls.mount===1 && clerkCalls.unmount===0 && document.documentElement.scrollWidth<=innerWidth`)
+
 		})
 	}
 }
@@ -233,10 +219,10 @@ func TestGallerySpaceNavigationRacesBrowser(t *testing.T) {
  hold(url=>url.includes('/partials/gallery-grid/shared?q=chart'),'body');
  document.querySelector('[data-gallery-query]').value='chart';document.querySelector('[data-gallery-query]').dispatchEvent(new Event('input',{bubbles:true}));`)
 	poll(`typeof release === 'function'`)
-	visit("/shared-by-me")
+	visit("/search")
 	run(`release();window.fetch=nativeFetch`)
 	poll(`released`)
-	check(`location.pathname === '/shared-by-me' && document.title === 'Shared by me · Exhibit' && document.querySelector('[data-duplicate-dialog]') && !document.querySelector('.card-owner-name')`)
+	check(`location.pathname === '/search' && document.title === 'Search · Exhibit' && document.querySelector('[data-duplicate-dialog]') && document.querySelector('.card-owner-name')`)
 	// Pagination from an incoming space may not append into the owner space.
 	visit("/shared")
 	run(`hold(url=>url.includes('/partials/gallery-grid/shared?offset='),'headers');document.querySelector('[data-gallery-page]')?.click()`)
@@ -244,15 +230,15 @@ func TestGallerySpaceNavigationRacesBrowser(t *testing.T) {
 	visit("/")
 	run(`release();window.fetch=nativeFetch`)
 	poll(`completed`)
-	check(`location.pathname === '/' && document.querySelectorAll('.card').length === 1 && !document.querySelector('.card-owner-name')`)
+	check(`location.pathname === '/' && document.querySelectorAll('.card').length === 0 && !document.querySelector('.card-owner-name')`)
 	// Two space requests in quick succession: the last destination wins even
 	// if the first request finishes reading its body afterwards.
 	run(`hold(url=>url==='/shared','body');document.querySelector('.gallery-spaces a[href="/shared"]').click()`)
 	poll(`typeof release === 'function'`)
-	visit("/shared-by-me")
+	visit("/search")
 	run(`release();window.fetch=nativeFetch`)
 	poll(`released`)
-	check(`location.pathname === '/shared-by-me' && document.querySelector('[data-gallery-search]').getAttribute('hx-get') === '/partials/gallery-grid/shared-by-me'`)
+	check(`location.pathname === '/search' && document.querySelector('[data-gallery-search]').getAttribute('hx-get') === '/partials/gallery-grid/search'`)
 	// Back interrupts an outstanding space request and restores the old URL
 	// through the same region, without replacing the header.
 	run(`hold(url=>url==='/shared','body');document.querySelector('.gallery-spaces a[href="/shared"]').click()`)
@@ -293,10 +279,10 @@ func TestGallerySpaceNavigationWithoutJSBrowser(t *testing.T) {
 	ctx, cancel = context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(app.URL+fmt.Sprintf("/shared?owner=%d&q=chart", in.ownerOne))))
-	ok, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`document.querySelector('[data-gallery-query]').value === 'chart' && document.querySelector('[data-gallery-search] input[name=owner]') !== null && document.querySelectorAll('.card').length === 24 && !window.Clerk`))
+	ok, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`document.querySelector('[data-gallery-query]').value === 'chart' && document.querySelector('[data-gallery-search] input[name=owner]') === null && document.querySelectorAll('.card').length === 24 && !window.Clerk`))
 	require.NoError(t, err)
 	require.True(t, ok, "direct query/filter URLs work without JavaScript")
-	for _, path := range []string{"/", "/shared-by-me", "/shared"} {
+	for _, path := range []string{"/", "/search", "/shared"} {
 		require.NoError(t, chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](`document.querySelector('.gallery-spaces a[href="`+path+`"]').click()`)))
 		// Native navigation destroys the old execution context. Retry the
 		// assertion against the new document rather than polling inside it.

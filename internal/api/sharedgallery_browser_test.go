@@ -33,7 +33,7 @@ func TestSharedGalleryRecipientBrowser(t *testing.T) {
 		chromedp.Navigate(app.URL+"/shared"),
 		chromedp.WaitVisible(chromedp.CSS(`.card-title`)),
 	))
-	correct, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`document.querySelectorAll('.card').length === 1 && document.querySelector('.card-owner-name').textContent === 'one@example.test' && !document.querySelector('.card-actions, .capability-cluster, [data-duplicate-dialog]')`))
+	correct, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`document.querySelectorAll('.card').length === 1 && document.querySelector('.card-owner-name').textContent === 'one@example.test' && !document.querySelector('.card .capability-cluster, .card a[href*="/edit"]')`))
 	require.NoError(t, err)
 	require.True(t, correct)
 	require.NoError(t, chromedp.Do(ctx,
@@ -46,8 +46,10 @@ func TestSharedGalleryRecipientBrowser(t *testing.T) {
 	require.NoError(t, in.ro.cfg.Store.DeleteGrant(context.Background(), in.ownerOne, in.granted, in.ownerTwo))
 	require.NoError(t, chromedp.Do(ctx,
 		chromedp.Navigate(app.URL+"/shared"),
-		chromedp.Poll[chromedp.Void](`document.querySelectorAll('.card').length === 0 && document.body.textContent.includes('Nothing has been shared with you yet.')`),
+		chromedp.WaitVisible(chromedp.CSS(`.empty`)),
+		chromedp.Poll[chromedp.Void](`document.querySelectorAll('.card').length === 0 && document.body.textContent.includes('Shared artifacts will appear here.')`),
 		chromedp.Navigate(app.URL+"/artifacts/"+in.granted),
+		chromedp.WaitVisible(chromedp.CSS(`.exhibit-404`)),
 		chromedp.Poll[chromedp.Void](`!document.querySelector('iframe') && !document.body.textContent.includes('`+ownerOneTitle+`')`),
 	))
 }

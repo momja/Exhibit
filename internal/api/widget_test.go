@@ -160,7 +160,7 @@ func TestGalleryCardRendersWidgetOrDefaultTile(t *testing.T) {
 	plain := createTestArtifact(t, r, "Mortgage Calculator")
 	require.Equal(t, http.StatusOK, putWidgetReq(t, r, withWidget, "<b>42 km</b>").Code)
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest("GET", "/search", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)

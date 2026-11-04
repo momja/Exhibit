@@ -8,6 +8,11 @@ func (s *SQLiteStore) SearchArtifactsReadableBy(ctx context.Context, viewer View
 }
 
 func readableSearchQuery(viewer ViewerID, query string, limit, offset int) (string, []any) {
+	statement, args := readableSearchBase(viewer, query)
+	return artifactListPage(statement, args, limit, offset)
+}
+
+func readableSearchBase(viewer ViewerID, query string) (string, []any) {
 	// Build the accessible set from indexed ownership and recipient lookups.
 	// UNION deduplicates self-grants before applying a single ordered page.
 	statement := `SELECT ` + artifactColsA + `, COALESCE(u.email, ''), COALESCE(u.external_id, '')
@@ -20,5 +25,5 @@ func readableSearchQuery(viewer ViewerID, query string, limit, offset int) (stri
 		statement += ` AND a.rowid IN (SELECT rowid FROM artifacts_fts WHERE artifacts_fts MATCH ?)`
 		args = append(args, match)
 	}
-	return artifactListPage(statement, args, limit, offset)
+	return statement, args
 }

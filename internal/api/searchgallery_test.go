@@ -47,7 +47,7 @@ func TestSearchGalleryAccessibleCards(t *testing.T) {
 	// A shared card keeps the recipient's widget/state identity and has no
 	// owner actions or capability controls, even beside editable owned cards.
 	shared := in.get(t, "/search?q="+url.QueryEscape(ownerOneTitle), in.cookieTwo).Body.String()
-	for _, forbidden := range []string{`data-controller="action-menu"`, `data-capability-trigger`, `/edit?`} {
+	for _, forbidden := range []string{`data-capability-trigger`, `/edit?`} {
 		assert.NotContains(t, shared, forbidden)
 	}
 	assert.Contains(t, shared, `class="card-owner-name">one@example.test`)
@@ -72,9 +72,10 @@ func TestSearchGalleryAccessibleCards(t *testing.T) {
 	for _, path := range []string{"/search", "/partials/gallery-grid/search?q=%20%20"} {
 		page := in.get(t, path, in.cookieTwo)
 		cards, next := galleryCardsAndNext(page.Body.String())
-		assert.Empty(t, cards)
-		assert.Empty(t, next)
-		assert.Contains(t, page.Body.String(), "Search your Gallery and artifacts shared with you.")
+		assert.Len(t, cards, galleryPageSize)
+		assert.NotEmpty(t, next)
+		assert.NotContains(t, page.Body.String(), private)
+		assert.NotContains(t, page.Body.String(), public)
 	}
 	assert.Contains(t, in.get(t, "/search?q=notfound", in.cookieTwo).Body.String(), "No artifacts match your search.")
 	for _, offset := range []string{"-1", "bad"} {
@@ -84,7 +85,7 @@ func TestSearchGalleryAccessibleCards(t *testing.T) {
 
 type unavailableSearchStore struct{ store.Store }
 
-func (s unavailableSearchStore) SearchArtifactsReadableBy(context.Context, store.ViewerID, string, int, int) ([]*store.SharedArtifact, error) {
+func (s unavailableSearchStore) ListViewerGallery(context.Context, store.ViewerID, store.ViewerGalleryOptions) ([]*store.SharedArtifact, error) {
 	return nil, errors.New("private search database failure")
 }
 

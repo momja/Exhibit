@@ -25,6 +25,9 @@ const MODEL_SUGGESTIONS = {
 };
 
 let sessionId = null;
+// An Activity link observes a session owned by another open agent panel.
+// Closing this observer must not terminate that panel's running work.
+let observingSession = false;
 let eventSource = null;
 let streaming = false;
 const pendingQuestions = new Set();
@@ -312,7 +315,8 @@ function setSession(id) {
 function resetSession() {
   invalidatePreparation();
   closeEvents();
-  if (sessionId) { apiFetch('/api/agent/sessions/' + sessionId, {method:'DELETE', keepalive: leaving}).catch(()=>{}); }
+  if (sessionId && !observingSession) { apiFetch('/api/agent/sessions/' + sessionId, {method:'DELETE', keepalive: leaving}).catch(()=>{}); }
+  observingSession = false;
   setSession(null);
   setStreaming(false);
 }
@@ -326,6 +330,7 @@ async function ensureSession() {
     const d = await preparation.claim();
     if (!d || current !== lifecycle) return false;
     preparation.release();
+    observingSession = false;
     setSession(d.id);
     connectEvents(d.sse_ticket);
     return true;
@@ -428,6 +433,14 @@ function handleAgentEvent(ev) {
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
   switch (ev.type) {
+    case 'message_end':
+      if (observingSession && ev.message?.role === 'user') {
+        const content = ev.message.content;
+        const text = typeof content === 'string' ? content
+          : Array.isArray(content) ? content.filter(part => part.type === 'text').map(part => part.text).join('\n') : '';
+        if (text) addMsg('user', text);
+      }
+      break;
     case 'exhibit_questions':
       if (ev.pending) pendingQuestions.add(ev.requestId);
       else pendingQuestions.delete(ev.requestId);
@@ -580,6 +593,7 @@ function handleAgentEvent(ev) {
       setStreaming(false);
       if (ended) addMsg('sys', 'Agent session ended. Your next message starts a new one.');
       closeEvents();
+      observingSession = false;
       setSession(null);
       break;
     }
@@ -936,7 +950,8 @@ async function resumeConversation(conversationId, rollbackTo) {
     if (started.id !== sessionId) {
       const previous = sessionId;
       closeEvents();
-      if (previous) apiFetch('/api/agent/sessions/' + previous, {method: 'DELETE'}).catch(() => {});
+      if (previous && !observingSession) apiFetch('/api/agent/sessions/' + previous, {method: 'DELETE'}).catch(() => {});
+      observingSession = false;
       setSession(started.id);
       connectEvents(started.sse_ticket);
     }
@@ -1197,6 +1212,20 @@ function briefToMessage(brief) {
 (async function boot() {
   syncHistoryButton();
   const configured = await refreshKeyStatus();
+  if (chatEl.dataset?.agentConversation === 'true') return;
+  const live = chatEl.dataset?.agentLiveSession;
+  if (live) {
+    try {
+      const response = await apiFetch('/api/agent/sessions/' + encodeURIComponent(live) + '/ticket', {method: 'POST'});
+      if (!response.ok) throw new Error('This agent is no longer available. Return to Activity and refresh.');
+      const data = await response.json();
+      if (leaving) return;
+      observingSession = true;
+      setSession(live);
+      connectEvents(data.sse_ticket);
+    } catch (error) { addMsg('err', error.message); }
+    return;
+  }
   const brief = takeBrief();
   // A brief only opens a *new* build. In modify mode the session already has a
   // subject, and a brief that somehow survived would ask for a second one.

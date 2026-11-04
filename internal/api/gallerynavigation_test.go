@@ -13,10 +13,13 @@ import (
 
 func TestGallerySpaceFragments(t *testing.T) {
 	in := newGrantedInstance(t)
-	for _, gallery := range []galleryDefinition{libraryGallery, searchGallery, sharedGallery, sharedByGallery} {
+	for _, gallery := range []galleryDefinition{starredGallery, searchGallery, sharedGallery, activityGallery} {
 		for _, history := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/history=%t", gallery.ID, history), func(t *testing.T) {
-				path := gallery.PagePath + "?q=absent"
+				path := gallery.PagePath
+				if !gallery.HideSearch {
+					path += "?q=absent"
+				}
 				r := httptest.NewRequest("GET", path, nil)
 				r.AddCookie(in.cookieTwo)
 				r.Header.Set("HX-Request", "true")
@@ -34,10 +37,14 @@ func TestGallerySpaceFragments(t *testing.T) {
 				}
 				assert.Contains(t, body, `hx-history-elt data-gallery-target="space"`)
 				assert.Contains(t, body, `hx-swap-oob="outerHTML:#gallery-search-region"`)
-				assert.Contains(t, body, `hx-get="`+gallery.FragmentPath+`"`)
+				if !gallery.Activity {
+					assert.Contains(t, body, `hx-get="`+gallery.FragmentPath+`"`)
+				}
 				assert.Contains(t, body, `href="`+gallery.PagePath+`" aria-current="page"`)
 				assert.Contains(t, body, fmt.Sprintf(`data-gallery-read-only="%t"`, gallery.ReadOnly))
-				assert.Contains(t, body, `value="absent"`)
+				if !gallery.HideSearch {
+					assert.Contains(t, body, `value="absent"`)
+				}
 				assert.Equal(t, "no-store", w.Header().Get("Cache-Control"))
 				if gallery.ReadOnly {
 					assert.NotContains(t, body, "data-duplicate-dialog")
@@ -55,7 +62,7 @@ func TestGallerySpaceFragments(t *testing.T) {
 
 func TestGallerySpaceFragmentExpiredSession(t *testing.T) {
 	in := newGrantedInstance(t)
-	for _, path := range []string{"/", "/search", "/shared", "/shared-by-me"} {
+	for _, path := range []string{"/", "/search", "/shared", "/activity"} {
 		r := httptest.NewRequest("GET", path, nil)
 		r.Header.Set("HX-Request", "true")
 		r.Header.Set("HX-Target", "div#gallery-content")

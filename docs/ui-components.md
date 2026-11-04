@@ -45,9 +45,12 @@ status. An optional `TitleIcon` decorates the page title.
 visually hidden at 600px and below. Accessible names and tooltips remain.
 `Primary` selects the primary button style. The editor's `SaveEditor` flag
 retains its existing `data-save-editor` binding and unsaved-changes workflow.
-Desktop gallery search and the mobile filter trigger live in
-`galleryHeaderSearch`. Mobile search lives on the dedicated `/search` page,
-using the same `gallerySearch` partial and gallery controller.
+Search lives on `/search` at every width, using the shared `gallerySearch`
+partial and gallery controller. The filter trigger lives in `galleryHeaderSearch`.
+Starred has no visible search or filters; Activity owns its context feed.
+The four destinations are Starred, Search, Shared, and Activity. The registered
+`artifact-stars` controller handles personal Star/Unstar menu events, then asks
+htmx to refresh the server-rendered cards through `exhibit:artifacts-changed`.
 
 `.app-header` and its child classes in `components.css` own the layout, including
 when the bar is nested inside a gallery controller. The baseline is the

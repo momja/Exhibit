@@ -5,7 +5,7 @@ import { loadPageScript, permissionDialog } from './testdom.mjs';
 const asset = name => fileURLToPath(new URL('../../internal/api/assets/gallery/' + name, import.meta.url));
 const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
 const json = body => ({ok: true, status: 201, json: async () => body});
-async function boot(start, {prompt = () => json({}), restore = () => json({}), ticket = () => json({}), byok = false} = {}) {
+async function boot(start, {prompt = () => json({}), restore = () => json({}), ticket = () => json({}), byok = false, chatData = {}} = {}) {
   const calls = [];
   const streams = [];
   const timers = new Map();
@@ -29,6 +29,8 @@ async function boot(start, {prompt = () => json({}), restore = () => json({}), t
     matchMedia: () => ({matches: false, addEventListener() {}}),
     CustomEvent: class { constructor(type) { this.type = type; } },
   });
+  Object.assign(page.byId('pane-chat').dataset, chatData);
+  if (chatData.agentConversation) page.byId('pane-chat').classList.add('history-open');
   const {resumeConversation} = await page.loadModule(asset('agent.js'), ['resumeConversation']);
   await flush();
   const tick = async delay => {
@@ -767,4 +769,26 @@ test('late rollback cannot detach a newer attach to the same historical session 
   await page.window.send();
   assert.equal(prompts(page)[0].path, '/api/agent/sessions/same-conversation/prompt');
   assert.equal(deletes(page).length, 0);
+});
+
+
+test('an Activity link observes the live conversation without starting or closing its process', async () => {
+  const page = await boot(() => { throw new Error('must not start'); }, {
+    chatData: {agentLiveSession: 'running-chat'}, ticket: () => json({sse_ticket: 'viewer-ticket'}),
+  });
+  assert.equal(starts(page).length, 0);
+  assert.equal(page.calls.filter(call => call.path === '/api/agent/sessions/running-chat/ticket').length, 1);
+  assert.equal(page.streams.length, 1);
+  emit(page, {type: 'message_end', message: {role: 'user', content: [{type: 'text', text: 'Make the chart green'}]}});
+  assert.ok(page.byId('messages').children.some(message => message.className === 'msg user' && message.textContent === 'Make the chart green'));
+  await page.dispatchOnWindow('pagehide');
+  assert.equal(deletes(page).length, 0, 'leaving the Activity observer must not stop running work');
+  assert.equal(page.streams[0].closed, true);
+});
+
+test('opening a saved conversation from Activity never starts or resumes an agent', async () => {
+  const page = await boot(() => { throw new Error('must not start'); }, {chatData: {agentConversation: 'true'}});
+  assert.equal(starts(page).length, 0);
+  assert.equal(page.streams.length, 0);
+  assert.ok(page.byId('pane-chat').classList.contains('history-open'));
 });

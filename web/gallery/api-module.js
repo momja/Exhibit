@@ -15,7 +15,7 @@ export function apiStateFetch(path, options) {
 // Viewer resources belong to the signed-in person even on a received artifact.
 // Keep this narrow: it does not confer permission to edit somebody else's file.
 export function viewerFetch(path, options = {}) {
-  if (!/^\/api\/(?:connections(?:\/|$)|artifacts\/[^/]+\/(?:relay(?:-grant|-schedules)?|connections|connection-data|agent-connections|connection-requests)(?:\/|$))/.test(path)) {
+  if (!/^\/api\/(?:connections(?:\/|$)|artifacts\/[^/]+\/(?:starred|opened|relay(?:-grant|-schedules)?|connections|connection-data|agent-connections|connection-requests)(?:\/|$))/.test(path)) {
     throw new Error('This is not a viewer resource.');
   }
   const headers = new Headers(options.headers);
