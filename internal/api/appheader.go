@@ -37,7 +37,7 @@ type appHeaderAction struct {
 func galleryHeader(grid galleryGridData, isAdmin bool, clerk *clerkView) appHeaderView {
 	title := grid.Title
 	if title == "" {
-		title = "Gallery"
+		title = "Library"
 	}
 	header := appHeaderView{
 		Title: title, HideTitle: true, Logo: template.HTML(exhibitLogoSVG),
@@ -55,7 +55,7 @@ func galleryHeader(grid galleryGridData, isAdmin bool, clerk *clerkView) appHead
 }
 
 func subpageHeader(title string) appHeaderView {
-	return appHeaderView{Title: title, Back: &appHeaderBack{URL: "/", Label: "Gallery", CollapseLabel: true}}
+	return appHeaderView{Title: title, Back: &appHeaderBack{URL: "/", Label: "Library", CollapseLabel: true}}
 }
 
 func editorHeader(id string, navigation editNavigation) appHeaderView {

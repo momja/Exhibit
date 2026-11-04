@@ -161,7 +161,7 @@ export default class extends Controller {
 
   clearData(event) {
     this.action(event, async () => {
-      if (!window.confirm('Clear this artifact’s saved data? This also clears saved version data when you own the artifact. Connection grants and network approvals stay in place. Open pages may still hold copies.')) return;
+      if (!window.confirm('Permanently clear saved data for this artifact? If you own it, this also clears data in saved versions; otherwise, it clears your saved data. This cannot be undone. Account and network permissions stay unchanged. Open pages may still hold copies.')) return;
       await this.request(this.artifactPath('/connection-data'), { method: 'DELETE' });
       this.changed('Saved data cleared.');
     });

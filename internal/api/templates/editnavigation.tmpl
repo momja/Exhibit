@@ -1,6 +1,6 @@
 {{define "editorLeaveDialog"}}<dialog class="modal-dialog modal-wide editor-leave-dialog" data-unsaved-changes-target="dialog" data-controller="modal" data-action="modal:before-close->unsaved-changes#beforeClose modal:closed->unsaved-changes#closed" aria-labelledby="editor-leave-title">
   <h2 id="editor-leave-title">Save changes before leaving?</h2>
-  <p>Your unsaved edits will be discarded if you leave without saving. Changes already saved stay saved.</p>
+  <p>Your unsaved edits will be discarded if you leave without saving.</p>
   <div class="modal-actions">
     <button type="button" class="btn btn-sec" data-keep-editing autofocus data-modal-dismiss>Keep editing</button>
     <button type="button" class="btn btn-sec" data-action="unsaved-changes#discard">Discard changes</button>

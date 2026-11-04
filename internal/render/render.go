@@ -568,7 +568,7 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'")
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusForbidden)
-		_, _ = fmt.Fprintf(w, `<!doctype html><html><head><meta charset="utf-8"><title>Open through Exhibit</title></head><body><h1>Open this connected app through Exhibit</h1><p>Use its isolated preview to access connected accounts and private saved data.</p><p><a href="%s/artifacts/%s">Return to the app</a></p></body></html>`, stdhtml.EscapeString(strings.TrimSuffix(rd.cfg.AppOrigin, "/")), stdhtml.EscapeString(url.PathEscape(a.ID)))
+		_, _ = fmt.Fprintf(w, `<!doctype html><html><head><meta charset="utf-8"><title>Open through Exhibit</title></head><body><h1>Open this artifact in Exhibit</h1><p>Connected accounts and private saved data are available in the Exhibit preview.</p><p><a href="%s/artifacts/%s">Open in Exhibit</a></p></body></html>`, stdhtml.EscapeString(strings.TrimSuffix(rd.cfg.AppOrigin, "/")), stdhtml.EscapeString(url.PathEscape(a.ID)))
 		return
 	}
 	rc, err := rd.cfg.Blob.Get(r.Context(), doc.blobID)

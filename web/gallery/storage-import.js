@@ -29,12 +29,11 @@ async function importFile(kind, file, button, input, status) {
     let response = await apiFetch(url, options);
     let failure = response.ok ? null : await response.json().catch(() => null);
     if (response.status === 409 && failure?.confirmation_required) {
-      const description = kind === 'state' ? 'stored state' : 'stored assets';
+      const description = kind === 'state' ? 'saved data' : 'stored assets';
       if (!window.confirm(
         'Import ' + description + '?\n\n' +
-        'This will erase all existing ' + description + ' for this artifact and replace it with the file’s data.' +
-        (kind === 'state' ? ' Unsaved edits in the state inspector will also be discarded.' : '') +
-        '\n\nContinue only if you understand that the existing data will be erased.'
+        'Replace this artifact’s current ' + description + ' with the file’s contents?' +
+        (kind === 'state' ? ' Unsaved data edits will also be discarded.' : '')
       )) {
         status.textContent = 'Import cancelled.';
         return;

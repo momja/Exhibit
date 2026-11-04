@@ -450,3 +450,5 @@ button.banner-action{background:none;border:0;padding:0;font:inherit;cursor:poin
   .modal-dialog .modal-error,.modal-dialog [data-permission-status]{font-size:var(--text-secondary);line-height:1.5;overflow-wrap:anywhere}
   .modal-dialog .modal-actions .btn{font-size:var(--text-secondary);white-space:normal;overflow-wrap:anywhere;max-width:100%}
 }
+
+.action-menu-help{display:block;max-width:220px;margin-top:4px;font-size:11px;line-height:1.4;color:var(--color-muted)}

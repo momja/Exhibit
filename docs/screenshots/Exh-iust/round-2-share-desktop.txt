@@ -1,0 +1,30 @@
+Sandboxed.
+ Share artifact
+Public link
+Anyone with the link can open this artifact
+
+Visitors see your saved data, including results from connected accounts. They can’t change your saved data or use your accounts. This applies in either data mode.
+
+People
+
+Sharing this artifact never lets someone use your connected accounts. Each person connects their own accounts.
+
+Add people
+
+Enter existing Exhibit usernames or emails, separated by commas.
+
+Give access
+
+Not shared with anyone yet.
+
+Saved data for people you add
+Saved data for people you add
+Separate data
+Each person uses their own saved data. Changes affect only them.
+Shared data
+People you add can view and update your saved data. Changes affect everyone with access.
+
+Shared data includes results saved from connected accounts. Review it before sharing.
+
+What happens when I switch?
+Done

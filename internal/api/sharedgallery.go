@@ -22,7 +22,7 @@ var sharedGallery = galleryDefinition{
 var sharedByGallery = galleryDefinition{
 	ID: "shared-by-me-gallery", Title: "Shared by me", PagePath: "/shared-by-me", FragmentPath: "/partials/gallery-grid/shared-by-me",
 	Filters: store.ListOptions{SharedOnly: true},
-	Empty:   galleryEmptyState{Message: "Nothing shared yet. Share an artifact from its share panel."},
+	Empty:   galleryEmptyState{Message: "You haven’t shared any artifacts yet. Open an artifact and choose Share."},
 }
 
 func selectSharedWith(ro *Router, r *http.Request, offset, limit int, query string) ([]galleryCard, url.Values, error) {

@@ -189,14 +189,10 @@ function renderSecurityPanel() {
   ({blocked, unapproved} = originGroups(allowlist, savedArtifact.blocked, forgotten));
   document.body.dispatchEvent(new CustomEvent('exhibit:origin-draft-changed'));
 
+  const allowedFeatures = [downloadsApproved, clipboardApproved, linksApproved, cameraApproved, microphoneApproved, geolocationApproved].filter(Boolean).length;
   document.getElementById('security-summary-text').textContent =
-    allowlist.length + (allowlist.length === 1 ? ' origin' : ' origins') +
-    ' · downloads: ' + (downloadsApproved ? 'always allow' : 'ask first') +
-    ' · clipboard: ' + (clipboardApproved ? 'always allow' : 'ask first') +
-    ' · links: ' + (linksApproved ? 'always allow' : 'ask first') +
-    ' · camera: ' + (cameraApproved ? 'always allow' : 'ask first') +
-    ' · microphone: ' + (microphoneApproved ? 'always allow' : 'ask first') +
-    ' · location: ' + (geolocationApproved ? 'always allow' : 'ask first');
+    '· ' + allowlist.length + (allowlist.length === 1 ? ' site' : ' sites') +
+    ' · ' + allowedFeatures + (allowedFeatures === 1 ? ' feature allowed' : ' features allowed');
   editorChanged();
 }
 
@@ -247,7 +243,7 @@ async function save() {
   const title = document.getElementById('title').value.trim();
   const body  = document.getElementById('body').value;
   const status = document.getElementById('status');
-  if (!body.trim()) { status.textContent = 'Body cannot be empty.'; return false; }
+  if (!body.trim()) { status.textContent = 'HTML source cannot be empty.'; return false; }
   status.textContent = 'Saving…';
   document.getElementById('scan-result').style.display = 'none';
   document.getElementById('source-network-warnings').hidden = false;
@@ -392,7 +388,7 @@ function esc(s) {
 }
 
 async function deleteArtifact() {
-  if (!confirm('Are you sure you want to delete this artifact? The action cannot be reversed and all data will be lost.')) return;
+  if (!confirm('Delete “' + TITLE + '”? Its versions, saved data, and share links will be deleted. This cannot be undone.')) return;
   const status = document.getElementById('status');
   status.textContent = 'Deleting…';
   try {
@@ -520,7 +516,7 @@ const widgetPanel = (function() {
       const generationBuffer = src.value;
       generateBtn.disabled = true;
       saveBtn.disabled = true;
-      status.textContent = 'Generating… the agent is reading the artifact and writing its tile.';
+      status.textContent = 'Generating widget…';
 
       let events = null, timer = null;
       function finish(message) {

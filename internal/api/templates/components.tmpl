@@ -44,9 +44,9 @@
      its popups and restore tab stay outside the transformed pill. */}}
 {{define "floatingAppHeader"}}<header class="app-header-floating" data-app-header data-controller="floating-header">
 <div class="pip" id="pip" role="toolbar" aria-label="Artifact controls">
-  <a class="pip-btn" href="/" aria-label="My library" title="My library"><i class="ph ph-squares-four" aria-hidden="true"></i></a>
+  <a class="pip-btn" href="/" aria-label="Library" title="Library"><i class="ph ph-squares-four" aria-hidden="true"></i></a>
   <span class="pip-sep"></span>
-  <button type="button" class="pip-grip" id="pip-grip" title="Drag to move" aria-label="Move controls. Drag them, or use the arrow keys. Past the left or right edge puts them away."></button>
+  <button type="button" class="pip-grip" id="pip-grip" title="Drag to move" aria-label="Move controls by dragging or using the arrow keys. Move past either side to hide them."></button>
   {{/* The posture button opens the info card and summarizes the cluster (Exh-ghuv). The mark is an htmx
        target (av-mf1x): after a runtime origin approval the prompt fires
        exhibit:capabilities-changed on <body>, and the mark and the receipt in
@@ -106,12 +106,12 @@
        drift apart. */}}
   {{if not .ReadOnly}}
   <a href="/artifacts/{{.ID}}/edit"><i class="ph ph-pencil-simple" aria-hidden="true"></i> Edit</a>
-  <a href="/agent?artifact={{.ID}}"><i class="ph ph-robot" aria-hidden="true"></i> Modify with agent</a>
+  <a href="/agent?artifact={{.ID}}"><i class="ph ph-robot" aria-hidden="true"></i> Edit with agent</a>
   {{/* The portable copy (av-vnkt): one file with every stored payload folded
        back in, depending on no origin and no running instance. A plain link,
        because the response is an attachment — no JS, and it works from the
        page a visitor is already on. */}}
-  <a href="/api/artifacts/{{.ID}}/export" download title="Downloads this tool and its assets, without its saved data or connected accounts"><i class="ph ph-download-simple" aria-hidden="true"></i> Download file</a>
+  <a href="/api/artifacts/{{.ID}}/export" download title="Downloads this artifact and its assets, without saved data or connected accounts"><i class="ph ph-download-simple" aria-hidden="true"></i> <span>Download HTML<small class="action-menu-help">Includes assets. No saved data or account access.</small></span></a>
   {{if .SourceURL}}<button type="button" onclick="refetchSource()"><i class="ph ph-arrow-clockwise" aria-hidden="true"></i> Update from source</button>{{end}}
   {{end}}
   <hr>

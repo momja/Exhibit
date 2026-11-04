@@ -30,21 +30,18 @@
     <img class="exhibit-404__frame" src="{{.LogoImage}}" width="293" height="363" alt="">
     <figcaption class="exhibit-404__label">
       <span class="exhibit-404__label-kicker">NOT ON VIEW</span>
-      <span class="exhibit-404__label-title">Untitled (Artifact Not Found)</span>
-      <span class="exhibit-404__label-medium">n.d. — HTML, CSS, JavaScript</span>
-      <span class="exhibit-404__label-note">Deaccessioned from the collection</span>
+
     </figcaption>
   </figure>
   <div class="exhibit-404__copy">
     <p class="exhibit-404__eyebrow">ERROR 404</p>
-    <h2 class="exhibit-404__headline">Nothing hanging here.</h2>
-    <p class="exhibit-404__body">The artifact you&#39;re looking for isn&#39;t in this collection. It may have been deleted — or the link arrived slightly bent.</p>
-    <p class="exhibit-404__path"><span class="exhibit-404__path-label">REQUESTED</span> <code>{{.RequestedPath}}</code></p>
+    <h2 class="exhibit-404__headline">Page not found</h2>
+    <p class="exhibit-404__body">This page may have moved or been deleted. Check the link or search your library.</p>
+    <details class="exhibit-404__path"><summary>Technical details</summary><code>{{.RequestedPath}}</code></details>
     <div class="exhibit-404__actions">
-      <a class="btn" href="/"><i class="ph ph-arrow-left"></i> Back to the gallery</a>
+      <a class="btn" href="/"><i class="ph ph-arrow-left"></i> Back to library</a>
       {{/* Ingest is its own page now (av-qo0j) — this used to point at a
            /#upload fragment on the gallery index that no longer exists. */}}
-      <a class="btn btn-sec" href="/new"><i class="ph ph-plus"></i> Add an artifact</a>
     </div>
     {{/* A plain GET form to the gallery index, which already reads ?q= and
          runs it through the FTS5 search — no JS, and the same query the

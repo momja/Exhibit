@@ -174,3 +174,8 @@ input.state-input{max-width:340px}
 .tag-create .btn{align-self:flex-start;margin-top:8px}
 .tag-error{color:var(--color-danger-hover);margin-top:8px}
 
+
+/* Transfer help stays beside the action it explains, including on phones. */
+.storage-transfers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-6);margin:var(--space-6) 0}
+.storage-transfers p{margin-top:var(--space-3);line-height:1.5}
+@media(max-width:640px){.storage-transfers{grid-template-columns:1fr}.storage-transfers .btn{width:100%}}
