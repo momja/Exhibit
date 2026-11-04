@@ -229,7 +229,7 @@
       <div class="widget-source">
         <label class="text-sm muted" for="widget-src">Widget HTML</label>
         <textarea id="widget-src" data-revision="{{.WidgetRevision}}" spellcheck="false" aria-describedby="widget-source-help">{{.WidgetSrc}}</textarea>
-        <p class="text-sm muted" id="widget-source-help">Enter a complete HTML document for the card widget. Leave it empty to use the default.</p>
+        <p class="text-sm muted" id="widget-source-help">Enter a complete HTML document for the card widget. To use the default widget instead, choose Remove.</p>
         {{/* Generate takes no prompt: the button IS the request, and the whole
              instruction lives server-side (agent.GenerateWidgetPrompt, prompts/generate_widget.tmpl
              plus the session's WidgetOnly system prompt), so there is nothing

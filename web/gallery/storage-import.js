@@ -51,7 +51,7 @@ async function importFile(kind, file, button, input, status) {
       document.body.dispatchEvent(new Event('exhibit:assets-changed'));
     }
   } catch (error) {
-    status.textContent = 'Could not import ' + kind + ': ' + error.message;
+    status.textContent = 'Could not import ' + (kind === 'state' ? 'saved data' : 'assets') + ': ' + error.message;
     status.classList.add('error');
   } finally {
     input.value = '';

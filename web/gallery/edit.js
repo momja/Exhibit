@@ -442,7 +442,7 @@ const widgetPanel = (function() {
     const body = submitted.trim();
     if (!body) {
       if (!hasWidget) { savedWidget = submitted; return true; }
-      status.textContent = '✗ Widget source cannot be empty. Use Remove to restore the default tile.';
+      status.textContent = '✗ Widget HTML cannot be empty. Choose Remove to use the default widget.';
       return false;
     }
     status.textContent = 'Saving…';
@@ -477,7 +477,7 @@ const widgetPanel = (function() {
   }
 
   removeBtn.addEventListener('click', async function() {
-    if (!confirm('Remove this artifact’s widget? Its card falls back to the default tile.')) return;
+    if (!confirm('Remove this artifact’s custom widget? Its library card will use the default widget.')) return;
     status.textContent = 'Removing…';
     try {
       const r = await apiFetch('/api/artifacts/' + ID + '/widget', {
