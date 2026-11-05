@@ -208,3 +208,7 @@ The bounded fresh Opus31 live coverage addendum failed without its assigned repo
 **2026-11-05T16:32:31Z**
 
 User now requests10/10 ONLY for edit tags UI after Claude reset. Continue same worktree/PR273 stack; narrow the new council to Tags section and Edit tag sheet, with seven categories independently light/dark and two joint10 passes on unchanged UI. Preserve broader9 scores and incomplete coverage as history, do not resume broad addendum. New focused baseline32 on42c94eb1/aa7 with validationc115; no app changes yet. No recurring tasks remain.
+
+**2026-11-05T16:50:15Z**
+
+Focused baseline32 Opus completed all16actual Tags/sheet renders, scores7.5–9.5 (workflow7.5 boththemes), not10. Saved report/status/table. Concrete blockers: misplaced add error/emptyAdd dead end; unstated library-wide tag edit scope; custom selection vsfocus ambiguity; desktop badge/dot overlap; distant/unannounced field validation; ragged phone row/actions; rawhex names/dark dots/utility emphasis and native Delete/footer order. Sol32 still active at last actual check: same32 peer results withheld, source/build remains frozen. Planned response saved, no UI edits yet; apply only after both independent reviews finish.
