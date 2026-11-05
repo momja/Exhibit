@@ -1,4 +1,4 @@
-# Current parent-only checkpoint: Opus31 live coverage addendum
+# Current parent-only checkpoint: coverage follow-up stopped by Claude quota
 
 Production is unchanged:42c94eb1cb12a74108885cc1cbb7aaf7d11f5721, assets aa7a00afd7a2,
 stacked on PR273 ab0135c902559d5912deec420947d6ab3cbdbcf6.
@@ -27,7 +27,7 @@ Original Opus quota failure remains no-score in attempts history. Original provi
 failure did not count as a pass. New post-reset report read current same31 peer
 NEVER; its own report records this independence.
 
-A FRESH, bounded, read-only Opus LIVE COVERAGE ADDENDUM is now RUNNING:
+The fresh, bounded, read-only Opus LIVE COVERAGE ADDENDUM FAILED WITHOUT REPORT:
 node:delegated-task:command%3Amcp%3A77879691-97b1-4203-b1da-d57eb27f78e1%3Adelegate-task%3AExh-zrjo-r31-opus-live-coverage-addendum-pr273
 clientRequestId Exh-zrjo-r31-opus-live-coverage-addendum-pr273.
 Unique report round-31-opus-live-coverage-addendum.md; actual launch saved in
@@ -38,7 +38,19 @@ continue through childThreadId/t3_thread_send. This is evidence completion on
 same app, not another claimed passing round or an app change. Reassess all14
 numbers honestly after actual live matrix, reduce if observations warrant it.
 
-Wait for terminal notification, then task_status and actual addendum. Verify
+Actual task_status failed: Claude API rate limit reached. Try again later.
+Public activity396/397 says five-hour limit resets15:50UTC Nov5; epoch1793893800
+verified. No assigned report or reassessed14table was produced. Status/quota/
+sanitized public partial activity/unavailable.md saved under round-31-opus-live-
+coverage-*. Partial progress includes all40 empty renders and much of the main
+matrix, but no final independent verdict or restoration receipt. Parent browser
+status listed no surviving tabs. Never infer a completed report from partial work.
+
+No further retry or timer is scheduled. list_scheduled_tasks is empty. Do not
+launch a quota retry before actual15:50UTC availability, and do not invent a new
+unbounded automation loop. On a later continuation, inspect this latest checkpoint,
+dedupe actual tasks and finish only unresolved coverage with a fresh task; preserve
+all original scores/results. Do not duplicate Sol31 or repeat passing suites. Verify
 actual own resized/visually inspected72 route pairs (4 populated+5 empty ×4widths
 ×2schemes), all8 tag-sheet pairs, missing native tools/popover/Embed and all6
 shortShare first/reopen/realwheel/lowerpaint pairs. Frame-only/metadata-only

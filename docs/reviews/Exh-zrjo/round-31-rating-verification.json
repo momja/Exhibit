@@ -117,16 +117,26 @@
   ],
   "jointPassingStreak": 1,
   "completed": false,
-  "qualification": "pending_required_live_coverage_addendum",
+  "qualification": "pending_required_live_coverage_provider_quota",
   "coverageAddendum": {
     "taskId": "node:delegated-task:command%3Amcp%3A77879691-97b1-4203-b1da-d57eb27f78e1%3Adelegate-task%3AExh-zrjo-r31-opus-live-coverage-addendum-pr273",
     "clientRequestId": "Exh-zrjo-r31-opus-live-coverage-addendum-pr273",
-    "status": "running",
+    "status": "failed_without_report",
     "launchRecord": "round-31-opus-live-coverage-launch.json",
     "safeBrief": "round-31-opus-live-coverage-brief.md plus followup-round-31-brief.md",
     "report": "round-31-opus-live-coverage-addendum.md",
     "reason": "Original actual scores pass but mandatory actual-render matrix is incomplete; frame measurements and unviewed resizes do not qualify.",
-    "recordedAt": "2026-11-05T11:08:57.710033+00:00"
+    "recordedAt": "2026-11-05T11:08:57.710033+00:00",
+    "taskStatus": "failed",
+    "error": "Claude API rate limit reached. Try again later.",
+    "resetAt": "2026-11-05T15:50:00.000Z",
+    "reportProduced": false,
+    "scoresProduced": false,
+    "statusRecord": "round-31-opus-live-coverage-status.json",
+    "quotaRecord": "round-31-opus-live-coverage-quota.json",
+    "partialActivityRecord": "round-31-opus-live-coverage-partial.json",
+    "failureRecord": "round-31-opus-live-coverage-unavailable.md",
+    "retryScheduled": false
   },
   "recordedAt": "2026-11-05T11:08:57.710033+00:00"
 }
