@@ -4,7 +4,7 @@ Work: [Exh-iust](../../.tickets/Exh-iust.md). Full [page-by-page change inventor
 
 ## Acceptance rule
 
-Independent Codex Sol (`gpt-6.1-sol`) and Claude Opus (`claude-opus-5-5`) reviewers rate necessity, clarity, and hierarchy from 0–10. Both reviewers must give every category at least 8 in two consecutive rounds. Reviewers were asked to preserve security and irreversible-action meaning and to report concrete objections rather than raise scores to meet the target.
+Independent Codex Sol (`gpt-6.1-sol`) and Codex Astra (`gpt-6-astra`) reviewers rate necessity, clarity, and hierarchy from 0–10. The user explicitly substituted Astra for unavailable Claude Opus on 2026-11-05; earlier Opus reviews remain historical evidence. Both reviewers must give every category at least 8 in two consecutive rounds. Reviewers were asked to preserve security and irreversible-action meaning and to report concrete objections rather than raise scores to meet the target.
 
 Scope: Library/search/empty states; creation; viewer/editor/agent; sharing, duplication, downloads and permissions; Settings, connected agents and connections; sign-in, OAuth and error/render fallback pages. User artifact content, API-only errors, operator diagnostics, developer docs and agent system prompts are excluded.
 
@@ -20,7 +20,7 @@ Scope: Library/search/empty states; creation; viewer/editor/agent; sharing, dupl
 | 3 / 3b retry | `5ba4f080` | Opus | — | — | — | Provider usage limit; no review |
 | 4 | `0a2cb08e` | Sol | 8 | 8 | 8 | Second consecutive Sol pass |
 
-**Joint council acceptance is pending, not passed.** Opus's last actual scores remain 7/7/8 from round 2. Its round-3 attempts returned no scores. The raw provider notice states: “You've hit your 5-hour limit · resets 7:50pm (UTC)” on 2026-11-04. T3 marked both attempts failed. No alternative-model rating is substituted for the requested Opus review.
+**Joint Sol/Astra council acceptance is pending.** Earlier Sol-only passes do not count as joint acceptance. Opus's last actual scores were 7/7/8 from round 2; later Opus attempts returned no scores due a provider quota on 2026-11-04. On 2026-11-05 the user authorized replacing Opus with Codex Astra. Fresh joint Sol/Astra rounds now determine acceptance.
 
 Reports: [Sol R1](round-1-sol.md), [Opus R1](round-1-opus.md), [Sol R2](round-2-sol.md), [Opus R2](round-2-opus.md), [Sol R3](round-3-sol.md), [Sol R4](round-4-sol.md).
 
@@ -44,7 +44,7 @@ Suffixes: `exh-iust-copy-sol-r1`, `exh-iust-copy-opus-r1`, `exh-iust-copy-sol-r2
 
 ## Outstanding work
 
-After Opus access resets, review the final source and saved screenshots with Opus, resolve any remaining objections, and continue both reviewers until **two consecutive joint passing rounds** exist. Do not treat the two Sol passes as joint acceptance. Keep the ticket in progress until this condition is met.
+Complete fresh independent Sol/Astra reviews of the final source and saved screenshots, address any substantive remaining objections, and continue until **two consecutive joint passing rounds** exist. Keep the ticket in progress until this condition is met.
 
 ## Validation
 
@@ -55,4 +55,12 @@ After Opus access resets, review the final source and saved screenshots with Opu
 - Short-test coverage completed across all packages. Long combined invocations ended with SIGTERM (exit 143), so validation was completed in bounded package/test batches rather than reported as a successful uninterrupted `go test -short ./...` run.
 - All 864 top-level API tests were assigned to four exhaustive, disjoint `go test -short -count=1 -p 1 ./internal/api -run ...` batches of 216. Batches 1, 2 and 4 passed. Batch 3 reported only an outdated assertion expecting the removed “pi binary” tooltip; that assertion was corrected and `TestPlatformModeEnablesWidgetGeneration` then passed. The remaining batch-3 tests, including `TestGalleryPageScriptSuite` (the gallery Node regression suite), completed without failures.
 - All 245 top-level store tests passed in two exhaustive batches (123 and 122 tests). The other package checks passed; `internal/tile`, after the interrupted combined run, was checked separately and passed. Normal `-short` skips still apply to optional browser/integration tests.
-- `git diff --check` passed. Main remains clean; all development is on the feature worktree. The ticket remains in progress solely because the joint Opus/Sol scoring condition is not complete.
+- `git diff --check` passed. Main remains clean; all development is on the feature worktree. The ticket remains in progress solely because the joint council scoring condition is not complete.
+
+## Resumed council — 2026-11-05
+
+The user requested Codex Astra instead of Opus. Joint round 6 reviews the unchanged final interface at `b2f8def2` with independent Codex Sol and Codex Astra reviewers. Both tasks are read-only and inspect the prior findings, responses, final source, and saved desktop/phone evidence. Acceptance still requires two consecutive joint rounds with every score at least 8.
+
+Round-6 task IDs:
+- Sol: `node:delegated-task:command%3Amcp%3Af06d7919-58d9-4e1e-a1fd-c28129115a57%3Adelegate-task%3Aexh-iust-copy-sol-r6`
+- Astra: `node:delegated-task:command%3Amcp%3Af06d7919-58d9-4e1e-a1fd-c28129115a57%3Adelegate-task%3Aexh-iust-copy-astra-r6`

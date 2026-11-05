@@ -9,9 +9,9 @@ priority: 2
 assignee: Max Omdal
 tags: [ui, copy, ux]
 ---
-# Refine interface copy with Codex Sol and Claude Opus council
+# Refine interface copy with Codex Sol and Codex Astra council
 
-Audit Exhibit interface text for necessity, clarity, and hierarchy. Use independent Codex Sol and Claude Opus reviewers each round; revise copy and placement until all three categories score at least 8/10 from both reviewers in two consecutive rounds. Record every text change and its location.
+Audit Exhibit interface text for necessity, clarity, and hierarchy. Use independent Codex Sol and Codex Astra reviewers each round (Astra replaces Opus at the user’s request on 2026-11-05); revise copy and placement until all three categories score at least 8/10 from both reviewers in two consecutive rounds. Record every text change and its location.
 
 ## Acceptance Criteria
 
@@ -27,3 +27,7 @@ Implemented copy and placement changes in feature/Exh-iust/interface-copy, with 
 **2026-11-04T16:28:47Z**
 
 Validation completed: asset/server build and diff check passed; all API test cases covered by four exhaustive short-test batches, with the only stale-tooltip assertion corrected and its targeted rerun passing; gallery Node suite passed; all store tests covered by two passing batches; other package checks passed. Live Give access submission preserved the running artifact; responsive checks and final screenshots saved. Long combined test invocations ended with SIGTERM, so results are recorded as bounded batches rather than a successful uninterrupted full invocation. Implementation and inventory are ready; only joint council acceptance remains blocked by Opus usage quota.
+
+**2026-11-05T02:39:06Z**
+
+User authorized Codex Astra instead of unavailable Opus on 2026-11-05. Resuming with independent Codex Sol and Codex Astra reviews, requiring both to score necessity, clarity, and hierarchy at least 8/10 in two consecutive joint rounds. Prior Opus history remains evidence, not current acceptance.
