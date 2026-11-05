@@ -242,7 +242,7 @@
       "applicationCommit": "235a5c9ecddd7494a20eaef32e55c0320994adad",
       "assetVersion": "b1f015b9d4bf",
       "validationBaseline": "235a5c9ecddd7494a20eaef32e55c0320994adad",
-      "status": "sol_running_opus_deferred_until_reset",
+      "status": "sol_pass_opus_deferred_until_reset",
       "jointPass": null,
       "reviewers": [
         {
@@ -251,12 +251,31 @@
           "model": "gpt-6.1-sol",
           "taskId": "node:delegated-task:command%3Amcp%3Ae394a58e-fb38-4e0c-b7c7-0df413da8a7e%3Adelegate-task%3AExh-zrjo-r35-sol-tags-ten",
           "clientRequestId": "Exh-zrjo-r35-sol-tags-ten",
-          "status": "running",
+          "status": "completed",
           "launchRecord": "round-35-sol-tags-ten-launch.json",
           "report": "round-35-sol-tags-ten.md",
-          "light": null,
-          "dark": null,
-          "individualPass": null
+          "light": [
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0
+          ],
+          "dark": [
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0
+          ],
+          "individualPass": true,
+          "statusRecord": "round-35-sol-tags-ten-status.json",
+          "requiredViewedCoverageComplete": true,
+          "scoreVerification": "All14 numeric values parsed from actual report table, exact10, categories/order matched."
         },
         {
           "reviewer": "opus",
@@ -275,5 +294,5 @@
     }
   ],
   "historicalBroader9": "followup-scores.json: numerical passes, final broad coverage incomplete; superseded by user focused10 instruction, not claimed complete",
-  "validationStatus": "makeassets/build,479Node,icon+native and24E2E pass; full standardGo35 still running, read actual durable receipt."
+  "validationStatus": "ALL required checks PASS on unchanged235a5c9e/b1: assets/build,479Node,icon+native,24E2E and fullGo443.14s. No reruns needed unchanged."
 }

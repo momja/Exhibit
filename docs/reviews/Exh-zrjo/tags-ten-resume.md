@@ -1,4 +1,4 @@
-# Current checkpoint: Sol35 active, Opus35 deferred after actual reset
+# Current checkpoint: Sol35 completed all14=10, missing independent Opus35 after reset
 
 Latest user request:10/10 ONLY Tags section and Edit tag sheet. Fixed7categories
 in LIGHT/DARK (14/model), BOTH ALL14=10 in TWO consecutive JOINT rounds on SAME
@@ -13,7 +13,9 @@ Current bin/server and both process SHA3e9cf847e05ddf4c9ed01fd8ca15d2151c6c6069d
 No VCSstamp; identity/build/scoped source/actual assets are provenance. Later
 commits may be evidence only. No source/assets changes during active review.
 
-Sol35 is a fresh active shared/async/review task, actual taskId:
+Sol35 is actually COMPLETED with all14 exact10, full16core +4samplepairs
+viewed; report/status saved, exacttable values independently parsed. Never duplicate
+it or disclose its same35 result to Opus. Its shared/async/review actual taskId:
 node:delegated-task:command%3Amcp%3Ae394a58e-fb38-4e0c-b7c7-0df413da8a7e%3Adelegate-task%3AExh-zrjo-r35-sol-tags-ten
 Never duplicate it. Read task_status on notification; retain terminal report and
 verify14actual values and mandatory viewed coverage. No current35Sol outcome/
@@ -29,7 +31,9 @@ brief include ALLfocused32–34findings/responses plus original focused brief.
 
 Current checks PASS: makeassets12.63s,build5.72s,479Node16.71s,icon+nativeTag19.71s
 (actual1280/390,no skips),all24E2E149.19s. Whole fingerprint unchanged during each.
-Full standardGo35 runner290893 still active at checkpoint; read actual durable
+Full standardGo35 CONFIRMED PASS exit0/443.14s, API426.200s/store194.788s,
+sourceUnchanged=true matching entire fingerprint. Saved tags-ten-r35-go-final
+status/log. Do not repeat. Original durable receipt:
 /tmp/exhibit-zrjo-tags10-r35-go-final-status.json and corresponding.log. Do NOT
 infer pass from partial output. Read final receipt; do not repeat passed checks
 unchanged or rebuild assets during Go compilation. Earlier34failure receipts and

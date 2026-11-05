@@ -236,3 +236,7 @@ Opus34 actual task_status FAILED at Claude API rate limit, no assigned report/fi
 **2026-11-05T18:51:47.323185+00:00**
 
 Sol34 completed12x10+workflow9.5both; real409/Enter retry bug reproduced (old browser expected1PATCH/received2) and fixed in235a5c9e/assetsb1f015b9d4bf. Opus34no-scorequota is superseded, never fill oldphase. Full34Go failed445.42s on unregisteredph-minus; registry rebuilt, tests intact. Current479Node16.71s,icon/native19.71s,all24E2E149.19s PASS; fullGo35 running durably.4newactualinvalid views+26disposableoutcomes, actualbeforeafter35 previewed/rendered. Fresh Sol35 active, actualtaskId retained; Opus35 deferred actual21:30UTCreset. One-use21:31UTCNov5 continuation in THISthread, temporarydailytrigger FIRSTpermanentlydeletesits actualID; metadata/prompt saved. Streak0/2; no10claim. Mainclean/onmain, no merge/push/newPR.
+
+**2026-11-05T18:58:17.016470+00:00**
+
+Sol35 COMPLETED on unchanged235a5c9e/b1f015b9d4bf: all14 actual category/theme values10, full16Main views+4sample pairs, honest live/source limits. Original task/status/report retained, no duplication; same35 outcome withheld from Opus. StandardGo35 now CONFIRMED PASS exit0/443.14s(API426.200/store194.788), entire fingerprint unchanged. ALL required checks pass; no repeat/rebuild. Focused jointstreak0/2 pending missing independentOpus35 after actual21:30UTCreset; existing21:31temporarydailycontinuation deletes itself FIRST. No UI changes or newPR/mainmutation.

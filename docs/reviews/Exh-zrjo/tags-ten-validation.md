@@ -14,7 +14,7 @@ b242d0432fd608bc915891a342025e35d2ff19dfb027f4959cc82849b778e851.
 | Complete Playwright suite | PASS24tests,149.19s wrapper, including real409/Enter regression |
 | Parent current T3 photos |4invalid-color views,1280/390 each actual light/dark, visible neutral glyph and no overflow |
 | Disposable-fixture screenshots |26current drafts/outcomes from passing E2E |
-| Full standard Go short confirmation | RUNNING; no exit inferred; read durable r35-go-final receipt |
+| Full standard Go short confirmation | PASS exit0,443.14s; API426.200s/store194.788s; entire source unchanged |
 
 All completed receipts confirm unchanged entire fingerprint during checks:
 tags-ten-r35-*-status.json plus adjacent.txt. Raw logs remain at recorded/tmp
@@ -40,7 +40,7 @@ Delete preserving artifacts, pending locks and htmx feedback remain covered.
 Previous full34Go failed445.42s solely because new ph-minus was not registered
 or served. Failure receipts/logs are preserved in round-34-validation and current
 history; tests were not weakened. New registry is rebuilt and both checks pass.
-Full standardGo confirmation is still required, currently running on frozen35:
+Full standardGo confirmation is now complete, exit0 on frozen35:
 /tmp/exhibit-zrjo-tags10-r35-go-final-status.json and corresponding.log.
 Do NOT rebuild assets during Go compilation or repeat passing suites unchanged.
 
