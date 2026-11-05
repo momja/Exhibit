@@ -1,4 +1,4 @@
-# Current checkpoint: fresh BOTH36 active on aligned Add row
+# Current checkpoint: Opus36 all14=10, Sol36 active, current checks all pass
 
 Latest user scope:10 ONLY Tags section/Edit tag sheet. Fixed7 categories EACH
 actual light/dark (14/model), BOTH all14 exactly10 in TWO consecutive JOINT rounds
@@ -26,7 +26,11 @@ After measurements all1280/768/390/320bothschemes show0overhang/nooverflow/0tagr
 8before+8after photos, actual cropped comparison36 withfullsize originals already
 previewed728/360console[]thenhtml_render. No newtest for reversible layout fix.
 
-Fresh shared/async/review BOTH36 actual taskIds:
+Opus36 is now actually COMPLETED: all14 values exact10 parsed from its table,
+complete actual Main16states +4samplepairs including every lower Create view.
+Its report/status saved; do not expose same36 outcome to still-active Sol36.
+Sol36 remains active, NEVERduplicate. Jointstreak remains0 until both qualify.
+Original fresh shared/async/review actual taskIds:
 sol: node:delegated-task:command%3Amcp%3Acfaf7639-87c2-4c24-af58-fe176ad56b8c%3Adelegate-task%3AExh-zrjo-r36-sol-tags-ten
 opus: node:delegated-task:command%3Amcp%3Acfaf7639-87c2-4c24-af58-fe176ad56b8c%3Adelegate-task%3AExh-zrjo-r36-opus-tags-ten
 
@@ -41,7 +45,9 @@ Current checks PASS: makebuild17.61s, icon+servedCSS+nativeTag20.14s(actual1280/
 no skips),full24E2E119.39s,sourceUnchanged=true.479Node carried from35 on unchanged
 JS/tests, not a newrun/fingerprint claim. Entire delta from235a5c9e is ONLY3CSSrules;
 whole scope proof/source-servedJS agreement tags-ten-r36-scope-change.json.
-Full standardGo36 runner306396 NOW active: read durable actual result
+Full standardGo36 CONFIRMED PASS exit0/441.10s, API426.015s/store188.443s,
+sourceUnchanged=true matching full1fc... fingerprint. Saved current receipts/log.
+No passing-check repeats needed. Original durable result:
 /tmp/exhibit-zrjo-tags10-r36-go-final-status.json and corresponding.log. Do NOT
 infer pass from partial output. No assets rebuild during Go or repeat passing
 checks unchanged. Prior35 fullGoPASS443.14s and receipts archived round-35-validation.

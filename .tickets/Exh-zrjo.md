@@ -248,3 +248,7 @@ Sol35 COMPLETED on unchanged235a5c9e/b1f015b9d4bf: all14 actual category/theme v
 **2026-11-05T21:53:10.812570+00:00**
 
 Both35 terminal: Sol14x10, Opus composition9.5both/other12x10 fromactualtable (rawprosemiscount preserved). JointFAIL0 and honest lower-view coverage limits retained. Reproduced81px desktop Addoverhang, fixed only3CSSrules in f58de10b/assets4beedb277545; phonefullwidth retained. Actual all8width/theme aftermeasurements0overhang/nooverflow/0tagrequests,8before+8after photos and croppedactualcomparison36 published. Build17.61s,icon/native20.14s,all24E2E119.39s PASS;479Nodecarry on unchangedJS/tests explicitproof, fullGo36 running durably. Fresh independent BOTH36 active, actualtaskIds retained/currentpeer withheld, full lower-render matrix explicit. No repeatedoldreviews, no10claim, main unchanged, no recurringautomation.
+
+**2026-11-05T21:58:38.653669+00:00**
+
+Opus36 COMPLETED independently on unchangedf58de10b/4beedb277545: all14 actual tablevalues10, full Main16core +4samplepairs including fullyexposed lowerCreate everypair; restored0writes/own-tabsclosed. Report/status/table parsed and retained, same36 outcome withheld from activeSol36. FullcurrentGo CONFIRMED PASS exit0/441.10s(API426.015/store188.443), fingerprintunchanged. ALL requiredchecks pass with disclosed479Nodecarry on unchangedJS/tests. No rebuild/repeats; sourcefrozen. Jointstreak0 until Sol36 alsoqualifies; no completionclaim. No recurringautomation/mainchanges/newPR.

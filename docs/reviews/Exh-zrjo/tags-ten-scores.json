@@ -327,7 +327,7 @@
       "applicationCommit": "f58de10bf88acff268b9339e0c7dae406a93c664",
       "assetVersion": "4beedb277545",
       "validationBaseline": "f58de10bf88acff268b9339e0c7dae406a93c664",
-      "status": "running",
+      "status": "opus_pass_sol_running",
       "jointPass": null,
       "reviewers": [
         {
@@ -349,16 +349,35 @@
           "model": "claude-opus-5-5",
           "taskId": "node:delegated-task:command%3Amcp%3Acfaf7639-87c2-4c24-af58-fe176ad56b8c%3Adelegate-task%3AExh-zrjo-r36-opus-tags-ten",
           "clientRequestId": "Exh-zrjo-r36-opus-tags-ten",
-          "status": "running",
+          "status": "completed",
           "launchRecord": "round-36-opus-tags-ten-launch.json",
           "report": "round-36-opus-tags-ten.md",
-          "light": null,
-          "dark": null,
-          "individualPass": null
+          "light": [
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0
+          ],
+          "dark": [
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0
+          ],
+          "individualPass": true,
+          "statusRecord": "round-36-opus-tags-ten-status.json",
+          "requiredViewedCoverageComplete": true,
+          "scoreVerification": "All14 exact10 parsed from original table in category order; full Main16states and4sample pairs including lower Create views explicitly covered."
         }
       ]
     }
   ],
   "historicalBroader9": "followup-scores.json: numerical passes, final broad coverage incomplete; superseded by user focused10 instruction, not claimed complete",
-  "validationStatus": "Current makebuild17.61s,icon/native20.14s,24E2E119.39s PASS.479Node carried on unchangedJS/tests. Full currentGo36 running; read actual durable exit."
+  "validationStatus": "ALL required checks PASS on unchangedf58de10b/4bee: makebuild17.61s,icon/native20.14s,24E2E119.39s,fullGo441.10s.479Node carried on unchangedJS/tests with explicit proof. Do not repeat unchanged."
 }

@@ -12,7 +12,7 @@ f58de10b, with no exclusions. Source fingerprint:
 | Icon registry + served CSS + native Tag modal | PASS20.14s; actual1280/390 native subtests, no skips |
 | Complete Playwright suite | PASS24tests,119.39s |
 | Current actual Add-row layout measurements/photos | Eight before +eight after at1280/768/390/320, both real schemes;81px desktop overhang→0px, no overflow or tag API requests |
-| Full standard Go short confirmation | RUNNING on frozen36; no exit inferred |
+| Full standard Go short confirmation | PASS exit0,441.10s; API426.015s/store188.443s, entire fingerprint unchanged |
 
 The ENTIRE delta from the previous235a5c9e candidate is three rule edits in
 web/gallery/edit.css. No JS/templates/Go/tests changed. The explicit whole-scope
@@ -26,7 +26,8 @@ and unchanged entire current fingerprint during each. Runtime identity proves
 bin/server and both current process executables match SHA
 7be17fc28c646d805fb5deaa0accd791bc338a837d11c7900c44a6ce5e5d7458.
 The binary has no VCS stamp. Provenance is real source/build/assets/process hash.
-Full current Go status: /tmp/exhibit-zrjo-tags10-r36-go-final-status.json and.log.
+Full current Go confirmation is complete; saved tags-ten-r36-go-final-status.json/.txt.
+Original durable status: /tmp/exhibit-zrjo-tags10-r36-go-final-status.json and.log.
 Read actual exit; don't rebuild assets during Go or repeat passed checks unchanged.
 Previous full35Go PASS443.14s is retained as history, not claimed as the new run.
 
