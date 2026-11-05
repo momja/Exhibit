@@ -250,12 +250,22 @@ security summaries keep the disclosure chevron aligned with the first line.
 under the same page styles. It checks heading/body/helper/caption/field/checkbox/
 footer/error roles and horizontal containment without equating content geometry.
 
-The `color-picker` controller owns only local preset/picker/hex synchronization.
-Use `picker`, `hex` and `swatch` targets, `color-picker#choose` on presets and
-`input->color-picker#input` on both native inputs. A selected preset has
-`aria-pressed=true`; an unmatched valid color marks `.color-custom-row.is-custom`.
+The `color-picker` controller owns local preset/picker/hex synchronization and
+hex validation. The shared `tagColorFields` partial supplies the `picker`, `hex`,
+`swatch`, `selection` and `error` targets. Presets are named radios with one
+tab stop, `aria-checked` selection and arrow/Home/End navigation. Four columns of
+56px cells keep a complete22px sample clear of its inset check even at320px.
+The selected color name (or Custom) is a caption, not another focus outline.
+`input->color-picker#input` updates both inputs and announces invalid hex near
+the field. `color-picker:change` reports working-copy validity to the tag feature.
 Send `color-picker:refresh` to the controller after filling a working copy.
 Tag saving remains in `tags.js`; htmx owns replacement and Stimulus reconnection.
+The Tags panel explains immediate persistence. Its label/action rows align to
+the form column, with quiet32px desktop/44px phone utilities. Attach/removal
+errors live beside their controls; the feature retains their text across swaps.
+Edit tag explains library-wide scope and enables Save tag only for a valid,
+changed working copy. Its two-action footer keeps DOM and visual order aligned;
+the body has a separate Delete entry and an in-sheet Keep/Delete confirmation.
 `TestTagModalBrowser` covers preset/custom synchronization, isolation from the
 creation fields behind the modal, and use after a real server-rendered swap.
 

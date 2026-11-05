@@ -20,6 +20,31 @@ var Presets = []string{
 	"#AC6F92", // rose
 }
 
+// PresetName names the palette for people choosing a color, while the hex value
+// remains available for precise custom colors.
+func PresetName(hex string) string {
+	switch strings.ToUpper(hex) {
+	case "#6B7280":
+		return "Gray"
+	case "#B86562":
+		return "Red"
+	case "#AB7B3E":
+		return "Amber"
+	case "#377A64":
+		return "Green"
+	case "#42838C":
+		return "Teal"
+	case "#527CB0":
+		return "Blue"
+	case "#8470AC":
+		return "Violet"
+	case "#AC6F92":
+		return "Pink"
+	default:
+		return "Custom"
+	}
+}
+
 // Normalize validates a tag color for safe use inside an HTML style
 // attribute, expanding the 3-digit CSS shorthand hex form (e.g. "#f00",
 // same shorthand CSS itself accepts) to the full 6-digit form ("#ff0000").

@@ -121,18 +121,18 @@ func TestTagModalBrowser(t *testing.T) {
 			checkModalVisuals(t, b.ctx, "#tag-edit-modal")
 			// The color control is a local working copy: preset and custom inputs
 			// agree, without changing the creation form behind the modal.
-			b.wait(`document.querySelector('#tag-edit-modal .color-custom-row.is-custom')`)
+			b.wait(`document.querySelector('#tag-edit-modal .color-selection').textContent==='Custom'`)
 			b.eval(`window.creationColor=document.querySelector('#tags-panel [data-color-picker-target="hex"]').value; document.querySelector('#tag-edit-modal .color-swatch[data-color="#377A64"]').click()`)
-			b.check(`document.getElementById('tag-edit-color-hex').value==='#377a64' && document.getElementById('tag-edit-color-picker').value==='#377a64' && document.querySelector('#tag-edit-modal [aria-pressed="true"]').dataset.color==='#377A64' && !document.querySelector('#tag-edit-modal .is-custom') && document.querySelector('#tags-panel [data-color-picker-target="hex"]').value===creationColor`)
+			b.check(`document.getElementById('tag-edit-color-hex').value==='#377a64' && document.getElementById('tag-edit-color-picker').value==='#377a64' && document.querySelector('#tag-edit-modal [aria-checked="true"]').dataset.color==='#377A64' && document.querySelector('#tag-edit-modal .color-selection').textContent==='Green' && document.querySelector('#tags-panel [data-color-picker-target="hex"]').value===creationColor`)
 			b.eval(`const hex=document.getElementById('tag-edit-color-hex');hex.value='#0088ff';hex.dispatchEvent(new Event('input',{bubbles:true}))`)
-			b.check(`document.getElementById('tag-edit-color-picker').value==='#0088ff' && !document.querySelector('#tag-edit-modal [aria-pressed="true"]') && !!document.querySelector('#tag-edit-modal .is-custom')`)
+			b.check(`document.getElementById('tag-edit-color-picker').value==='#0088ff' && !document.querySelector('#tag-edit-modal [aria-checked="true"]') && document.querySelector('#tag-edit-modal .color-selection').textContent==='Custom'`)
 			b.capture("Exh-p3ah", width)
-			b.eval(`document.getElementById('tag-edit-name').value='';document.getElementById('tag-edit-save').click()`)
-			b.check(`document.querySelector('#tag-edit-modal').open && document.getElementById('tag-edit-error').textContent==='Name is required.'`)
-			b.eval(`document.getElementById('tag-edit-name').value='Graphs'; document.getElementById('tag-edit-save').click()`)
+			b.eval(`document.getElementById('tag-edit-name').value='';document.getElementById('tag-edit-name').dispatchEvent(new Event('input',{bubbles:true}))`)
+			b.check(`document.querySelector('#tag-edit-modal').open && document.getElementById('tag-edit-name-error').textContent==='Name is required.' && document.getElementById('tag-edit-name').getAttribute('aria-invalid')==='true' && document.getElementById('tag-edit-save').disabled`)
+			b.eval(`document.getElementById('tag-edit-name').value='Graphs';document.getElementById('tag-edit-name').dispatchEvent(new Event('input',{bubbles:true})); document.getElementById('tag-edit-save').click()`)
 			b.wait(`!document.getElementById('tag-edit-modal').open && document.querySelector('[data-tag-name="Graphs"]') && document.activeElement.dataset.tagName==='Graphs'`)
 			// Saving replaces the panel through htmx; the new picker connects too.
-			b.wait(`document.querySelector('#tags-panel [data-color-picker-target="hex"]') && document.querySelector('#tags-panel [aria-pressed="true"]')`)
+			b.wait(`document.querySelector('#tags-panel [data-color-picker-target="hex"]') && document.querySelector('#tags-panel [aria-checked="true"]')`)
 			b.eval(`document.querySelector('#tags-panel .color-swatch[data-color="#527CB0"]').click()`)
 			b.check(`document.querySelector('#tags-panel [data-color-picker-target="hex"]').value==='#527cb0' && document.querySelector('#tags-panel [data-color-picker-target="picker"]').value==='#527cb0'`)
 			// A pending mutation blocks every dismissal and another submission.
@@ -142,7 +142,7 @@ func TestTagModalBrowser(t *testing.T) {
  if (path.startsWith('/api/tags/') && options.method==='PATCH') {
   tagCalls++; return new Promise(resolve=>window.finishTag=()=>resolve({ok:false,json:async()=>({error:'Please retry'})}));
  } return tagAPI(path,options);
-}; document.getElementById('tag-edit-name').value='Plots';document.getElementById('tag-edit-save').click()`)
+}; document.getElementById('tag-edit-name').value='Plots';document.getElementById('tag-edit-name').dispatchEvent(new Event('input',{bubbles:true}));document.getElementById('tag-edit-save').click()`)
 			b.wait(`tagCalls===1 && document.getElementById('tag-edit-save').disabled`)
 			b.run(chromedp.KeyEvent(kb.Escape))
 			b.eval(`document.getElementById('tag-edit-modal').dispatchEvent(new MouseEvent('click',{bubbles:true,clientX:-1,clientY:-1}));document.getElementById('tag-edit-save').click();document.getElementById('tag-edit-cancel').click()`)

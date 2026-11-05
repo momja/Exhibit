@@ -396,19 +396,32 @@ button.banner-action{background:none;border:0;padding:0;font:inherit;cursor:poin
 .tag-dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:var(--color-muted);transition:opacity .12s ease}
 .tag-pill-label{overflow-wrap:anywhere}
 /* Tag color picker: presets + custom. */
-.color-presets{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px;margin-top:6px}
-.color-swatch{--swatch-radius:8px;--swatch-check-inset:3px;position:relative;display:grid;place-content:center;width:100%;height:36px;border:1px solid transparent;border-radius:var(--swatch-radius);background:none;cursor:pointer;padding:0}
-.color-swatch>span{width:18px;height:18px;border-radius:50%;background:var(--swatch-color)}
+.tag-color-fields{margin-top:16px;min-width:0}
+.tag-color-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.tag-color-heading>.field-label{margin:0}
+.color-selection{padding:2px 8px;border-radius:var(--radius-pill);background:var(--color-accent-tint);color:var(--color-accent);font-size:.75rem;line-height:1.5}
+.color-presets{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:8px}
+.color-swatch{--swatch-radius:8px;--swatch-check-inset:3px;position:relative;display:grid;place-content:center;width:100%;height:56px;border:1px solid transparent;border-radius:var(--swatch-radius);background:none;cursor:pointer;padding:0}
+.color-swatch>span{width:22px;height:22px;border-radius:50%;background:var(--swatch-color);box-shadow:inset 0 0 0 1px var(--color-tag-ring)}
 .color-swatch:hover{background:var(--color-hover-fill)}
-.color-swatch[aria-pressed=true]{border-color:var(--color-accent);background:var(--color-accent-tint)}
-.color-swatch[aria-pressed=true]::after{content:"\e182";position:absolute;right:var(--swatch-check-inset);top:var(--swatch-check-inset);display:grid;place-content:center;width:16px;height:16px;border-radius:calc(var(--swatch-radius) - var(--swatch-check-inset) - 1px);font-family:Phosphor;font-size:12px;background:var(--color-accent);color:var(--color-on-accent)}
-.color-custom-row{display:flex;gap:8px;align-items:center;margin-top:8px;padding:0;border:0;border-radius:6px}
-.color-custom-row.is-custom{outline:1px solid var(--color-accent);outline-offset:3px}
+.color-swatch[aria-checked=true]{border-color:var(--color-accent);background:var(--color-accent-tint)}
+.color-swatch[aria-checked=true]::after{content:"\e182";position:absolute;right:var(--swatch-check-inset);top:var(--swatch-check-inset);display:grid;place-content:center;width:16px;height:16px;border-radius:calc(var(--swatch-radius) - var(--swatch-check-inset) - 1px);font-family:Phosphor;font-size:12px;background:var(--color-accent);color:var(--color-on-accent)}
+.tag-color-fields>label{margin-top:16px}
+.color-custom-row{display:flex;gap:8px;align-items:center;padding:0;border:0;border-radius:6px}
 .color-custom-row input[type=color]{appearance:none;flex:0 0 44px;width:44px;height:44px;padding:4px;background:var(--color-field);border:1px solid var(--color-field-border);border-radius:6px;cursor:pointer}
 .color-custom-row input[type=color]::-webkit-color-swatch-wrapper{padding:0}
 .color-custom-row input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
 .color-custom-row input[type=color]::-moz-color-swatch{border:0;border-radius:3px}
 .color-custom-row input[type=text]{flex:1;min-width:0}
+.color-hint{margin-top:6px}
+.tag-field-error{color:var(--color-danger-hover);font-size:.75rem;line-height:1.5;margin-top:10px}
+.tag-color-fields input[aria-invalid=true],#tag-edit-name[aria-invalid=true],#tag-add-name[aria-invalid=true]{border-color:var(--color-danger)}
+.tag-panel [hidden],.tag-edit-dialog [hidden]{display:none!important}
+.tag-delete-entry{margin-top:24px;padding-top:16px;border-top:1px solid var(--color-hairline)}
+.modal-dialog.tag-edit-dialog .tag-dialog-footer{flex-direction:row}
+.tag-edit-dialog .tag-dialog-footer>.btn{order:0;width:auto;margin:0}
+@media(max-width:400px){.tag-edit-dialog .tag-dialog-footer>.btn{flex:1}}
+@media(max-width:767px){.tag-color-fields .tag-field-error{font-size:var(--text-secondary)}}
 
 /* Native dialogs share their frame and content defaults. Content geometry is
  * the only feature-level variation; see docs/ui-components.md. */
@@ -557,7 +570,6 @@ input[type=checkbox]:disabled{opacity:.55;cursor:not-allowed}
   .modal-footer .modal-destructive{order:2}
 }
 
-@media(max-width:480px){.color-presets{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.color-swatch{height:44px}.color-swatch>span{width:22px;height:22px}}
 
 .form-help,.modal-check small{text-wrap:pretty}
 

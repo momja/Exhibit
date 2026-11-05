@@ -33,28 +33,45 @@
      itself carries no modal-specific state. The swatch/dot backgrounds stay
      inline styles: they are per-tag dynamic values, which classes cannot
      express. Data: []string (hex colors). */}}
-{{define "colorSwatches"}}<div class="color-presets" role="group" aria-label="Preset colors">{{range .}}<button type="button" class="color-swatch" data-color="{{.}}" data-color-picker-target="swatch" data-action="color-picker#choose" style="--swatch-color:{{.}}" aria-label="{{.}}" aria-pressed="false"><span aria-hidden="true"></span></button>{{end}}</div>{{end}}
+{{define "colorSwatches"}}<div class="color-presets" role="radiogroup" aria-label="Preset colors" data-action="keydown->color-picker#navigate">{{range .}}<button type="button" class="color-swatch" role="radio" data-color="{{.}}" data-color-name="{{tagColorName .}}" data-color-picker-target="swatch" data-action="color-picker#choose" style="--swatch-color:{{.}}" aria-label="{{tagColorName .}} ({{.}})" title="{{tagColorName .}}" aria-checked="false" tabindex="-1"><span aria-hidden="true"></span></button>{{end}}</div>{{end}}
+
+{{define "tagColorFields"}}<div class="tag-color-fields" id="{{.Prefix}}-color-controls" data-controller="color-picker" data-action="color-picker:refresh->color-picker#refresh">
+  <div class="tag-color-heading"><span class="field-label">Color</span><span class="color-selection" data-color-picker-target="selection">Gray</span></div>
+  {{template "colorSwatches" .Presets}}
+  <label class="field-label" for="{{.Prefix}}-color-hex">Custom color</label>
+  <div class="color-custom-row">
+    <input type="color" id="{{.Prefix}}-color-picker" value="{{.DefaultColor}}" aria-label="Choose a custom color" data-color-picker-target="picker" data-action="input->color-picker#input">
+    <input type="text" id="{{.Prefix}}-color-hex" class="field" value="{{.DefaultColor}}" placeholder="#rrggbb" maxlength="7" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="{{.Prefix}}-color-hint {{.Prefix}}-color-error" data-color-picker-target="hex" data-action="input->color-picker#input">
+  </div>
+  <div class="form-help color-hint" id="{{.Prefix}}-color-hint">Use the picker or a six-digit hex color.</div>
+  <div id="{{.Prefix}}-color-error" class="modal-error tag-field-error" role="alert" data-color-picker-target="error" hidden></div>
+</div>{{end}}
 
 {{/* editTagModal renames, recolors or deletes a tag library-wide; opened
      from the Tags panel's pencils by tags.js. Data: []string (presets). */}}
-{{define "editTagModal"}}<dialog id="tag-edit-modal" class="modal-dialog modal-sheet tag-edit-dialog" aria-labelledby="tag-edit-title" data-controller="modal">
+{{define "editTagModal"}}<dialog id="tag-edit-modal" class="modal-dialog modal-sheet tag-edit-dialog" aria-labelledby="tag-edit-title" aria-describedby="tag-edit-scope" data-controller="modal">
   <div class="modal-header"><h2 id="tag-edit-title">Edit tag</h2>{{template "modalClose"}}</div>
-  <div class="modal-body"><fieldset class="modal-fields" data-controller="color-picker" data-action="color-picker:refresh->color-picker#refresh" aria-label="Tag details">
+  <div class="modal-body"><fieldset id="tag-edit-fields" class="modal-fields" aria-label="Tag details">
+    <p id="tag-edit-scope" class="form-help tag-scope-note">Changes apply to this tag on every artifact in your library.</p>
     <label for="tag-edit-name">Name</label>
-    <input type="text" id="tag-edit-name" maxlength="60" autofocus>
-    <label for="tag-edit-color-picker">Color</label>
-    {{template "colorSwatches" .}}
-    <div class="color-custom-row">
-      <input type="color" id="tag-edit-color-picker" aria-label="Custom color" data-color-picker-target="picker" data-action="input->color-picker#input">
-      <input type="text" id="tag-edit-color-hex" placeholder="#rrggbb" maxlength="7" aria-label="Color hex code" data-color-picker-target="hex" data-action="input->color-picker#input">
-    </div>
-    <div id="tag-edit-error" class="modal-error" hidden></div>
+    <input type="text" id="tag-edit-name" maxlength="60" required aria-describedby="tag-edit-name-error" autofocus>
+    <div id="tag-edit-name-error" class="modal-error tag-field-error" role="alert" hidden></div>
+    {{template "tagColorFields" (tagColors "tag-edit" .)}}
+    <div id="tag-edit-error" class="modal-error" role="alert" hidden></div>
+    <div class="tag-delete-entry"><button type="button" class="btn btn-sec btn-danger-outline" id="tag-edit-delete"><i class="ph ph-trash" aria-hidden="true"></i> Delete tag…</button></div>
+  </fieldset>
+  <fieldset id="tag-delete-fields" class="modal-fields" aria-label="Confirm tag deletion" hidden>
+    <p>Delete <strong id="tag-delete-name"></strong> from your library?</p>
+    <p id="tag-delete-help" class="form-help">It will be removed from every artifact. Your artifacts will be kept.</p>
+    <div id="tag-delete-error" class="modal-error" role="alert" hidden></div>
   </fieldset></div>
-  <div class="modal-actions modal-footer">
-    <button type="button" class="btn modal-primary" id="tag-edit-save"><i class="ph ph-floppy-disk" aria-hidden="true"></i> Save</button>
-    <button type="button" class="btn btn-sec modal-secondary" id="tag-edit-cancel" data-modal-dismiss>Cancel</button>
-    <button type="button" class="btn btn-sec btn-danger-outline modal-destructive" id="tag-edit-delete"><i class="ph ph-trash" aria-hidden="true"></i> Delete</button>
+  <div class="modal-actions modal-footer tag-dialog-footer">
+    <button type="button" class="btn btn-sec" id="tag-edit-cancel" data-modal-dismiss>Cancel</button>
+    <button type="button" class="btn" id="tag-edit-save" disabled><i class="ph ph-floppy-disk" aria-hidden="true"></i> <span id="tag-edit-save-label">Save tag</span></button>
+    <button type="button" class="btn btn-sec" id="tag-delete-cancel" hidden>Keep tag</button>
+    <button type="button" class="btn btn-danger" id="tag-edit-confirm-delete" hidden><i class="ph ph-trash" aria-hidden="true"></i> <span id="tag-delete-label">Delete tag</span></button>
   </div>
+  <span id="tag-edit-status" class="sr-only" role="status"></span>
 </dialog>{{end}}
 
 {{/* fragmentError is the user-facing 404 body every /partials/* route serves
@@ -139,27 +156,26 @@
       </span>
     </li>{{end}}
   </ul>{{else}}<p class="text-sm muted">This artifact has no tags.</p>{{end}}
-  <label for="tag-add-select" class="field-label">Add existing tag</label>
+  <div id="tag-list-error" class="text-sm tag-error" role="alert" hidden></div>
+  {{if .Available}}<label for="tag-add-select" class="field-label">Add existing tag</label>
   <div class="tag-add-row">
-    <select id="tag-add-select" class="select" aria-label="Tag to add">
+    <select id="tag-add-select" class="select" aria-label="Tag to add" aria-describedby="tag-add-error">
       <option value="">Choose a tag…</option>
       {{range .Available}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
     </select>
-    <button type="button" class="btn btn-sm btn-sec" id="tag-add-confirm"><i class="ph ph-plus" aria-hidden="true"></i> Add</button>
+    <button type="button" class="btn btn-sm btn-sec" id="tag-add-confirm" disabled><i class="ph ph-plus" aria-hidden="true"></i> Add</button>
   </div>
-  <div id="tag-add-create-fields" class="tag-create" data-controller="color-picker" data-action="color-picker:refresh->color-picker#refresh" role="group" aria-labelledby="tag-create-heading">
+  {{else}}<p class="form-help tag-available-note">{{if .Tags}}All existing tags are already on this artifact.{{else}}Create your first tag below.{{end}}</p>{{end}}
+  <div id="tag-add-error" class="text-sm tag-error" role="alert" hidden></div>
+  <fieldset id="tag-add-create-fields" class="tag-create" aria-labelledby="tag-create-heading">
     <h3 id="tag-create-heading" class="tag-section-heading">Create new tag</h3>
     <label for="tag-add-name" class="field-label">Name</label>
-    <input type="text" id="tag-add-name" class="field" maxlength="60" aria-describedby="tag-create-error">
-    <span class="field-label">Color</span>
-    {{template "colorSwatches" .Presets}}
-    <div class="color-custom-row">
-      <input type="color" id="tag-add-color-picker" value="{{.DefaultColor}}" aria-label="Custom color" data-color-picker-target="picker" data-action="input->color-picker#input">
-      <input type="text" id="tag-add-color-hex" data-color-picker-target="hex" data-action="input->color-picker#input" class="field" value="{{.DefaultColor}}" placeholder="#rrggbb" maxlength="7" aria-label="Color hex code">
-    </div>
-    <button type="button" class="btn" id="tag-create-confirm"><i class="ph ph-plus" aria-hidden="true"></i> Create and add tag</button>
+    <input type="text" id="tag-add-name" class="field" maxlength="60" required aria-describedby="tag-create-name-error">
+    <div id="tag-create-name-error" class="text-sm tag-error" role="alert" hidden></div>
+    {{template "tagColorFields" (tagColors "tag-add" .Presets)}}
+    <button type="button" class="btn" id="tag-create-confirm"><i class="ph ph-plus" aria-hidden="true"></i> <span id="tag-create-label">Create and add tag</span></button>
     <div id="tag-create-error" class="text-sm tag-error" role="alert" hidden></div>
-  </div>
+  </fieldset>
 </div>{{end}}
 
 {{/* capabilityCluster renders the gallery card's / viewer toolbar's neutral

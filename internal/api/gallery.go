@@ -718,11 +718,23 @@ func tagViews(tags []*store.Tag) []tagView {
 // tagPanelView feeds tagPanelBody. Available is the owner's tags not yet on
 // the artifact.
 type tagPanelView struct {
-	ArtifactID   string
-	Tags         []tagView
-	Available    []tagView
+	ArtifactID string
+	Tags       []tagView
+	Available  []tagView
+	Presets    []string
+}
+
+// The inline creator and edit sheet share one local color working copy UI.
+type tagColorPickerView struct {
+	Prefix       string
 	Presets      []string
 	DefaultColor string
+}
+
+func newTagColorPickerView(prefix string, presets []string) tagColorPickerView {
+	return tagColorPickerView{
+		Prefix: prefix, Presets: presets, DefaultColor: color.Normalize(store.DefaultTagColor),
+	}
 }
 
 func newTagPanelView(a *store.Artifact, library []*store.Tag) tagPanelView {
@@ -737,11 +749,10 @@ func newTagPanelView(a *store.Artifact, library []*store.Tag) tagPanelView {
 		}
 	}
 	return tagPanelView{
-		ArtifactID:   a.ID,
-		Tags:         tagViews(a.Tags),
-		Available:    tagViews(available),
-		Presets:      color.Presets,
-		DefaultColor: color.Normalize(store.DefaultTagColor),
+		ArtifactID: a.ID,
+		Tags:       tagViews(a.Tags),
+		Available:  tagViews(available),
+		Presets:    color.Presets,
 	}
 }
 

@@ -37,12 +37,11 @@
   <details class="details-panel" id="tags-panel" data-artifact-id="{{.ID}}">
     <summary>{{template "panelCaret"}} Tags</summary>
     <div class="panel-body">
+      <p id="tag-status" class="form-help tag-status" role="status" aria-live="polite" aria-atomic="true">Adding or removing a tag saves immediately.</p>
       <div id="tags-body"
            hx-get="/partials/tag-panel?artifact={{.ID}}"
            hx-trigger="exhibit:tags-changed from:body"
            hx-swap="innerHTML">{{template "tagPanelBody" .TagPanel}}</div>
-      {{/* Outside the swap so errors survive the re-render. */}}
-      <div id="tag-add-error" class="text-sm tag-error" hidden></div>
       {{template "editTagModal" .Presets}}
     </div>
   </details>

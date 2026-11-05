@@ -212,3 +212,7 @@ User now requests10/10 ONLY for edit tags UI after Claude reset. Continue same w
 **2026-11-05T16:50:15Z**
 
 Focused baseline32 Opus completed all16actual Tags/sheet renders, scores7.5–9.5 (workflow7.5 boththemes), not10. Saved report/status/table. Concrete blockers: misplaced add error/emptyAdd dead end; unstated library-wide tag edit scope; custom selection vsfocus ambiguity; desktop badge/dot overlap; distant/unannounced field validation; ragged phone row/actions; rawhex names/dark dots/utility emphasis and native Delete/footer order. Sol32 still active at last actual check: same32 peer results withheld, source/build remains frozen. Planned response saved, no UI edits yet; apply only after both independent reviews finish.
+
+**2026-11-05T17:23:34Z**
+
+Both focused32 baselines completed independently: Sol8.5–10, Opus7.5–9.5, no passing round. Implemented a shared named/keyboard color palette with clear custom selection, aligned tag rows, immediate/library-wide scope copy, local announced validation, valid dirty Save tag/pending status, nearby swap-retained feedback and same-sheet Delete confirmation. New regression reproduces old1280 badge collision and caught an intermediate320 collision;56px cells resolve it. Focused3E2E34.02s and actual native Tag modal pass before final copy/reset refinement;478Node pass, fresh final checks to follow. Actual before/after and new council still required; no10 claimed.

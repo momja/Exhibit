@@ -33,7 +33,7 @@
       "applicationCommit": "42c94eb1cb12a74108885cc1cbb7aaf7d11f5721",
       "assetVersion": "aa7a00afd7a2",
       "validationBaseline": "c1156ef15c7f5caa282b1068214492bce42018e1",
-      "status": "reviewing",
+      "status": "joint_failure",
       "jointPass": false,
       "reviewers": [
         {
@@ -42,9 +42,29 @@
           "model": "gpt-6.1-sol",
           "taskId": "node:delegated-task:command%3Amcp%3Ae394a58e-fb38-4e0c-b7c7-0df413da8a7e%3Adelegate-task%3AExh-zrjo-r32-sol-tags-ten-baseline",
           "clientRequestId": "Exh-zrjo-r32-sol-tags-ten-baseline",
-          "status": "running",
+          "status": "completed",
           "launchRecord": "round-32-sol-tags-ten-launch.json",
-          "report": "round-32-sol-tags-ten.md"
+          "report": "round-32-sol-tags-ten.md",
+          "light": [
+            10.0,
+            9.5,
+            10.0,
+            10.0,
+            9.5,
+            9.5,
+            8.5
+          ],
+          "dark": [
+            10.0,
+            9.5,
+            10.0,
+            10.0,
+            9.5,
+            9.5,
+            8.5
+          ],
+          "individualPass": false,
+          "statusRecord": "round-32-sol-tags-ten-status.json"
         },
         {
           "reviewer": "opus",

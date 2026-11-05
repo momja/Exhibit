@@ -119,7 +119,7 @@ func TestEditPageRendersTagsPanel(t *testing.T) {
 	assert.Contains(t, page, `Create and add tag`)
 	assert.Contains(t, page, `id="tag-create-error"`)
 	assert.NotContains(t, page, `class="tag-create" hidden`)
-	assert.Contains(t, page, `id="tag-add-color-hex" data-color-picker-target="hex" data-action="input->color-picker#input" class="field" value="#6b7280"`)
+	assert.Contains(t, page, `id="tag-add-color-hex" class="field" value="#6b7280"`)
 	// The library-wide edit dialog, and the script that drives both.
 	assert.Contains(t, page, `<dialog id="tag-edit-modal" class="modal-dialog modal-sheet tag-edit-dialog"`)
 	assert.Contains(t, page, `data-color="#6B7280"`) // store.DefaultTagColor preset

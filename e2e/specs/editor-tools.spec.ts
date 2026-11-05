@@ -5,6 +5,9 @@ test('expanded editor tools keep descriptions with actions and consistent operab
   const tagResponse = await api.post('/api/tags', { data: { name: `Tools-${artifact.id.slice(0, 8)}`, color: '#64748b' } });
   expect(tagResponse.status(), await tagResponse.text()).toBe(201);
   const tag = await tagResponse.json();
+  const availableResponse = await api.post('/api/tags', { data: { name: `Available-${artifact.id.slice(0, 8)}`, color: '#377a64' } });
+  expect(availableResponse.status(), await availableResponse.text()).toBe(201);
+  const availableTag = await availableResponse.json();
   try {
     const attached = await api.post(`/api/tags/${tag.id}/artifacts/${artifact.id}`);
     expect(attached.ok(), await attached.text()).toBeTruthy();
@@ -56,15 +59,21 @@ test('expanded editor tools keep descriptions with actions and consistent operab
         const tagGeometry = await page.locator('.tag-edit-item').first().evaluate(item => {
           const chip = item.querySelector('.tag-pill')!.getBoundingClientRect();
           const actions = item.querySelector('.tag-edit-actions')!.getBoundingClientRect();
-          const swatch = document.querySelector('.color-swatch[aria-pressed=true]')!;
+          const swatch = document.querySelector('.color-swatch:is([aria-checked=true],[aria-pressed=true])')!;
           const outer = getComputedStyle(swatch), badge = getComputedStyle(swatch, '::after');
+          const cell = swatch.getBoundingClientRect(), dot = swatch.querySelector('span')!.getBoundingClientRect();
+          const check = { right: cell.right - parseFloat(outer.borderWidth) - parseFloat(badge.right), top: cell.top + parseFloat(outer.borderWidth) + parseFloat(badge.top) };
+          const closestX = Math.max(check.right - parseFloat(badge.width), Math.min(dot.x + dot.width / 2, check.right));
+          const closestY = Math.max(check.top, Math.min(dot.y + dot.height / 2, check.top + parseFloat(badge.height)));
           return { separated: chip.right <= actions.left, compact: chip.height < actions.height,
+            colorSampleClear: Math.hypot(closestX - dot.x - dot.width / 2, closestY - dot.y - dot.height / 2) >= dot.width / 2 + 1,
             inset: parseFloat(badge.right), cornerDrift: Math.abs(parseFloat(outer.borderTopRightRadius) - parseFloat(outer.borderWidth) - parseFloat(badge.right) - parseFloat(badge.borderTopRightRadius)) };
         });
         expect(tagGeometry.separated).toBe(true);
         expect(tagGeometry.compact).toBe(true);
         expect(tagGeometry.inset).toBeGreaterThanOrEqual(2);
         expect(tagGeometry.cornerDrift).toBeLessThan(0.5);
+        expect(tagGeometry.colorSampleClear, `${width}px ${colorScheme} check must leave the color sample intact`).toBe(true);
         const propertyRowsAlign = await page.locator('.state-adder').evaluateAll(rows => rows.every(row => {
           const heights = [...row.querySelectorAll('input,select,button')].map(element => element.getBoundingClientRect().height);
           return Math.max(...heights) - Math.min(...heights) < 1;
@@ -130,6 +139,8 @@ test('expanded editor tools keep descriptions with actions and consistent operab
     const saved = await api.get(`/api/artifacts/${artifact.id}/state`);
     expect(await saved.json()).toEqual({ sample: JSON.stringify(sample) });
   } finally {
+    const availableRemoved = await api.delete(`/api/tags/${availableTag.id}`);
+    expect(availableRemoved.ok(), await availableRemoved.text()).toBeTruthy();
     const removed = await api.delete(`/api/tags/${tag.id}`);
     expect(removed.ok(), await removed.text()).toBeTruthy();
   }

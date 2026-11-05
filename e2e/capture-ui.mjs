@@ -177,7 +177,7 @@ try {
       await capture('tag-dialog', editorPath, width, scheme, async page => {
         await page.locator('#tags-panel > summary').click();
         await page.getByRole('button', { name: 'Edit tag Health', exact: true }).click();
-        await page.locator('#tag-edit-modal [aria-pressed=true]').waitFor({ state: 'visible' });
+        await page.locator('#tag-edit-modal [aria-checked=true]').waitFor({ state: 'visible' });
       });
       await capture('share', `/artifacts/${artifact.id}`, width, scheme, async page => {
         await page.getByRole('button', { name: 'Share', exact: true }).click();
