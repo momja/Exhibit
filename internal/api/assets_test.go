@@ -70,13 +70,13 @@ func TestGalleryPagesLoadPhosphorIconsFromAppOrigin(t *testing.T) {
 		assert.Contains(t, page, stylesheetTag, path)
 	}
 
-	// The documented markup pattern — <i class="ph ph-<name>"></i> — renders
+	// The documented markup pattern — <i class="ph ph-<name>" aria-hidden="true"></i> — renders
 	// somewhere in the gallery, using the icon set this ticket introduces.
 	req := httptest.NewRequest("GET", "/artifacts/"+id+"/edit", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	page := w.Body.String()
-	assert.Contains(t, page, `<i class="ph ph-check"></i>`)
+	assert.Contains(t, page, `<i class="ph ph-floppy-disk" aria-hidden="true"></i>`)
 	assert.Contains(t, page, `<i class="ph ph-x"></i>`)
 	assert.Contains(t, page, `<i class="ph ph-trash"></i>`)
 }
