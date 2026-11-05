@@ -41,8 +41,10 @@ type galleryEmptyState struct {
 	Welcome     bool
 	Icon        string
 	Message     string
+	Hint        string
 	ActionURL   string
 	ActionLabel string
+	ResetAction bool
 }
 
 type galleryGridData struct {
@@ -63,6 +65,22 @@ type galleryGridData struct {
 	NextURL      string
 	RetryURL     string
 	Empty        galleryEmptyState
+}
+
+// Resolve a miss without duplicating the presentation or losing a destination's
+// own onboarding action. Reset links keep the normal gallery htmx boundary.
+func (grid galleryGridData) EmptyState() galleryEmptyState {
+	if grid.Query != "" {
+		label := "Clear search"
+		if len(grid.Filters.Chips) > 0 {
+			label = "Clear search and filters"
+		}
+		return galleryEmptyState{Icon: "ph-magnifying-glass", Message: "No artifacts match your search.", Hint: "Try another title, keyword, or tag.", ActionURL: grid.ResetURL, ActionLabel: label, ResetAction: true}
+	}
+	if len(grid.Filters.Chips) > 0 {
+		return galleryEmptyState{Icon: "ph-sliders", Message: "No artifacts match your filters.", Hint: "Remove a filter to see more of your library.", ActionURL: grid.ResetURL, ActionLabel: "Clear filters", ResetAction: true}
+	}
+	return grid.Empty
 }
 
 func (ro *Router) loadGalleryGrid(r *http.Request, gallery galleryDefinition, offset int) (galleryGridData, error) {

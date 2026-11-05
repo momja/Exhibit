@@ -148,6 +148,7 @@ test('origin button changes immediately update the saved status', async () => {
   Object.defineProperty(controller, 'statusTarget', {value: page.byId('dirty-status')});
   Object.defineProperty(controller, 'saveButtonTarget', {value: page.byId('save-button')});
   Object.defineProperty(controller, 'saveMessageTarget', {value: page.byId('save-message')});
+  Object.defineProperty(controller, 'saveMessageTextTarget', {value: page.byId('save-message-text')});
   Object.defineProperty(controller, 'element', {value: page.document.body});
   page.document.body.addEventListener('exhibit:editor-changed', () => controller.refresh());
   controller.refresh();

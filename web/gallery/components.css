@@ -85,11 +85,12 @@
 /* Save stays named at every width, with its outcome beside the action while
  * the editor scrolls and an in-view explanation when a save needs attention. */
 .editor-save-controls{position:relative;display:flex;align-items:center;gap:8px}
-.editor-save-status{font-size:.75rem;line-height:1.4;color:var(--color-muted);white-space:nowrap}
+.editor-save-status{min-width:4.5em;text-align:right;font-size:.75rem;line-height:1.4;color:var(--color-muted);white-space:nowrap}
 .editor-save-status[data-state=attention]{color:var(--color-warn-ink-soft)}
-.app-header [data-save-editor]{width:auto;min-width:78px;padding:0 12px;font-size:.875rem}
+.app-header [data-save-editor]{width:auto;min-width:82px;padding:0 12px;font-size:.875rem}
 .app-header [data-save-editor] .header-link-label{position:static;width:auto;height:auto;margin:0;padding:0;overflow:visible;clip:auto;white-space:nowrap}
-.editor-save-message{position:absolute;right:0;top:calc(100% + 6px);width:360px;max-width:calc(100vw - 32px);padding:12px;border:1px solid var(--color-border);border-left:3px solid var(--color-warn-strong);border-radius:8px;background:var(--color-panel);color:var(--color-ink-soft);box-shadow:var(--shadow-card);font-size:.8125rem;line-height:1.5;overflow-wrap:anywhere}
+.editor-save-message{display:grid;grid-template-columns:16px minmax(0,1fr);gap:8px;position:absolute;right:0;top:calc(100% + 6px);width:360px;max-width:calc(100vw - 32px);padding:12px;border:1px solid var(--color-border);border-left:3px solid var(--color-warn-strong);border-radius:8px;background:var(--color-panel);color:var(--color-ink-soft);box-shadow:var(--shadow-card);font-size:.8125rem;line-height:1.5;overflow-wrap:anywhere}
+.editor-save-message>.ph{font-size:16px;line-height:1.25;color:var(--color-warn-ink-soft)}
 .editor-save-message[hidden]{display:none}
 
 /* --- floating app header --------------------------------------------- */
@@ -397,7 +398,7 @@ button.banner-action{background:none;border:0;padding:0;font:inherit;cursor:poin
 /* Tag color picker: presets + custom. */
 .color-presets{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px;margin-top:6px}
 .color-swatch{--swatch-radius:8px;--swatch-check-inset:3px;position:relative;display:grid;place-content:center;width:100%;height:36px;border:1px solid transparent;border-radius:var(--swatch-radius);background:none;cursor:pointer;padding:0}
-.color-swatch>span{width:22px;height:22px;border-radius:50%;background:var(--swatch-color)}
+.color-swatch>span{width:18px;height:18px;border-radius:50%;background:var(--swatch-color)}
 .color-swatch:hover{background:var(--color-hover-fill)}
 .color-swatch[aria-pressed=true]{border-color:var(--color-accent);background:var(--color-accent-tint)}
 .color-swatch[aria-pressed=true]::after{content:"\e182";position:absolute;right:var(--swatch-check-inset);top:var(--swatch-check-inset);display:grid;place-content:center;width:16px;height:16px;border-radius:calc(var(--swatch-radius) - var(--swatch-check-inset) - 1px);font-family:Phosphor;font-size:12px;background:var(--color-accent);color:var(--color-on-accent)}
@@ -556,7 +557,7 @@ input[type=checkbox]:disabled{opacity:.55;cursor:not-allowed}
   .modal-footer .modal-destructive{order:2}
 }
 
-@media(max-width:480px){.color-presets{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.color-swatch{height:44px}}
+@media(max-width:480px){.color-presets{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.color-swatch{height:44px}.color-swatch>span{width:22px;height:22px}}
 
 .form-help,.modal-check small{text-wrap:pretty}
 

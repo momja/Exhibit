@@ -19,14 +19,20 @@
      Replacing only the sentinel leaves existing widget frames running. */}}
 {{define "galleryGrid"}}{{if .Activity}}{{template "activityItems" .}}{{else}}{{if eq .Offset 0}}{{template "galleryFilterChips" .}}{{end}}{{range .Cards}}{{template "galleryCard" .}}{{end}}
 {{if .RetryURL}}{{template "galleryMore" .}}{{else}}
-  {{if and (not .Cards) (eq .Offset 0)}}{{if .Query}}<section class="gallery-empty"><i class="ph ph-magnifying-glass" aria-hidden="true"></i><p class="empty">No artifacts match your search.</p><p class="empty-hint">Try another title, keyword, or tag.</p><a class="btn btn-sec" href="{{.ResetURL}}" data-gallery-space-link hx-get="{{.ResetURL}}" hx-target="#gallery-content" hx-swap="outerHTML" hx-push-url="true" hx-sync="#gallery-shell:replace">{{if .SearchPage}}Clear search{{else}}Clear search and filters{{end}}</a></section>{{else if .Filters.Chips}}<section class="gallery-empty"><i class="ph ph-sliders" aria-hidden="true"></i><p class="empty">No artifacts match your filters.</p><p class="empty-hint">Remove a filter to see more of your library.</p><a class="btn btn-sec" href="{{.ResetURL}}" data-gallery-space-link hx-get="{{.ResetURL}}" hx-target="#gallery-content" hx-swap="outerHTML" hx-push-url="true" hx-sync="#gallery-shell:replace">Clear filters</a></section>{{else if .Empty.Welcome}}{{template "galleryWelcome" .Empty}}{{else}}<section class="gallery-empty">{{if .Empty.Icon}}<i class="ph {{.Empty.Icon}}" aria-hidden="true"></i>{{end}}<p class="empty">{{.Empty.Message}}</p>{{if .Empty.ActionURL}}<a class="btn btn-sec" href="{{.Empty.ActionURL}}">{{.Empty.ActionLabel}}</a>{{end}}</section>{{end}}{{end}}
+  {{if and (not .Cards) (eq .Offset 0)}}{{template "galleryEmpty" .EmptyState}}{{end}}
   {{if .NextURL}}{{template "galleryMore" .}}{{end}}
 {{end}}{{end}}{{end}}
 
-{{/* Only browse-all Search opts into this invitation. Search/filter misses and other
-     galleries keep their contextual empty states, including after htmx swaps. */}}
-{{define "galleryWelcome"}}<section class="gallery-welcome" aria-labelledby="gallery-welcome-title">
-  <div class="welcome-art" aria-hidden="true">
+{{/* Data: galleryEmptyState. Every destination and miss shares the same text
+     hierarchy and controls; only first-artifact Search uses the illustration. */}}
+{{define "galleryEmpty"}}<section class="gallery-empty{{if .Welcome}} gallery-welcome{{end}}">
+  {{if .Welcome}}{{template "galleryWelcomeArt"}}{{else if .Icon}}<i class="ph {{.Icon}}" aria-hidden="true"></i>{{end}}
+  <h2 class="empty">{{.Message}}</h2>
+  {{if .Hint}}<p class="empty-hint">{{.Hint}}</p>{{end}}
+  {{if .ActionURL}}<a class="btn{{if not .Welcome}} btn-sec{{end}}" href="{{.ActionURL}}"{{if .ResetAction}} data-gallery-space-link hx-get="{{.ActionURL}}" hx-target="#gallery-content" hx-swap="outerHTML" hx-push-url="true" hx-sync="#gallery-shell:replace"{{end}}>{{if .Welcome}}<i class="ph ph-palette" aria-hidden="true"></i>{{end}}{{.ActionLabel}}</a>{{end}}
+</section>{{end}}
+
+{{define "galleryWelcomeArt"}}  <div class="welcome-art" aria-hidden="true">
     <div class="welcome-tool welcome-tool-list">
       <i class="ph ph-check-square"></i>
       <div class="welcome-checks"><i class="ph ph-check-circle"></i><span></span><i class="ph ph-check-circle"></i><span></span><i class="ph ph-circle"></i><span></span></div>
@@ -40,9 +46,7 @@
       <div class="welcome-bars"><span></span><span></span><span></span><span></span><span></span></div>
     </div>
   </div>
-  <h2 class="welcome-eyebrow" id="gallery-welcome-title">{{.Message}}</h2>
-  <a class="btn welcome-create" href="{{.ActionURL}}"><i class="ph ph-palette" aria-hidden="true"></i>{{.ActionLabel}}</a>
-</section>{{end}}
+{{end}}
 
 {{define "galleryMore"}}<div class="gallery-more">
   <p class="gallery-error" data-gallery-load-error{{if not .RetryURL}} hidden{{end}}>Couldn’t load {{if .Activity}}activity{{else}}artifacts{{end}}. Try again.</p>

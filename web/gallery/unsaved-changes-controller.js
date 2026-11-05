@@ -3,7 +3,7 @@ import { modalFor } from './modal.js';
 import { hasEditorChanges, saveEditorChanges, discardEditorChanges, waitForEditorSave, editorSaveStatus } from './editor-session.js';
 
 export default class UnsavedChangesController extends Controller {
-  static targets = ['dialog', 'status', 'saveButton', 'saveMessage'];
+  static targets = ['dialog', 'status', 'saveButton', 'saveMessage', 'saveMessageText'];
 
   connect() {
     this.modal = modalFor(this.dialogTarget);
@@ -27,7 +27,9 @@ export default class UnsavedChangesController extends Controller {
     button.classList.toggle('btn-sec', !dirty);
     button.disabled = saving || !dirty;
     button.setAttribute('aria-busy', String(saving));
-    this.saveMessageTarget.textContent = dirty && !saving ? issue : '';
+    // Legacy footer statuses include a text glyph. The shared notice supplies
+    // its own icon, so keep just the explanation and its recovery instruction.
+    this.saveMessageTextTarget.textContent = dirty && !saving ? issue.replace(/^✗\s*(?:Error:\s*)?/, '') : '';
     this.saveMessageTarget.hidden = !dirty || saving || !issue;
   }
 

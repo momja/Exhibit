@@ -11,10 +11,21 @@ test('sticky editor Save names its action and shows pending and persisted outcom
       const status = page.locator('.app-header [role=status]');
       await expect(status).toHaveText('Saved');
       await expect(save).toBeDisabled();
+      await page.evaluate(() => document.fonts.ready);
+      const controls = page.locator('.app-header [aria-label="View artifact"], .editor-save-status, #save-button');
+      const bounds = () => controls.evaluateAll(elements => elements.map(element => {
+        const rect = element.getBoundingClientRect();
+        return [rect.left, rect.width];
+      }));
+      const savedBounds = await bounds();
       const title = `Saved ${width} ${colorScheme}`;
       await page.getByLabel('Artifact title', { exact: true }).fill(title);
       await expect(status).toHaveText('Unsaved');
       await expect(save).toBeEnabled();
+      await expect.poll(async () => {
+        const dirtyBounds = await bounds();
+        return Math.max(...dirtyBounds.flatMap((rect, i) => rect.map((value, j) => Math.abs(value - savedBounds[i][j]))));
+      }, { message: 'changing Save status keeps the header controls stationary' }).toBeLessThan(0.5);
       await page.locator('#tags-panel > summary').click();
       await page.locator('#versions-panel > summary').click();
       await page.locator('#versions-panel').evaluate(element => { element.scrollIntoView({ block: 'start' }); window.scrollBy(0, -72); });
@@ -69,6 +80,8 @@ test('failed editor Save keeps its explanation visible and supports a successful
     const explanation = page.locator('.editor-save-message');
     await expect(explanation).toBeVisible();
     await expect(explanation).toContainText('Temporary save failure');
+    await expect(explanation).toHaveText('Temporary save failure. Try again.');
+    await expect(explanation.locator('.ph-warning')).toBeVisible();
     expect(await explanation.evaluate(element => { const r = element.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth; })).toBe(true);
     await expect(save).toBeEnabled();
     expect((await (await api.get(`/api/artifacts/${artifact.id}`)).json()).title).toBe(before);

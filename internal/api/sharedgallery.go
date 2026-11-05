@@ -13,7 +13,7 @@ var sharedGallery = galleryDefinition{
 	ID: "shared-gallery", Title: "Shared", PagePath: "/shared", FragmentPath: "/partials/gallery-grid/shared",
 	Description: "Artifacts shared with you and artifacts you’ve shared with others.",
 	Select:      selectAllShared, NoFilters: true,
-	Empty: galleryEmptyState{Icon: "ph-share-network", Message: "Shared artifacts will appear here. Share one of yours, or ask someone to share with you."},
+	Empty: galleryEmptyState{Icon: "ph-share-network", Message: "Nothing shared yet", Hint: "Share one of your artifacts, or ask someone to share with you."},
 }
 
 func selectAllShared(ro *Router, r *http.Request, offset, limit int, query string) ([]galleryCard, url.Values, error) {
