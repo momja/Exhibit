@@ -1,0 +1,18 @@
+{
+  "scheduledTaskId": "scheduled-task:command:mcp:bb622e97-24f4-48e5-90ab-d51f24f155e2:schedule-task:Exh-zrjo-r31-opus-reset-2026-11-05",
+  "schedule": {
+    "type": "fixed_time",
+    "timeOfDay": "10:51"
+  },
+  "nextRunAt": "2026-11-05T10:51:00.000Z",
+  "boundThreadId": "096f4939-b5a7-46dd-a015-84f12c84336e",
+  "enabled": true,
+  "oneUse": true,
+  "firstAction": "permanently delete this exact scheduledTaskId",
+  "actualResetAt": "2026-11-05T10:50:00Z",
+  "promptPath": "followup-r31-opus-resume-prompt.md",
+  "productionApplication": "42c94eb1cb12a74108885cc1cbb7aaf7d11f5721",
+  "validationBaseline": "c1156ef15c7f5caa282b1068214492bce42018e1",
+  "assetVersion": "aa7a00afd7a2",
+  "boundedPostResetExecutions": 1
+}
