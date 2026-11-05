@@ -1,30 +1,27 @@
-# Tag editing council: target10
+# Tag editing council: target 10
 
-Current application235a5c9e, assetsb1f015b9d4bf, remains stacked on PR273. The
-latest scope is only Tags and Edit tag. Completion needs both independent models
-to award all seven categories10 in light and dark in two consecutive joint
-rounds on the unchanged interface, with the required live rendered coverage.
-The focused joint streak remains0/2. Broader9coverage is superseded history and
-was not retroactively completed.
+Current application `f58de10b`, assets `4beedb277545`, remains stacked on PR273.
+Only Tags and Edit tag are in scope. Both independent reviewers must award all
+seven categories 10 in light and dark, in two consecutive joint rounds on the
+same interface with complete required live coverage. The current streak is 0/2.
+Broader historical 9 coverage is superseded/incomplete, not claimed completed.
 
-Round34 Sol gave twelve10s and workflow9.5 in both themes, correctly identifying
-an Enter bypass after duplicate-name rejection. Opus34 failed at its actual quota
-without report/scores. That candidate is superseded; its missing phase will not
-be filled. All reports, actual task IDs and no-score failure remain recorded.
+Round35 Sol awarded all14 values10. Opus's actual table has composition9.5 in both
+schemes and twelve10s (its prose miscounts); that joint round failed. Opus also
+honestly declared some unviewed lower controls, retained as limits. Both reports
+were terminal before the current change. Fresh36 explicitly requires actual full
+lower views in every relevant Main/sample pair, without cross-theme substitution.
 
-The current response reproduces that keyboard bug in a real disposable browser
-fixture, then fixes it: the error stays visible, Enter sends no repeated PATCH,
-and editing Name restores eligibility. It also registers and self-hosts the
-empty-color minus icon caught by the full Go suite. No assertions were weakened.
-[Actual before/after](../../screenshots/Exh-zrjo/tags-ten-comparison-round35.html)
-was previewed/rendered. Earlier visual refinements and comparisons remain saved.
+The remaining desktop Add row overhang was reproduced at81px in both themes.
+Three CSS rules align the whole row with the tag list/create column, keeping
+phone controls full width. Actual after geometry at all four widths/both themes
+is0px overhang, no overflow or tag requests. Eight before/eight after photographs
+and an [actual comparison](../../screenshots/Exh-zrjo/tags-ten-comparison-round36.html)
+are saved and published. No new automated test for this small layout-only fix.
 
-Current assets/build,479Node,icon/native checks and all24E2E pass. Standard full
-Go35 confirmation also PASS: exit0,443.14s, unchanged whole source fingerprint. Four current T3invalid views
-and26disposable draft/outcome photos supplement the independent council, not
-replace it. Sol35 completed all14 scores10 after the full actual16core +4sample-pair matrix.
-This is one independent pass; joint streak remains0 pending Opus35. The missing
-fresh Opus phase is now running after reset, same-round peer scores withheld.
-The temporary continuation was permanently deleted FIRST; scheduled-task list
-is empty. No recurring automation remains. No new PR, main merge or push. No physical-phone/Safari/screen-reader
-certification. Safe [validation](tags-ten-validation.md), parent [scores](tags-ten-scores.json).
+Current full build, native/icon checks and all24E2E pass.479Node results carry on
+unchanged JS/tests with explicit whole-scope delta proof. Full standardGo36 is
+running; no exit inferred. Both fresh36 reviews are active, same-round peer scores
+withheld. No10 milestone or one-model pass carried across the change. No recurring
+automation, new PR, main merge or push. No physical-phone/Safari/a11y certification.
+Safe [validation](tags-ten-validation.md); parent [scores](tags-ten-scores.json).

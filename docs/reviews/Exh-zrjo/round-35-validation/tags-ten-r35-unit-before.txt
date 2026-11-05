@@ -1,0 +1,40 @@
+(node:288927) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ remove detaches the tag from this artifact and re-renders the panel (47.840639ms)
+✔ adding an existing tag attaches it, and nothing is created (4.694902ms)
+✔ create new makes the tag with its name and color, then attaches it (6.88296ms)
+✔ add with nothing chosen sends nothing and says why (4.03166ms)
+✔ a refused create is reported and never attaches (5.63435ms)
+✔ the edit dialog renames the tag library-wide and re-renders the panel (6.699504ms)
+✖ Edit Enter keeps a rejected name blocked until its value changes (8.167737ms)
+✔ deleting shows a local confirmation, and Keep tag sends nothing (7.683867ms)
+✔ creating validates its own name even when an existing tag is selected (4.817985ms)
+✔ Enter in the new tag name creates without consulting the dropdown (5.270937ms)
+✔ attachment errors after creation survive the panel refresh (5.524685ms)
+ℹ tests 11
+ℹ suites 0
+ℹ pass 10
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 239.778355
+
+✖ failing tests:
+
+test at web/gallery/tags.test.mjs:134:1
+✖ Edit Enter keeps a rejected name blocked until its value changes (8.167737ms)
+  AssertionError [ERR_ASSERTION]: unchanged rejected name sends no repeated PATCH
+
+  2 !== 1
+
+      at TestContext.<anonymous> (file:///home/maxomdal/.t3/worktrees/Exhibit/feature-Exh-zrjo-ui-council/web/gallery/tags.test.mjs:145:12)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 2,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

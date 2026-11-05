@@ -1,50 +1,52 @@
 # Current focused tag UI validation
 
-APPLICATION235a5c9ecddd7494a20eaef32e55c0320994adad, assetsb1f015b9d4bf.
-Strict entire internal web e2e cmd scripts Makefile go.mod go.sum scope is clean
-against235a5c9e, NO exclusions. Source fingerprint
-b242d0432fd608bc915891a342025e35d2ff19dfb027f4959cc82849b778e851.
+Application f58de10bf88acff268b9339e0c7dae406a93c664, assets 4beedb277545.
+Entire internal web e2e cmd scripts Makefile go.mod go.sum scope is clean against
+f58de10b, with no exclusions. Source fingerprint:
+1fc8899f65781b39212653be286d8064d2ea02bcfd772558ad9a2033ac71992a.
 
 | Check | Current actual result |
 | --- | --- |
-| Full asset build (make assets) | PASS12.63s |
-| Go server build | PASS5.72s |
-| Gallery Node suite | PASS479tests,16.71s wrapper |
-| Icon registry + served subsetCSS + native Tag modal | PASS19.71s wrapper; actual1280/390 native subtests, no skips |
-| Complete Playwright suite | PASS24tests,149.19s wrapper, including real409/Enter regression |
-| Parent current T3 photos |4invalid-color views,1280/390 each actual light/dark, visible neutral glyph and no overflow |
-| Disposable-fixture screenshots |26current drafts/outcomes from passing E2E |
-| Full standard Go short confirmation | PASS exit0,443.14s; API426.200s/store194.788s; entire source unchanged |
+| Full make build (all asset workspaces + server) | PASS17.61s |
+| Gallery Node suite | Carried479 PASS from35 on unchanged JS/tests; not rerun for CSS-only change |
+| Icon registry + served CSS + native Tag modal | PASS20.14s; actual1280/390 native subtests, no skips |
+| Complete Playwright suite | PASS24tests,119.39s |
+| Current actual Add-row layout measurements/photos | Eight before +eight after at1280/768/390/320, both real schemes;81px desktop overhang→0px, no overflow or tag API requests |
+| Full standard Go short confirmation | RUNNING on frozen36; no exit inferred |
 
-All completed receipts confirm unchanged entire fingerprint during checks:
-tags-ten-r35-*-status.json plus adjacent.txt. Raw logs remain at recorded/tmp
-paths; doc copies normalize trailing whitespace only. Build receipts truthfully
-retain pre-source-commit HEAD; exactly these bytes were then committed as235a5c9e.
-Runtime identity proves matching current bin/server/Main/playground SHA
-3e9cf847e05ddf4c9ed01fd8ca15d2151c6c6069db0373246ed47cb97cd6f1bb.
-There is no binary VCS stamp; none was extracted.
+The ENTIRE delta from the previous235a5c9e candidate is three rule edits in
+web/gallery/edit.css. No JS/templates/Go/tests changed. The explicit whole-scope
+proof and source/served JS byte agreement are in tags-ten-r36-scope-change.json.
+Node479 remains a previous execution on the unchanged JS/test code, not a fresh
+run or current full fingerprint claim. No source paths are excluded from the
+strict current-candidate comparison.
 
-Main http://t3code:18280/render18281/default profile and isolated Tag sample
-http://t3code:18580/render18581/incognito profile run the SAMEcurrentbinary.
-Public fixture identity in tags-ten-playground.json. OldEMPTY18380 is outdated.
-Main's four original tags/associations unchanged. Parent persistence tests use
-only disposable18080; reviewers remain read-only on both current samples.
+Current completed receipts/logs: tags-ten-r36-*-status.json/.txt, confirming exit0
+and unchanged entire current fingerprint during each. Runtime identity proves
+bin/server and both current process executables match SHA
+7be17fc28c646d805fb5deaa0accd791bc338a837d11c7900c44a6ce5e5d7458.
+The binary has no VCS stamp. Provenance is real source/build/assets/process hash.
+Full current Go status: /tmp/exhibit-zrjo-tags10-r36-go-final-status.json and.log.
+Read actual exit; don't rebuild assets during Go or repeat passed checks unchanged.
+Previous full35Go PASS443.14s is retained as history, not claimed as the new run.
 
-The real new regression FAILS old62328d49: duplicate Edit409 then Enter sends
-another PATCH despite disabled Save (expected1, received2). Unit fails the same
-path. Current BOTHschemes pass Name and hex Enter with error retained, Namefocus,
-Save disabled and exactly1request; editing Name clears error and enables normal
-Save. Existing503/retry, global rename/recolor, association-only removal, global
-Delete preserving artifacts, pending locks and htmx feedback remain covered.
+Main http://t3code:18280/render18281/default and isolated Tag sample
+http://t3code:18580/render18581/incognito use the same new binary and unchanged
+fixtures. Public identity tags-ten-playground.json. No Main or sample tag writes;
+only local Utilities selection, restored. Persistent tests use disposable18080.
+OldEMPTY18380 is outdated. Other-task18480/18481 were never touched.
 
-Previous full34Go failed445.42s solely because new ph-minus was not registered
-or served. Failure receipts/logs are preserved in round-34-validation and current
-history; tests were not weakened. New registry is rebuilt and both checks pass.
-Full standardGo confirmation is now complete, exit0 on frozen35:
-/tmp/exhibit-zrjo-tags10-r35-go-final-status.json and corresponding.log.
-Do NOT rebuild assets during Go compilation or repeat passing suites unchanged.
+All existing browser behavior checks remain: real409/Enter guard, pending locks,
+503/retry/global rename/recolor, association-only Remove, global Delete retaining
+artifacts, partial201/attach503 retry/focus and htmx error retention, invalid local
+fields, palette geometry/keyboard, footer DOM order and short sheets. No new test
+for the small reversible width fix; real browser geometry and photos directly
+verify alignment. Current full E2E pass covers these existing assertions.
 
-Parent images are supplementary, not council coverage or ratings. Each reviewer
-must actually view its own16Main core states plus4sample pairs, real schemes,
-with declared limits. Parent did not certify physicalphone/Safari/screenreader.
-Broader historical9coverage remains superseded/incomplete, not claimed complete.
+Parent captured and measured all eight current sample pairs, visually inspecting
+representative desktop and phone dark views. Photos focus the Add row, not a
+parent full-core certification. Each reviewer must actually VIEW its own complete
+16Main states +4sample pairs, including lower controls at every relevant pair.
+Parent photos/tests do not award ratings or substitute for personally viewed
+outcomes. R35 outcome photos remain historical supplementary evidence; persistence
+paths unchanged. No physical-phone/Safari/screen-reader certification.

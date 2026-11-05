@@ -1,0 +1,42 @@
+
+Running 1 test using 1 worker
+
+(node:288819) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  1 [chromium] › specs/tags.spec.ts:173:1 › tag changes persist with clear pending, local failure and retry feedback without page Save (3.2s)
+
+
+  1) [chromium] › specs/tags.spec.ts:173:1 › tag changes persist with clear pending, local failure and retry feedback without page Save
+
+    Error: Enter cannot retry a known rejected name
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 1
+    Received: 2
+
+      250 |         await expect(modal.locator('#tag-edit-name')).toBeFocused();
+      251 |         await expect(modal.locator('#tag-edit-save')).toBeDisabled();
+    > 252 |         expect(editAttempts, 'Enter cannot retry a known rejected name').toBe(1);
+          |                                                                          ^
+      253 |       }
+      254 |       await page.screenshot({ path: test.info().outputPath(`tag-edit-name-error-${colorScheme}.png`) });
+      255 |       const retried = `${original} retried`;
+        at /home/maxomdal/.t3/worktrees/Exhibit/feature-Exh-zrjo-ui-council/e2e/specs/tags.spec.ts:252:74
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/tags-tag-changes-persist-w-b38e2--feedback-without-page-Save-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/tags-tag-changes-persist-w-b38e2--feedback-without-page-Save-chromium/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/tags-tag-changes-persist-w-b38e2--feedback-without-page-Save-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/tags-tag-changes-persist-w-b38e2--feedback-without-page-Save-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [chromium] › specs/tags.spec.ts:173:1 › tag changes persist with clear pending, local failure and retry feedback without page Save

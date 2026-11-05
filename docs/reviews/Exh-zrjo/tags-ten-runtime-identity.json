@@ -1,7 +1,7 @@
 {
-  "applicationCommit": "235a5c9ecddd7494a20eaef32e55c0320994adad",
-  "assetVersion": "b1f015b9d4bf",
-  "sourceFingerprint": "b242d0432fd608bc915891a342025e35d2ff19dfb027f4959cc82849b778e851",
+  "applicationCommit": "f58de10bf88acff268b9339e0c7dae406a93c664",
+  "assetVersion": "4beedb277545",
+  "sourceFingerprint": "1fc8899f65781b39212653be286d8064d2ea02bcfd772558ad9a2033ac71992a",
   "scope": [
     "internal",
     "web",
@@ -13,11 +13,11 @@
     "go.sum"
   ],
   "scopedDiff": "",
-  "binarySha256": "3e9cf847e05ddf4c9ed01fd8ca15d2151c6c6069db0373246ed47cb97cd6f1bb",
-  "mainPID": 290478,
-  "mainExecutableSha256": "3e9cf847e05ddf4c9ed01fd8ca15d2151c6c6069db0373246ed47cb97cd6f1bb",
-  "playgroundPID": 290564,
-  "playgroundExecutableSha256": "3e9cf847e05ddf4c9ed01fd8ca15d2151c6c6069db0373246ed47cb97cd6f1bb",
+  "binarySha256": "7be17fc28c646d805fb5deaa0accd791bc338a837d11c7900c44a6ce5e5d7458",
+  "mainPID": 305222,
+  "mainExecutableSha256": "7be17fc28c646d805fb5deaa0accd791bc338a837d11c7900c44a6ce5e5d7458",
+  "playgroundPID": 305238,
+  "playgroundExecutableSha256": "7be17fc28c646d805fb5deaa0accd791bc338a837d11c7900c44a6ce5e5d7458",
   "vcsStamp": false,
-  "proof": "Clean entire scope plus identical current executables and versioned assets, not VCS extraction. Build occurred on parent HEAD before committing exactly this source."
+  "proof": "Full asset/server build receipt on this commit, empty full source scope, current assets and matching process executables. No binary VCS stamp."
 }

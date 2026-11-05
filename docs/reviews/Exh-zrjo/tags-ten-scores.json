@@ -23,9 +23,9 @@
   "requiredJointConsecutivePasses": 2,
   "jointPassingStreak": 0,
   "completed": false,
-  "applicationCommit": "235a5c9ecddd7494a20eaef32e55c0320994adad",
-  "assetVersion": "b1f015b9d4bf",
-  "validationBaseline": "235a5c9ecddd7494a20eaef32e55c0320994adad",
+  "applicationCommit": "f58de10bf88acff268b9339e0c7dae406a93c664",
+  "assetVersion": "4beedb277545",
+  "validationBaseline": "f58de10bf88acff268b9339e0c7dae406a93c664",
   "rounds": [
     {
       "round": 32,
@@ -242,8 +242,8 @@
       "applicationCommit": "235a5c9ecddd7494a20eaef32e55c0320994adad",
       "assetVersion": "b1f015b9d4bf",
       "validationBaseline": "235a5c9ecddd7494a20eaef32e55c0320994adad",
-      "status": "sol_completed_opus_running",
-      "jointPass": null,
+      "status": "joint_failure",
+      "jointPass": false,
       "reviewers": [
         {
           "reviewer": "sol",
@@ -283,26 +283,82 @@
           "model": "claude-opus-5-5",
           "taskId": "node:delegated-task:command%3Amcp%3Acfaf7639-87c2-4c24-af58-fe176ad56b8c%3Adelegate-task%3AExh-zrjo-r35-opus-tags-ten-after-reset-2026-11-05",
           "clientRequestId": "Exh-zrjo-r35-opus-tags-ten-after-reset-2026-11-05",
-          "status": "running",
+          "status": "completed",
           "report": "round-35-opus-tags-ten.md",
           "deferredRecord": "round-35-opus-tags-ten-deferred.md",
-          "light": null,
-          "dark": null,
-          "individualPass": null,
+          "light": [
+            10.0,
+            9.5,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0
+          ],
+          "dark": [
+            10.0,
+            9.5,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0
+          ],
+          "individualPass": false,
           "launchRecord": "round-35-opus-tags-ten-after-reset-launch.json",
           "attempts": [
             {
               "taskId": "node:delegated-task:command%3Amcp%3Acfaf7639-87c2-4c24-af58-fe176ad56b8c%3Adelegate-task%3AExh-zrjo-r35-opus-tags-ten-after-reset-2026-11-05",
               "clientRequestId": "Exh-zrjo-r35-opus-tags-ten-after-reset-2026-11-05",
-              "status": "running",
+              "status": "completed",
               "startedAt": "2026-11-05T21:33:32.069369+00:00",
-              "scoresProduced": null
+              "scoresProduced": true
             }
-          ]
+          ],
+          "statusRecord": "round-35-opus-tags-ten-status.json",
+          "scoreVerification": "Parsed actual table:12values10,2values9.5. Raw report/terminal prose says13; arithmetic typo preserved, numeric table authoritative.",
+          "coverageLimits": "Rendered all core surface pairs, but1280light/390dark Main lower controls and sample lower controls were not separately fully viewed. Does not qualify regardless: composition below10."
+        }
+      ]
+    },
+    {
+      "round": 36,
+      "purpose": "column_alignment_candidate",
+      "applicationCommit": "f58de10bf88acff268b9339e0c7dae406a93c664",
+      "assetVersion": "4beedb277545",
+      "validationBaseline": "f58de10bf88acff268b9339e0c7dae406a93c664",
+      "status": "running",
+      "jointPass": null,
+      "reviewers": [
+        {
+          "reviewer": "sol",
+          "providerInstanceId": "codex",
+          "model": "gpt-6.1-sol",
+          "taskId": "node:delegated-task:command%3Amcp%3Acfaf7639-87c2-4c24-af58-fe176ad56b8c%3Adelegate-task%3AExh-zrjo-r36-sol-tags-ten",
+          "clientRequestId": "Exh-zrjo-r36-sol-tags-ten",
+          "status": "running",
+          "launchRecord": "round-36-sol-tags-ten-launch.json",
+          "report": "round-36-sol-tags-ten.md",
+          "light": null,
+          "dark": null,
+          "individualPass": null
+        },
+        {
+          "reviewer": "opus",
+          "providerInstanceId": "claudeAgent",
+          "model": "claude-opus-5-5",
+          "taskId": "node:delegated-task:command%3Amcp%3Acfaf7639-87c2-4c24-af58-fe176ad56b8c%3Adelegate-task%3AExh-zrjo-r36-opus-tags-ten",
+          "clientRequestId": "Exh-zrjo-r36-opus-tags-ten",
+          "status": "running",
+          "launchRecord": "round-36-opus-tags-ten-launch.json",
+          "report": "round-36-opus-tags-ten.md",
+          "light": null,
+          "dark": null,
+          "individualPass": null
         }
       ]
     }
   ],
   "historicalBroader9": "followup-scores.json: numerical passes, final broad coverage incomplete; superseded by user focused10 instruction, not claimed complete",
-  "validationStatus": "ALL required checks PASS on unchanged235a5c9e/b1: assets/build,479Node,icon+native,24E2E and fullGo443.14s. No reruns needed unchanged."
+  "validationStatus": "Current makebuild17.61s,icon/native20.14s,24E2E119.39s PASS.479Node carried on unchangedJS/tests. Full currentGo36 running; read actual durable exit."
 }
