@@ -23,7 +23,7 @@ func TestGallerySpacesBrowser(t *testing.T) {
 		name          string
 		width, height int64
 		phone         bool
-	}{{"phone", 390, 844, true}, {"tablet", 768, 900, false}, {"desktop", 1280, 900, false}} {
+	}{{"narrow", 320, 844, true}, {"phone", 390, 844, true}, {"tablet", 768, 900, false}, {"desktop", 1280, 900, false}} {
 		t.Run(viewport.name, func(t *testing.T) {
 			browser, err := chromium.New(chromiumtest.Start(t))
 			require.NoError(t, err)
@@ -56,7 +56,12 @@ func TestGallerySpacesBrowser(t *testing.T) {
 				require.NoError(t, err)
 				require.True(t, ok, message)
 			}
-			checkDesktopRows := func() {
+			checkSpaceLayout := func() {
+				check(`(() => {
+ const heading = document.querySelector('.gallery-title');
+ const description = document.querySelector('.gallery-description');
+ return !description || description.getBoundingClientRect().top >= heading.getBoundingClientRect().bottom + 4;
+})()`, "the destination description has visible separation below its heading")
 				if viewport.phone {
 					return
 				}
@@ -80,9 +85,9 @@ func TestGallerySpacesBrowser(t *testing.T) {
 				check(`Array.from(document.querySelectorAll('.card')).at(-1).getBoundingClientRect().bottom <= document.querySelector('.gallery-rail').getBoundingClientRect().top`, "the last card scrolls fully above the tabs")
 			} else {
 				check(`getComputedStyle(document.querySelector('.gallery-layout')).display === 'grid' && document.querySelector('.gallery-rail').getBoundingClientRect().right <= document.querySelector('main').getBoundingClientRect().left`, "desktop rail sits beside the grid")
-				checkDesktopRows()
 				require.NoError(t, chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](`window.spaceRowPositions = Array.from(document.querySelectorAll('.gallery-spaces a')).filter(a => a.getClientRects().length).map(a => a.getBoundingClientRect().top)`)))
 			}
+			checkSpaceLayout()
 
 			// Ordinary Tab order and visible focus work in both layouts.
 			require.NoError(t, chromedp.Do(ctx, chromedp.Focus(chromedp.CSS(`.gallery-spaces a[href="/"]`)), chromedp.KeyEvent(kb.Tab)))
@@ -94,7 +99,7 @@ func TestGallerySpacesBrowser(t *testing.T) {
 			err = chromedp.Do(ctx, chromedp.KeyEvent(kb.Enter), chromedp.Poll[chromedp.Void](`location.pathname === "/activity"`))
 			require.NoError(t, err)
 			check(`location.pathname === '/activity' && document.querySelector('.gallery-spaces [aria-current="page"]').getAttribute('href') === '/activity'`, "keyboard activation navigates to Activity")
-			checkDesktopRows()
+			checkSpaceLayout()
 			for _, path := range []string{"/", "/shared"} {
 				// Load can finish before pagereveal starts the cross-document
 				// transition, when getAnimations() is still empty. Wait for the
@@ -105,12 +110,12 @@ func TestGallerySpacesBrowser(t *testing.T) {
 				err = chromedp.Do(ctx, chromedp.Click(chromedp.CSS(`.gallery-spaces a[href="`+path+`"]`)), chromedp.Poll[chromedp.Void](`location.pathname === "`+path+`"`))
 				require.NoError(t, err)
 				check(`location.pathname === '`+path+`' && document.querySelector('.gallery-spaces [aria-current="page"]').getAttribute('href') === '`+path+`'`, "space links navigate and update the active space")
-				checkDesktopRows()
+				checkSpaceLayout()
 			}
 			_, err = chromedp.Call(ctx, emulation.SetEmulatedMedia, emulation.SetEmulatedMediaParams{Features: []*emulation.MediaFeature{{Name: "prefers-color-scheme", Value: "dark"}}})
 			require.NoError(t, err)
 			check(`matchMedia('(prefers-color-scheme: dark)').matches && getComputedStyle(document.querySelector('.gallery-rail')).backgroundColor === getComputedStyle(document.querySelector('header')).backgroundColor`, "the navigation follows the dark panel token")
-			checkDesktopRows()
+			checkSpaceLayout()
 		})
 	}
 }

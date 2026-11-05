@@ -12,7 +12,7 @@ test('posture receipt stays within the viewport through keyboard, resize and ser
     await page.setViewportSize({ width, height: width > 767 ? 500 : 740 });
     for (const colorScheme of ['light', 'dark'] as const) {
       await page.emulateMedia({ colorScheme });
-      await page.goto('/');
+      await page.goto('/search');
       await page.evaluate(() => document.fonts.ready);
       const originalHeight = await page.evaluate(() => document.documentElement.scrollHeight);
       await trigger.focus();
@@ -43,13 +43,13 @@ test('posture receipt stays within the viewport through keyboard, resize and ser
       await trigger.click();
       await page.mouse.click(width - 2, 2);
       await expect(panel).not.toBeVisible();
-      expect(new URL(page.url()).pathname).toBe('/');
+      expect(new URL(page.url()).pathname).toBe('/search');
     }
   }
   // htmx replaces the card, so the old controller and its window hooks leave.
   const previous = await trigger.elementHandle();
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page.locator('header [data-gallery-query]').fill('not-a-fixture');
+  await page.locator('.gallery-page-search [data-gallery-query]').fill('not-a-fixture');
   await expect(card).toHaveCount(0);
   await expect.poll(() => previous!.evaluate(node => node.isConnected)).toBe(false);
   await page.locator('[data-gallery-clear]').click();

@@ -45,9 +45,9 @@ try {
     ['gallery', '/'], ['search', '/search'], ['search-results', '/search?q=run'],
     ['global-search-empty', '/search?q=not-in-this-library'], ['add', '/new'], ['settings', '/settings'],
     ['editor', editorPath], ['viewer', `/artifacts/${artifact.id}`],
-    ['shared', '/shared'], ['shared-by-me', '/shared-by-me'],
-    ['search-empty', '/?q=not-in-this-library'], ['filters', '/?tag=Health'],
-    ['filters-empty', '/?tag=Health&tag=Reading'],
+    ['shared', '/shared'], ['activity', '/activity'],
+    ['search-empty', '/search?q=not-in-this-library'], ['filters', '/search?tag=Health'],
+    ['filters-empty', '/search?tag=Health&tag=Reading'],
   ];
   await mkdir(output, { recursive: true });
   const page = await context.newPage();
@@ -81,7 +81,7 @@ try {
     for (const [name, route] of routes) await capture(name, route, width, scheme);
   }
   for (const scheme of ['light', 'dark']) {
-    for (const [name, route] of [['gallery', '/'], ['shared', '/shared'], ['shared-by-me', '/shared-by-me']]) {
+    for (const [name, route] of [['gallery', '/'], ['shared', '/shared'], ['activity', '/activity']]) {
       await capture(name, route, 768, scheme);
     }
   }
@@ -92,11 +92,11 @@ try {
     await capture('add-url', '/new', 390, scheme, async page => {
       await page.locator('[data-mode=url]').click();
     });
-    await capture('duplicate', '/', 390, scheme, async page => {
+    await capture('duplicate', '/search', 390, scheme, async page => {
       await page.getByRole('button', { name: 'Actions for Run Log', exact: true }).click();
       await page.getByRole('menuitem', { name: 'Duplicate', exact: true }).click();
     });
-    await capture('card-menu', '/', 1280, scheme, async page => {
+    await capture('card-menu', '/search', 1280, scheme, async page => {
       await page.getByRole('button', { name: 'Actions for Run Log', exact: true }).click();
     });
     await capture('share', `/artifacts/${artifact.id}`, 390, scheme, async page => {
@@ -170,7 +170,7 @@ try {
       for (const [name, route] of [['add', '/new'], ['settings', '/settings'], ['global-search-empty', '/search?q=not-in-this-library']]) {
         await capture(name, route, width, scheme);
       }
-      await capture('duplicate', '/', width, scheme, async page => {
+      await capture('duplicate', '/search', width, scheme, async page => {
         await page.getByRole('button', { name: 'Actions for Run Log', exact: true }).click();
         await page.getByRole('menuitem', { name: 'Duplicate', exact: true }).click();
       });
@@ -198,7 +198,7 @@ try {
         await page.locator('#versions-panel > summary').click();
         await page.locator('#versions-panel').scrollIntoViewIfNeeded();
       });
-      await capture('card-posture', '/', width, scheme, async page => {
+      await capture('card-posture', '/search', width, scheme, async page => {
         await page.locator(`[data-href="/artifacts/${artifact.id}"] [data-capability-trigger]`).click();
         await page.locator('.capability-wrap.is-open .capability-popover').waitFor({ state: 'visible' });
       });
@@ -239,7 +239,7 @@ try {
         });
       });
       if (width < 768) {
-        await capture('filter-sheet', '/', width, scheme, async page => {
+        await capture('filter-sheet', '/search', width, scheme, async page => {
           await page.locator('.gallery-filter-trigger').click();
         });
         await capture('add-paste-footer', '/new', width, scheme, async page => {

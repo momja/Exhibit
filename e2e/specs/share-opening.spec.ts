@@ -1,10 +1,10 @@
 import { test, expect, login } from '../fixtures';
 
-test('Share opens at the beginning on short screens and text entry waits for a deliberate action', async ({ browser, api, artifacts }) => {
-  const artifact = await artifacts.create('<h1>Share opening fixture</h1>');
-  const link = await api.post('/api/shares', { data: { artifact_id: artifact.id } });
-  expect(link.ok(), await link.text()).toBeTruthy();
-  for (const touch of [false, true]) {
+for (const touch of [false, true]) {
+  test(`Share opens at the beginning and waits for deliberate text entry (${touch ? 'touch' : 'mouse'})`, async ({ browser, api, artifacts }) => {
+    const artifact = await artifacts.create('<h1>Share opening fixture</h1>');
+    const link = await api.post('/api/shares', { data: { artifact_id: artifact.id } });
+    expect(link.ok(), await link.text()).toBeTruthy();
     const context = await browser.newContext({ hasTouch: touch, isMobile: touch });
     try {
       await login(context);
@@ -39,5 +39,5 @@ test('Share opens at the beginning on short screens and text entry waits for a d
     } finally {
       await context.close();
     }
-  }
-});
+  });
+}
