@@ -39,6 +39,7 @@ type gallerySelection func(*Router, *http.Request, int, int, string) ([]galleryC
 
 type galleryEmptyState struct {
 	Welcome     bool
+	Icon        string
 	Message     string
 	ActionURL   string
 	ActionLabel string

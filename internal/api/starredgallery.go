@@ -12,7 +12,7 @@ var starredGallery = galleryDefinition{
 	ID: "starred-gallery", Title: "Starred", PagePath: "/", FragmentPath: "/partials/gallery-grid",
 	NoFilters: true, HideSearch: true, Select: selectStarred,
 	Description: "Your go-to artifacts, most recently opened first.",
-	Empty:       galleryEmptyState{Message: "Keep your favorites close. Choose Star in an artifact’s action menu.", ActionURL: "/search", ActionLabel: "Browse your artifacts"},
+	Empty:       galleryEmptyState{Icon: "ph-star", Message: "Keep your favorites close. Choose Star in an artifact’s action menu.", ActionURL: "/search", ActionLabel: "Browse your artifacts"},
 }
 
 func selectStarred(ro *Router, r *http.Request, offset, limit int, _ string) ([]galleryCard, url.Values, error) {

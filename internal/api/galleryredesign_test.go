@@ -22,6 +22,8 @@ func TestGalleryPersonalStarAPI(t *testing.T) {
 		in.ro.ServeHTTP(w, r)
 		return w.Code
 	}
+	// Empty Starred needs a route to discover tools rather than a link to itself.
+	assert.Contains(t, in.get(t, "/", in.cookieTwo).Body.String(), `href="/search">Browse your artifacts</a>`)
 	assert.Equal(t, 204, write(in.cookieTwo, "PUT", in.granted, "starred", `{"starred":true}`))
 	body := in.get(t, "/", in.cookieTwo).Body.String()
 	assert.Contains(t, body, `data-href="/artifacts/`+in.granted+`"`)
