@@ -21,8 +21,8 @@
     320
   ],
   "requiredJointConsecutivePasses": 2,
-  "jointPassingStreak": 1,
-  "completed": false,
+  "jointPassingStreak": 2,
+  "completed": true,
   "applicationCommit": "f58de10bf88acff268b9339e0c7dae406a93c664",
   "assetVersion": "4beedb277545",
   "validationBaseline": "f58de10bf88acff268b9339e0c7dae406a93c664",
@@ -360,7 +360,8 @@
           "individualPass": true,
           "statusRecord": "round-36-sol-tags-ten-status.json",
           "requiredViewedCoverageComplete": true,
-          "scoreVerification": "Actual14values exact10 parsed from table, ordered categories matched; actual16Main +4samplepairs fully viewed including lower controls."
+          "scoreVerification": "Actual14values exact10 parsed from table, ordered categories matched; actual16Main +4samplepairs fully viewed including lower controls.",
+          "reviewStatus": "complete_report_verified"
         },
         {
           "reviewer": "opus",
@@ -392,7 +393,8 @@
           "individualPass": true,
           "statusRecord": "round-36-opus-tags-ten-status.json",
           "requiredViewedCoverageComplete": true,
-          "scoreVerification": "Actual14values exact10 parsed from table, ordered categories matched; actual16Main +4samplepairs fully viewed including lower controls."
+          "scoreVerification": "Actual14values exact10 parsed from table, ordered categories matched; actual16Main +4samplepairs fully viewed including lower controls.",
+          "reviewStatus": "complete_report_verified"
         }
       ],
       "jointPassingStreakAfter": 1
@@ -403,8 +405,8 @@
       "applicationCommit": "f58de10bf88acff268b9339e0c7dae406a93c664",
       "assetVersion": "4beedb277545",
       "validationBaseline": "f58de10bf88acff268b9339e0c7dae406a93c664",
-      "status": "running",
-      "jointPass": null,
+      "status": "joint_pass",
+      "jointPass": true,
       "reviewers": [
         {
           "reviewer": "sol",
@@ -412,12 +414,31 @@
           "model": "gpt-6.1-sol",
           "taskId": "node:delegated-task:command%3Amcp%3Acfaf7639-87c2-4c24-af58-fe176ad56b8c%3Adelegate-task%3AExh-zrjo-r37-sol-tags-ten-confirmation",
           "clientRequestId": "Exh-zrjo-r37-sol-tags-ten-confirmation",
-          "status": "running",
+          "status": "completed",
           "launchRecord": "round-37-sol-tags-ten-launch.json",
           "report": "round-37-sol-tags-ten.md",
-          "light": null,
-          "dark": null,
-          "individualPass": null
+          "light": [
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0
+          ],
+          "dark": [
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0
+          ],
+          "individualPass": true,
+          "statusRecord": "round-37-sol-tags-ten-status.json",
+          "reviewStatus": "complete_report_verified",
+          "requiredViewedCoverageComplete": true
         },
         {
           "reviewer": "opus",
@@ -425,16 +446,45 @@
           "model": "claude-opus-5-5",
           "taskId": "node:delegated-task:command%3Amcp%3Acfaf7639-87c2-4c24-af58-fe176ad56b8c%3Adelegate-task%3AExh-zrjo-r37-opus-tags-ten-confirmation",
           "clientRequestId": "Exh-zrjo-r37-opus-tags-ten-confirmation",
-          "status": "running",
+          "status": "failed",
           "launchRecord": "round-37-opus-tags-ten-launch.json",
           "report": "round-37-opus-tags-ten.md",
-          "light": null,
-          "dark": null,
-          "individualPass": null
+          "light": [
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0
+          ],
+          "dark": [
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0
+          ],
+          "individualPass": true,
+          "statusRecord": "round-37-opus-tags-ten-status.json",
+          "reviewStatus": "complete_report_delivered_before_provider_failure",
+          "requiredViewedCoverageComplete": true,
+          "deliveryAuditRecord": "round-37-opus-tags-ten-delivery-audit.json",
+          "executionError": "Claude API rate limit reached. Try again later.",
+          "reportDeliveredBeforeFailure": true
         }
-      ]
+      ],
+      "jointPassingStreakAfter": 2
     }
   ],
   "historicalBroader9": "followup-scores.json: numerical passes, final broad coverage incomplete; superseded by user focused10 instruction, not claimed complete",
-  "validationStatus": "ALL required checks PASS on unchangedf58de10b/4bee: makebuild17.61s,icon/native20.14s,24E2E119.39s,fullGo441.10s.479Node carried on unchangedJS/tests with explicit proof. Do not repeat unchanged."
+  "validationStatus": "ALL required checks PASS on unchangedf58de10b/4bee: makebuild17.61s,icon/native20.14s,24E2E119.39s,fullGo441.10s.479Node carried on unchangedJS/tests with explicit proof. Do not repeat unchanged.",
+  "councilComplete": true,
+  "finalizationStatus": "Complete:56ratings verified,2jointpasses,current checks pass,feature ticket closed,evidence saved.",
+  "completedAt": "2026-11-05T22:23:47.211028+00:00",
+  "finalRatingVerification": "tags-ten-final-rating-verification.json",
+  "finalSummary": "tags-ten-summary.md",
+  "finalScopeLimit": "Latest Tags/Edit tag-only target; broader historical9coverage remains superseded/incomplete."
 }

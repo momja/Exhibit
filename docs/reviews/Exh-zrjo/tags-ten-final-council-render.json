@@ -1,0 +1,75 @@
+{
+  "application": "f58de10bf88acff268b9339e0c7dae406a93c664",
+  "asset": "4beedb277545",
+  "previews": [
+    {
+      "width": 728,
+      "contentHeight": 620,
+      "capturedHeight": 620,
+      "consoleMessages": [],
+      "screenshot": {
+        "mimeType": "image/png",
+        "width": 728,
+        "height": 620
+      }
+    },
+    {
+      "width": 360,
+      "contentHeight": 810,
+      "capturedHeight": 810,
+      "consoleMessages": [],
+      "screenshot": {
+        "mimeType": "image/png",
+        "width": 360,
+        "height": 810
+      }
+    }
+  ],
+  "render": {
+    "htmlRender": {
+      "attachmentId": "096f4939-b5a7-46dd-a015-84f12c84336e-325acdb3-5ce9-4105-87dd-efb242730e95-html",
+      "title": "Tag editing: two joint 10/10 reviews",
+      "height": 1000,
+      "heights": [
+        [
+          320,
+          867
+        ],
+        [
+          375,
+          793
+        ],
+        [
+          430,
+          706
+        ],
+        [
+          520,
+          695
+        ],
+        [
+          640,
+          659
+        ],
+        [
+          728,
+          620
+        ],
+        [
+          860,
+          620
+        ],
+        [
+          1000,
+          620
+        ],
+        [
+          1144,
+          584
+        ]
+      ],
+      "outline": "t0,1,56,4,1;t142,2,38,4,1;t0,10,166,4,1;t0,18,59,9,2;g0,31,182,81,8;t0,117,164,4,1;t0,124,181,8,2;t0,136,176,8,2;t0,148,91,3,1"
+    },
+    "message": "Shown to the reader above your reply. Don't mention or describe the page; reply with only what it doesn't already say."
+  }
+}
