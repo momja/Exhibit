@@ -23,8 +23,10 @@ Scope: Library/search/empty states; creation; viewer/editor/agent; sharing, dupl
 | 6 | `b2f8def2` | Astra | 8 | 8 | 8 | First joint Sol/Astra pass |
 | 7 | `80c48ae6` | Sol | 8 | 8 | 8 | Second joint Sol/Astra pass |
 | 7 | `80c48ae6` | Astra | 8 | 8 | 8 | Second joint Sol/Astra pass |
+| 8 | `66e95a57` | Sol | 8 | 8 | 8 | Final verification; third joint pass |
+| 8 | `66e95a57` | Astra | 8 | 8 | 8 | Final verification; third joint pass |
 
-**Rounds 6 and 7 meet the two-consecutive-joint-pass scoring condition.** Earlier Sol-only passes do not count as joint acceptance. Opus's last actual scores were 7/7/8 from round 2; later Opus attempts returned no scores due a provider quota on 2026-11-04. On 2026-11-05 the user authorized replacing Opus with Codex Astra. Two localized round-7 findings are corrected for one final independent verification before closing the work.
+**Accepted: three consecutive joint Sol/Astra passes, including final UI revision `66e95a57`.** Both reviewers independently scored necessity, clarity, and hierarchy 8/10 in rounds 6, 7, and 8. Neither found remaining acceptance blockers or concrete regressions in the final verification. Earlier Sol-only passes do not count as joint acceptance. Opus's last actual scores were 7/7/8 from round 2; later Opus attempts returned no scores due a provider quota on 2026-11-04. On 2026-11-05 the user authorized replacing Opus with Codex Astra.
 
 Reports: [Sol R1](round-1-sol.md), [Opus R1](round-1-opus.md), [Sol R2](round-2-sol.md), [Opus R2](round-2-opus.md), [Sol R3](round-3-sol.md), [Sol R4](round-4-sol.md).
 
@@ -46,9 +48,9 @@ All IDs have prefix:
 
 Suffixes: `exh-iust-copy-sol-r1`, `exh-iust-copy-opus-r1`, `exh-iust-copy-sol-r2`, `exh-iust-copy-opus-r2`, `exh-iust-copy-sol-r3`, `exh-iust-copy-opus-r3` (usage limit), `exh-iust-copy-opus-r3b` (usage limit), `exh-iust-copy-sol-r4`.
 
-## Outstanding work
+## Completion
 
-Verify the two final round-7 corrections with independent Sol/Astra reviewers, publish the complete change inventory, and close the ticket. The required two consecutive joint passing rounds already exist.
+All requested copy changes, location inventory, rendered evidence, relevant checks, and independent council verification are complete. The ticket is closed on the feature branch. The final [interactive summary](summary.html) contains the complete inventory grouped by page; [changes.md](changes.md) retains source links for every group. Main remains clean and on `main`; changes have not been merged into it.
 
 ## Validation
 
@@ -59,7 +61,7 @@ Verify the two final round-7 corrections with independent Sol/Astra reviewers, p
 - Short-test coverage completed across all packages. Long combined invocations ended with SIGTERM (exit 143), so validation was completed in bounded package/test batches rather than reported as a successful uninterrupted `go test -short ./...` run.
 - All 864 top-level API tests were assigned to four exhaustive, disjoint `go test -short -count=1 -p 1 ./internal/api -run ...` batches of 216. Batches 1, 2 and 4 passed. Batch 3 reported only an outdated assertion expecting the removed “pi binary” tooltip; that assertion was corrected and `TestPlatformModeEnablesWidgetGeneration` then passed. The remaining batch-3 tests, including `TestGalleryPageScriptSuite` (the gallery Node regression suite), completed without failures.
 - All 245 top-level store tests passed in two exhaustive batches (123 and 122 tests). The other package checks passed; `internal/tile`, after the interrupted combined run, was checked separately and passed. Normal `-short` skips still apply to optional browser/integration tests.
-- `git diff --check` passed. Main remains clean; all development is on the feature worktree. Ticket closure follows final verification and the complete change handoff.
+- `git diff --check` passed. Main remains clean; all development and ticket closure are on the feature worktree.
 
 ## Resumed council — 2026-11-05
 
@@ -91,3 +93,12 @@ Both reviewers again scored necessity, clarity, and hierarchy 8/10, establishing
 Both noted a competing **Open in new tab** action on redirected-request warnings; it is now hidden for that failure because a new tab cannot bypass network permissions. The action remains visible for sandbox limitations it can resolve. Sol also found an editor status incorrectly pointing below its network review region; it now says **“Saved. Review network access before leaving.”** Both were localized nonblockers at the qualifying scores; a final round will verify this cleanup against the complete interface.
 
 Final-cleanup validation: `make build` and `go test -short ./internal/api -run '^TestGalleryPageScriptSuite$'` passed. Extended existing network regressions to cover owner/recipient redirects hiding the ineffective action and ordinary preview limitations retaining it. Actual-app checks caught and corrected a shared CSS display rule overriding the button's hidden state; the final phone and desktop checks confirm computed `display: none`, zero button width, and no horizontal overflow. Screenshots: [phone](../screenshots/Exh-iust/round-8-recipient-redirect-phone.png), [desktop](../screenshots/Exh-iust/round-8-recipient-redirect-desktop.png). These use the same controlled fixture message described above, not a real external redirect.
+
+### Round-8 final verification
+
+Both independent reviewers verified the two final corrections at `66e95a57` and again scored every category 8/10. Reports: [Sol R8](round-8-sol.md), [Astra R8](round-8-astra.md). This is the third consecutive joint passing round; no further copy change or council round is required. Remaining explanation density was noted as optional refinement, not a concrete regression or acceptance blocker.
+
+Round-8 task IDs:
+
+- Sol: `node:delegated-task:command%3Amcp%3Af06d7919-58d9-4e1e-a1fd-c28129115a57%3Adelegate-task%3Aexh-iust-copy-sol-r8`
+- Astra: `node:delegated-task:command%3Amcp%3Af06d7919-58d9-4e1e-a1fd-c28129115a57%3Adelegate-task%3Aexh-iust-copy-astra-r8`

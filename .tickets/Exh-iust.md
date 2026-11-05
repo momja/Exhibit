@@ -1,6 +1,6 @@
 ---
 id: Exh-iust
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-04T15:35:00Z
@@ -31,3 +31,7 @@ Validation completed: asset/server build and diff check passed; all API test cas
 **2026-11-05T02:39:06Z**
 
 User authorized Codex Astra instead of unavailable Opus on 2026-11-05. Resuming with independent Codex Sol and Codex Astra reviews, requiring both to score necessity, clarity, and hierarchy at least 8/10 in two consecutive joint rounds. Prior Opus history remains evidence, not current acceptance.
+
+**2026-11-05T02:59:45Z**
+
+Completed the user-authorized Sol + Astra council: both reviewers scored necessity, clarity, and hierarchy 8/10 in three consecutive joint rounds (6, 7, 8). Final reviewed UI revision 66e95a57 resolves the last redirect-action and editor-direction findings. Build, gallery Node regressions, focused Go checks, earlier exhaustive short-test batches, and actual-app phone/desktop checks passed as documented. Complete change inventory, interactive summary, review reports, and screenshots are in docs/copy-council and docs/screenshots/Exh-iust. Main remains clean; all changes and closure are on the feature branch.
