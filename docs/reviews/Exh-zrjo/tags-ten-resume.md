@@ -1,4 +1,4 @@
-# Current checkpoint: Sol35 completed all14=10, missing independent Opus35 after reset
+# Current checkpoint: Sol35 completed, independent Opus35 running after reset
 
 Latest user request:10/10 ONLY Tags section and Edit tag sheet. Fixed7categories
 in LIGHT/DARK (14/model), BOTH ALL14=10 in TWO consecutive JOINT rounds on SAME
@@ -61,16 +61,21 @@ in BOTHcreate/editName/hex submits: noEnter. No validSave/Create/Add/Remove/fina
 Delete, tests/builds/fixture changes/subdelegation. Local drafts/Deleteentry/Keep
 allowed/restored. Unique report only. Original/r35safe briefs are operative.
 
-Opus35 has NOT been launched. A bounded one-use continuation is set21:31UTCNov5,
-implemented by temporary daily21:31 trigger whose FIRSTaction permanently deletes
-actualID in tags-ten-r35-scheduled-resume.json. Exact prompt in tags-ten-r35-resume-prompt.md.
-At wake FIRSTdelete; if cancelled stop after deletion. Latest checkpoint overrides
-snapshot. If Sol35eligible(active or completedALL14=10) and source unchanged, run
-ONLYmissing freshOpus35 (planned clientRequestIdExh-zrjo-r35-opus-tags-ten-after-reset-2026-11-05).
-Dedupe latestlaunch/task_status; retain actual returnedtaskId. Never duplicate Sol.
-If Solbelow10 or appadvanced, repair/verify then freshBOTHnextunusedround instead.
-Do not start obsolete phases. Same35peer/aggregate withheld; safe brief+PRIORreports
-only, not ticket/checkpoint/timerprompt. Confirm live models at execution.
+The temporary21:31UTC daily continuation was permanently deleted FIRST on wake.
+Actual deletion receipt tags-ten-r35-resume-deleted.json; list confirmed no tasks.
+No recurring automation remains. Source fingerprint and both process binaries
+were independently rechecked unchanged; all prior passing checks were preserved.
+
+ONLY the missing fresh Opus35 phase is now RUNNING shared/async/review. ActualID:
+node:delegated-task:command%3Amcp%3Acfaf7639-87c2-4c24-af58-fe176ad56b8c%3Adelegate-task%3AExh-zrjo-r35-opus-tags-ten-after-reset-2026-11-05
+Stable clientRequestId Exh-zrjo-r35-opus-tags-ten-after-reset-2026-11-05.
+Launch saved round-35-opus-tags-ten-after-reset-launch.json and attempts history.
+Do NOTduplicate this phase or completed Sol35. Same35Sol/parent aggregates/ticket/
+timer prompt were withheld; only safe35+original/prior context supplied. No old34
+phase filled. This is the one bounded post-reset execution. On terminal read
+actual status/report, verify14numbers and actual mandatory coverage. No missing
+rating or partial render counts. If stillquota-limited, preserve actual error/
+publicreset; no unbounded retry/timer or invented score.
 
 If BOTH35all14=10, streak1 then freshBOTH36confirmation SAMEapp, both35 then prior
 context/current36peer withheld. Everyround freshdelegate/uniqueIDs/actualtaskIds,

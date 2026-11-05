@@ -23,7 +23,8 @@ Current assets/build,479Node,icon/native checks and all24E2E pass. Standard full
 Go35 confirmation also PASS: exit0,443.14s, unchanged whole source fingerprint. Four current T3invalid views
 and26disposable draft/outcome photos supplement the independent council, not
 replace it. Sol35 completed all14 scores10 after the full actual16core +4sample-pair matrix.
-This is one independent pass; joint streak remains0 until missing Opus35. Opus35 is deferred to the actual21:30UTC reset.
-One temporary21:31UTC continuation deletes itself FIRST; metadata and exact IDs
-are saved. No new PR, main merge or push. No physical-phone/Safari/screen-reader
+This is one independent pass; joint streak remains0 pending Opus35. The missing
+fresh Opus phase is now running after reset, same-round peer scores withheld.
+The temporary continuation was permanently deleted FIRST; scheduled-task list
+is empty. No recurring automation remains. No new PR, main merge or push. No physical-phone/Safari/screen-reader
 certification. Safe [validation](tags-ten-validation.md), parent [scores](tags-ten-scores.json).

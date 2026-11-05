@@ -1,4 +1,4 @@
-# Round35 Opus phase: not yet launched
+# Round35 Opus phase: historical deferral, now launched
 
 The earlier round34 Opus execution failed without scores at the actual five-hour
 quota; public notices give reset2026-11-05T21:30:00Z. Round34 is superseded by a
@@ -16,3 +16,8 @@ Actual returned taskId must be retained. No pre-reset retry.
 Temporary daily21:31UTC continuation returns to THIS thread; first action deletes
 its actual scheduledTaskId (metadata tags-ten-r35-scheduled-resume.json). The next
 run is2026-11-05T21:31:00Z. No recurring automation is intended to remain.
+
+Deferral ended2026-11-05T21:33:32.069369+00:00. Fresh independent execution actually started; actual taskId
+node:delegated-task:command%3Amcp%3Acfaf7639-87c2-4c24-af58-fe176ad56b8c%3Adelegate-task%3AExh-zrjo-r35-opus-tags-ten-after-reset-2026-11-05
+Launch receipt round-35-opus-tags-ten-after-reset-launch.json. Temporary trigger
+was permanently deleted before execution, task list confirmed empty.
