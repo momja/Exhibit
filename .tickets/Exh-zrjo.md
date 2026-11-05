@@ -9,11 +9,15 @@ priority: 2
 assignee: Max Omdal
 tags: [ui, ux]
 ---
-# Iterate on UI consistency and visual craft to9/10 with Codex and Opus council
+# Refine tag editing to10/10 with Codex and Opus council
 
 Audit and improve Exhibit interface in a dedicated worktree. Use independent Codex Sol and Claude Opus council reviews to score visual hierarchy, consistency, navigation/discoverability, workflow feedback, accessibility, and responsive behavior. Iterate until both reviewers award every category at least 8/10 in two consecutive rounds. Preserve the server-template, htmx, Stimulus, and self-hosted Phosphor architecture.
 
 ## Acceptance Criteria
+
+Latest user scope: **10/10 only on the artifact editor Tags section and Edit tag dialog**, preserving the PR273 stack. Independent Codex Sol + Claude Opus score seven focused categories in actual light/dark (14 values/model) until two consecutive joint rounds all reach10 on the unchanged candidate, with a real1280/768/390/320 Tags+sheet matrix, meaningful workflow checks and actual before/after screenshots. Historical broader9/10 coverage remains incomplete and is superseded by this narrower instruction, not retroactively completed. Current evidence: docs/reviews/Exh-zrjo/tags-ten-brief.md and tags-ten-scores.json.
+
+Prior scope (historical):
 
 Current user follow-up: improve the PR #273 stack, including the reported tag-check corner, tag-pill spacing and ambiguous mobile Save. Both Codex Sol and Claude Opus independently award all SEVEN categories at least9/10 in each actual light/dark scheme (14 scores/model), in TWO consecutive JOINT rounds on unchanged application code. Categories: Typography; Composition and spacing; Color harmony; Contrast and emphasis; Component visual consistency; Responsive visual polish; Save discoverability and feedback. Relevant current browser and Go checks pass; actual before/after screenshots, scores, task IDs and honest coverage limits are saved; main remains clean/on main. Earlier8/10 and pre-stack9/10 milestones are historical and do not satisfy this corrected stack.
 
@@ -200,3 +204,7 @@ Post-reset Opus31 completed with all fourteen scores9 on unchanged42c94eb1/aa7. 
 **2026-11-05T11:27:51Z**
 
 The bounded fresh Opus31 live coverage addendum failed without its assigned report or reassessed scores: actual task_status Claude API rate limit reached. Try again later. Public activity396/397 gives the five-hour reset15:50UTC Nov5, verified epoch1793893800. Terminal/public notices and sanitized partial evidence saved in round-31-opus-live-coverage-status.json/-quota.json/-partial.json/-unavailable.md. Its public progress reaches all40 empty renders and much of populated/tag matrix, not final320/tool/Share coverage or a verdict; no completeness inferred. All56 original report numbers remain9, but required live coverage unresolved, qualifying joint streak1/2. No new retry/timer created; scheduled tasks empty. Source unchanged, tests passing, main clean/onmain; ticket stays in_progress.
+
+**2026-11-05T16:32:31Z**
+
+User now requests10/10 ONLY for edit tags UI after Claude reset. Continue same worktree/PR273 stack; narrow the new council to Tags section and Edit tag sheet, with seven categories independently light/dark and two joint10 passes on unchanged UI. Preserve broader9 scores and incomplete coverage as history, do not resume broad addendum. New focused baseline32 on42c94eb1/aa7 with validationc115; no app changes yet. No recurring tasks remain.

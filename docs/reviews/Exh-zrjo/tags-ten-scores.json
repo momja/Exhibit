@@ -1,0 +1,31 @@
+{
+  "scope": "Artifact editor Tags section and Edit tag dialog only",
+  "target": 10,
+  "categories": [
+    "Typography",
+    "Composition and spacing",
+    "Color harmony",
+    "Contrast and emphasis",
+    "Component visual consistency",
+    "Responsive visual polish",
+    "Tag workflow clarity and feedback"
+  ],
+  "schemes": [
+    "light",
+    "dark"
+  ],
+  "widths": [
+    1280,
+    768,
+    390,
+    320
+  ],
+  "requiredJointConsecutivePasses": 2,
+  "jointPassingStreak": 0,
+  "completed": false,
+  "applicationCommit": "42c94eb1cb12a74108885cc1cbb7aaf7d11f5721",
+  "assetVersion": "aa7a00afd7a2",
+  "validationBaseline": "c1156ef15c7f5caa282b1068214492bce42018e1",
+  "rounds": [],
+  "historicalBroader9": "followup-scores.json: numerical passes, final broad coverage incomplete; superseded by user focused10 instruction, not claimed complete"
+}
