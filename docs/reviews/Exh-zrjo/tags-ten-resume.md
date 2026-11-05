@@ -1,7 +1,53 @@
-# Focused tag-editing10/10 council
+# Current tag-only10 council: both33 terminal, response34 ready
 
-User narrowed the current goal to Tags section and Edit tag sheet only. Historical broad9 coverage is incomplete, not claimed complete; do not resume that obsolete addendum. Baseline32 is running on production42c94eb1/assetsaa7a00afd7a2, declared validationbaselinec1156ef1, PR273 stack preserved. Both models are fresh shared/async/review tasks. Exact task IDs and unique reports are in tags-ten-scores.json and round-32-*-tags-ten-launch.json. Do not duplicate tasks or read current peer results. No source/build changes during live review. Parent is saving actual before captures and inspecting implementation; wait for BOTH terminal reviews before editing. Scope/rubric/full relevant history in tags-ten-brief.md. New bar: all14 independent light/dark scores10 from BOTH models in two consecutive joint rounds on unchanged candidate, actual16-view focused matrix; passing tests or earlier9 scores do not count. No recurring tasks. Main stays clean/onmain, no merge/pushmain or newPR.
+User's current scope ONLY editor Tags section +Edit tag sheet, target10 from BOTH
+models for all7categories in Light/Dark (14/model), TWOconsecutive joint passes.
+Streak0/2. Broad9coverage is historical/superseded, never claim it completed.
 
-Parent before evidence: docs/screenshots/Exh-zrjo/tags-ten-before/manifest.json has8 actual T3 captures (Tags section/Edit tag sheet ×1280/390 ×light/dark), all currentaa7 with matchMedia agreement/zero document overflow. Parent visually inspected desktopdark and phonelight images; the other captures are collected comparison material, not a claim of a full parent verification matrix. No source changes or test reruns yet. Both round32 tasks remain the baseline reviewers; wait for actual terminal results, parse both14tables, then respond to specific tag-only blockers. Preserve same-round independence.
+Current source/runtime72be0ccc60f8b8820ad0715c5113f5a6f0cb44aa/assetsbc262e992d4d.
+Both33 are TERMINAL COMPLETED, do not duplicate. Solall14=10; Opus6x10+8x9.5,
+so JOINTFAIL. Reports/statuses/taskIDs and actual tables saved in tags-ten-scores.
+All16actualrequiredviews per reviewer completed. Source stayed frozen untilboth
+terminal. Sol missed a real computed invalid-hex border cascade issue found by
+Opus; no single-model10 credit. Read both reports for the next fresh round.
 
-Opus32 is terminal completed:14 scores7.5–9.5, not10. Report/status saved. Key blockers: add error misplaced and empty dropdown enabled; global/immediate tag scope absent; custom selection indistinguishable from focus; check covers dot desktop/768; near-field/announced validation absent; phone rows/icons ragged; minor rawhex names, dark dots, utility emphasis, footer tab order/native confirm. Sol32 still active at last actual check, keep source frozen and do not expose Opus same-round result to Sol. Parent may prepare a patch outside checkout; apply only after BOTH terminal.
+Required response in tags-ten-round-34-plan.md. Parent just captured4real BEFORE
+invalid-hex photos on72/bc at1280/390 bothschemes in tags-ten-round-34-before/:
+normal border despite aria-invalidtrue, error35.5/37px away, stale purple preview,
+Custom caption,0APIwrites. All cancelled; own tab closed. Valid-state before photos
+already in tags-ten-round-33/. Do not rebuild before preserving this evidence.
+
+No34task started. Next: strengthen meaningful existing E2E assertions to reproduce
+invalid state beforefix on currentbin; implement plan, build/check/capture/publish
+new actual beforeafter, then fresh BOTH34 on newcandidate. Same34peer withheld.
+Do not duplicate33Sol or try to reuse it after source changes. Actual taskIDs in
+scores/launch/status files. No childThreadId/t3_thread_send/top-level continuation.
+
+Current72checks PASS: build8.08s,478Node16.86s,23E2E106.83s,nativeTag14.19s wrapper
+(actual1280/390 subtests2.21s). Receipts/fingerprintbb765b... in safevalidation.
+FullGo short on newtagUI NOT yetrun, requiredbeforefinalfinish. NoGo suiteactive,
+so next source/assets changes are safe. Do not repeat passed checks unchanged.
+Current proof archive round-33-validation preserves72 before futuregenericreceipt
+updates. Parent20T3photos+22E2Ephotos current72/bc;8oldbefore photos42/aa7.
+Actual before/after comparison published viahtml_preview728/360console[] then
+html_render, receiptfile saved; no generated-image substitute.
+
+Main18280/render18281 onlycurrenttaginstance; admin/changeme, RunLogartifact
+461183aa-ca77-41f8-a4c0-6bbbe189b332. Its4tagsunchanged Health/Reading/Test/Utilities.
+OldEMPTY18380 outdated/outscope. Plan a separate scratchTagplayground18480/18481
+if free, samecurrentbinary, longattachedtag+unattachedtag, incognito profile;
+never changeMain library toexpose Add. CookieHOSTscoped: main/default, newfixture/
+incognito. Testspersist onlyindisposable18080fixture. Normalnavigation receipts
+allowed; no realRunLogtagwrites. CurrentmainPID275988/bin matchsha, noVCS stamp.
+Use scopedsource/buildreceipt/assets/processsha forprovenance.
+
+CurrentNewTagUI Enter IN BOTHcreate/editName/hex saves; reviewers mustnotpressit.
+Readonlyexceptunique reports; no valid Save/Create/Add/Remove/finalDelete. Safe
+Delete entry/Keep, localworkingcopiesrestored/cancelled. Own T3tabs/exactIDs.
+No tests/builds/app edits/subdelegationbyreviewers. UserURLs t3code; ticketrefs
+actualabsolutefile .tickets/Exh-zrjo.md. No physicalSafari/a11ycertificationclaims.
+
+No recurring automation. Ifquotafails recordactual publicreset, no inventedscore
+or unboundedretrytimer. Aftertwohonestjoint10passes+finalchecks: finish evidence,
+closeFEATUREticket, commit/verifybothworktrees. Mainclean/onmain; no merge/pushmain,
+no newPR. Existing273linked; list/unwatchbeforehandoff. Alreadyauthorized.

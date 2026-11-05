@@ -216,3 +216,11 @@ Focused baseline32 Opus completed all16actual Tags/sheet renders, scores7.5–9.
 **2026-11-05T17:23:34Z**
 
 Both focused32 baselines completed independently: Sol8.5–10, Opus7.5–9.5, no passing round. Implemented a shared named/keyboard color palette with clear custom selection, aligned tag rows, immediate/library-wide scope copy, local announced validation, valid dirty Save tag/pending status, nearby swap-retained feedback and same-sheet Delete confirmation. New regression reproduces old1280 badge collision and caught an intermediate320 collision;56px cells resolve it. Focused3E2E34.02s and actual native Tag modal pass before final copy/reset refinement;478Node pass, fresh final checks to follow. Actual before/after and new council still required; no10 claimed.
+
+**2026-11-05T17:45:50Z**
+
+Refined tag candidate72be0ccc/assetsbc262e992d4d is built and frozen. Current source fingerprintbb765b unchanged:478Node16.86s, all23E2E106.83s, actual nativeTag1280/390 confirmation14.19s pass. Final fullGo short still required. Saved20actualT3captures,22currentE2Eoutcome/draft shots and rendered actual before/after with728/360console[] checks. Fresh independent BOTH33 tasks running; exact IDs/launch receipts in tags-ten-scores.json, currentpeer outcomes withheld, no old9/10 credit. Streak0/2. Keep source/assets frozen until both terminal; no currentRunLog mutation, no recurring automation, no merge/pushmain/newPR.
+
+**2026-11-05T18:06:52Z**
+
+Both focused33 reviews completed on72be0ccc/bc262: Solall14=10; Opus6x10+8x9.5, so jointFAIL/streak0. Opus found real invalid-hex border specificity failure, duplicate/distant hint+error with stale preview/Custom caption, inconsistent invalid Create action, detached desktop rows, small validation recenter jump/palette sparsity. Parent reproduced computed border and35.5/37px error gap with4real before photos/0APIwrites. Preserve both reports; next34 must be fresh BOTH after fixes. Current23E2E/478Node/native/build pass, fullGo stillpending. Old validation archived. No source changes untilboth33terminal; nowresponse34 ready.

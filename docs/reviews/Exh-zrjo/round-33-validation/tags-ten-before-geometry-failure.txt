@@ -1,0 +1,42 @@
+
+Running 1 test using 1 worker
+
+(node:270607) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  1 [chromium] › specs/editor-tools.spec.ts:3:1 › expanded editor tools keep descriptions with actions and consistent operable controls (2.6s)
+
+
+  1) [chromium] › specs/editor-tools.spec.ts:3:1 › expanded editor tools keep descriptions with actions and consistent operable controls
+
+    Error: 1280px light check must leave the color sample intact
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      74 |         expect(tagGeometry.inset).toBeGreaterThanOrEqual(2);
+      75 |         expect(tagGeometry.cornerDrift).toBeLessThan(0.5);
+    > 76 |         expect(tagGeometry.colorSampleClear, `${width}px ${colorScheme} check must leave the color sample intact`).toBe(true);
+         |                                                                                                                    ^
+      77 |         const propertyRowsAlign = await page.locator('.state-adder').evaluateAll(rows => rows.every(row => {
+      78 |           const heights = [...row.querySelectorAll('input,select,button')].map(element => element.getBoundingClientRect().height);
+      79 |           return Math.max(...heights) - Math.min(...heights) < 1;
+        at /home/maxomdal/.t3/worktrees/Exhibit/feature-Exh-zrjo-ui-council/e2e/specs/editor-tools.spec.ts:76:116
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/editor-tools-expanded-edit-4c364-onsistent-operable-controls-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/editor-tools-expanded-edit-4c364-onsistent-operable-controls-chromium/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/editor-tools-expanded-edit-4c364-onsistent-operable-controls-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/editor-tools-expanded-edit-4c364-onsistent-operable-controls-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [chromium] › specs/editor-tools.spec.ts:3:1 › expanded editor tools keep descriptions with actions and consistent operable controls

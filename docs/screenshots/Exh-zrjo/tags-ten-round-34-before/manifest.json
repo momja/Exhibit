@@ -1,0 +1,87 @@
+{
+  "applicationCommit": "72be0ccc60f8b8820ad0715c5113f5a6f0cb44aa",
+  "assetVersion": "bc262e992d4d",
+  "source": "Actual MAIN local invalid-color probes, cancelled without API writes",
+  "captures": [
+    {
+      "width": 1280,
+      "height": 800,
+      "scheme": "light",
+      "view": "hex-error",
+      "url": "http://t3code:18280/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit?return_to=%2Fsearch",
+      "screenshotPath": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw3utt7g-057f8906.png",
+      "proof": {
+        "width": 1280,
+        "dark": false,
+        "asset": "http://t3code:18280/assets/v/bc262e992d4d/htmx/htmx.min.js",
+        "invalid": "true",
+        "border": "rgb(135, 146, 162)",
+        "fieldToError": 35.5,
+        "pickerValue": "#8a5db0",
+        "caption": "Custom",
+        "apiWrites": 0
+      },
+      "file": "hex-error-1280-light.png"
+    },
+    {
+      "width": 1280,
+      "height": 800,
+      "scheme": "dark",
+      "view": "hex-error",
+      "url": "http://t3code:18280/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit?return_to=%2Fsearch",
+      "screenshotPath": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw3uttqk-a8443d3e.png",
+      "proof": {
+        "width": 1280,
+        "dark": true,
+        "asset": "http://t3code:18280/assets/v/bc262e992d4d/htmx/htmx.min.js",
+        "invalid": "true",
+        "border": "rgb(100, 112, 131)",
+        "fieldToError": 35.5,
+        "pickerValue": "#8a5db0",
+        "caption": "Custom",
+        "apiWrites": 0
+      },
+      "file": "hex-error-1280-dark.png"
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "view": "hex-error",
+      "url": "http://t3code:18280/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit?return_to=%2Fsearch",
+      "screenshotPath": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw3utu9c-d28d4751.png",
+      "proof": {
+        "width": 390,
+        "dark": false,
+        "asset": "http://t3code:18280/assets/v/bc262e992d4d/htmx/htmx.min.js",
+        "invalid": "true",
+        "border": "rgb(135, 146, 162)",
+        "fieldToError": 37,
+        "pickerValue": "#8a5db0",
+        "caption": "Custom",
+        "apiWrites": 0
+      },
+      "file": "hex-error-390-light.png"
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "view": "hex-error",
+      "url": "http://t3code:18280/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit?return_to=%2Fsearch",
+      "screenshotPath": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw3utur2-279010e2.png",
+      "proof": {
+        "width": 390,
+        "dark": true,
+        "asset": "http://t3code:18280/assets/v/bc262e992d4d/htmx/htmx.min.js",
+        "invalid": "true",
+        "border": "rgb(100, 112, 131)",
+        "fieldToError": 37,
+        "pickerValue": "#8a5db0",
+        "caption": "Custom",
+        "apiWrites": 0
+      },
+      "file": "hex-error-390-dark.png"
+    }
+  ]
+}

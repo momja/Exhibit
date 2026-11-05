@@ -23,9 +23,9 @@
   "requiredJointConsecutivePasses": 2,
   "jointPassingStreak": 0,
   "completed": false,
-  "applicationCommit": "42c94eb1cb12a74108885cc1cbb7aaf7d11f5721",
-  "assetVersion": "aa7a00afd7a2",
-  "validationBaseline": "c1156ef15c7f5caa282b1068214492bce42018e1",
+  "applicationCommit": "72be0ccc60f8b8820ad0715c5113f5a6f0cb44aa",
+  "assetVersion": "bc262e992d4d",
+  "validationBaseline": "72be0ccc60f8b8820ad0715c5113f5a6f0cb44aa",
   "rounds": [
     {
       "round": 32,
@@ -97,7 +97,80 @@
           "statusRecord": "round-32-opus-tags-ten-status.json"
         }
       ]
+    },
+    {
+      "round": 33,
+      "purpose": "refined_candidate",
+      "applicationCommit": "72be0ccc60f8b8820ad0715c5113f5a6f0cb44aa",
+      "assetVersion": "bc262e992d4d",
+      "validationBaseline": "72be0ccc60f8b8820ad0715c5113f5a6f0cb44aa",
+      "status": "joint_failure",
+      "jointPass": false,
+      "reviewers": [
+        {
+          "reviewer": "sol",
+          "providerInstanceId": "codex",
+          "model": "gpt-6.1-sol",
+          "taskId": "node:delegated-task:command%3Amcp%3Ae394a58e-fb38-4e0c-b7c7-0df413da8a7e%3Adelegate-task%3AExh-zrjo-r33-sol-tags-ten",
+          "clientRequestId": "Exh-zrjo-r33-sol-tags-ten",
+          "status": "completed",
+          "launchRecord": "round-33-sol-tags-ten-launch.json",
+          "report": "round-33-sol-tags-ten.md",
+          "statusRecord": "round-33-sol-tags-ten-status.json",
+          "light": [
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0
+          ],
+          "dark": [
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0
+          ],
+          "individualPass": true
+        },
+        {
+          "reviewer": "opus",
+          "providerInstanceId": "claudeAgent",
+          "model": "claude-opus-5-5",
+          "taskId": "node:delegated-task:command%3Amcp%3Ae394a58e-fb38-4e0c-b7c7-0df413da8a7e%3Adelegate-task%3AExh-zrjo-r33-opus-tags-ten",
+          "clientRequestId": "Exh-zrjo-r33-opus-tags-ten",
+          "status": "completed",
+          "launchRecord": "round-33-opus-tags-ten-launch.json",
+          "report": "round-33-opus-tags-ten.md",
+          "statusRecord": "round-33-opus-tags-ten-status.json",
+          "light": [
+            10.0,
+            9.5,
+            10.0,
+            9.5,
+            9.5,
+            10.0,
+            9.5
+          ],
+          "dark": [
+            10.0,
+            9.5,
+            10.0,
+            9.5,
+            9.5,
+            10.0,
+            9.5
+          ],
+          "individualPass": false
+        }
+      ],
+      "validationArchive": "round-33-validation"
     }
   ],
-  "historicalBroader9": "followup-scores.json: numerical passes, final broad coverage incomplete; superseded by user focused10 instruction, not claimed complete"
+  "historicalBroader9": "followup-scores.json: numerical passes, final broad coverage incomplete; superseded by user focused10 instruction, not claimed complete",
+  "validationStatus": "focused_checks_pass_final_full_go_pending"
 }
