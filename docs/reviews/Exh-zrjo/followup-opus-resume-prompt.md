@@ -1,3 +1,5 @@
+EXECUTED HISTORICAL PROMPT: the one-use timer was permanently deleted FIRST at05:51UTCNov5. No recurring automation remains. Do not execute this old trigger again. Current authoritative checkpoint: followup-resume.md.
+
 Resume the existing Exhibit UI council target9 in THIS same thread/worktree after Claude's actual five-hour reset. FIRST permanently DELETE THIS temporary scheduled task: scheduled-task:command:mcp:bb622e97-24f4-48e5-90ab-d51f24f155e2:schedule-task:Exh-zrjo-followup-opus-reset-2026-11-05. It is a one-use continuation implemented with a daily05:51UTC trigger; leave no recurring automation. If user cancelled, stop after deletion.
 
 Worktree /home/maxomdal/.t3/worktrees/Exhibit/feature-Exh-zrjo-ui-council, feature/Exh-zrjo/ui-council. Read docs/reviews/Exh-zrjo/followup-resume.md, followup-summary.md, followup-scores.json, followup-validation.md and .tickets/Exh-zrjo.md. These parent-only checkpoints override this snapshot if work advanced. NEVER give current peer/aggregate outcomes to reviewers.

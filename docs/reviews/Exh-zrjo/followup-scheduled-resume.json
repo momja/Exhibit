@@ -1,11 +1,11 @@
 {
   "scheduledTaskId": "scheduled-task:command:mcp:bb622e97-24f4-48e5-90ab-d51f24f155e2:schedule-task:Exh-zrjo-followup-opus-reset-2026-11-05",
-  "enabled": true,
+  "enabled": false,
   "schedule": {
     "type": "fixed_time",
     "timeOfDay": "05:51"
   },
-  "nextRunAt": "2026-11-05T05:51:00.000Z",
+  "nextRunAt": null,
   "boundThreadId": "096f4939-b5a7-46dd-a015-84f12c84336e",
   "oneUse": true,
   "firstAction": "permanent deletion of this exact scheduledTaskId",
@@ -20,5 +20,9 @@
   "solStatus": "completed_all14_9",
   "solTaskId": "node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r29-sol-followup-pr273",
   "requiredChecks": "all_pass",
-  "jointPassingStreak": 0
+  "jointPassingStreak": 0,
+  "deleted": true,
+  "deletedAt": "2026-11-05T05:53:36.414132+00:00",
+  "remainingProjectScheduledTasks": 0,
+  "postResetTaskId": "node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r29-opus-followup-pr273-after-reset-2026-11-05"
 }
