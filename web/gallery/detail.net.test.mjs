@@ -335,3 +335,18 @@ test("a connected preview explains unavailable features without prescribing a di
   await postFromFrame({ __avCapabilityWarning: true, artifactId: ID, capability: "redirected-origin" });
   assert.match(byId("capability-warning-detail").textContent, /redirected this request/);
 });
+
+
+for (const protectedPreview of [false, true]) {
+  test(`a recipient's redirected request asks the owner to review access (connected=${protectedPreview})`, async () => {
+    const { byId, postFromFrame, api } = await loadDetail({ readOnly: true, protectedPreview });
+    await postFromFrame({ __avCapabilityWarning: true, artifactId: ID, capability: "redirected-origin" });
+    const detail = byId("capability-warning-detail").textContent;
+    assert.match(detail, /Only the owner can allow this destination/);
+    assert.match(detail, /Ask them to review this request/);
+    assert.match(detail, /new tab does not bypass these permissions/);
+    assert.doesNotMatch(detail, /Edit → Permissions/);
+    assert.equal(byId("net-modal").open, false);
+    assert.deepEqual(originCalls(api), []);
+  });
+}

@@ -860,7 +860,7 @@ document.getElementById('history').addEventListener('click', (e) => {
   if (btn) resumeConversation(btn.dataset.resume, Number(btn.dataset.rollback) || 0);
 });
 
-const RESTORE_UNCERTAINTY = 'The rollback could not be confirmed and may have completed. The conversation was not continued. Check the artifact before trying again.';
+const RESTORE_UNCERTAINTY = 'The restore could not be confirmed and may have completed. The conversation was not continued. Check the artifact before trying again.';
 
 function detachHistoryCandidate(attempt) {
   const candidateId = attempt.candidateId;
@@ -952,7 +952,7 @@ async function resumeConversation(conversationId, rollbackTo) {
             const why = await back.json().catch(() => ({}));
             // Only this explicit 409 means there was nothing to put back.
             if (back.status !== 409 || why.code !== 'already_current') {
-              const error = new Error('Could not roll back: ' + (why.error || 'HTTP ' + back.status) + ' The conversation was not continued.');
+              const error = new Error('Could not restore: ' + (why.error || 'HTTP ' + back.status) + ' The conversation was not continued.');
               error.restoreRefused = true;
               throw error;
             }
@@ -971,7 +971,7 @@ async function resumeConversation(conversationId, rollbackTo) {
     // What was said, as the fragment drew it, becomes the chat: the conversation
     // being continued, with the next message after it.
     messagesEl.innerHTML = pastMarkup;
-    addMsg('sys', (rollbackTo ? 'Rolled back to v' + rollbackTo + '. ' : '') +
+    addMsg('sys', (rollbackTo ? 'Restored v' + rollbackTo + '. ' : '') +
       'Continuing this conversation. The agent will read the artifact again before it changes anything.');
     closeHistory();
     // The pane shows the artifact the conversation now continues on. After a

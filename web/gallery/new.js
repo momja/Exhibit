@@ -172,7 +172,7 @@ async function ingest() {
     // The artifact is saved but network-blocked (CSP connect-src 'none').
     // Pause here for explicit approval — nothing is added to the allowlist,
     // and no origin gains network access, until the user decides.
-    status.textContent = '✓ Saved — review network access below.';
+    status.textContent = 'Saved. Review network access before continuing.';
     showApproval(id);
     return;
   }

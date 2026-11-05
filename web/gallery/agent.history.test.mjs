@@ -259,7 +259,7 @@ test("a rollback that fails detaches its candidate and says the conversation was
 
   assert.equal(page.api.calls.filter((c) => c.method === "DELETE" && c.path === "/api/agent/sessions/conv-1").length, 0,
     "an unclaimed candidate is left to the server lease rather than deleting a sidecar another tab can claim");
-  assert.match(page.byId("resume-status").textContent, /Could not roll back: boom/);
+  assert.match(page.byId("resume-status").textContent, /Could not restore: boom/);
   assert.match(page.byId("resume-status").textContent, /not continued/);
   assert.equal(page.byId("pane-chat").classList.contains("history-open"), true);
 });
@@ -440,7 +440,7 @@ test("a rollback re-renders the pane once, whether or not a version was showing"
 test("a missing historical blob is a failed rollback even with HTTP 409", async () => {
   const page = await loadWith([STARTED, json(409, { error: "that version's source is no longer stored" }), json(204, {})]);
   await page.context.resumeConversation("conv-1", 2);
-  assert.match(page.byId("resume-status").textContent, /Could not roll back.*not continued/);
+  assert.match(page.byId("resume-status").textContent, /Could not restore.*not continued/);
   assert.equal(page.byId("pane-chat").classList.contains("history-open"), true);
 });
 

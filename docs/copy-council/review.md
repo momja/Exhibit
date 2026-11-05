@@ -19,6 +19,8 @@ Scope: Library/search/empty states; creation; viewer/editor/agent; sharing, dupl
 | 3 | `5ba4f080` | Sol | 8 | 8 | 8 | Sol qualifies |
 | 3 / 3b retry | `5ba4f080` | Opus | — | — | — | Provider usage limit; no review |
 | 4 | `0a2cb08e` | Sol | 8 | 8 | 8 | Second consecutive Sol pass |
+| 6 | `b2f8def2` | Sol | 8 | 8 | 8 | First joint Sol/Astra pass |
+| 6 | `b2f8def2` | Astra | 8 | 8 | 8 | First joint Sol/Astra pass |
 
 **Joint Sol/Astra council acceptance is pending.** Earlier Sol-only passes do not count as joint acceptance. Opus's last actual scores were 7/7/8 from round 2; later Opus attempts returned no scores due a provider quota on 2026-11-04. On 2026-11-05 the user authorized replacing Opus with Codex Astra. Fresh joint Sol/Astra rounds now determine acceptance.
 
@@ -64,3 +66,12 @@ The user requested Codex Astra instead of Opus. Joint round 6 reviews the unchan
 Round-6 task IDs:
 - Sol: `node:delegated-task:command%3Amcp%3Af06d7919-58d9-4e1e-a1fd-c28129115a57%3Adelegate-task%3Aexh-iust-copy-sol-r6`
 - Astra: `node:delegated-task:command%3Amcp%3Af06d7919-58d9-4e1e-a1fd-c28129115a57%3Adelegate-task%3Aexh-iust-copy-astra-r6`
+
+
+### Round-6 outcome and corrections
+
+Both reviewers scored necessity, clarity, and hierarchy 8/10. This is the first qualifying joint Sol/Astra round. Reports: [Sol R6](round-6-sol.md), [Astra R6](round-6-astra.md).
+
+Before confirmation, addressed all findings: artifact-specific Connections only suggests available steps; recipient redirect warnings defer to the owner; post-import review guidance is direction-neutral; preparation noise is hidden in recorded as well as live conversations; connection actions/notices and restoration feedback use consistent nouns/verbs; removed the final decorative 404 caption. Added coverage of unavailable/available connection setup and recipient redirect explanations. The final text inventory includes these changes.
+
+Round-7 preparation validation: `make build` and focused Go checks for connection availability, connection actions, transcript projection, not-found rendering, and `TestGalleryPageScriptSuite` passed. The last includes gallery Node regressions, including the two new recipient-redirect cases. Actual-app screenshots now cover artifact-specific Connections (desktop/phone), 404 without decorative captions, and a recipient redirect warning. The redirect screenshot uses a controlled fixture message from the displayed frame's identity to exercise the real notice handler; it does not claim an actual external redirect. Recipient `READ_ONLY` was true and the notice no longer directs the recipient to Edit → Permissions. No phone document overflow was detected.

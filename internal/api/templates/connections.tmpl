@@ -33,14 +33,14 @@
 </article>{{end}}</div>{{else}}<div class="connect-empty"><i class="ph ph-plugs-connected" aria-hidden="true"></i><h4>No accounts connected yet.</h4>{{if .SetupProviders}}<p>Connect a service, then allow an artifact to use it.</p>{{end}}</div>{{end}}
 </section>
 {{if .Artifact}}
-<section id="connection-access" class="card connect-section"><div class="connect-section-head"><h3>Access for this artifact</h3><i class="ph ph-shield-check" aria-hidden="true"></i></div><p class="connect-section-intro">Choose an account to review what this artifact can read or change.</p>
+<section id="connection-access" class="card connect-section"><div class="connect-section-head"><h3>Access for this artifact</h3><i class="ph ph-shield-check" aria-hidden="true"></i></div>{{if .Connections}}<p class="connect-section-intro">Choose an account to review what this artifact can read or change.</p>{{end}}
 {{range .Grants}}<div class="connection-grant"><div><strong>{{.Connection.Name}}</strong><p>Allowed for your account only.</p></div><button class="btn btn-sec" type="button" data-action="connections#ungrant" data-connection-id="{{.Connection.ID}}">Remove access</button></div>{{end}}
 {{if .Connections}}<form class="connect-form grant-form" data-action="submit->connections#grant" hx-get="/partials/connections?artifact={{.Artifact.ID}}&amp;preview=true" hx-trigger="change" hx-target="#grant-preview" hx-swap="innerHTML">
   <label for="grant-connection">Choose your account</label><select id="grant-connection" name="connection" required><option value="">Choose an account…</option>{{range .Connections}}<option value="{{.ID}}"{{if $.Preview}}{{if eq $.Preview.Connection.ID .ID}} selected{{end}}{{end}}{{if ne .Status "active"}} disabled{{end}}>{{.Name}}{{if ne .Status "active"}} · reconnect first{{end}}</option>{{end}}</select>
   {{if .IsOwner}}<label class="connect-check"><input type="checkbox" name="approve_origins" checked> <span>Allow this artifact to contact this account’s service.</span></label>{{end}}
   <div id="grant-preview" class="grant-preview" aria-live="polite">{{template "connectionGrantPreview" .}}</div>
   <button type="submit" class="btn"><i class="ph ph-shield-check" aria-hidden="true"></i> Allow this artifact</button>
-</form>{{else}}<p class="muted">Connect your own account first, then allow this artifact to use it.</p>{{end}}
+</form>{{else}}<p class="muted">{{if .SetupProviders}}Connect your own account first, then allow this artifact to use it.{{else}}No accounts are available for this artifact.{{end}}</p>{{end}}
 </section>
 {{template "connectionSavedData" .}}
 {{if .Advanced}}

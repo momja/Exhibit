@@ -24,14 +24,9 @@
   {{/* The hero is the header's artwork again, drawn from the base64 data URI
        rather than a second inline <svg>: two inline copies on one page would
        duplicate every gradient/filter id, and the second copy's url(#…) paint
-       would resolve against the first copy's <defs>. alt="" because the wall
-       label below already names what is (not) hanging. */}}
+       would resolve against the first copy's <defs>. alt="" because the frame is decorative; the adjacent heading explains the error. */}}
   <figure class="exhibit-404__stage">
     <img class="exhibit-404__frame" src="{{.LogoImage}}" width="293" height="363" alt="">
-    <figcaption class="exhibit-404__label">
-      <span class="exhibit-404__label-kicker">NOT ON VIEW</span>
-
-    </figcaption>
   </figure>
   <div class="exhibit-404__copy">
     <p class="exhibit-404__eyebrow">ERROR 404</p>

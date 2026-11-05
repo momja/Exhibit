@@ -155,14 +155,13 @@ func TestReadSessionFileReturnsOnlyWholeLines(t *testing.T) {
 	assert.Equal(t, "", got)
 }
 
-func TestPreparedSourceProjectionNamesHostPreparationAndHidesSource(t *testing.T) {
+func TestPreparedSourceProjectionHidesPreparationNoiseAndSource(t *testing.T) {
 	file := `{"type":"message","message":{"role":"user","content":"make it green"}}
 {"type":"custom","customType":"exhibit_source_read","data":{"snapshot":{"artifact":{"body":"PRIVATE SOURCE"}},"callId":"exhibit_source_1"}}
 {"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"Done"}]}}
 `
 	assert.Equal(t, []TranscriptMessage{
 		{Role: "user", Text: "make it green"},
-		{Role: "tool", Text: "Prepared artifact source"},
 		{Role: "assistant", Text: "Done"},
 	}, ProjectSessionFile(file))
 }

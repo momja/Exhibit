@@ -142,8 +142,6 @@ func project(msgs []piMessage) []TranscriptMessage {
 					out[row].Questions = &result.QuestionRequest
 				}
 			}
-		case "prepared_source":
-			out = append(out, TranscriptMessage{Role: "tool", Text: "Prepared artifact source"})
 		case "user":
 			text, images := userContent(m.Content)
 			out = append(out, TranscriptMessage{Role: "user", Text: text, Images: images})

@@ -271,6 +271,8 @@ const CAPABILITY_COPY = {
     detail: 'An allowed site redirected this request to another site. Your browser hides that destination from Exhibit. ' +
       'If you know it, add it under Edit → Permissions. Opening a new tab does not bypass these permissions; ' +
       'your browser’s Network panel can show the destination.',
+    recipientDetail: 'An allowed site redirected this request to another site. Your browser hides that destination from Exhibit. ' +
+      'Only the owner can allow this destination. Ask them to review this request. Opening a new tab does not bypass these permissions.',
     resourceLabel: 'Blocked request'
   },
   'module-worker': {
@@ -296,9 +298,10 @@ window.addEventListener('message', function(e) {
   if (detail && !detail.textContent) {
     const copy = CAPABILITY_COPY[d.capability] || CAPABILITY_COPY_FALLBACK;
     const connectedPreview = typeof CONNECTION_PROTECTED === 'boolean' && CONNECTION_PROTECTED;
+    const explanation = READ_ONLY && copy.recipientDetail ? copy.recipientDetail : copy.detail;
     detail.textContent = connectedPreview && d.capability !== 'redirected-origin'
       ? 'This feature is unavailable while the artifact uses connected accounts or private saved data in Exhibit.'
-      : copy.detail;
+      : explanation;
     // Most capabilities share the banner's headline ("open it directly to run
     // it"), which is true of every failure the sandbox causes. A capability
     // that opening directly does NOT fix supplies its own rather than leaving

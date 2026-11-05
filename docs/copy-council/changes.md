@@ -32,6 +32,7 @@ Sources: [new.tmpl](../../internal/api/templates/new.tmpl), [new.js](../../web/g
 - Individual file failures say the files **could not be saved** and still need network access, replacing “inlined” and “origins below.”
 - Replaced the absolute “fully self-contained” claim with **“The scan found no remaining external references.”**
 - Approval-update failures now say **“Couldn’t update allowed sites.”**
+- Post-save network guidance is **“Saved. Review network access before continuing.”**, so it no longer incorrectly points below a review region positioned above it.
 
 ## Network permissions — import, editor, runtime prompt, card popover
 
@@ -105,7 +106,7 @@ Sources: [detail.tmpl](../../internal/api/templates/detail.tmpl), [direct_open.t
 
 - Unsupported-feature headline now explains that the preview cannot provide a feature and offers a new tab. For protected connected previews, it instead says the feature is unavailable there.
 - Shortened separate camera, microphone, combined-device, location, background-worker, and fallback details to useful explanations instead of browser-origin theory.
-- Protected-preview details no longer recommend the disabled new-tab remedy. The redirected-request case remains separate and explains that another site needs permission and a new tab does not bypass the restriction.
+- Protected-preview details no longer recommend the disabled new-tab remedy. The redirected-request case remains separate and explains that another site needs permission and a new tab does not bypass the restriction. Shared recipients are told to ask the owner to review the request, rather than use owner-only Edit → Permissions controls.
 - Shared-recipient blocked-network guidance now plainly says only the owner can allow new sites. Runtime recipient banners use **artifact** and **sites**, replacing tool/origins.
 - Saved-data-change banner now gives the remedy and its cost: **reload to use the latest data; unsaved input may be lost**. Its button is **Reload artifact**.
 - Download and clipboard consent retain their enduring scope but point to the actual **Edit → Permissions** controls.
@@ -147,10 +148,10 @@ Sources: [agent.tmpl](../../internal/api/templates/agent.tmpl), [agent.js](../..
 - Added both visible and accessible **Remove API key** text to the trash control.
 - History empty states are **“No earlier conversations about this artifact.”** and **“No messages in this conversation.”**
 - Older non-resumable conversations now say they can be read but not continued. When the agent is unavailable, the note explicitly says past conversations remain readable.
-- Version mismatch says the conversation **last used** a version. Actions are **Preview vN**, **Restore vN and continue**, and **Continue with current version**, replacing longer preview and rollback wording.
+- Version mismatch says the conversation **last used** a version. Actions are **Preview vN**, **Restore vN and continue**, and **Continue with current version**, replacing longer preview and rollback wording. Restore success, failure, and uncertain-result messages also say **restore** rather than roll back.
 - Artifact-created/updated messages no longer repeatedly tell users which side or tab contains the preview. New network messages explain that access stays blocked until approval.
 - Widget save notices are shorter and direct blocked-site remediation to Edit → Permissions.
-- Removed the internal **Prepared artifact source** chat notice.
+- Removed the internal **Prepared artifact source** notice from both live chat and recorded conversation history.
 - Extension failure is a plain retry instruction; provider retry status says the AI provider did not respond, retaining attempt counts.
 - Live and recorded data activities consistently say **saved data** or **saved data key**, replacing state. Data-clear result specifies current saved data.
 
@@ -174,12 +175,12 @@ Source: [profile.tmpl](../../internal/api/templates/profile.tmpl).
 
 ## Connections — `/connections`, artifact connections, Advanced
 
-Sources: [connections.tmpl](../../internal/api/templates/connections.tmpl), [relay.tmpl](../../internal/api/templates/relay.tmpl), [connections-controller.js](../../web/gallery/connections-controller.js).
+Sources: [connections.tmpl](../../internal/api/templates/connections.tmpl), [connections_page.go](../../internal/api/connections_page.go), [relay.tmpl](../../internal/api/templates/relay.tmpl), [connections-controller.js](../../web/gallery/connections-controller.js).
 
 - Shortened the page introduction and removed the repeated per-account custody suffix. Retained the shared account-privacy explanation.
 - Artifact access introduction asks users to select an account to review what the artifact can read or change. Grant preview retains the trust/scope warning and concisely discloses that saved results may be shared/exported.
-- Reconnect copy uses **artifacts**, as do custom-credential scope explanations and disconnect confirmation.
-- Empty-account guidance only appears when setup providers exist. The artifact next step only appears when there is an account to grant; an instance without services no longer suggests impossible setup.
+- Reconnect copy uses **artifacts**, as do custom-credential scope explanations, disconnect confirmation, account-connected notices, artifact-return navigation, and the account-grant action.
+- Empty-account guidance only appears when setup providers exist. The artifact next step only appears when there is an account to grant; an instance without services no longer suggests impossible setup. The artifact-specific access section also hides choose-account instructions when no accounts exist and says **“No accounts are available for this artifact.”** when setup is unavailable.
 - Renamed **Relay permissions** / **Allow relay requests** to **Server requests** / **Allow server requests**. Shortened help while retaining the ability to read/change data within API/account permissions.
 - Network labels use **Allowed sites** and **No sites allowed yet**.
 - Scheduled refresh explains updating saved data even while the artifact is closed; **Save to localStorage key** became **Saved data key**. Timing help explains random scheduling and retained data on failure.
@@ -200,7 +201,7 @@ Sources: [auth.go](../../internal/api/auth.go), [login.tmpl](../../internal/api/
 - SSO verification/expiry failures now explain that the attempt expired or could not be verified. Provider refusal and other failures have plain explanations; disabled-account refusal remains distinct. Technical failure details remain in logs.
 - Added a server-rendered **Sign-in failed** page with **Return to sign in** beside the explanation; authentication refusal behavior and HTTP status remain unchanged.
 - OAuth scope now precisely says the agent cannot **share or delete artifacts**, or change saved data, instead of leaving the objects of share/delete implicit.
-- Removed the 404's decorative Untitled/n.d./Deaccessioned captions and the “link arrived slightly bent” explanation.
+- Removed all decorative 404 captions, including Untitled/n.d./Deaccessioned and **NOT ON VIEW**, plus the “link arrived slightly bent” explanation.
 - 404 heading is **Page not found**; body asks users to check the link or search the library. Requested path moved into **Technical details**.
 - 404 recovery action is **Back to library**. Removed the second Add artifact action in the body; the header already supplies it.
 - Invalid/revoked public-link page adds recovery: **“This link is unavailable. Ask the sender for a new link.”**
