@@ -1,5 +1,5 @@
 {
-  "verifiedAt": "2026-11-05T04:07:21.868861+00:00",
+  "verifiedAt": "2026-11-05T04:25:12.018369+00:00",
   "applicationCommit": "575559b5abaadc997a6faf62be3669e4881cfe27",
   "basePR": "https://github.com/momja/Exhibit/pull/273",
   "baseCommit": "ab0135c902559d5912deec420947d6ab3cbdbcf6",
@@ -12,10 +12,9 @@
   "jointStreak": 0,
   "completed": false,
   "pending": [
-    "current fullGo",
-    "current244captures",
-    "independent29Sol",
-    "Opus after quota",
+    "independent Opus29 after actual quota reset",
     "two actual joint9passes"
-  ]
+  ],
+  "validationStatus": "all_pass",
+  "sol29": "completed_all14_9"
 }

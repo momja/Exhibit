@@ -1,4 +1,11 @@
 Independent Exhibit UI council — FRESH ROUND29 on corrected PR273 stack, target9. This header supersedes ALL obsolete CURRENT/source/round instructions in archived prior briefs. Only the report assigned after the brief may be written.
+BROWSER SETUP REQUIRED: open main18280 with profileId:default and secondary
+empty18380 with profileId:incognito, OWN separate tabs/exactIDs. Cookies share
+the host across ports; do not sign into secondary in the main profile.
+INDEPENDENCE: also withhold round-29-sol-followup-status.json and
+followup-rating-verification.json; no current-peer material or parent aggregates.
+Current required validation is now ALL PASS; details in followup-validation.md.
+This is context, not a reason to award any score.
 
 Frozen runtime575559b5abaadc997a6faf62be3669e4881cfe27, assets2f37c8103d52, PR273 baseab0135c902559d5912deec420947d6ab3cbdbcf6. Main populated preview http://t3code:18280/render18281; NEW secondary EMPTY fixture http://t3code:18380/render18381, same current binary and admin/changeme. Port scheme is separate render origin, not a /render path. Both are disposable only; no production data. Use own T3 tab(s)/exactIDs and actual light/dark atEACH1280/768/390/320 plus matchMedia proof. Required new coverage: EMPTY Search welcome with Create your first artifact(/new), empty Starred Browse your artifacts(/search), empty unifiedShared neutral explanation. Do not persist any artifact, grant, star or preference actions. Navigation's automatic opened receipt is allowed normal product behavior. Return temporary drafts to Saved/clean, close OWN tabs. Secondary fixture is not permission to create content.
 

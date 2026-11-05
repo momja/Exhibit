@@ -119,7 +119,7 @@
       "round": 29,
       "applicationCommit": "575559b5abaadc997a6faf62be3669e4881cfe27",
       "assetVersion": "2f37c8103d52",
-      "status": "reviewing",
+      "status": "awaiting_independent_opus",
       "reviewers": [
         {
           "reviewer": "sol",
@@ -127,8 +127,28 @@
           "model": "gpt-6.1-sol",
           "clientRequestId": "Exh-zrjo-r29-sol-followup-pr273",
           "taskId": "node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r29-sol-followup-pr273",
-          "status": "running",
-          "report": "round-29-sol-followup.md"
+          "status": "completed",
+          "report": "round-29-sol-followup.md",
+          "light": [
+            9.0,
+            9.0,
+            9.0,
+            9.0,
+            9.0,
+            9.0,
+            9.0
+          ],
+          "dark": [
+            9.0,
+            9.0,
+            9.0,
+            9.0,
+            9.0,
+            9.0,
+            9.0
+          ],
+          "individualPass": true,
+          "statusRecord": "round-29-sol-followup-status.json"
         },
         {
           "reviewer": "opus",
@@ -144,7 +164,11 @@
         "status": "quota_wait",
         "resetAt": "2026-11-05T05:50:00Z",
         "plannedClientRequestId": "Exh-zrjo-r29-opus-followup-pr273-after-reset-2026-11-05",
-        "report": "round-29-opus-followup.md"
+        "report": "round-29-opus-followup.md",
+        "scheduledTaskId": "scheduled-task:command:mcp:bb622e97-24f4-48e5-90ab-d51f24f155e2:schedule-task:Exh-zrjo-followup-opus-reset-2026-11-05",
+        "nextRunAt": "2026-11-05T05:51:00.000Z",
+        "scheduledTaskDeleted": false,
+        "boundedFreshExecutions": 1
       }
     }
   ],

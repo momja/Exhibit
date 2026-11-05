@@ -1,73 +1,56 @@
-# PR273 stack validation — current
+# Current PR273 stack validation
 
-Frozen application68655f3a78724ee0ed90f6fa820dd1b12a169432, assets2f37c8103d52,
-base PR273 ab0135c9. All pre-stack947 validation is HISTORICAL, preserved in
-followup-validation-before-pr273.md and original receipts. No review ratings here.
+Frozen runtime575559b5abaadc997a6faf62be3669e4881cfe27, assets2f37c8103d52,
+base PR273 ab0135c902559d5912deec420947d6ab3cbdbcf6. Later commits evidence only.
+Strict runtime/validation scope has NO exclusions. No same-round scores here.
 
-- make build confirmed exit0/17.85s, source unchanged during build. Build started
-  before integration commit68655, whose tree is identical to the built source.
--478 gallery Node tests pass/0fail in17.633s on integrated productionJS. Raw runner
-  output retained in /tmp/exhibit-zrjo-pr273-node.log; fullGo also owns Node exit.
-- Native integration group confirmed exit0/104.59s (Go package88.114s), unchanged:
-  personal stars/access, Activity owner/conversation, redesign, navigation/races/
-  no-JS, search, unified sharing, app headers, editor navigation/permission saves,
-  tag/lifecycle and agent composer/markdown/panes. Before final spacing-only CSS.
-- Strengthened GallerySpaces first FAILS actual negative description gap, then
-  confirmed exit0/42.03s on final68655:320/390/768/1280, title spacing, all four
-  routes, touch targets/safe area, keyboard/row stability, actual dark.
-- Initial fullE2E retained exit2/131.93s:19 passed; large combined mouse/touch
-  Share-opening matrix hit30s overall deadline, not a failed app assertion.
-  Trace showed completed late touch1280 light checks; cleanup deleted fixture,
-  causing final404 snapshot. Split matrix into independent mouse/touch cases;
-  same assertions/coverage/timeouts. Final21-case run IN PROGRESS.
-- Full standard go test -short ./... IN PROGRESS, detached durable exit/status.
-- Current244 authenticated captures IN PROGRESS, actual schemes and no overflow
-  enforced. Only a complete manifest plus exit receipt counts.
+All current required checks PASS:
 
-Current receipts /tmp/exhibit-zrjo-pr273-{e2e-confirm,go-confirm,capture}-status.json
-and matchinglogs. Do not rebuild assets during Go or repeat passing checks without
-source changes/failures/unresolved concern. ProductionJS unchanged after478 pass.
+| Check | Actual result and scope |
+| --- | --- |
+| make build | exit0/19.19s, identical tree committed575559b5. No later runtimeJS/CSS changes. |
+| Gallery Node |478 passed/0failed17.633s on integrated productionJS, unchanged since. Full currentGo also confirms its exit. |
+| Empty-state unit + Chromium | exit0/28.35s(API14.673s): welcome creation, star discovery/access, empty destinations, Search/redesign. Assertions firstFAIL old, thenPASS new; preserved/strengthened. |
+| Full current E2E |21 passed, confirmedexit0/140.55s, runtimeAndValidationUnchanged=true on575559b5. |
+| Standard full Go | go test -short ./..., CONFIRMEDexit0/503.36s(API486.398/store228.996), runtimeAndValidationUnchanged=true on575559b5. |
+| Current populated corpus |244 captures, confirmedexit0/306.12s, runtimeAndValidationUnchanged=true. Everyasset2f37, actualmediaagreement/errors[] and explicit containment assertions. Bothschemes at320/390/768/1280 plus640shortlandscape. |
+| Current empty fixture |24 own-T3 views:3routes x4widths x2schemes, all media/containment/correctactions.4 actual old beforeframes retained. Manifest old68655/current575559b5. |
+| Current Save outcomes |14 screenshots from passing current21E2E, source575559b5/asset2f37 manifest. Disposable artifacts only; deliberate503 simulation. |
 
-Disposable sample DB backed up before migration054. Personal star preferences
-seeded forRunLog/ReadingList only; artifact content/state/versions untouched.
-CurrentSave E2E real pending/success/error/retry screenshots use disposable
-artifacts; simulated503 is deliberate. No sample Save or grant performed.
+Go/E2E/capture rawlogs and durable exit receipts: stack-empty-*-status.json/.txt.
+Current corpus: docs/screenshots/Exh-zrjo/followup-round-29/manifest.json.
+Empty proof: stack-empty-states/manifest.json. Save proof: followup-save-states-pr273/manifest.json.
+E2E covers real Save pending/success/error/retry/persistence and repeat activation,
+exact tag corners/external actions, actual source selection/chrome, Share opening/
+scrolling/footerpaint, popup placement, enlarged history and creation feedback.
 
-One Chromium engine, real prefers-color-scheme emulation; no physical Safari,
-softwarekeyboard, alternate-engine or exhaustive accessibility certification.
+Earlier integrated native group passed104.59s(API88.114s) before final spacing/
+empty refinements: stars/access, Activity owner/conversations, redesign/navigation/
+races/noJS, Search/unifiedsharing, appheaders, editor navigation/permission saves,
+Tag/lifecycle and agent composer/markdown/panes. Final spacing/navigation group
+passed42.03s at320/390/768/1280 with dark/safearea/keyboard/stable rows. These
+scopes are explicit, not relabeled as another execution. Current final Go,
+focusedempty and21E2E results are above.
 
-CURRENT final21 E2E CONFIRMED exit0/203.47s, runtimeAndValidationUnchanged=true.
-Current14 Save-state screenshots refreshed in followup-save-states-pr273/,
-manifest68655/2f37; only disposable artifacts were saved. Current244captures
-CONFIRMED exit0/355.81s, every asset2f37/mediaagreement/errors[] and explicit
-nooverflow assertions. Archived initial failing receipts retained.
-Actual stack-comparison.html preview728x935 console[] then rendered inline,
-light/dark controls compare newdestinations plus tag/Save details.
-FullGo still pending; no final result assumed.
+Initial stacked fullGo exit1/603.26s caught REAL missing Search creation CTA.
+Actual old Starred also showed incorrect Share guidance/selflink. Assertions
+preserved/strengthened; production branch/action metadata repaired. Initial
+combined mouse/touch Share matrix hit30s overall deadline under contention;
+trace showed completed late actions, cleanup caused later404. Split independent
+mouse/touch cases retain every viewport/theme/first/reopen assertion and timeout.
+Final21case pass140.55s. Raw failed receipts retained; history in
+followup-validation-history.md /followup-validation-before-pr273.md.
 
-FULL Go initial CONFIRMED exit1/603.26s, API570.030/store239.028. Only failure
-TestGalleryEmptyStateLinksToNewPage: Search welcome CTA missing, a REAL template
-regression, not stale test. Parent also found generic Starred CTA pointed to root
-instead of its definition's/Search. Preserve assertions, fix production branch
-priority/action metadata. Sol28 interrupted/no scores before repair; old244
-captures and21E2E remain68655 history after runtime changes. Fresh current
-checks/captures and BOTH-model nextunused29 are required.
+Actual before/after stack-comparison.html and stack-empty-comparison.html were
+checked with html_preview(console[]) then html_render. All current checks pass;
+do not repeat unchanged or rebuild assets duringGo.
 
-CURRENT R29 frozen575559b5/assets2f37 (productionJS/CSS unchanged). Buildpass
-19.19s; focused existing empty unit+Chromium28.35s, both assertions failed old.
-New24 T3 empty views cover all4 widths x bothschemes x Search/Starred/Shared,
-with matchMedia/containment/action proof. Separate empty preview18380/render18381,
-same binary/admin/changeme. Four before views capture old68655 actual defects.
-Current standard fullGo and21E2E IN PROGRESS; durable
-/tmp/exhibit-zrjo-pr273-empty-{go-confirm,e2e-confirm}-status.json.
-478Node carries unchangedJS; no source change/rebuild during review/Go.
+Populated http://t3code:18280/render18281; EMPTY http://t3code:18380/render18381,
+same current binary, scratchadmin/changeme. Cookies are HOST-scoped: OWN default
+profile formain, OWN incognito profile forempty. Don't overwrite main login by
+signing into secondary in the same profile. Parent only seeded personal stars
+RunLog/ReadingList in scratch. Sample contents/state/versions unchanged.
 
-CURRENT575559b5 final21 E2E CONFIRMED PASS exit0/140.55s,
-runtimeAndValidationUnchanged=true. Current14 Save-state shots refreshed from
-this passing run with source575559b5/asset2f37 manifest. FullGo still pending.
-Fresh populated244 capture refresh started in followup-round-29/; only complete
-manifest plus exit/source proof counts. No app rebuild or runtime edits.
-
-Actual stack-empty-comparison.html preview728x1087 console[] then rendered
-inline. Current29 safe brief includes secondary-fixture profile separation;
-Sol has own fresh task and no current-peer outcome supplied.
+One Chromium engine, real scheme emulation. No physical-phone/Safari/software-
+keyboard/alternate-engine or exhaustive accessibility certification. Validation
+and screenshots do not award ratings or certify unseen states.

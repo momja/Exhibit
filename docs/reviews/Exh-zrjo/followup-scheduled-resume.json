@@ -16,5 +16,9 @@
   "round": 29,
   "oldRound27": "superseded_do_not_execute",
   "boundedPostResetExecutions": 1,
-  "oldRound28": "superseded_interrupted_do_not_execute"
+  "oldRound28": "superseded_interrupted_do_not_execute",
+  "solStatus": "completed_all14_9",
+  "solTaskId": "node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r29-sol-followup-pr273",
+  "requiredChecks": "all_pass",
+  "jointPassingStreak": 0
 }
