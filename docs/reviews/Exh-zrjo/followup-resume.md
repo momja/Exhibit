@@ -1,51 +1,55 @@
-# Current parent-only PR273 stack checkpoint
+# PR273 stack follow-up — current parent-only checkpoint
 
-# PR273 stack follow-up — in progress
+Frozen application575559b5abaadc997a6faf62be3669e4881cfe27/assets2f37c8103d52,
+stacked on PR273 ab0135c9. Net UI replayc20f6f72, integration68655, corrected
+per-destination empty-state rendering575559b5. Full old history retained on
+feature/Exh-zrjo/ui-council-before-pr273-20261105 at a8f9d14e.
 
-Changes are stacked on PR273 headab0135c9. Frozen application68655f3a, assets2f37c8103d52.
-Original62+commit history preserved on feature/Exh-zrjo/ui-council-before-pr273-20261105;
-net patch replayc20f6f72 plus integration68655. Main remains clean/onmain.
+Preserved new4destinations/stars/conversations/access/migration054/header htmx,
+shared visual polish, exact tag badge/pill and explicit Save-state corrections.
+Actual title-gap conflict fails old/passesnew. FullGo then caught Search welcome
+CTA missing; actual emptyStarred had wrong Share instruction/self-link. Kept
+assertions, corrected production metadata/branching; existing strengthened
+unit+browser28.35s passes. New24 T3 emptyviews atall4widths/bothschemes show
+correct routes and nooverflow; before4 views retained. Main18280 populated and
+secondary18380 empty fixture are both current; use separate default/incognito
+profiles because cookies are host-scoped.
 
-Preserved Starred/Search/unifiedShared/Activity, personal preferences, conversation
-links/access, migration054, header/account htmx stability. Kept shared UI and exact
-user fixes: concentric inset check badge, compact tag labels/external actions,
-visible Save + sticky dirty/pending/success/review/failure feedback and retry.
-Fixed description -6px cascade clash and removed obsolete two-line phone tab
-minimum. Updated browser/capture paths to newSearch semantics. Before/after and
-validation are being refreshed for this newstack; old947 evidence is historical.
+R27 superseded, oldSol14=9/Opus no-score quota. R28 interrupted before full
+scores/report, superseded by realemptyregression; Opus28 neverlaunched. NEVER
+fill either oldphase. FreshR29 Sol independently reviewing current575559b5;
+Opus29 waits actual05:50UTC reset. No current ratings assumed, streak0/2.
+Need both ALL14>=9 twice jointly SAME app. Prior25/26 milestone historical.
 
-R27 is superseded: Sol14=9 on old947, Opus quota WITHOUTSCORES. Do not fill it.
-FreshR28 Sol independently reviewing68655. Opus28 waits actual05:50UTC reset.
-No scores yet assumed. Current newstack joint passing streak0/2. Need BOTH all14
-atleast9, two consecutiveJOINT rounds sameapp; tests/oldmilestones never substitute.
+Current buildpass, focusedempty28.35s;478Node unchangedJS/CSS. Current fullGo
+and21E2E confirming; definitive receipts will be added to followup-validation.md.
+Old68655 corpus244 plus14 Save-states are historical until refresh; newempty
+captures current. Before/after stack-comparison shown; newempty comparison pending.
+Temporary05:51UTC dailytrigger resumes ONCE/deletes itself FIRST, exactID/prompt
+and dedupe instructions below. Main stays clean/onmain; no merge/push/newPR.
 
-Temporary daily05:51UTC continuation nextNov5 deletes itself FIRST before any
-resume, then dedupes currenttasks/source and launches only eligible missingphase.
-Scheduled ID and exact current task IDs: followup-scores.json and followup-resume.md.
-No main merge/push or newPR. Current safe validation: followup-validation.md.
+Resume the existing Exhibit UI council target9 in THIS same thread/worktree after Claude's actual five-hour reset. FIRST permanently DELETE THIS temporary scheduled task: scheduled-task:command:mcp:bb622e97-24f4-48e5-90ab-d51f24f155e2:schedule-task:Exh-zrjo-followup-opus-reset-2026-11-05. It is a one-use continuation implemented with a daily05:51UTC trigger; leave no recurring automation. If user cancelled, stop after deletion.
 
-Resume the user's existing Exhibit UI council target9 in THIS same thread/worktree after Claude's actual five-hour reset. FIRST permanently DELETE THIS temporary scheduled task: scheduled-task:command:mcp:bb622e97-24f4-48e5-90ab-d51f24f155e2:schedule-task:Exh-zrjo-followup-opus-reset-2026-11-05. It is a one-use continuation implemented with a daily05:51UTC trigger; leave no recurring automation. If the user has since cancelled, stop after deletion.
+Worktree /home/maxomdal/.t3/worktrees/Exhibit/feature-Exh-zrjo-ui-council, feature/Exh-zrjo/ui-council. Read docs/reviews/Exh-zrjo/followup-resume.md, followup-summary.md, followup-scores.json, followup-validation.md and .tickets/Exh-zrjo.md. These parent-only checkpoints override this snapshot if work advanced. NEVER give current peer/aggregate outcomes to reviewers.
 
-Worktree /home/maxomdal/.t3/worktrees/Exhibit/feature-Exh-zrjo-ui-council, feature/Exh-zrjo/ui-council. Read docs/reviews/Exh-zrjo/followup-resume.md, followup-summary.md, followup-scores.json, followup-validation.md and .tickets/Exh-zrjo.md. Parent-only checkpoints are authoritative if work advanced; NEVER supply them/current peer outcomes to a reviewer.
+User requested reapplying our changes STACKED on PR273 https://github.com/momja/Exhibit/pull/273. DONE on ab0135c902559d5912deec420947d6ab3cbdbcf6. Current frozen APPLICATION575559b5abaadc997a6faf62be3669e4881cfe27, assets2f37c8103d52. Old full history backed up feature/Exh-zrjo/ui-council-before-pr273-20261105 at a8f9d14e. Net replayc20f6f72, integration68655f3a, empty-state repair575559b5. Preserve PR's Starred/Search/unifiedShared/Activity/preferences/access/conversation/migration054. Main stays clean/onmain; no merge/pushmain or newPR. PR273 linked. Later commits may be evidence only; strict runtime+validation diff from575559b5 ALL internal/web/e2e/cmd/scripts/build manifests must be empty, NO exclusions.
 
-Latest user asked to reapply our changes stacked on PR273 https://github.com/momja/Exhibit/pull/273. DONE: base ab0135c902559d5912deec420947d6ab3cbdbcf6; current frozen application68655f3a78724ee0ed90f6fa820dd1b12a169432/assets2f37c8103d52. Original full history backed up feature/Exh-zrjo/ui-council-before-pr273-20261105 at a8f9d14e; consolidated net patch replayed ontoPR273 as c20f6f72, integration adapts routes/spacing in68655. Keep PR273 Starred/Search/unifiedShared/Activity, access controls and migration054; don't restore old layout. Later commits may be evidence only; strict runtime/validation diff ALL internal/web/e2e/cmd/scripts/build manifests must be empty for eligible same candidate.
+Old25/26 target9 milestone is historical. User exposed actual tag-check corner/pill spacing and ambiguous mobileSave defects; corrected947. R27 Sol14=9 on OLD947, Opus27 no-score quota reset05:50UTCNov5. R27 is superseded by requested stack, NEVER fill Opus27. R28 source68655 was superseded: fullGo caught REAL missing Search creation action, parent also confirmed Starred sharing instruction/self-link. Sol28 was interrupted before report/14scores; actual terminal interrupted receipt/partial observations saved. Opus28 NEVER launched. NEVER fill old28 or infer scores. Existing assertions preserved and strengthened; corrected empty-state behavior now passes focused unit+native28.35s, old assertions fail beforefix. New24 T3 empty views all4widths/bothschemes have correct actions/nooverflow, source-keyedmanifest.
 
-Historical completed9 milestone25/26 is oldd30 source. User then reported real tag badge corner/pill spacing/ambiguous Save defects, corrected947. R27 Sol completed14=9 on OLD947, Opus27 failed WITHOUT SCORES at Claude quota; actual reset05:50UTC Nov5. Preserve old receipts, do NOT launch any missing Opus27: R27 is superseded by user-requested PR273 stack.
+Fresh R29 Sol task on CURRENT575559b5:
+node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r29-sol-followup-pr273
+Read actual task_status/checkpoint. NEVER duplicate active/completed Sol. R29 Opus has not launched at snapshot. Dedupe actual post-reset active/completed task first. If source unchanged and Sol eligible (active or completed all14>=9), launch ONLY missing Opus29, NOT Sol. If Sol below9 or source changed, repair/verify then fresh BOTH nextunused round; never fill obsolete partial phases. Follow latest actual round/source if checkpoint advanced.
 
-Fresh R28 Sol has been launched on current68655 and may be active/completed by wake:
-node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r28-sol-followup-pr273
-Read actual task_status/checkpoint, retain terminal report, NEVER duplicate active/completed Sol. R28 Opus was not launched before reset. Dedupe actual checkpoint/post-reset task before any execution. If source unchanged and Sol is eligible (active or completed all14>=9), launch ONLY missing Opus28. If Sol below9/source changed, repair/verify and start fresh BOTH nextunused round; never fill obsolete partial phase. If work advanced, follow actual latest candidate/round rather than blindly restarting28.
+Confirm orchestrator_capabilities codex/gpt-6.1-sol and claudeAgent/claude-opus-5-5. NEW delegate_task/shared/async/review role; stable clientRequestId Exh-zrjo-r29-opus-followup-pr273-after-reset-2026-11-05; unique report docs/reviews/Exh-zrjo/round-29-opus-followup.md. Retain ACTUAL returned taskId; no childThreadId/t3_thread_send or top-level continuation. ONE bounded fresh post-reset Opus execution; if still unavailable preserve actual task_status/detailed public notices/reset, no invented scores/unbounded retry/timers.
 
-Confirm live orchestrator_capabilities codex/gpt-6.1-sol and claudeAgent/claude-opus-5-5. Every new phase uses fresh delegate_task/shared/async/review role, stable distinct clientRequestId and retained ACTUAL taskId. For missing28 Opus stable ID Exh-zrjo-r28-opus-followup-pr273-after-reset-2026-11-05, output docs/reviews/Exh-zrjo/round-28-opus-followup.md. No childThreadId/t3_thread_send or top-level thread continuation. One bounded fresh post-reset Opus execution; if still unavailable record actual task_status/public detailed notices/reset, no invented scores/unbounded retries or timers.
+Supply ONLY saved followup-round-29-brief.md (original brief, all prior5–28 findings/responses/unresolved judgments, current fixtures), visual/nine safe briefs, prior reports through27 plus R28 partial interruption/no-score records, changes through29 and followup-validation.md. WITHHOLD round-29-sol-followup.md, followup-scores/summary/resume/timer prompt, nine-scores/summary/resume, ticket and THIS parent-only snapshot. Never tell Opus same29 peer ratings. Historical archived CURRENT directions are superseded by operative29 header.
 
-Supply ONLY saved followup-round-28-brief.md (original brief plus ALL R5–27 findings/responses/unresolved judgments, currentPR273 instructions/fixtures), safe visual/nine briefs, prior reports through27/change notes through28 and followup-validation.md. WITHHOLD round-28-sol-followup.md, followup-scores/summary/resume, nine-scores/summary/resume, ticket and THIS parent-only prompt. Do not reveal same28 peer ratings. R27 outcomes are valid historical context, not current proof. Archive directions are historical; latest28 header overrides obsolete source/route/timing directions.
+Rubric7: Typography; Composition and spacing; Color harmony; Contrast and emphasis; Component visual consistency; Responsive visual polish; Save discoverability and feedback. EACH actualLIGHT/DARK0–10,14/model. BOTH models ALL14>=9 in TWO consecutiveJOINT rounds SAME app; current newstack streakZERO. No oldscore/test/single-model/missing reviews substitute. If joint29 passes, fresh BOTH30 confirmation same source; both29 then PRIOR context/current30 peers withheld. Material sub9 -> fix/verify/repeat honestly.
 
-Rubric: Typography; Composition and spacing; Color harmony; Contrast and emphasis; Component visual consistency; Responsive visual polish; PLUS Save discoverability and feedback. Each independent actualLIGHT/DARK0–10 =14/model. User's tag pixels/spacing and mobileSave purpose/dirty/pending/clean/error/retry must earn9 too. BOTH Sol+Opus ALL14>=9 in TWO consecutive JOINT rounds on SAME app. Current newstack joint streakZERO, tests/single-model/missing reviews do not substitute. If joint28passes, fresh BOTH29 confirmation same source; both28 then PRIOR context, current29 peers withheld. Any material sub9 -> fix/verify/freshBOTH honestly.
+Live all4widths1280/768/390/320 BOTH actual schemes, own T3tabs/exactIDs/matchMedia, all4PRdestinations+representative app, shortShare320x640/390x640/640x360 first/reopen/scroll BOTHschemes. Exact tag corner/pill + Save purpose/dirty/pending/clean/error/retry still mandatory. Main populated preview http://t3code:18280, render18281; secondary EMPTY fixture http://t3code:18380, render18381 SAME current binary. Scratchadmin/changeme both. Cookies are HOST-scoped: main profileId:default, EMPTY profileId:incognito, distinct OWN tabs; don't overwrite main login by secondary login in same profile. Empty Search welcome Create/new, emptyStarred Browse/search, emptyShared explanation. Read-only except unique report; no valid saves/creates/deletes/grants/transfers/erase/star/fixture changes. Restore local drafts. Exclude arbitrary usertool/widget designs/credentialed execution. Distinguish live/current/historical supplementary evidence, honest limits.
 
-Actual bothschemes at EACH1280/768/390/320, own T3 tab/exactID and matchMedia proof, new4destinations/representative app/shortShare320x640,390x640,640x360 first/reopen/scroll BOTHschemes. Read-only except unique report, no valid saves/creates/deletes/grants/transfers/erase/star/content/fixture changes; restore local unsaved title/preset/source specimens. Exclude arbitrary usertool/widget designs/credentialed execution. Pending/error/success screenshots supplement live inspect; only current manifest counts. Don't invent or certify unseen states.
+Checks: current buildpass19.19s, focusedempty28.35s;478Node carry unchangedJS/CSS. Prior68655 nativeintegration104.59s/layout42.03s/21E2E203.47s/244captures355.81s passed but fullGo exit1/603.26s realemptydefect; initialfailedreceipts kept. CURRENT575559b5 fullGo/21E2E confirming at creation; READ actual latest status/logs, no assumedpass. /tmp/exhibit-zrjo-pr273-empty-{go-confirm,e2e-confirm}-status.json. Current capture refresh may be queued/running, read actual checkpoint. No rebuild duringGo, no unchanged passed-suite repeats. Current24 T3 emptycaptures stack-empty-states/; current full corpus only valid completedmanifest +exit/source proof. Save-state images disposable fixtures,503 deliberately simulated.
 
-Validation current: buildpass17.85s;478Nodepass; native PR273/redesign/access/navigation/search/sharing/header/tag/Save/agent group104.59s; final spacing/navigation320/390/768/1280 group42.03s firstfailsold/passesnew. Final21E2E/fullGo/capture drivers were in progress at prompt creation; READ actual final checkpoint/receipts, don't assume pass or repeat unchanged passing suites. /tmp/exhibit-zrjo-pr273-{e2e-confirm,go-confirm,capture}-status.json andlogs. Current captures followup-round-28/. Initial combined Share mouse/touch matrix hit30s test budget; trace showed completed late actions, cleanup404 not appfailure; split into independent mouse/touch cases retaining all assertions/timeouts. No assets rebuild duringGo. Checkpoint may contain later definitive receipts.
+RunLog /artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332 and/edit. Restart ONLY main sample if needed python3 /tmp/exhibit-zrjo-restart.py; empty fixture config /tmp/exhibit-zrjo-empty-fixture.json, owns only18380/18381. UserURLs t3code; ticket refs absolutebackingfile. Show actual before/after via html_preview then html_render if further UI edits.
 
-Preview http://t3code:18280 /renderer18281, scratchadmin/changeme. RunLog /artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332 and/edit. Sample-only personal stars RunLog+ReadingList seeded, contents/state unchanged; DB backed up before migration. Restart ONLY sample if needed python3 /tmp/exhibit-zrjo-restart.py. User URLs t3code; ticket refs absolute backing file. Actual before/after html_preview then html_render if more UI edits.
-
-After TWO honest joint14>=9 passes plus requiredchecks, finish evidence/scoretables/limits, close ticket onFEATURE, commit/verify bothworktrees. Keep main clean/onmain, never merge/pushmain. No PR requested; PR273 already linked, list_thread_pull_requests before handoff. User authorized work, proceed without asking again. Keep updates concise.
+After2 honest joint passes+checks: final evidence/scores/limits, close ticket onFEATURE, commit/verify bothworktrees, mainclean/onmain/no merge/pushmain. No PR requested, list_thread_pull_requests beforehandoff. Already authorized, proceed without asking again; conciseupdates. Temporary timer must already be permanently deleted regardless of provider outcome.

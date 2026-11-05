@@ -1,0 +1,15 @@
+{
+  "command": [
+    "go",
+    "test",
+    "./internal/api",
+    "-run",
+    "^Test(GalleryEmptyStateLinksToNewPage|GalleryPersonalStarAPI|GalleryEmptySpacesBrowser|SearchTabBrowser|GalleryRedesignBrowser)$",
+    "-count=1"
+  ],
+  "head": "287d95f78f143b7e08dfd54cfd2ffa9cd07ae9f9",
+  "exitCode": 0,
+  "seconds": 28.35,
+  "runtimeAndValidationUnchanged": true,
+  "log": "/tmp/exhibit-zrjo-pr273-empty-confirm.log"
+}

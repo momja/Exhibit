@@ -1,5 +1,5 @@
 {
-  "applicationCommit": "68655f3a78724ee0ed90f6fa820dd1b12a169432",
+  "applicationCommit": "575559b5abaadc997a6faf62be3669e4881cfe27",
   "assetVersion": "2f37c8103d52",
   "categories": [
     "Typography",
@@ -85,7 +85,7 @@
       "round": 28,
       "applicationCommit": "68655f3a78724ee0ed90f6fa820dd1b12a169432",
       "assetVersion": "2f37c8103d52",
-      "status": "reviewing",
+      "status": "superseded_empty_state_regression",
       "jointPass": false,
       "reviewers": [
         {
@@ -94,23 +94,57 @@
           "model": "gpt-6.1-sol",
           "clientRequestId": "Exh-zrjo-r28-sol-followup-pr273",
           "taskId": "node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r28-sol-followup-pr273",
+          "status": "interrupted",
+          "report": "round-28-sol-followup.md",
+          "scoresProduced": false,
+          "statusRecord": "round-28-sol-followup-status.json"
+        },
+        {
+          "reviewer": "opus",
+          "providerInstanceId": "claudeAgent",
+          "model": "claude-opus-5-5",
+          "status": "not_launched_superseded",
+          "clientRequestId": "Exh-zrjo-r28-opus-followup-pr273-after-reset-2026-11-05",
+          "report": "round-28-opus-followup.md"
+        }
+      ],
+      "deferredOpus": {
+        "status": "superseded_do_not_execute",
+        "resetAt": "2026-11-05T05:50:00Z",
+        "report": "round-28-opus-followup.md"
+      },
+      "reason": "Full Go exposed missing Search welcome action; parent also reproduced Starred empty CTA linking back to root. Sol interrupted before a complete report; no scores assigned. Repair requires fresh BOTH29."
+    },
+    {
+      "round": 29,
+      "applicationCommit": "575559b5abaadc997a6faf62be3669e4881cfe27",
+      "assetVersion": "2f37c8103d52",
+      "status": "reviewing",
+      "reviewers": [
+        {
+          "reviewer": "sol",
+          "providerInstanceId": "codex",
+          "model": "gpt-6.1-sol",
+          "clientRequestId": "Exh-zrjo-r29-sol-followup-pr273",
+          "taskId": "node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r29-sol-followup-pr273",
           "status": "running",
-          "report": "round-28-sol-followup.md"
+          "report": "round-29-sol-followup.md"
         },
         {
           "reviewer": "opus",
           "providerInstanceId": "claudeAgent",
           "model": "claude-opus-5-5",
           "status": "not_launched_quota_wait",
-          "clientRequestId": "Exh-zrjo-r28-opus-followup-pr273-after-reset-2026-11-05",
-          "report": "round-28-opus-followup.md"
+          "clientRequestId": "Exh-zrjo-r29-opus-followup-pr273-after-reset-2026-11-05",
+          "report": "round-29-opus-followup.md"
         }
       ],
+      "jointPass": false,
       "deferredOpus": {
         "status": "quota_wait",
         "resetAt": "2026-11-05T05:50:00Z",
-        "plannedClientRequestId": "Exh-zrjo-r28-opus-followup-pr273-after-reset-2026-11-05",
-        "report": "round-28-opus-followup.md"
+        "plannedClientRequestId": "Exh-zrjo-r29-opus-followup-pr273-after-reset-2026-11-05",
+        "report": "round-29-opus-followup.md"
       }
     }
   ],
@@ -121,10 +155,11 @@
     "previousBase": "44def51afa43019771fd258bc61b28e3ebf4613b",
     "previousApplication": "947758e0ed4fee4f3590aa2837981218118520d0",
     "backupBranch": "feature/Exh-zrjo/ui-council-before-pr273-20261105",
-    "applicationCommit": "68655f3a78724ee0ed90f6fa820dd1b12a169432",
+    "applicationCommit": "575559b5abaadc997a6faf62be3669e4881cfe27",
     "assetVersion": "2f37c8103d52",
     "rebasedNetCommit": "c20f6f72f9a18182e91bfcd3a71e4c9d2180e9ac",
     "originalHead": "a8f9d14e691abe355a38c7a37ab3c515329c9547",
-    "netPatchCommit": "13b7192330c6d6d68a5a37f6a724116a81470538"
+    "netPatchCommit": "13b7192330c6d6d68a5a37f6a724116a81470538",
+    "emptyStateRepair": "575559b5"
   }
 }

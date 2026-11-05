@@ -11,9 +11,10 @@
   "firstAction": "permanent deletion of this exact scheduledTaskId",
   "quotaResetAt": "2026-11-05T05:50:00Z",
   "promptPath": "followup-opus-resume-prompt.md",
-  "applicationCommit": "68655f3a78724ee0ed90f6fa820dd1b12a169432",
+  "applicationCommit": "575559b5abaadc997a6faf62be3669e4881cfe27",
   "assetVersion": "2f37c8103d52",
-  "round": 28,
+  "round": 29,
   "oldRound27": "superseded_do_not_execute",
-  "boundedPostResetExecutions": 1
+  "boundedPostResetExecutions": 1,
+  "oldRound28": "superseded_interrupted_do_not_execute"
 }

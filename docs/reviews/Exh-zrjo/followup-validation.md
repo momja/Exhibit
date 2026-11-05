@@ -44,3 +44,30 @@ nooverflow assertions. Archived initial failing receipts retained.
 Actual stack-comparison.html preview728x935 console[] then rendered inline,
 light/dark controls compare newdestinations plus tag/Save details.
 FullGo still pending; no final result assumed.
+
+FULL Go initial CONFIRMED exit1/603.26s, API570.030/store239.028. Only failure
+TestGalleryEmptyStateLinksToNewPage: Search welcome CTA missing, a REAL template
+regression, not stale test. Parent also found generic Starred CTA pointed to root
+instead of its definition's/Search. Preserve assertions, fix production branch
+priority/action metadata. Sol28 interrupted/no scores before repair; old244
+captures and21E2E remain68655 history after runtime changes. Fresh current
+checks/captures and BOTH-model nextunused29 are required.
+
+CURRENT R29 frozen575559b5/assets2f37 (productionJS/CSS unchanged). Buildpass
+19.19s; focused existing empty unit+Chromium28.35s, both assertions failed old.
+New24 T3 empty views cover all4 widths x bothschemes x Search/Starred/Shared,
+with matchMedia/containment/action proof. Separate empty preview18380/render18381,
+same binary/admin/changeme. Four before views capture old68655 actual defects.
+Current standard fullGo and21E2E IN PROGRESS; durable
+/tmp/exhibit-zrjo-pr273-empty-{go-confirm,e2e-confirm}-status.json.
+478Node carries unchangedJS; no source change/rebuild during review/Go.
+
+CURRENT575559b5 final21 E2E CONFIRMED PASS exit0/140.55s,
+runtimeAndValidationUnchanged=true. Current14 Save-state shots refreshed from
+this passing run with source575559b5/asset2f37 manifest. FullGo still pending.
+Fresh populated244 capture refresh started in followup-round-29/; only complete
+manifest plus exit/source proof counts. No app rebuild or runtime edits.
+
+Actual stack-empty-comparison.html preview728x1087 console[] then rendered
+inline. Current29 safe brief includes secondary-fixture profile separation;
+Sol has own fresh task and no current-peer outcome supplied.
