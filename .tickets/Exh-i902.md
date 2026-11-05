@@ -18,6 +18,7 @@ An artifact that calls window.exhibit.ai leaves the service without it. The expo
 
 - .html export: include a minimal window.exhibit.ai stand-in whose available() is empty and whose methods reject with 'unavailable', showing nothing in the artifact's DOM. The export dialog says this tool uses AI and won't use it offline.
 - ZIP export: the local relay gains the inference route with the same request shape, so the artifact runs unchanged. Each kind works only if the person configures a provider for it locally (never the instance's credential, never the viewer's stored one).
+- Runtime prerequisite: follow the final [Exh-urrg](Exh-urrg.md) decision ([provisional findings](../docs/pi-inference-registry-spike.md)). If the warm registry worker is selected, the ZIP runner needs an explicitly installed/configured compatible local Pi runtime in addition to keys; a Go relay alone does not contain its provider adapters/catalog. With that runtime missing, report unavailable. Do not silently introduce separate Go provider clients just for exports.
 - No credential of any kind is written into either export.
 
 ## Acceptance Criteria

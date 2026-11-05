@@ -1,0 +1,40 @@
+{
+  "retrieved_at": "2026-11-05T03:30:49.335154+00:00",
+  "authenticated": false,
+  "models": [
+    {
+      "source": "https://openrouter.ai/api/v1/models",
+      "id": "openai/gpt-4.1-nano",
+      "canonical_slug": "openai/gpt-4.1-nano-2025-04-14",
+      "pricing": {
+        "prompt": "0.0000001",
+        "completion": "0.0000004",
+        "web_search": "0.01",
+        "input_cache_read": "0.00000003"
+      },
+      "endpoints": [
+        "/api/v1/chat/completions",
+        "/api/v1/completions",
+        "/api/v1/messages",
+        "/api/v1/responses"
+      ]
+    },
+    {
+      "source": "https://openrouter.ai/api/v1/models?output_modalities=decisions",
+      "id": "typesafe/jev-1.14",
+      "canonical_slug": "typesafe/jev-1.14-20261014",
+      "pricing": {
+        "prompt": "0.000000042",
+        "completion": "0"
+      },
+      "endpoints": [
+        "/api/alpha/decisions"
+      ]
+    }
+  ],
+  "unauthenticated_post_probes": {
+    "https://openrouter.ai/api/v1/systemone": 401,
+    "https://openrouter.ai/api/alpha/decisions": 401
+  },
+  "limitation": "Catalog/probe evidence only. No inference was performed; 401 does not establish authenticated route compatibility."
+}

@@ -21,16 +21,16 @@ Precedent: the usage-policy guardrail (internal/agent/ext/guard.ts, av-gust) alr
 ## Design
 
 - Providers: the agent's provider pattern, no separate decision configuration. Platform mode uses the instance credential (AGENT_API_KEY + AGENT_PROVIDER; OpenRouter on the hosted version, which serves Jev). BYOK uses the viewer's stored key and provider. INFERENCE_DECISION_MODEL names a classifier model in Pi's catalog for that provider; startup fails in platform mode if it is unset or doesn't resolve to a classifier. In BYOK mode, a provider with no classifier model makes decide() unavailable for that viewer.
-- Runtime per the spike (Exh-urrg): Pi's registry.classify() if the worker is viable, otherwise a Go client implementing the same contract.
+- Runtime: [Exh-urrg](Exh-urrg.md) provisionally selects registry.classify() in the core's dedicated warm Pi Bolt 1.0.8 / Pi 1.4.0 worker. [Findings and prototype](../docs/pi-inference-registry-spike.md) prove local operation/isolation but not live OpenRouter acceptance. Keep this dependency unresolved until authenticated classification verifies the pinned /api/v1/systemone transport (current OpenRouter catalog advertises /api/alpha/decisions). Do not silently use a new endpoint or claim the pinned adapter passed. If this fails, revise the spike decision before adding a narrow Go fallback.
 - window.exhibit.ai.decide({ state, questions }) mirrors Pi's ClassifierContext. state is a JSON object (the thing being judged). Each named question is one of:
   - bool: instructions, criteria { true, false } → { probability }
   - choice: instructions, criteria { option: meaning } → { choice, probabilities, confidence }
   - score: instructions, criteria [level descriptions] → { score, confidence }
   Anything else is invalid_request before any provider call. Bounds on option count, level count, question count and state size, within the provider's own caps.
-- Answers reach the artifact unchanged, probabilities and confidence included. Thresholds belong to the artifact's code, not to Exhibit. Answers vary slightly between runs, so the docs tell artifacts to threshold on ranges.
+- Answers use Pi's normalized shape above, probabilities/confidence included where specified; this is not a passthrough of all provider wire fields (Pi's score normalization omits extra score probabilities). Validate finite/range-correct values and choice membership; Pi's parser alone does not enforce all these bounds. Thresholds belong to the artifact's code, not to Exhibit. Answers vary slightly between runs, so the docs tell artifacts to threshold on ranges.
 - No text generation, no repair step and no streaming: the answer arrives whole or the call fails (provider_error).
 - With no classifier model available, decide() is unavailable and available() omits it. It never falls back to a chat model, because an artifact must never receive a probability that means nothing.
-- Metering and limits are the core's, under the decide kind, with cost from the catalog price. Per-call defaults are small and short.
+- Metering and limits are the core's, under the decide kind, using optional usage priced from Pi's pinned catalog, explicitly an estimate. Meter usage before rejecting error/aborted results, including malformed billed answers; missing usage is unknown spend, not zero. Per-call defaults are small and short; send per-request cancellation through the shared worker, never session-wide abort.
 
 ## Acceptance Criteria
 

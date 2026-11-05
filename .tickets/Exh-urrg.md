@@ -34,3 +34,13 @@ Record the decision in the epic and update Exh-hwjg, Exh-gd3g and Exh-x16u to ma
 - A prototype answering a complete() and a classify() call through OpenRouter from Go, with measured latency.
 - A written decision with the trade-offs above, linked from the epic.
 
+## Research result — 2026-11-05 (live acceptance still blocked)
+
+[Findings, primary-source citations and reproducible commands](../docs/pi-inference-registry-spike.md), [Go prototype](../scripts/pi-inference-spike/main.go), [extension](../scripts/pi-inference-spike/extension.ts), and [raw local measurements](../scripts/pi-inference-spike/results/local-bolt-1.0.8-arm64.json).
+
+Provisional recommendation: one independent, warm, checksum-pinned Pi Bolt 1.0.8 / Pi 1.4.0 worker, an inference-only handled-input RPC extension, and Go supervision in the inference core. Reuse complete/classify adapters/catalogs; no new Go provider client family unless live evidence invalidates this runtime. Epic, core and both kind tickets updated; ZIP export prerequisite clarified, and bridge/guidance checked for runtime contradictions.
+
+Actual Bolt tests pass twelve overlapping mixed calls with zero credential mismatches, cancellation of each kind without canceling siblings, bounded admission, malformed-answer usage preservation, crash/wedge failure of pending calls, and successful explicit fresh-worker replacement. Local HTTP fixture (20 warm samples per path/kind): complete median 3.659 ms worker vs 1.605 ms direct; classify 2.834 ms vs 1.616 ms. Ready 142.498 ms; warm child RSS 91,940 KiB. These are fake-provider transport/accounting measurements, not provider/HTTPS latency or real spend.
+
+Acceptance remains unmet: no authorized OpenRouter credential was available in the shell or Pi auth store, so no live complete/classify call or provider latency was measured. Public API catalog/probes are recorded separately and do not satisfy acceptance. Pinned classify uses /api/v1/systemone while the current OpenRouter catalog advertises /api/alpha/decisions; authenticate and verify the pinned route before finalizing the recommendation. Keep this ticket in_progress and its dependencies gated; do not close based on local tests alone.
+
