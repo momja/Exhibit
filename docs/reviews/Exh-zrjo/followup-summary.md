@@ -1,4 +1,4 @@
-# Current parent-only checkpoint: second confirmation31 waits for Opus reset
+# Current parent-only checkpoint: independent Opus31 confirmation is running
 
 SAME PRODUCTION42c94eb1cb12a74108885cc1cbb7aaf7d11f5721/assetsaa7a00afd7a2 as30.
 Declared VALIDATIONbaselinec1156ef15c7f5caa282b1068214492bce42018e1 afterBOTH30
@@ -27,21 +27,26 @@ Actualtask_status Claude API rate limit reached. Try again later. Publicnotices
 2026-11-05T10:50:00Z. No inventedratingfrompartialinspection. Status/quota/public
 receipt/unavailable.md preserved. Don'tcontinue viachildThreadId/t3send.
 
-ONE boundedfresh missingphase afteractualreset scheduled10:51UTCNov5, samecurrent
-thread. TemporaryDAILYtrigger underlying, FIRST action permanentlyDELETESitself:
-scheduled-task:command:mcp:bb622e97-24f4-48e5-90ab-d51f24f155e2:schedule-task:Exh-zrjo-r31-opus-reset-2026-11-05
-ActualnextRunAt2026-11-05T10:51:00.000Z. Prompt followup-r31-opus-resume-prompt.md;
-metadata followup-r31-scheduled-resume.json. Previous05:51timer alreadydeleted.
-AtwakeFIRSTdeleteexactnewID, ifusercancelledstopafterdeletion. No otherautomation
-atcreation. No unboundedretry/newtimerloop iftheboundedpostresetexecutionfails.
+The temporary10:51UTC trigger was permanently DELETED FIRST on Nov5; actual
+receipt round-31-trigger-deletion.json confirms deleted=true, remainingtasks=0.
+No recurring automation remains. Metadata followup-r31-scheduled-resume.json.
+Original failed Opus31 attempt remains in history and produced NO scores.
 
-Ifcurrentproduction42/aa7+validationc115 unchanged andSol31eligible(activeorall14
->=9completed), launchONLYmissingfreshOpus31 usingNEWdelegate_task/shared/async/
-review role, clientRequestId Exh-zrjo-r31-opus-confirmation-pr273-after-reset-2026-11-05,
-output round-31-opus-followup.md. RetainactualtaskId/bothattempts. Dedupe actual
-postresetactive/completedrequest first. NeverduplicateSol orfillobsoletephase.
-IfSolbelow9 oractualruntimechanged, repair/verify/freshBOTHnextunusedround and
-followactualcheckpoint instead. Test-onlydeclaredbaseline doesn'tchangeUI.
+ONE bounded fresh post-reset Opus31 execution is now RUNNING on unchanged42/aa7
+with declared validationbaselinec115. Actual taskId (retain, never guess):
+node:delegated-task:command%3Amcp%3A77879691-97b1-4203-b1da-d57eb27f78e1%3Adelegate-task%3AExh-zrjo-r31-opus-confirmation-pr273-after-reset-2026-11-05
+Stable clientRequestId Exh-zrjo-r31-opus-confirmation-pr273-after-reset-2026-11-05.
+Shared/async/review role, claudeAgent/claude-opus-5-5 confirmed live. Sole writable
+report round-31-opus-followup.md. Actual launch record
+round-31-opus-followup-after-reset-launch.json; both attempts retained in scores.
+Current same31 Sol report/status/scores and parent aggregates were WITHHELD.
+Sol31 remains completedall14=9, never duplicate. No passing-suite rerun/rebuild.
+
+Wait for terminal notification, then read ACTUAL task_status/report and verify
+all14 actual numbers; never duplicate an active/completed post-reset phase. If
+below9, fix/verify and fresh BOTH nextunusedround, reset streak honestly. If
+quota still unavailable, preserve actual public error/reset, no invented scores,
+no unbounded retries or new timers. Current joint streak remains1/2 pending Opus.
 
 Safe suppliedcontextONLY followup-round-31-brief.md (original/allprior5–30 findings/
 responses/unresolvedjudgments), both30priorreports/changes through31, safe
