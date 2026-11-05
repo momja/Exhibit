@@ -1,74 +1,109 @@
-# Current parent-only checkpoint: independent Opus29 running
+# Current parent-only checkpoint: fresh independent round30
 
-Frozen APPLICATION575559b5abaadc997a6faf62be3669e4881cfe27, assets2f37c8103d52,
-PR273 baseab0135c902559d5912deec420947d6ab3cbdbcf6. Runtime/validation scope
-internal web e2e cmd scripts Makefile go.mod go.sum is unchanged, NO exclusions.
-Current featurebranch feature/Exh-zrjo/ui-council; original history backup
-feature/Exh-zrjo/ui-council-before-pr273-20261105 at a8f9d14e.
+Frozen APPLICATION42c94eb1cb12a74108885cc1cbb7aaf7d11f5721, assetsaa7a00afd7a2,
+PR273 baseab0135c902559d5912deec420947d6ab3cbdbcf6. Later commits evidence only;
+strict runtime/validation scope internal web e2e cmd scripts Makefile go.mod
+go.sum, NO exclusions. Feature/Exh-zrjo/ui-council, same worktree. Main clean/onmain.
 
-05:51UTC continuation permanently DELETED its temporary scheduled task FIRST:
-scheduled-task:command:mcp:bb622e97-24f4-48e5-90ab-d51f24f155e2:schedule-task:Exh-zrjo-followup-opus-reset-2026-11-05
-Actual deletion receipt followup-schedule-deletion.json; list_scheduled_tasks
-confirmed tasks[]. NO recurring automation remains. Never recreate/run the old
-trigger. Its original prompt is retained as executed history only.
+R29 is ACTUAL JOINT FAILURE, streak0. Sol all14=9; Opus Component visual
+consistency8.5 LIGHT andDARK, other12=9 (report narrative13of14 arithmeticwrong;
+actual table controls). Both terminal BEFORE production edits, reports/status
+preserved. No missing or duplicate29 phase. Old27/28 superseded; historical25/26
+oldsource milestone never qualifies current stack.
 
-Live catalog confirmed codex/gpt-6.1-sol and claudeAgent/claude-opus-5-5. Sol29
-actual task_status COMPLETED, all14 fresh report scores9 on unchanged575559b5.
-NEVER duplicate active/completed Sol29. Its report/status/parent aggregates were
-WITHHELD from the new same-round Opus. Parent-only current outcomes must stay
-out of Opus29 context.
+Response42c94eb1: one server-template empty partial +server context resolver for
+Starred/Shared/welcome/query/filtermiss, short600 h2, regular400 muted helper,
+optional44px action. Preserved PR273 illustration and routes/actions/access/star/
+Activity/conversation/migration/headerhtmx semantics. Welcome no longer solely
+12uppercase label/48button. Save glyphs allfloppy, static template-ownedwarning+
+text target instead of legacycross/Error prefix. Header reserves status/Save
+width, compact dots18desktop/22phone; original inset3/border1/inner4/outer8 and
+compact tagpill/external32/44 utilities unchanged. Existing persistence unchanged.
 
-NEW independent Opus29 phase now RUNNING, shared/async/review role, safe original
-brief plus all prior5–28 findings/responses/unresolved context:
-node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r29-opus-followup-pr273-after-reset-2026-11-05
-Request Exh-zrjo-r29-opus-followup-pr273-after-reset-2026-11-05.
-Assigned unique report round-29-opus-followup.md. Actual taskId/launch/attempt
-retained. Safe prompt followup-round-29-brief.md ONLY; no current29Sol report,
-status, scores/summary/resume/ticket or THIS parent checkpoint given. One bounded
-post-reset execution has now been used; don't duplicate or retry via childThreadId,
-t3_thread_send or top-level thread. Async terminal notification resumes parent.
+Fresh BOTH30 shared/async/review tasks RUNNING (never continue childThreadId):
+- sol: node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r30-sol-followup-pr273 → round-30-sol-followup.md
+- opus: node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r30-opus-followup-pr273 → round-30-opus-followup.md
+Actual launch records and stable requestIDs retained in followup-scores.json.
+Original brief/allprior5–29 findings/responses/unresolved judgments supplied via
+followup-round-30-brief.md, both29 validPRIOR context; current30 peers/parent
+aggregates WITHHELD. No same-round agreement. Readonly except unique reports,
+own defaultmain/incognitoempty tabs/exactIDs and actual schemes, restore drafts.
+Parent MUST keep runtime frozen until independent reviews terminal.
 
-CURRENT corrected-stack JOINT STREAK0/2, NOT complete. Need BOTH models ALL14>=9
-(seven categories x actualLIGHT/DARK) in TWO consecutive JOINT rounds on SAME app.
-Categories: Typography; Composition and spacing; Color harmony; Contrast and
-emphasis; Component visual consistency; Responsive visual polish; Save
-discoverability and feedback. Sol alone/tests/missing scores are never jointpass.
-If Opus29 all14>=9, record firstJOINT pass then fresh BOTH30 confirmation same
-source. Both29 then prior context; current30 peers withheld. If material sub9,
-fix/verify then fresh BOTH nextunused round; no score inflation. Preserve actual
-limitations and no-score failures. R27 oldsource and R28 interrupted are
-superseded, never fill those phases. Historical25/26 milestone doesn't qualify.
+Current bar7categories x actualLIGHT/DARK=14/model, threshold9, TWO consecutive
+JOINT rounds SAME app. Current streakZERO. If both30all14>=9, firstjointpass;
+fresh BOTH31 confirmation same source required. If any material<9, fix/verify
+and fresh BOTH nextunused round honestly. Tests/singlemodel/missing scores/old
+milestones never substitute. Keep honest coverage limits. Don't invent outcomes.
 
-ALL required checks already PASS on unchanged575559b5: build19.19s,478Node on
-unchangedJS/CSS, focusedempty28.35s,21E2Eexit0/140.55s, standardfullGoexit0/503.36s
-(API486.398/store228.996),244 authenticatedcaptures exit0/306.12s/allasset2f37/
-actualmediaagreement/errors[]/containment, plus24 current T3emptyviews and14real
-Save-outcome shots. Safe validation followup-validation.md; durable current
-stack-empty-*.txt/-status.json. No reruns/rebuild on unchangedapp. Original real
-empty-state failure and fixed assertions retained, not weakened.
+Current build17.21s, all478Node16.73s, focusednative43.23s and Save2E2E20.56s PASS.
+New native40-view emptygrammar and Savegeometry firstFAIL old; old header moved
+15.03125px. Current bothPASS, plus actualClear htmx/header preservation. Final
+current21E2E CONFIRMEDexit0/124.83s, sourceunchangedtrue. FullGo and244corpus
+confirming via /tmp/exhibit-zrjo-pr273-grammar-{go-confirm,capture}-status.json.
+Read actual latest before claiming pass; no unchanged passing-suite repeats or
+assets rebuild duringGo. Safe current facts followup-validation.md.
 
-Preserve PR273 four destinations/stars/access/conversations/migration054/header
-htmx plus shared visual/source/sheet grammar and exact user tag/Save corrections.
-Current empty Search creation and Starred Search-discovery were repaired after
-fullGo caught the merged template branch. Actual before/after shown/saved
-stack-comparison.html and stack-empty-comparison.html. All fixtures disposable.
+32 own-T3 current empty/miss views all4widths/bothschemes verified aa7 assets,
+600headline/400helper/44actions and nooverflow. Current14Save-state screenshots
+from passing21E2E in followup-save-states-round-30/manifest.json. Before source575
+photos retained round-30-before; after round-30-after. New comparison being saved.
+Current244 corpus followup-round-30/ only complete manifest +exit/source receipt
+counts. No live sample Save/create/delete/grant/transfer/erase/star changes.
 
 Populated http://t3code:18280/render18281; EMPTY http://t3code:18380/render18381,
-same binary/admin/changeme. HOST-scoped cookies: own default-profile tab formain,
-own incognito-profile tab forempty. Own exactIDs/matchMedia/all4widths bothschemes,
-shortShare320x640/390x640/640x360 first/reopen/scroll BOTHschemes. Reviewer readonly
-except report; no valid saves/creates/deletes/grants/transfers/erase/star/fixture
-changes; restore local specimens. Pending/error/success screenshots supplement,
-not replace, live evidence; arbitrary authored tool/widget designs excluded.
+same new binary/admin/changeme. HOST-scoped cookies: own default-profile main,
+own incognito-profile empty. Main restart helper /tmp/exhibit-zrjo-restart.py;
+empty config /tmp/exhibit-zrjo-empty-fixture.json (owns18380/18381 only). Don't
+restart unrelated services. RunLog /artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit.
+UserURLs t3code; ticket links actualabsolute .tickets/Exh-zrjo.md.
 
-If current Opus attempt fails quota again, preserve actual task_status + detailed
-public notice/reset, no invented scores/unbounded retries/new automation. All
-old failed attempts remain history. Existing approved work continues on actual
-score feedback only. No user cancellation was received.
+One-use timer permanentlyDELETED FIRST05:51, scheduledeletionreceipt +emptylist
+verified. NO recurringautomation remains. No new timers or quota retry loops.
+Requested live models confirmed codex/gpt-6.1-sol +claudeAgent/claude-opus-5-5.
+If actual quota fails, preserve no-score status/publicreset and don't claim pass.
 
-Ticket remains in_progress onFEATURE; acceptance updated explicitly14/model.
-After2 genuine jointpasses+checks, finish evidence/scores/limits, close ticket,
-commit/verify feature andmain. Keep main clean/onmain; no merge/pushmain/newPR.
-PR273 already linked; list_thread_pull_requests before finalhandoff. UserURLs
-t3code; ticket refs absolute backing .tickets/Exh-zrjo.md. Show actual before/after
-html_preview then html_render for further UI changes. Already authorized.
+After TWO actual jointpasses+checks: final evidence/scores/limits, closeFEATURE
+ticket, commit/verify worktrees; mainclean/onmain/no merge/pushmain, no newPR.
+PR273 linked; list_thread_pull_requests beforehandoff. Actual before/after via
+html_preview then html_render for currentUI edits. Alreadyauthorized; proceed.
+
+LATEST actual fullGo result: exit1/470.07s from TWO stale expectations: oldcheck
+icon and oldSharedhelper. Production current42/aa7 stays frozen until BOTH30
+terminal. Then correct exactly internal/api/assets_test.go and
+internal/api/galleryspaces_test.go test expectations without dropping assertions,
+focusedtest +standardGo confirmation. No app change/rebuild is needed for tests;
+record transparent validation-only baseline after reviews, no hidden exclusions.
+UI review scores still pending; all21E2E and nativebehaviorchecks pass.
+
+LATEST Opus30 COMPLETED independently, all14score9; report/status saved. Sol30
+is still RUNNING at06:42UTC, so jointstreakremains0. NEVER duplicate Opus30 or
+read its current result to Sol. Runtime+validation still frozen42 with no diffs.
+244currentcaptures CONFIRMEDexit0/299.91s/allaa7/mediaagreement/errors[]/nooverflow.
+32 current T3 emptyviews +14Save outcomes also complete. Before/after comparison
+round-30-comparison.html preview728x1104 console[] thenhtml_render was shown.
+
+FullGo ONLY two staleexpectations still pending correction afterBOTH30terminal.
+Exact unapplied patch prepared /tmp/exhibit-zrjo-r30-validation-expectations.patch:
+only internal/api/assets_test.go (new Savefloppy+ariahidden instead of oldcheck)
+and internal/api/galleryspaces_test.go (new Shared helper wording). No assertion
+dropped, no appcode change needed. Apply AFTER reviews terminal, focusedtest +
+full standardGo; no assets rebuild. Record transparent validation-only baseline
+for next round, not hidden exclusions. Runtime42/aa7 stays BYTE IDENTICAL;
+round-30-runtime-identity.json hashes bin/server andboth/proc executables.
+Current30 reviews checked whole scopeagainst42beforethatvalidationchange. Next
+round should declare SAME production42/aa7 plus exact validation-onlycommit, and
+freeze ALL runtime/validation paths against that declared newbaseline with NO
+exclusions. Test-only expectation fixes do not alter interface or invalidate its
+scores; audit full diff and binaryidentity explicitly, don't pretend emptydiff
+against42aftertestfix. If any actual runtimechange, freshBOTH/source round.
+
+Fixtureaudit: Opus noticed changing tag displays; currentSQLite RunLog has
+Health/Reading/Test/Utilities versus originalprePRbackupHealth. Timing/actor are
+not established. Capture script has no tagwrite path; bounded Solactivity audit
+found no observed attach/detach. Do NOT attribute or claim immutablefixture.
+Preserve potential user/testdata, don'tdelete associations. Record currentfour
+tags as confirmationbaseline. See round-30-fixture-audit.md. Corpus filters-empty
+basename is not proof of noresults aftertagvariation; route/manifestauthoritative,
+actualmisses verified via isolatednative40 and ownT3states. No productioncode
+change or new capture needed for this honest scope note.

@@ -1,0 +1,21 @@
+{
+  "applicationCommit": "42c94eb1cb12a74108885cc1cbb7aaf7d11f5721",
+  "assetVersion": "aa7a00afd7a2",
+  "source": "passing current21-case E2E, disposable artifacts; deliberate503",
+  "files": [
+    "save-error-320-dark.png",
+    "save-error-320-light.png",
+    "saved-1280-dark.png",
+    "saved-1280-light.png",
+    "saved-320-dark.png",
+    "saved-320-light.png",
+    "saved-390-dark.png",
+    "saved-390-light.png",
+    "saving-1280-dark.png",
+    "saving-1280-light.png",
+    "saving-320-dark.png",
+    "saving-320-light.png",
+    "saving-390-dark.png",
+    "saving-390-light.png"
+  ]
+}
