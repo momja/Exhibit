@@ -1,6 +1,6 @@
 ---
 id: Exh-ivro
-status: open
+status: in_progress
 deps: []
 links: []
 created: 2026-11-05T03:46:08Z
@@ -71,3 +71,7 @@ Round2 contract corrections (normative): Add persisted Bazarre draft isolation f
 **2026-11-05T03:54:13Z**
 
 Round2 final acceptance additions: all idempotent import/candidate operations bind owner+operation+request ID to a fingerprint of full confirmed payload (source/digest/mode/parent/baseline/ordered brief). Reused request ID with any different payload conflicts; retries of identical operation return same artifact without erasing subsequent edits. Candidate approved brief remains in a private table, never Artifact JSON/public serialization. Existing creation-brief handoff in agent.js auto-sends: do NOT reuse that path. Add separate server-loaded draft path that only prefills composer, never calls send, including after configured-key detection, key setup, reload and multiple tabs. Keep in gallery clears only Bazarre draft isolation; it does not create a public RSS release. On a PUBLIC gallery normal visibility is restored, so button labels clearly say Make visible on public instances; no implied release/license permission. Private instances remain private after keeping.
+
+**2026-11-05T03:55:58Z**
+
+Three pre-implementation review rounds completed. Round3: implementation-ready with no remaining material blockers; newest normative notes supersede earlier wording. Review1/2 findings addressed before application code. Work divided into publication, import/remix, catalog service, shared protocol/UI/integration.
