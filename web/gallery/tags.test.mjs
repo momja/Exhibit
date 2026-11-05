@@ -131,6 +131,30 @@ test("the edit dialog renames the tag library-wide and re-renders the panel", as
   assert.deepEqual(t.events, ["exhibit:tags-changed"]);
 });
 
+test("Edit Enter keeps a rejected name blocked until its value changes", async () => {
+  const t = await loadTags({ responses: [{ ok: false, status: 409, json: async () => ({ error: 'tag exists' }) }] });
+  await t.clickAction('edit-tag', { tagId: 'tag-1', tagName: 'charts', tagColor: '#ffffff' });
+  const modal = t.byId('tag-edit-modal'), name = t.byId('tag-edit-name');
+  name.value = 'existing name';
+  await t.byId('tags-panel').dispatchEvent({ type: 'input', target: name });
+  await modal.dispatchEvent({ type: 'click', target: { closest: selector => selector === '#tag-edit-save' ? {} : null } });
+  assert.equal(t.api.calls.length, 1);
+  assert.equal(t.byId('tag-edit-save').disabled, true);
+  for (const id of ['tag-edit-name', 'tag-edit-color-hex']) {
+    await t.byId('tags-panel').dispatchEvent({ type: 'keydown', key: 'Enter', target: t.byId(id), preventDefault() {} });
+    assert.equal(t.api.calls.length, 1, 'unchanged rejected name sends no repeated PATCH');
+    assert.equal(t.byId('tag-edit-name-error').textContent, 'tag exists');
+    assert.equal(name.focused, true);
+  }
+  name.value = 'new name';
+  await t.byId('tags-panel').dispatchEvent({ type: 'input', target: name });
+  assert.equal(t.byId('tag-edit-name-error').hidden, true);
+  assert.equal(t.byId('tag-edit-save').disabled, false);
+  await t.byId('tags-panel').dispatchEvent({ type: 'keydown', key: 'Enter', target: name, preventDefault() {} });
+  assert.equal(t.api.calls.length, 2);
+  assert.equal(modal.open, false);
+});
+
 test("deleting shows a local confirmation, and Keep tag sends nothing", async () => {
   const t = await loadTags({ confirmed: false });
   await t.clickAction("edit-tag", { tagId: "tag-1", tagName: "charts", tagColor: "#ffffff" });

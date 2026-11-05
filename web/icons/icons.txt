@@ -91,3 +91,6 @@ ph-star
 
 # Saved-data sharing note
 ph-info
+
+# Incomplete tag color
+ph-minus

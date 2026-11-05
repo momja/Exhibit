@@ -230,8 +230,32 @@ test('tag changes persist with clear pending, local failure and retry feedback w
       }
       await expect(page.locator('#save-button')).toBeDisabled();
       await page.locator(`[data-action=edit-tag][data-tag-id="${created.id}"]`).click();
+      const conflictResponse = await api.post('/api/tags', { data: { name: `Conflict-${first.id.slice(0, 8)}`, color: '#377a64' } });
+      expect(conflictResponse.status()).toBe(201);
+      const conflict = await conflictResponse.json();
+      remaining.add(conflict.id);
+      let editAttempts = 0;
+      page.on('request', request => { if (request.url().endsWith(`/api/tags/${created.id}`) && request.method() === 'PATCH') editAttempts++; });
+      await modal.locator('#tag-edit-name').fill(conflict.name);
+      await modal.locator('#tag-edit-save').click();
+      const nameError = modal.locator('#tag-edit-name-error');
+      await expect(nameError).toBeVisible();
+      const rejection = await nameError.textContent();
+      await expect(modal.locator('#tag-edit-save')).toBeDisabled();
+      expect(editAttempts).toBe(1);
+      for (const field of ['#tag-edit-name', '#tag-edit-color-hex']) {
+        await modal.locator(field).press('Enter');
+        await expect(modal.locator('#tag-edit-name')).toHaveAttribute('aria-invalid', 'true');
+        await expect(nameError).toHaveText(rejection!);
+        await expect(modal.locator('#tag-edit-name')).toBeFocused();
+        await expect(modal.locator('#tag-edit-save')).toBeDisabled();
+        expect(editAttempts, 'Enter cannot retry a known rejected name').toBe(1);
+      }
+      await page.screenshot({ path: test.info().outputPath(`tag-edit-name-error-${colorScheme}.png`) });
       const retried = `${original} retried`;
       await modal.locator('#tag-edit-name').fill(retried);
+      await expect(nameError).toBeHidden();
+      await expect(modal.locator('#tag-edit-save')).toBeEnabled();
       await page.route(tagURL, route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Temporary tag save failure. Try again.' }) }));
       await modal.locator('#tag-edit-save').click();
       await expect(modal.locator('#tag-edit-error')).toHaveText('Temporary tag save failure. Try again.');

@@ -276,6 +276,8 @@ function connectTags(panel) {
 
   function saveTag() {
     if (editor.pending) return;
+    const name = byId('tag-edit-name');
+    if (name.value.trim() && name.getAttribute('aria-invalid') === 'true') { name.focus(); return; }
     const details = readDetails('edit');
     if (!details || details.name === originalName && details.color === originalColor) return;
     return mutateTag('PATCH', details);
