@@ -1,4 +1,4 @@
-# Current tag-only10 council: fresh BOTH34 active
+# Current tag-only10 council: Sol34 active, Opus34 no-score quota failure
 
 Latest user target is10 ONLY Tags section/Edit tag sheet, fixed7categories each
 actual light/dark (14/model), TWO consecutive joint passes on same interface.
@@ -19,7 +19,10 @@ outlined palette, stable pending buttons, partial201/attach503 retry SAME tag
 with nearby error and selection/focus restoration. New assertions fail old72 and
 pass current. See changes/brief and honest validation; tests never award scores.
 
-Fresh shared/async/review tasks34 active; actualIDs in tags-ten-scores.json and
+Fresh Sol34 review is active; Opus34 failed without report/scores at actual quota.
+Public reset21:30UTC Nov5(epoch1793914200); failure receipt/unavailable note saved.
+No before-reset retry or score inference. Sol must not be duplicated.
+Original shared/async/review tasks34: actualIDs in tags-ten-scores.json and
 round-34-*-tags-ten-launch.json. NEVERduplicate active/completed phases or reveal
 same34peer/aggregate results. Operative prompt tags-ten-round-34-brief.md plus
 original focused brief, BOTH32+33 prior reports/responses. No app/assets edits

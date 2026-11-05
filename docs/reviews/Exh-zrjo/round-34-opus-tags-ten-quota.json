@@ -1,0 +1,62 @@
+{
+  "taskId": "node:delegated-task:command%3Amcp%3Ae394a58e-fb38-4e0c-b7c7-0df413da8a7e%3Adelegate-task%3AExh-zrjo-r34-opus-tags-ten",
+  "status": "failed",
+  "error": "Claude API rate limit reached. Try again later.",
+  "publicNotices": [
+    {
+      "position": 212,
+      "visibility": "local",
+      "sourceThreadId": "thread:delegated-task:command%3Amcp%3Ae394a58e-fb38-4e0c-b7c7-0df413da8a7e%3Adelegate-task%3AExh-zrjo-r34-opus-tags-ten",
+      "itemId": "turn-item:provider:claudeAgent:native-item:usage-limit%3Aprovider-turn%3Aprovider%3AclaudeAgent%3Anative-turn%3Aturn%253Arun-attempt%253Arun%253Arun%25253Athread%25253Athread%2525253Adelegated-task%2525253Acommand%252525253Amcp%252525253Ae394a58e-fb38-4e0c-b7c7-0df413da8a7e%252525253Adelegate-task%252525253AExh-zrjo-r34-opus-tags-ten%25253Aordinal%25253A1%253Aattempt%253A1%3Afive_hour%3A1793914200",
+      "runId": "run:thread:thread%3Adelegated-task%3Acommand%253Amcp%253Ae394a58e-fb38-4e0c-b7c7-0df413da8a7e%253Adelegate-task%253AExh-zrjo-r34-opus-tags-ten:ordinal:1",
+      "messageId": null,
+      "createdBy": null,
+      "creationSource": null,
+      "type": "system_notice",
+      "status": "completed",
+      "title": "Claude usage limit reached. This turn is paused until the 5-hour limit resets in 2h 50m.",
+      "text": "Claude usage limit reached. This turn is paused until the 5-hour limit resets in 2h 50m.",
+      "textTruncated": false,
+      "nextTextOffset": null,
+      "updatedAt": "2026-11-05T18:40:00.841Z"
+    },
+    {
+      "position": 213,
+      "visibility": "local",
+      "sourceThreadId": "thread:delegated-task:command%3Amcp%3Ae394a58e-fb38-4e0c-b7c7-0df413da8a7e%3Adelegate-task%3AExh-zrjo-r34-opus-tags-ten",
+      "itemId": "turn-item:provider:claudeAgent:native-item:6ce509ee-9795-41ec-a8e0-7b329f8b6d50",
+      "runId": "run:thread:thread%3Adelegated-task%3Acommand%253Amcp%253Ae394a58e-fb38-4e0c-b7c7-0df413da8a7e%253Adelegate-task%253AExh-zrjo-r34-opus-tags-ten:ordinal:1",
+      "messageId": "message:provider:claudeAgent:native-item:6ce509ee-9795-41ec-a8e0-7b329f8b6d50",
+      "createdBy": "agent",
+      "creationSource": "provider",
+      "type": "assistant_message",
+      "status": "completed",
+      "title": null,
+      "text": "You've hit your 5-hour limit \u00b7 resets 9:30pm (UTC)",
+      "textTruncated": false,
+      "nextTextOffset": null,
+      "updatedAt": "2026-11-05T18:40:00.846Z"
+    },
+    {
+      "position": 214,
+      "visibility": "local",
+      "sourceThreadId": "thread:delegated-task:command%3Amcp%3Ae394a58e-fb38-4e0c-b7c7-0df413da8a7e%3Adelegate-task%3AExh-zrjo-r34-opus-tags-ten",
+      "itemId": "turn-item:provider:claudeAgent:native-item:terminal-failure%3Aprovider-turn%3Aprovider%3AclaudeAgent%3Anative-turn%3Aturn%253Arun-attempt%253Arun%253Arun%25253Athread%25253Athread%2525253Adelegated-task%2525253Acommand%252525253Amcp%252525253Ae394a58e-fb38-4e0c-b7c7-0df413da8a7e%252525253Adelegate-task%252525253AExh-zrjo-r34-opus-tags-ten%25253Aordinal%25253A1%253Aattempt%253A1",
+      "runId": "run:thread:thread%3Adelegated-task%3Acommand%253Amcp%253Ae394a58e-fb38-4e0c-b7c7-0df413da8a7e%253Adelegate-task%253AExh-zrjo-r34-opus-tags-ten:ordinal:1",
+      "messageId": null,
+      "createdBy": null,
+      "creationSource": null,
+      "type": "error",
+      "status": "failed",
+      "title": "Usage limit reached",
+      "text": "Claude API rate limit reached. Try again later.",
+      "textTruncated": false,
+      "nextTextOffset": null,
+      "updatedAt": "2026-11-05T18:40:00.911Z"
+    }
+  ],
+  "resetEpoch": 1793914200,
+  "resetUTC": "2026-11-05T21:30:00.000Z",
+  "reportExists": false,
+  "ratings": null
+}

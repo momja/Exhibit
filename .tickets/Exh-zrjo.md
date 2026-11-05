@@ -228,3 +228,7 @@ Both focused33 reviews completed on72be0ccc/bc262: Solall14=10; Opus6x10+8x9.5, 
 **2026-11-05T18:34:49.907039+00:00**
 
 Both33 terminal jointFAIL despite Sol14x10. After real old-binary failures, candidate62328d49/ef44b49026ee repairs invalid state, stable validation geometry, Create validity, row/palette grouping and partial creation recovery. Build,478Node,focused3E2E,nativeTag and full24E2E PASS; full standardGo confirmation running durably. Saved24Main+8playground actualscheme views and24disposableoutcome photos; actual before/after34 previewed/rendered. Fresh independent BOTH34 shared reviews active, actualIDs retained; current peers withheld. Scope frozen until bothterminal; jointstreak0/2, no10completion claim. Main unchanged, no recurring tasks or newPR.
+
+**2026-11-05T18:41:36.846147+00:00**
+
+Opus34 actual task_status FAILED at Claude API rate limit, no assigned report/final14ratings. Public notices212/213 give actual reset21:30UTC Nov5(epoch1793914200). Failed attempt/status/notices saved; no score or joint credit inferred. Sol34 and standardGo remain active on unchanged62328d49/ef44. No pre-reset retry or application edit. Streak0/2, ticket in_progress.

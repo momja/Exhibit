@@ -4,7 +4,8 @@ The current candidate is62328d49, assetsef44b49026ee, on the PR273 stack.
 After both33 completed, it fixes invalid-color border/feedback, Create validity,
 dialog geometry, row/palette grouping and partial creation recovery. New actual
 [before/after](../../screenshots/Exh-zrjo/tags-ten-comparison-round34.html) is saved.
-Fresh independent Sol and Opus round34 reviews are running. No focused joint pass
+Sol34 is still reviewing. Opus34 failed before its report/scores at an actual
+five-hour quota, resetting21:30UTC Nov5; original attempt is preserved. No focused joint pass
 is claimed:33 Sol14x10, Opus6x10/8x9.5 was a joint failure, and scores do not carry
 over to changed source. Target remains two consecutive BOTH-model all14x10 rounds.
 

@@ -193,18 +193,29 @@
           "providerInstanceId": "claudeAgent",
           "model": "claude-opus-5-5",
           "taskId": "node:delegated-task:command%3Amcp%3Ae394a58e-fb38-4e0c-b7c7-0df413da8a7e%3Adelegate-task%3AExh-zrjo-r34-opus-tags-ten",
-          "status": "running",
+          "status": "failed",
           "clientRequestId": "Exh-zrjo-r34-opus-tags-ten",
           "report": "round-34-opus-tags-ten.md",
           "launchRecord": "round-34-opus-tags-ten-launch.json",
           "light": null,
           "dark": null,
-          "individualPass": null
+          "individualPass": false,
+          "statusRecord": "round-34-opus-tags-ten-status.json",
+          "unavailableRecord": "round-34-opus-tags-ten-unavailable.md",
+          "quotaRecord": "round-34-opus-tags-ten-quota.json",
+          "attempts": [
+            {
+              "taskId": "node:delegated-task:command%3Amcp%3Ae394a58e-fb38-4e0c-b7c7-0df413da8a7e%3Adelegate-task%3AExh-zrjo-r34-opus-tags-ten",
+              "status": "failed",
+              "reason": "Claude API rate limit reached. Try again later.",
+              "scoresProduced": false
+            }
+          ]
         }
       ],
       "purpose": "refined_candidate",
       "validationBaseline": "62328d495baa4dc3c049ffa818b0679980938221",
-      "status": "running",
+      "status": "incomplete_opus_usage_limit",
       "jointPass": null
     }
   ],
