@@ -1,23 +1,23 @@
 {
-  "round": 31,
   "applicationCommit": "42c94eb1cb12a74108885cc1cbb7aaf7d11f5721",
   "assetVersion": "aa7a00afd7a2",
   "validationBaseline": "c1156ef15c7f5caa282b1068214492bce42018e1",
-  "status": "awaiting_independent_opus",
-  "jointPassingStreak": 1,
-  "completed": false,
-  "firstJointPassRecord": "round-30-rating-verification.json",
-  "reviewers": [
+  "categories": [
+    "Typography",
+    "Composition and spacing",
+    "Color harmony",
+    "Contrast and emphasis",
+    "Component visual consistency",
+    "Responsive visual polish",
+    "Save discoverability and feedback"
+  ],
+  "actualScoreCount": 56,
+  "allScoresAtLeast9": true,
+  "reports": [
     {
+      "round": 30,
       "reviewer": "sol",
-      "providerInstanceId": "codex",
-      "model": "gpt-6.1-sol",
-      "clientRequestId": "Exh-zrjo-r31-sol-confirmation-pr273",
-      "taskId": "node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r31-sol-confirmation-pr273",
-      "status": "completed",
-      "report": "round-31-sol-followup.md",
-      "launchRecord": "round-31-sol-followup-launch.json",
-      "scoresProduced": true,
+      "report": "round-30-sol-followup.md",
       "light": [
         9.0,
         9.0,
@@ -36,48 +36,97 @@
         9.0,
         9.0
       ],
-      "individualPass": true,
-      "statusRecord": "round-31-sol-followup-status.json",
-      "ratingVerification": "round-31-sol-rating-verification.json"
+      "count": 14,
+      "allAtLeast9": true
     },
     {
+      "round": 30,
       "reviewer": "opus",
-      "providerInstanceId": "claudeAgent",
-      "model": "claude-opus-5-5",
-      "clientRequestId": "Exh-zrjo-r31-opus-confirmation-pr273-after-reset-2026-11-05",
-      "taskId": "node:delegated-task:command%3Amcp%3A77879691-97b1-4203-b1da-d57eb27f78e1%3Adelegate-task%3AExh-zrjo-r31-opus-confirmation-pr273-after-reset-2026-11-05",
-      "status": "running",
-      "report": "round-31-opus-followup.md",
-      "launchRecord": "round-31-opus-followup-after-reset-launch.json",
-      "scoresProduced": false,
-      "resetAt": "2026-11-05T10:50:00Z",
-      "attempts": [
-        {
-          "taskId": "node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r31-opus-confirmation-pr273",
-          "clientRequestId": "Exh-zrjo-r31-opus-confirmation-pr273",
-          "status": "failed_without_scores",
-          "scoresProduced": false,
-          "error": "Claude API rate limit reached. Try again later.",
-          "resetAt": "2026-11-05T10:50:00Z",
-          "statusRecord": "round-31-opus-followup-status.json",
-          "launchRecord": "round-31-opus-followup-launch.json",
-          "failureRecord": "round-31-opus-followup-unavailable.md"
-        },
-        {
-          "taskId": "node:delegated-task:command%3Amcp%3A77879691-97b1-4203-b1da-d57eb27f78e1%3Adelegate-task%3AExh-zrjo-r31-opus-confirmation-pr273-after-reset-2026-11-05",
-          "clientRequestId": "Exh-zrjo-r31-opus-confirmation-pr273-after-reset-2026-11-05",
-          "status": "running",
-          "scoresProduced": false,
-          "postResetExecution": true,
-          "recordedAt": "2026-11-05T10:53:22.139240+00:00",
-          "launchRecord": "round-31-opus-followup-after-reset-launch.json"
-        }
+      "report": "round-30-opus-followup.md",
+      "light": [
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0
       ],
-      "originalFailureRecord": "round-31-opus-followup-unavailable.md",
-      "safeBrief": "followup-round-31-brief.md"
+      "dark": [
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0
+      ],
+      "count": 14,
+      "allAtLeast9": true
+    },
+    {
+      "round": 31,
+      "reviewer": "sol",
+      "report": "round-31-sol-followup.md",
+      "light": [
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0
+      ],
+      "dark": [
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0
+      ],
+      "count": 14,
+      "allAtLeast9": true
+    },
+    {
+      "round": 31,
+      "reviewer": "opus",
+      "report": "round-31-opus-followup.md",
+      "light": [
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0
+      ],
+      "dark": [
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0
+      ],
+      "count": 14,
+      "allAtLeast9": true
     }
   ],
-  "validationStatus": "all_pass",
-  "currentCompletedScoreCount": 14,
-  "jointResult": "not_established_opus_active"
+  "jointPassingStreak": 1,
+  "completed": false,
+  "qualification": "pending_required_live_coverage_addendum",
+  "coverageAddendum": {
+    "taskId": "node:delegated-task:command%3Amcp%3A77879691-97b1-4203-b1da-d57eb27f78e1%3Adelegate-task%3AExh-zrjo-r31-opus-live-coverage-addendum-pr273",
+    "clientRequestId": "Exh-zrjo-r31-opus-live-coverage-addendum-pr273",
+    "status": "running",
+    "launchRecord": "round-31-opus-live-coverage-launch.json",
+    "safeBrief": "round-31-opus-live-coverage-brief.md plus followup-round-31-brief.md",
+    "report": "round-31-opus-live-coverage-addendum.md",
+    "reason": "Original actual scores pass but mandatory actual-render matrix is incomplete; frame measurements and unviewed resizes do not qualify.",
+    "recordedAt": "2026-11-05T11:08:57.710033+00:00"
+  },
+  "recordedAt": "2026-11-05T11:08:57.710033+00:00"
 }

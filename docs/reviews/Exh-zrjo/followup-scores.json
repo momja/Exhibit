@@ -288,7 +288,7 @@
       "assetVersion": "aa7a00afd7a2",
       "validationBaseline": "c1156ef15c7f5caa282b1068214492bce42018e1",
       "sameProductionAsRound": 30,
-      "status": "confirmation_running",
+      "status": "required_live_coverage_pending",
       "jointPass": false,
       "reviewers": [
         {
@@ -329,10 +329,10 @@
           "model": "claude-opus-5-5",
           "clientRequestId": "Exh-zrjo-r31-opus-confirmation-pr273-after-reset-2026-11-05",
           "taskId": "node:delegated-task:command%3Amcp%3A77879691-97b1-4203-b1da-d57eb27f78e1%3Adelegate-task%3AExh-zrjo-r31-opus-confirmation-pr273-after-reset-2026-11-05",
-          "status": "running",
+          "status": "completed_pending_required_live_coverage",
           "report": "round-31-opus-followup.md",
           "launchRecord": "round-31-opus-followup-after-reset-launch.json",
-          "scoresProduced": false,
+          "scoresProduced": true,
           "resetAt": "2026-11-05T10:50:00Z",
           "attempts": [
             {
@@ -349,15 +349,49 @@
             {
               "taskId": "node:delegated-task:command%3Amcp%3A77879691-97b1-4203-b1da-d57eb27f78e1%3Adelegate-task%3AExh-zrjo-r31-opus-confirmation-pr273-after-reset-2026-11-05",
               "clientRequestId": "Exh-zrjo-r31-opus-confirmation-pr273-after-reset-2026-11-05",
-              "status": "running",
-              "scoresProduced": false,
+              "status": "completed",
+              "scoresProduced": true,
               "postResetExecution": true,
               "recordedAt": "2026-11-05T10:53:22.139240+00:00",
-              "launchRecord": "round-31-opus-followup-after-reset-launch.json"
+              "launchRecord": "round-31-opus-followup-after-reset-launch.json",
+              "statusRecord": "round-31-opus-followup-after-reset-status.json",
+              "individualPass": true
             }
           ],
           "originalFailureRecord": "round-31-opus-followup-unavailable.md",
-          "safeBrief": "followup-round-31-brief.md"
+          "safeBrief": "followup-round-31-brief.md",
+          "taskStatus": "completed",
+          "light": [
+            9.0,
+            9.0,
+            9.0,
+            9.0,
+            9.0,
+            9.0,
+            9.0
+          ],
+          "dark": [
+            9.0,
+            9.0,
+            9.0,
+            9.0,
+            9.0,
+            9.0,
+            9.0
+          ],
+          "individualPass": true,
+          "statusRecord": "round-31-opus-followup-after-reset-status.json",
+          "coverageComplete": false,
+          "coverageAddendum": {
+            "taskId": "node:delegated-task:command%3Amcp%3A77879691-97b1-4203-b1da-d57eb27f78e1%3Adelegate-task%3AExh-zrjo-r31-opus-live-coverage-addendum-pr273",
+            "clientRequestId": "Exh-zrjo-r31-opus-live-coverage-addendum-pr273",
+            "status": "running",
+            "launchRecord": "round-31-opus-live-coverage-launch.json",
+            "safeBrief": "round-31-opus-live-coverage-brief.md plus followup-round-31-brief.md",
+            "report": "round-31-opus-live-coverage-addendum.md",
+            "reason": "Original actual scores pass but mandatory actual-render matrix is incomplete; frame measurements and unviewed resizes do not qualify.",
+            "recordedAt": "2026-11-05T11:08:57.710033+00:00"
+          }
         }
       ],
       "deferredOpus": {
@@ -367,11 +401,13 @@
         "scheduledTaskId": "scheduled-task:command:mcp:bb622e97-24f4-48e5-90ab-d51f24f155e2:schedule-task:Exh-zrjo-r31-opus-reset-2026-11-05",
         "nextRunAt": "2026-11-05T10:51:00.000Z",
         "scheduledTaskDeleted": true,
-        "status": "launched_after_reset",
+        "status": "completed_after_reset_scores_pass_coverage_pending",
         "deletedAt": "2026-11-05T10:52:36.462Z",
         "actualTaskId": "node:delegated-task:command%3Amcp%3A77879691-97b1-4203-b1da-d57eb27f78e1%3Adelegate-task%3AExh-zrjo-r31-opus-confirmation-pr273-after-reset-2026-11-05",
         "postResetExecutions": 1
-      }
+      },
+      "scoresMeetThreshold": true,
+      "qualificationPending": "Opus actual route/width/scheme renders, tag sheets, native tools/card posture/Embed and full short Share first/reopen coverage"
     }
   ],
   "restack": {

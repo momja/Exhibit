@@ -1,92 +1,77 @@
-# Current parent-only checkpoint: independent Opus31 confirmation is running
+# Current parent-only checkpoint: Opus31 live coverage addendum
 
-SAME PRODUCTION42c94eb1cb12a74108885cc1cbb7aaf7d11f5721/assetsaa7a00afd7a2 as30.
-Declared VALIDATIONbaselinec1156ef15c7f5caa282b1068214492bce42018e1 afterBOTH30
-terminal changedexactly TWO Go testfiles: assets_test.go glyphexpectation/comment,
-galleryspaces_test.go helperwording. Noappcode/binary/assets rebuilt. Full42->c115
-diff isthose2testfiles, notempty; transparent, noexclusions. Current strictWHOLE
-scope internal web e2e cmd scripts Makefile go.mod go.sum againstc115 isEMPTY.
-Actual bin/server+both/proc SHA sameas30; round-31-validation-baseline.json and
-round-30-runtime-identity.json. Latercommits evidenceonly.
+Production is unchanged:42c94eb1cb12a74108885cc1cbb7aaf7d11f5721, assets aa7a00afd7a2,
+stacked on PR273 ab0135c902559d5912deec420947d6ab3cbdbcf6.
+Declared validation baseline c1156ef15c7f5caa282b1068214492bce42018e1 corrected exactly
+internal/api/assets_test.go and internal/api/galleryspaces_test.go after both30
+reviews ended. Complete42→c115 diff is those two tests, NOT empty. Assertions
+retained; no runtime code, binary or assets rebuilt. Strict entire scope internal
+web e2e cmd scripts Makefile go.mod go.sum against c115 is EMPTY, no exclusions.
+Runtime SHA for bin/server and both process executables remains
+9d4943dc5055211d8076931d3ca474888e41797fee72ebccad665a86426e74f0.
 
-R30 BOTH actual14tables ALL9: firstqualifyingJOINTpass. Currentstreak1/2, NOTdone.
-Need BOTH31ALL14>=9 onSAMEinterface forsecondpass, plusactualchecks. Historical
-25/26/27/28/29 notcurrentqualifyingpasses. Nevercounttests/one-model/missingreview.
+Round30: both actual14 tables all9, first qualifying joint pass.
+Round31: Sol completed all14=9. Fresh post-reset Opus ALSO completed all14=9.
+All56 actual numbers30+31 parsed and verified in round-31-rating-verification.json.
+BUT Opus31 explicitly used frame measurements for much of the required matrix,
+did not visually inspect some real resize pairs, phone Shared/Activity,768 tags,
+native completion, card posture or Embed, and left shortShare first/reopen gaps.
+Do NOT pretend these limits satisfy the mandatory own live coverage. Keep joint
+streak1/2 and ticket in_progress pending evidence completion. Scores are preserved,
+not changed or invented; no source repair has been made.
 
-R31 Sol has COMPLETED independently with all14 scores9 on unchanged42/aa7.
-Actual table parsed and verified; terminal status/report/rating receipt saved.
-This is parent-only: withhold current31 Sol results from same-round Opus. NEVERduplicate:
-node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r31-sol-confirmation-pr273
-Preserve its completed report/status; only missing Opus31 is eligible. Current31
-peer material MUSTNOT be suppliedtosame-roundOpus.
+Both primary31 task results/reports are terminal and preserved. NEVER duplicate:
+Sol: node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r31-sol-confirmation-pr273
+Opus: node:delegated-task:command%3Amcp%3A77879691-97b1-4203-b1da-d57eb27f78e1%3Adelegate-task%3AExh-zrjo-r31-opus-confirmation-pr273-after-reset-2026-11-05
+Original Opus quota failure remains no-score in attempts history. Original provider
+failure did not count as a pass. New post-reset report read current same31 peer
+NEVER; its own report records this independence.
 
-R31 original Opus FAILED WITHOUTSCORES, noreport/14table:
-node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r31-opus-confirmation-pr273
-Actualtask_status Claude API rate limit reached. Try again later. Publicnotices
-163/164 sayfive-hourlimit resets10:50amUTCNov5; epoch1793875800 verifiedactual
-2026-11-05T10:50:00Z. No inventedratingfrompartialinspection. Status/quota/public
-receipt/unavailable.md preserved. Don'tcontinue viachildThreadId/t3send.
+A FRESH, bounded, read-only Opus LIVE COVERAGE ADDENDUM is now RUNNING:
+node:delegated-task:command%3Amcp%3A77879691-97b1-4203-b1da-d57eb27f78e1%3Adelegate-task%3AExh-zrjo-r31-opus-live-coverage-addendum-pr273
+clientRequestId Exh-zrjo-r31-opus-live-coverage-addendum-pr273.
+Unique report round-31-opus-live-coverage-addendum.md; actual launch saved in
+round-31-opus-live-coverage-launch.json. Safe addendum header is
+round-31-opus-live-coverage-brief.md; supplied original/cumulative safe31 brief
+plus its OWN31report, NOT Sol31 or any parent aggregate. Do NOT duplicate it or
+continue through childThreadId/t3_thread_send. This is evidence completion on
+same app, not another claimed passing round or an app change. Reassess all14
+numbers honestly after actual live matrix, reduce if observations warrant it.
 
-The temporary10:51UTC trigger was permanently DELETED FIRST on Nov5; actual
-receipt round-31-trigger-deletion.json confirms deleted=true, remainingtasks=0.
-No recurring automation remains. Metadata followup-r31-scheduled-resume.json.
-Original failed Opus31 attempt remains in history and produced NO scores.
+Wait for terminal notification, then task_status and actual addendum. Verify
+actual own resized/visually inspected72 route pairs (4 populated+5 empty ×4widths
+×2schemes), all8 tag-sheet pairs, missing native tools/popover/Embed and all6
+shortShare first/reopen/realwheel/lowerpaint pairs. Frame-only/metadata-only
+measurements do NOT fill required live cells. Honest remaining limits must remain
+visible. If all required coverage is resolved and actual final Opus14>=9, pair
+with preserved Sol31, verify source/binary/checks and all56values before qualifying
+second joint pass. If material sub9, repair/verify/fresh BOTH nextunused32 and
+reset streak honestly. No completion claim from original all9 table alone.
 
-ONE bounded fresh post-reset Opus31 execution is now RUNNING on unchanged42/aa7
-with declared validationbaselinec115. Actual taskId (retain, never guess):
-node:delegated-task:command%3Amcp%3A77879691-97b1-4203-b1da-d57eb27f78e1%3Adelegate-task%3AExh-zrjo-r31-opus-confirmation-pr273-after-reset-2026-11-05
-Stable clientRequestId Exh-zrjo-r31-opus-confirmation-pr273-after-reset-2026-11-05.
-Shared/async/review role, claudeAgent/claude-opus-5-5 confirmed live. Sole writable
-report round-31-opus-followup.md. Actual launch record
-round-31-opus-followup-after-reset-launch.json; both attempts retained in scores.
-Current same31 Sol report/status/scores and parent aggregates were WITHHELD.
-Sol31 remains completedall14=9, never duplicate. No passing-suite rerun/rebuild.
+ALL checks PASS, do not repeat unchanged: build17.21s,478Node16.73s,native40+workflow
+43.23s,Save2E2E20.56s,full21E2E124.83s,244currentcaptures299.91s/allaa7/media/errors[]/
+containment,32T3empty+14Saveoutcomes,focusedexpectations13.73s,fullstandardGoexit0/
+431.62s(API417.857/store170.154), scope unchanged on c115. Old failed Go receipts
+retained. No app/test build or source change justified by this coverage follow-up.
 
-Wait for terminal notification, then read ACTUAL task_status/report and verify
-all14 actual numbers; never duplicate an active/completed post-reset phase. If
-below9, fix/verify and fresh BOTH nextunusedround, reset streak honestly. If
-quota still unavailable, preserve actual public error/reset, no invented scores,
-no unbounded retries or new timers. Current joint streak remains1/2 pending Opus.
+Main http://t3code:18280/render18281, EMPTY http://t3code:18380/render18381 samebinary,
+scratchadmin/changeme. Cookies HOST-scoped: OWN main/default and empty/incognito
+with exact tab IDs. Valid filter-only /search?tag=Review%20empty on EMPTY has ONE
+parent-preseeded unassigned tag; no reviewer writes needed. Main Health/Reading/
+Test/Utilities associations preserved, prior variation unattributed. Parent new
+8view filter matrix and native40 supplement, not substitute reviewers' own views.
+No valid Save/create/delete/grant/transfer/erase/star/data-mode/linkreplacement/
+fixture changes. Restore local drafts; app-owned chrome only, not user widgets.
+Restart ONLY main sample if required python3 /tmp/exhibit-zrjo-restart.py; empty
+config /tmp/exhibit-zrjo-empty-fixture.json owns18380/18381 only. No assets rebuild.
 
-Safe suppliedcontextONLY followup-round-31-brief.md (original/allprior5–30 findings/
-responses/unresolvedjudgments), both30priorreports/changes through31, safe
-followup-validation.md, round-31-validation-baseline.json andfilterfixture.json.
-WITHHOLD current31Solreport/status, followup-scores/summary/resume/rating/timer,
-nineaggregates,ticket/THISparentcheckpoint. Both30 priorcontext valid; same31
-peerunknown. Fresh independent14table, excellent9bar, honestcoverage/limits.
+Temporary10:51 trigger permanently deleted FIRST, saved round-31-trigger-deletion.json;
+remainingtasks0. No recurring automation, no new timer. No unbounded quota retries.
+Safe context followup-validation.md, visual/nine briefs, prior5–30reports/changes.
+Current same31 Sol results/aggregates/ticket/THIS checkpoint are forbidden to Opus.
 
-ALL requiredchecks nowPASS: build17.21s,478Node16.73s,native40+workflow43.23s,
-Save2E2E20.56s,full21E2E124.83s,current244captures299.91s/allaa7/media/errors[]/
-containment,32T3empty+14Saveoutcomes,focusedexpectations13.73s, FINALfullstandard
-Goexit0/431.62s(API417.857/store170.154), fullscopeunchangedtrueonc115. Saved
-round-31-go-confirm.txt/-status.json. No repeats/rebuildofunchangedpassingchecks.
-OldGo470.07sfailedreceipts preserved, assertions correctednotdropped.
-
-LIVE validfilter-onlyspecimen closes30gap: Parent preseededONEunassignedTagReview
-empty ONLYEMPTY18380 AFTER30before31, noartifacts. GET
-http://t3code:18380/search?tag=Review%20empty actualfilter-onlymiss+Clearfilters;
-parent8T3viewsall4widths/bothschemes verifiedrealclick->welcome/headeridentity/
-nooverflow, round-31-filter/manifest.json. Reviewerreadonly,no creates/attaches.
-MaincurrentHealth/Reading/Test/Utilities preserved; priorvariationunattributed,
-noactorclaim/deletion. Corpusbasenamefilters-emptyisn'tfunctionalproof; route/
-data andactualnative40/newlivefixtureauthoritative. No immutablefixtureclaim.
-
-Main http://t3code:18280/render18281; EMPTY http://t3code:18380/render18381 SAME
-binary/admin/changeme. HOST-scopedcookies: OWNdefaultmain, OWNincognitoemptytabs,
-exactIDs, actualschemes/matchMedia all1280/768/390/320, all5empty/all4destinations,
-exacttagcorner/pill/Savepurpose+stationaryfeedback, broadersurfaces, shortShare
-320x640/390x640/640x360 first/reopen/realwheel/lowerpaint BOTHschemes. No valid
-Save/create/delete/grant/transfer/erase/star/data-mode/linkreplacement/fixture
-writes, restorelocalspecimens. Exclude authoredtoolbody/credentialedexecution,
-honestlimits. CurrentSaveimages42/aa7supplement ownlive, notownpersistclaim.
-
-MainrestartONLYsample python3 /tmp/exhibit-zrjo-restart.py; EMPTYconfig
-/tmp/exhibit-zrjo-empty-fixture.json owns18380/18381only. PreserveTagReviewempty,
-currentbinary/data. UserURLs t3code; ticketrefs actualabsolute.tickets/Exh-zrjo.md.
-Actualbefore/after shown round-30-comparison.html previewconsole[]/html_render.
-
-Ifactualboth31tablesall14>=9, verifyall56values30+31 +source/binaryidentity +all
-checks; thenfinishscores/evidence/limits, closeFEATUREticket/commit/verifyboth
-worktrees. Mainclean/onmain; nevermerge/pushmain, nonewPRrequested. PR273linked,
-listPRsbeforehandoff/unwatchifneeded. Already authorized, no permissionquestion.
-Ifmaterialsub9, fix/verify/resetstreak/freshBOTH honestly. No prematurecompletion.
+After qualifying two joint passes +checks: finish score/evidence/limits summary,
+close FEATURE ticket, commit and verify both worktrees. Main clean/onmain; no
+merge/pushmain or newPR. Existing PR273 linked; listPRs before handoff/unwatchifneeded.
+Actual before/after already shown in round-30-comparison.html and historical
+followup-comparison.html; further UI edits require new actual before/after.
