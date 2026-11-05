@@ -1,7 +1,7 @@
 {
   "appOrigin": "http://t3code:18580",
   "renderOrigin": "http://t3code:18581",
-  "pid": 284106,
+  "pid": 290564,
   "artifactID": "252b5594-bfb3-4df5-bb9e-3d91579a5be8",
   "editURL": "http://t3code:18580/artifacts/252b5594-bfb3-4df5-bb9e-3d91579a5be8/edit",
   "tags": [
@@ -34,8 +34,8 @@
       "attached": false
     }
   ],
-  "binarySha256": "37a01fee1647cfbc6657e45ab0cf03d513ba48b0b4b7daf3544a8b82abf1ae22",
-  "sourceCommit": "62328d495baa4dc3c049ffa818b0679980938221",
+  "binarySha256": "3e9cf847e05ddf4c9ed01fd8ca15d2151c6c6069db0373246ed47cb97cd6f1bb",
+  "sourceCommit": "235a5c9ecddd7494a20eaef32e55c0320994adad",
   "dataDir": "/tmp/exhibit-zrjo-tags-playground-data",
   "purpose": "Isolated tag-only read-only review fixture with long attached name and an available tag; no Main library changes",
   "browserProfile": "incognito"

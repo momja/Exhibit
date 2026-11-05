@@ -232,3 +232,7 @@ Both33 terminal jointFAIL despite Sol14x10. After real old-binary failures, cand
 **2026-11-05T18:41:36.846147+00:00**
 
 Opus34 actual task_status FAILED at Claude API rate limit, no assigned report/final14ratings. Public notices212/213 give actual reset21:30UTC Nov5(epoch1793914200). Failed attempt/status/notices saved; no score or joint credit inferred. Sol34 and standardGo remain active on unchanged62328d49/ef44. No pre-reset retry or application edit. Streak0/2, ticket in_progress.
+
+**2026-11-05T18:51:47.323185+00:00**
+
+Sol34 completed12x10+workflow9.5both; real409/Enter retry bug reproduced (old browser expected1PATCH/received2) and fixed in235a5c9e/assetsb1f015b9d4bf. Opus34no-scorequota is superseded, never fill oldphase. Full34Go failed445.42s on unregisteredph-minus; registry rebuilt, tests intact. Current479Node16.71s,icon/native19.71s,all24E2E149.19s PASS; fullGo35 running durably.4newactualinvalid views+26disposableoutcomes, actualbeforeafter35 previewed/rendered. Fresh Sol35 active, actualtaskId retained; Opus35 deferred actual21:30UTCreset. One-use21:31UTCNov5 continuation in THISthread, temporarydailytrigger FIRSTpermanentlydeletesits actualID; metadata/prompt saved. Streak0/2; no10claim. Mainclean/onmain, no merge/push/newPR.

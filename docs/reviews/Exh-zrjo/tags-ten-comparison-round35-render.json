@@ -1,0 +1,73 @@
+{
+  "previews": [
+    {
+      "width": 728,
+      "contentHeight": 1005,
+      "capturedHeight": 1005,
+      "consoleMessages": [],
+      "screenshot": {
+        "mimeType": "image/png",
+        "width": 728,
+        "height": 1005
+      }
+    },
+    {
+      "width": 360,
+      "contentHeight": 1885,
+      "capturedHeight": 1885,
+      "consoleMessages": [],
+      "screenshot": {
+        "mimeType": "image/png",
+        "width": 360,
+        "height": 1885
+      }
+    }
+  ],
+  "render": {
+    "htmlRender": {
+      "attachmentId": "096f4939-b5a7-46dd-a015-84f12c84336e-df93f141-78c1-4621-ad53-ef49ff6cf6bb-html",
+      "title": "Tag editing: keyboard feedback and empty-color polish",
+      "height": 1005,
+      "heights": [
+        [
+          320,
+          1833
+        ],
+        [
+          375,
+          1950
+        ],
+        [
+          430,
+          2188
+        ],
+        [
+          520,
+          816
+        ],
+        [
+          640,
+          946
+        ],
+        [
+          728,
+          1005
+        ],
+        [
+          860,
+          1148
+        ],
+        [
+          1000,
+          1300
+        ],
+        [
+          1144,
+          1456
+        ]
+      ],
+      "outline": "t0,1,56,4,1;t0,9,33,14,3;t35,9,33,14,3;t71,9,17,14,3;t0,26,90,7,1;m0,35,90,193,1;t93,26,90,7,1;m93,35,90,193,1;t5,232,85,4,1;t5,237,157,4,1;t0,244,169,7,2"
+    },
+    "message": "Shown to the reader above your reply. Don't mention or describe the page; reply with only what it doesn't already say."
+  }
+}

@@ -1,32 +1,28 @@
-# Tag editing: focused10/10 progress
+# Tag editing council: target10
 
-The current candidate is62328d49, assetsef44b49026ee, on the PR273 stack.
-After both33 completed, it fixes invalid-color border/feedback, Create validity,
-dialog geometry, row/palette grouping and partial creation recovery. New actual
-[before/after](../../screenshots/Exh-zrjo/tags-ten-comparison-round34.html) is saved.
-Sol34 is still reviewing. Opus34 failed before its report/scores at an actual
-five-hour quota, resetting21:30UTC Nov5; original attempt is preserved. No focused joint pass
-is claimed:33 Sol14x10, Opus6x10/8x9.5 was a joint failure, and scores do not carry
-over to changed source. Target remains two consecutive BOTH-model all14x10 rounds.
+Current application235a5c9e, assetsb1f015b9d4bf, remains stacked on PR273. The
+latest scope is only Tags and Edit tag. Completion needs both independent models
+to award all seven categories10 in light and dark in two consecutive joint
+rounds on the unchanged interface, with the required live rendered coverage.
+The focused joint streak remains0/2. Broader9coverage is superseded history and
+was not retroactively completed.
 
-Build,478Node,focused3E2E,nativeTag and full24E2E pass on unchanged current scope.
-Full standardGo short is running, final receipt pending. Parent32livephotos and
-24disposableoutcome/draft photos are supplementary, not council rating evidence.
+Round34 Sol gave twelve10s and workflow9.5 in both themes, correctly identifying
+an Enter bypass after duplicate-name rejection. Opus34 failed at its actual quota
+without report/scores. That candidate is superseded; its missing phase will not
+be filled. All reports, actual task IDs and no-score failure remain recorded.
 
-## Baseline32 (historical candidate, before these fixes)
+The current response reproduces that keyboard bug in a real disposable browser
+fixture, then fixes it: the error stays visible, Enter sends no repeated PATCH,
+and editing Name restores eligibility. It also registers and self-hosts the
+empty-color minus icon caught by the full Go suite. No assertions were weakened.
+[Actual before/after](../../screenshots/Exh-zrjo/tags-ten-comparison-round35.html)
+was previewed/rendered. Earlier visual refinements and comparisons remain saved.
 
-| Category | Sol light/dark | Opus light/dark |
-| --- | --- | --- |
-| Typography | 10/10 | 9/9 |
-| Composition and spacing | 9.5/9.5 | 8.5/8.5 |
-| Color harmony | 10/10 | 9.5/9 |
-| Contrast and emphasis | 10/10 | 8.5/8.5 |
-| Component visual consistency | 9.5/9.5 | 8.5/8.5 |
-| Responsive visual polish | 9.5/9.5 | 8.5/8.5 |
-| Tag workflow clarity and feedback | 8.5/8.5 | 7.5/7.5 |
-
-Current checks and full-Go progress are recorded in validation. See [validation](tags-ten-validation.md), actual
-[task IDs/scores](tags-ten-scores.json) and independent round32 reports. Tests do
-not establish UI scores. No physical-phone/Safari/screen-reader certification.
-Broader9/10 incomplete coverage is historical and superseded by this narrower
-instruction; it is not claimed completed. Main is clean; no recurring automation.
+Current assets/build,479Node,icon/native checks and all24E2E pass. Standard full
+Go35 confirmation is running; final exit pending. Four current T3invalid views
+and26disposable draft/outcome photos supplement the independent council, not
+replace it. Fresh Sol35 is active; Opus35 is deferred to the actual21:30UTC reset.
+One temporary21:31UTC continuation deletes itself FIRST; metadata and exact IDs
+are saved. No new PR, main merge or push. No physical-phone/Safari/screen-reader
+certification. Safe [validation](tags-ten-validation.md), parent [scores](tags-ten-scores.json).
