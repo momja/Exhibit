@@ -48,7 +48,7 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
      history restoration. The header and its Clerk controller never swap. */}}
 {{define "gallerySearchRegion"}}<div id="gallery-search-region">{{template "gallerySearchControls" .}}</div>{{end}}
 {{define "gallerySearchControls"}}
-  <h1 class="app-header-title sr-only">{{if .Title}}{{.Title}}{{else}}Library{{end}}</h1>
+  <h1 class="app-header-title sr-only">{{if .Title}}{{.Title}}{{else}}Gallery{{end}}</h1>
   {{template "galleryHeaderSearch" .}}
 {{end}}
 

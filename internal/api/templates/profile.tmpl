@@ -51,7 +51,7 @@
        there is no users row behind it. Nothing is missing — that is the
        self-hoster's default shape — so the page says what it is instead of
        showing an account it made up. */}}
-  <p class="muted">Sign-in is not configured. Anyone who can reach this Exhibit instance can access its library.</p>
+  <p class="muted">Sign-in is not configured. Anyone who can reach this Exhibit instance can access its Gallery.</p>
   {{end}}
 </div>
 
@@ -133,7 +133,7 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
 
 {{define "accountDeletion"}}<div class="card card-danger" data-controller="account-deletion" data-account-deletion-hosted-value="{{if .Clerk}}true{{else}}false{{end}}">
   <h3 class="settings-h3 settings-h3-danger"><i class="ph ph-warning-octagon" aria-hidden="true"></i> Delete account</h3>
-  <p class="settings-danger-copy">Permanently delete your Exhibit account, library, saved data, and share links.</p>
+  <p class="settings-danger-copy">Permanently delete your Exhibit account, Gallery, saved data, and share links.</p>
   {{if .Connections.Enabled}}<p class="settings-danger-copy">Connected services are disconnected first. If a service is unavailable, deletion pauses so you can retry. Some services may already be disconnected.</p>{{end}}
   {{if .Account.SignedIn}}
   {{/* Counted rather than gestured at, and shares first among equals: an
@@ -167,20 +167,20 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
     {{/* Assembled from clauses that are each conditional on their own count,
          because a sentence built around "your no artifacts" is how a
          confirmation stops being read. */}}
-    <p class="settings-danger-copy"><strong>This cannot be undone.</strong> Your library will be permanently deleted{{if .Account.ArtifactCount}} including {{.Account.Artifacts}} and everything saved inside{{end}}.{{if .Account.ShareCount}} {{.Account.Shares}} will stop working.{{end}}</p>
+    <p class="settings-danger-copy"><strong>This cannot be undone.</strong> Your Gallery will be permanently deleted{{if .Account.ArtifactCount}} including {{.Account.Artifacts}} and everything saved inside{{end}}.{{if .Account.ShareCount}} {{.Account.Shares}} will stop working.{{end}}</p>
     {{if .Clerk}}
-    <p class="settings-danger-copy">Your Exhibit library and your sign-in account will be permanently deleted. You will be signed out on every device. This does not delete your Google, Apple, or other provider accounts.</p>
+    <p class="settings-danger-copy">Your Exhibit Gallery and your sign-in account will be permanently deleted. You will be signed out on every device. This does not delete your Google, Apple, or other provider accounts.</p>
     {{else if .Account.HasPassword}}
     <p class="settings-danger-copy">If you revisit this site, you will be treated as a new user.</p>
     {{else}}
-    <p class="settings-danger-copy">Signing in again will still work via your identity provider. You will arrive at a new account, with an empty library.</p>
+    <p class="settings-danger-copy">Signing in again will still work via your identity provider. You will arrive at a new account, with an empty Gallery.</p>
     {{end}}
     <label class="settings-label" for="delete-phrase">Type <code>delete my library</code> to confirm</label>
     <input class="field settings-confirm-field" type="text" id="delete-phrase" data-account-deletion-target="phrase" data-action="input->account-deletion#update" autocomplete="off"
            autocapitalize="none" spellcheck="false" placeholder="delete my library">
     <div class="settings-foot">
       <button class="btn btn-danger" type="button" id="delete-confirm-go" data-account-deletion-target="submit" data-action="account-deletion#submit" disabled>
-        <i class="ph ph-trash" aria-hidden="true"></i> {{if .Clerk}}Delete my account permanently{{else}}Delete my library permanently{{end}}
+        <i class="ph ph-trash" aria-hidden="true"></i> {{if .Clerk}}Delete my account permanently{{else}}Delete my Gallery permanently{{end}}
       </button>
       <button class="btn" type="button" id="delete-cancel" data-account-deletion-target="cancel" data-action="account-deletion#cancel">Cancel</button>
     </div>
@@ -197,7 +197,7 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
 
 {{define "agentGrantsPanel"}}<section class="card" id="agent-grants-panel"{{if .MCPURL}} data-mcp-url="{{.MCPURL}}"{{end}} aria-labelledby="agent-grants-heading">
   <h3 class="settings-h3" id="agent-grants-heading"><i class="ph ph-robot" aria-hidden="true"></i> Connected agents</h3>
-  {{if .MCPURL}}<p class="settings-copy">Connect your own agent to find, create and edit artifacts in your library. Each connection stays active until you revoke it.</p>
+  {{if .MCPURL}}<p class="settings-copy">Connect your own agent to find, create and edit artifacts in your Gallery. Each connection stays active until you revoke it.</p>
   <label class="settings-label" for="agent-mcp-url">MCP endpoint</label>
   <div class="agent-grant-create">
     <input class="field agent-grant-token" id="agent-mcp-url" value="{{.MCPURL}}" readonly spellcheck="false">
@@ -217,7 +217,7 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
        hx-swap="innerHTML">{{template "agentGrantsPanelBody" .}}</div>
   {{if .MCPURL}}<form id="agent-grant-form" class="settings-form agent-grant-form" aria-describedby="agent-token-scope">
     <h4 class="settings-h4">Use a token instead</h4>
-    <p class="settings-copy" id="agent-token-scope">Anyone with this token can search, create, read, and edit artifacts and widgets throughout your library, and read saved data. They cannot share or delete artifacts, or change saved data. Access lasts until you revoke it.</p>
+    <p class="settings-copy" id="agent-token-scope">Anyone with this token can search, create, read, and edit artifacts and widgets throughout your Gallery, and read saved data. They cannot share or delete artifacts, or change saved data. Access lasts until you revoke it.</p>
     <label class="settings-label" for="agent-grant-label">Connection label</label>
     <div class="agent-grant-create">
       <input class="field" id="agent-grant-label" name="label" maxlength="100" placeholder="External agent" autocomplete="off">

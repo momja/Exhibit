@@ -108,7 +108,7 @@ func TestGalleryFiltersAndEmptyLibrary(t *testing.T) {
 	page := getPage(t, ro, "/")
 	assert.Contains(t, page, `class="gallery-layout"`)
 	assert.Contains(t, page, `class="gallery-rail"`)
-	assert.Contains(t, page, `aria-label="Library spaces"`)
+	assert.Contains(t, page, `aria-label="Gallery spaces"`)
 	assert.Contains(t, page, "gallery-filter-sheet")
 	assert.Contains(t, page, "--tag-color:#2563eb")
 	// A collection ID cannot match another collection with the same name.

@@ -31,10 +31,10 @@
   <div class="exhibit-404__copy">
     <p class="exhibit-404__eyebrow">ERROR 404</p>
     <h2 class="exhibit-404__headline">Page not found</h2>
-    <p class="exhibit-404__body">This page may have moved or been deleted. Check the link or search your library.</p>
+    <p class="exhibit-404__body">This page may have moved or been deleted. Check the link or search your Gallery.</p>
     <details class="exhibit-404__path"><summary>Technical details</summary><code>{{.RequestedPath}}</code></details>
     <div class="exhibit-404__actions">
-      <a class="btn" href="/"><i class="ph ph-arrow-left"></i> Back to library</a>
+      <a class="btn" href="/"><i class="ph ph-arrow-left"></i> Back to Gallery</a>
       {{/* Ingest is its own page now (av-qo0j) — this used to point at a
            /#upload fragment on the gallery index that no longer exists. */}}
     </div>
@@ -42,7 +42,7 @@
          runs it through the FTS5 search — no JS, and the same query the
          gallery's own search box would have produced. */}}
     <form class="exhibit-404__find" action="/" method="get">
-      <label class="exhibit-404__find-label" for="q">Or find it in the library</label>
+      <label class="exhibit-404__find-label" for="q">Or search the Gallery</label>
       <div class="exhibit-404__search">
         <i class="ph ph-magnifying-glass" aria-hidden="true"></i>
         {{/* type=text, not type=search: the gallery's own search box is a

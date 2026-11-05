@@ -6,7 +6,7 @@ Work: [Exh-iust](../../.tickets/Exh-iust.md). Full [page-by-page change inventor
 
 Independent Codex Sol (`gpt-6.1-sol`) and Codex Astra (`gpt-6-astra`) reviewers rate necessity, clarity, and hierarchy from 0–10. The user explicitly substituted Astra for unavailable Claude Opus on 2026-11-05; earlier Opus reviews remain historical evidence. Both reviewers must give every category at least 8 in two consecutive rounds. Reviewers were asked to preserve security and irreversible-action meaning and to report concrete objections rather than raise scores to meet the target.
 
-Scope: Library/search/empty states; creation; viewer/editor/agent; sharing, duplication, downloads and permissions; Settings, connected agents and connections; sign-in, OAuth and error/render fallback pages. User artifact content, API-only errors, operator diagnostics, developer docs and agent system prompts are excluded.
+Scope: Gallery/search/empty states; creation; viewer/editor/agent; sharing, duplication, downloads and permissions; Settings, connected agents and connections; sign-in, OAuth and error/render fallback pages. User artifact content, API-only errors, operator diagnostics, developer docs and agent system prompts are excluded.
 
 ## Scores and evidence
 
@@ -26,7 +26,7 @@ Scope: Library/search/empty states; creation; viewer/editor/agent; sharing, dupl
 | 8 | `66e95a57` | Sol | 8 | 8 | 8 | Final verification; third joint pass |
 | 8 | `66e95a57` | Astra | 8 | 8 | 8 | Final verification; third joint pass |
 
-**Accepted: three consecutive joint Sol/Astra passes, including final UI revision `66e95a57`.** Both reviewers independently scored necessity, clarity, and hierarchy 8/10 in rounds 6, 7, and 8. Neither found remaining acceptance blockers or concrete regressions in the final verification. Earlier Sol-only passes do not count as joint acceptance. Opus's last actual scores were 7/7/8 from round 2; later Opus attempts returned no scores due a provider quota on 2026-11-04. On 2026-11-05 the user authorized replacing Opus with Codex Astra.
+**Rounds 6–8 achieved three consecutive joint Sol/Astra passes at UI revision `66e95a57`.** Both reviewers independently scored necessity, clarity, and hierarchy 8/10. The user's subsequent clarification that **Gallery is the official name of the artifacts library** supersedes the earlier Library recommendation; that correction is undergoing final verification. Earlier Sol-only passes do not count as joint acceptance. Opus's last actual scores were 7/7/8 from round 2; later Opus attempts returned no scores due a provider quota on 2026-11-04. On 2026-11-05 the user authorized replacing Opus with Codex Astra.
 
 Reports: [Sol R1](round-1-sol.md), [Opus R1](round-1-opus.md), [Sol R2](round-2-sol.md), [Opus R2](round-2-opus.md), [Sol R3](round-3-sol.md), [Sol R4](round-4-sol.md).
 
@@ -34,7 +34,7 @@ Baseline review was source-based. Subsequent reviews inspected source diffs and 
 
 ## How findings were resolved
 
-- Removed introductory and repeated copy, shortened panel explanations, standardized Library / artifact / Saved data / Permissions / Card widget names, and made source/description/widget instructions persistent.
+- Removed introductory and repeated copy, shortened panel explanations, standardized Gallery / artifact / Saved data / Permissions / Card widget names, and made source/description/widget instructions persistent.
 - Fixed inaccurate refetch undo wording, current-data erasure/history scope, permanent Connections clearing, future external-link permissions, sharing writer/reader audiences, and token library scope.
 - Added an explicit Give access submit action, grouped imports/exports with their explanations, put sharing disclosures at the shared dialog level, and retained account limits under a concise disclosure.
 - Replaced unavailable recovery actions with truthful connected-preview and Connections empty-state guidance. SSO failures now render a plain explanation with Return to sign in, retaining technical diagnostics in logs and the original refusal behavior.
@@ -48,9 +48,9 @@ All IDs have prefix:
 
 Suffixes: `exh-iust-copy-sol-r1`, `exh-iust-copy-opus-r1`, `exh-iust-copy-sol-r2`, `exh-iust-copy-opus-r2`, `exh-iust-copy-sol-r3`, `exh-iust-copy-opus-r3` (usage limit), `exh-iust-copy-opus-r3b` (usage limit), `exh-iust-copy-sol-r4`.
 
-## Completion
+## Naming correction in progress
 
-All requested copy changes, location inventory, rendered evidence, relevant checks, and independent council verification are complete. The ticket is closed on the feature branch. The final [interactive summary](summary.html) contains the complete inventory grouped by page; [changes.md](changes.md) retains source links for every group. Main remains clean and on `main`; changes have not been merged into it.
+The ticket is reopened on the feature branch to apply the user's official Gallery naming. The [interactive summary](summary.html) and [change inventory](changes.md) will reflect that correction, followed by fresh council verification. Historical reports recommending Library remain intact as evidence. Main remains clean and on `main`.
 
 ## Validation
 
@@ -102,3 +102,10 @@ Round-8 task IDs:
 
 - Sol: `node:delegated-task:command%3Amcp%3Af06d7919-58d9-4e1e-a1fd-c28129115a57%3Adelegate-task%3Aexh-iust-copy-sol-r8`
 - Astra: `node:delegated-task:command%3Amcp%3Af06d7919-58d9-4e1e-a1fd-c28129115a57%3Adelegate-task%3Aexh-iust-copy-astra-r8`
+
+
+## User correction — official Gallery name
+
+On 2026-11-05 the user clarified: “Gallery is the official name of the artifacts library.” Navigation, headings, accessible labels, search and empty states, creation actions, recovery links, sign-in/OAuth, Settings and connected-agent scope, administration, and widget notices now use Gallery. Existing identifiers and the literal typed deletion phrase `delete my library` remain API values rather than destination names. No authorization, deletion, or data behavior changes. The final inventory supersedes earlier recommendations to rename the destination Library.
+
+Validation: `make build` passed. Focused API checks for editor return navigation, Gallery sections/filters/empty states, creation, search, not-found pages, Settings/deletion disclosures, and OAuth consent passed, including `TestGalleryPageScriptSuite` (the complete gallery Node suite). Existing assertions were updated; no new copy-only tests were added. Actual-app screenshots cover the empty Gallery and creation page at 390px/1280px, plus the 404 recovery page at 390px. All five checks found no horizontal overflow. Screenshots are saved as `round-9-{gallery,new}-{phone,desktop}.png` and `round-9-404-phone.png` in the evidence directory.

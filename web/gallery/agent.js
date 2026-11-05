@@ -547,7 +547,7 @@ function handleAgentEvent(ev) {
       // rather than merely pending; say so plainly.
       if (!artifact) artifact = {id: ev.artifactId, title: 'Artifact'};
       refreshPreview();
-      let note = 'Card widget saved. It now appears in your library.';
+      let note = 'Card widget saved. It now appears in your Gallery.';
       if (ev.unapproved && ev.unapproved.length) {
         note += ' It references ' + ev.unapproved.join(', ') + ', which are blocked until you allow them under Edit → Permissions.';
       }

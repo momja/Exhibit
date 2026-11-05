@@ -477,7 +477,7 @@ const widgetPanel = (function() {
   }
 
   removeBtn.addEventListener('click', async function() {
-    if (!confirm('Remove this artifact’s custom widget? Its library card will use the default widget.')) return;
+    if (!confirm('Remove this artifact’s custom widget? Its Gallery card will use the default widget.')) return;
     status.textContent = 'Removing…';
     try {
       const r = await apiFetch('/api/artifacts/' + ID + '/widget', {

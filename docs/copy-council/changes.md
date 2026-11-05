@@ -2,14 +2,16 @@
 
 Work: [Exh-iust](../../.tickets/Exh-iust.md), branch `feature/Exh-iust/interface-copy`.
 This inventory describes the final changes from baseline `a6682df4`, grouped by where users encounter them. Repeated instances of the same shared copy are grouped together. Review rounds and validation are recorded in [review.md](review.md).
+**Gallery is the official name of the artifacts library**, as clarified by the user on 2026-11-05. This supersedes the earlier council recommendation to call that destination Library.
 
-## Navigation and library
+## Navigation and Gallery
 
-Sources: [appheader.go](../../internal/api/appheader.go), [editnavigation.go](../../internal/api/editnavigation.go), [gallery.go](../../internal/api/gallery.go), [gallerygrid.go](../../internal/api/gallerygrid.go), [sharedgallery.go](../../internal/api/sharedgallery.go), [gallery.tmpl](../../internal/api/templates/gallery.tmpl), [components.tmpl](../../internal/api/templates/components.tmpl).
+Sources: [appheader.go](../../internal/api/appheader.go), [editnavigation.go](../../internal/api/editnavigation.go), [gallery.go](../../internal/api/gallery.go), [gallerygrid.go](../../internal/api/gallerygrid.go), [galleryspaces.go](../../internal/api/galleryspaces.go), [searchgallery.go](../../internal/api/searchgallery.go), [sharedgallery.go](../../internal/api/sharedgallery.go), [gallery.tmpl](../../internal/api/templates/gallery.tmpl), [galleryspaces.tmpl](../../internal/api/templates/galleryspaces.tmpl), [components.tmpl](../../internal/api/templates/components.tmpl), [api.js](../../web/gallery/api.js).
 
-- Standardized the root destination as **Library**, replacing **Gallery** and **My library** in headers, return links, the viewer's accessible navigation label, the accessible library heading, and the editor's fallback destination.
-- Library navigation failure: **“Couldn’t open that page. Try again.”** replaces the internal “switch spaces” wording.
-- Empty library heading: **“Your library is empty”** replaces “Welcome to Exhibit”; the existing creation action stays beside it.
+- Standardized the root destination as **Gallery**, its official name, replacing **Library** and **My library** in section navigation, return links, the viewer's accessible navigation label, the accessible page heading, and the editor's fallback destination. The section navigation is labeled **Gallery spaces**.
+- Gallery navigation failure: **“Couldn’t open that page. Try again.”** replaces the internal “switch spaces” wording.
+- Empty Gallery heading: **“Your Gallery is empty”** replaces “Welcome to Exhibit”; the existing creation action stays beside it.
+- Search guidance says **“Search your Gallery and artifacts shared with you.”** Read-only errors say **“This Gallery is read-only — sign in to make changes.”**
 - Shared-by-me empty state now tells users to **open an artifact and choose Share**, instead of referring to an unnamed “share panel.”
 - Sharing receipts now state that named recipients can view and update the owner's shared data. The public-link receipt explicitly adds **“but cannot save changes”**; it no longer says everyone using the artifact can write.
 - Used **artifact** consistently in the viewer, sharing, connections, permission notices, settings, and agent preview instead of switching between artifact and tool. Generic examples and user-authored artifact content are unaffected by this terminology pass.
@@ -18,7 +20,7 @@ Sources: [appheader.go](../../internal/api/appheader.go), [editnavigation.go](..
 
 Sources: [new.tmpl](../../internal/api/templates/new.tmpl), [new.js](../../web/gallery/new.js).
 
-- Replaced **“Three ways in.”** with **“Add to your library”** and removed the subtitle promising every import is one self-contained file.
+- Replaced **“Three ways in.”** with **“Add to Gallery”** and removed the subtitle promising every import is one self-contained file. The import action also says **Add to Gallery**.
 - Route descriptions are now **“Describe what you want to build.”**, **“Save HTML you already have.”**, and **“Save a copy of a web page.”** The selected route's phone description uses the same text.
 - Renamed **Description** to **“What should it do?”** The long placeholder became persistent help below the field: **“Describe what you want on screen and what it should remember between visits.”** The placeholder is now a short timer example.
 - Renamed **Source** to **HTML source** and shortened its placeholder to **“Paste HTML…”**.
@@ -94,7 +96,7 @@ Sources: [edit.tmpl](../../internal/api/templates/edit.tmpl), [editnavigation.tm
 ### Card widget and versions
 
 - Renamed **Gallery widget** to **Card widget**. Its summary now says **custom/default**, replacing custom tile/default tile.
-- Widget explanation now describes a read-only preview on the library card that can show saved data; clicking opens the artifact.
+- Widget explanation now describes a read-only preview on the **Gallery card** that can show saved data; clicking opens the artifact. Widget-removal confirmation uses the same name.
 - Added a persistent **Widget HTML** label and help below the source field. The helper correctly directs users to **Remove** to use the default widget; it no longer promises that saving an empty custom widget will do that.
 - Empty-widget validation and removal confirmation use **widget** consistently and explain the default-widget outcome. The disabled generation tooltip now says the agent is unavailable and offers entering Widget HTML manually, instead of exposing a missing binary diagnostic.
 - Widget save/generation warnings now say network access is blocked and point to **Permissions**, replacing “not on the allowlist.”
@@ -153,26 +155,27 @@ Sources: [agent.tmpl](../../internal/api/templates/agent.tmpl), [agent.js](../..
 - Version mismatch says the conversation **last used** a version. Actions are **Preview vN**, **Restore vN and continue**, and **Continue with current version**, replacing longer preview and rollback wording. Restore success, failure, and uncertain-result messages also say **restore** rather than roll back.
 - Artifact-created/updated messages no longer repeatedly tell users which side or tab contains the preview. New network messages explain that access stays blocked until approval.
 - Widget save notices are shorter and direct blocked-site remediation to Edit → Permissions.
+- The saved-widget notice says it now appears in the **Gallery**.
 - Removed the internal **Prepared artifact source** notice from both live chat and recorded conversation history.
 - Extension failure is a plain retry instruction; provider retry status says the AI provider did not respond, retaining attempt counts.
 - Live and recorded data activities consistently say **saved data** or **saved data key**, replacing state. Data-clear result specifies current saved data.
 
 ## Settings — `/settings` (also `/profile`)
 
-Source: [profile.tmpl](../../internal/api/templates/profile.tmpl).
+Sources: [profile.tmpl](../../internal/api/templates/profile.tmpl), [profile.go](../../internal/api/profile.go).
 
 - Removed the heading's full stop and redundant “Manage your storage…” subtitle.
 - Shortened the missing-email explanation to identify the displayed account ID and its use by administrators.
 - External sign-in help directs users to manage their password and sign-in methods with their identity provider.
-- No-login copy plainly explains that anyone who can reach the instance can access its library, replacing service-token/origin implementation details.
+- No-login copy plainly explains that anyone who can reach the instance can access its **Gallery**, replacing service-token/origin implementation details.
 - Storage helper is now **“Includes artifact files, widgets, versions, and assets.”**
 - Removed the long Advanced/Experimental connection explanation and duplicate advanced-navigation link. Useful account allowances are retained under a concise **Connection limits** disclosure.
 - Sign-out helper is **“Sign out on this device.”**
-- Account-deletion summary names the account, library, saved data, and share links; the irreversible warning remains in the actual confirmation.
+- Account-deletion summary names the account, **Gallery**, saved data, and share links; the irreversible warning remains in the actual confirmation. The existing typed phrase `delete my library` remains the literal API confirmation value.
 - Connection-disconnection failure copy now plainly explains that deletion pauses for retry and that some services may already be disconnected.
 - Share-count consequences, deletion confirmation, and share-breakage sentences are shorter while retaining counts and permanent deletion. Hosted/provider-account distinctions remain intact.
 - Connected-agent token fallback heading is **Use a token instead**.
-- Added full token scope before issuance: library-wide artifact/widget search, creation, reading/editing, and reading saved data; no artifact sharing/deletion or saved-data changes; access lasts until revoked. Associated this warning with the form.
+- Connected-agent instructions refer to the **Gallery**. Added full token scope before issuance: artifact/widget search, creation, reading/editing throughout the Gallery, and reading saved data; no artifact sharing/deletion or saved-data changes; access lasts until revoked. Associated this warning with the form.
 - One-time token instruction now also says **keep it private**.
 
 ## Connections — `/connections`, artifact connections, Advanced
@@ -195,16 +198,17 @@ Sources: [connections.tmpl](../../internal/api/templates/connections.tmpl), [con
 - Permanent clear confirmation explicitly distinguishes owner history clearing from a recipient's own data, says **This cannot be undone**, and retains unchanged account/network permissions and possible copies in open pages.
 - Server-request consent points to the actual **Connections → Advanced connections → Server requests** revocation path.
 
-## Sign-in, OAuth, not-found and render fallback pages
+## Sign-in, OAuth, administration, not-found and render fallback pages
 
-Sources: [auth.go](../../internal/api/auth.go), [login.tmpl](../../internal/api/templates/login.tmpl), [oauth.tmpl](../../internal/api/templates/oauth.tmpl), [notfound.tmpl](../../internal/api/templates/notfound.tmpl), [opengraph.go](../../internal/render/opengraph.go), [render.go](../../internal/render/render.go).
+Sources: [auth.go](../../internal/api/auth.go), [oauth.go](../../internal/api/oauth.go), [login.tmpl](../../internal/api/templates/login.tmpl), [clerk.tmpl](../../internal/api/templates/clerk.tmpl), [oauth.tmpl](../../internal/api/templates/oauth.tmpl), [admin.tmpl](../../internal/api/templates/admin.tmpl), [notfound.tmpl](../../internal/api/templates/notfound.tmpl), [opengraph.go](../../internal/render/opengraph.go), [render.go](../../internal/render/render.go).
 
+- Sign-in introductions, OAuth access/recovery guidance, and the administration account-disabling explanation use the official name **Gallery**.
 - SSO action is **Sign in with SSO**, replacing Continue with your identity provider.
 - SSO verification/expiry failures now explain that the attempt expired or could not be verified. Provider refusal and other failures have plain explanations; disabled-account refusal remains distinct. Technical failure details remain in logs.
 - Added a server-rendered **Sign-in failed** page with **Return to sign in** beside the explanation; authentication refusal behavior and HTTP status remain unchanged.
 - OAuth scope now precisely says the agent cannot **share or delete artifacts**, or change saved data, instead of leaving the objects of share/delete implicit.
 - Removed all decorative 404 captions, including Untitled/n.d./Deaccessioned and **NOT ON VIEW**, plus the “link arrived slightly bent” explanation.
-- 404 heading is **Page not found**; body asks users to check the link or search the library. Requested path moved into **Technical details**.
-- 404 recovery action is **Back to library**. Removed the second Add artifact action in the body; the header already supplies it.
+- 404 heading is **Page not found**; body asks users to check the link or search their **Gallery**. Requested path moved into **Technical details**.
+- 404 recovery action is **Back to Gallery**, and the search form label is **Or search the Gallery**. Removed the second Add artifact action in the body; the header already supplies it.
 - Invalid/revoked public-link page adds recovery: **“This link is unavailable. Ask the sender for a new link.”**
 - Protected direct-render fallback says **Open this artifact in Exhibit**, explains where connected accounts/private saved data are available, and labels its recovery link **Open in Exhibit**.

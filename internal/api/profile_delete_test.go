@@ -267,7 +267,7 @@ func TestProfileDeleteSectionSaysSigningInAgainGivesAnEmptyAccount(t *testing.T)
 	// works *and lands somewhere empty*.
 	assert.Contains(t, page, "you will be treated as a new user")
 	assert.Contains(t, page, "Signing in again will still work via your identity provider")
-	assert.Contains(t, page, "You will arrive at a new account, with an empty library")
+	assert.Contains(t, page, "You will arrive at a new account, with an empty Gallery")
 }
 
 // A local account gets the opposite sentence, because it has no provider to
@@ -337,7 +337,7 @@ func TestProfileDeleteSectionOmitsSharesWhenThereAreNone(t *testing.T) {
 	// The confirmation's clauses are each guarded by their own count, so an
 	// empty library gets a sentence rather than one built around "your no
 	// artifacts" — which is how a confirmation stops being read.
-	assert.Contains(t, page, "Your library will be permanently deleted.")
+	assert.Contains(t, page, "Your Gallery will be permanently deleted.")
 	assert.NotContains(t, page, "everything saved inside")
 }
 

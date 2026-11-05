@@ -10,7 +10,7 @@ import (
 var searchGallery = galleryDefinition{
 	ID: "search-gallery", Title: "Search", PagePath: "/search", FragmentPath: "/partials/gallery-grid/search",
 	Select: selectSearchResults, SearchPage: true,
-	Empty: galleryEmptyState{Message: "Search your library and artifacts shared with you."},
+	Empty: galleryEmptyState{Message: "Search your Gallery and artifacts shared with you."},
 }
 
 func selectSearchResults(ro *Router, r *http.Request, offset, limit int, query string) ([]galleryCard, url.Values, error) {

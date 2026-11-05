@@ -31,7 +31,7 @@ type galleryDefinition struct {
 
 var libraryGallery = galleryDefinition{
 	ID: "library-gallery", PagePath: "/", FragmentPath: "/partials/gallery-grid",
-	Empty: galleryEmptyState{Welcome: true, Message: "Your library is empty", ActionURL: "/new", ActionLabel: "Create your first artifact"},
+	Empty: galleryEmptyState{Welcome: true, Message: "Your Gallery is empty", ActionURL: "/new", ActionLabel: "Create your first artifact"},
 }
 
 // Selection returns cards and validated URL parameters even when listing fails,

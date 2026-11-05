@@ -29,7 +29,7 @@ func TestNewPageOffersThreeRoutes(t *testing.T) {
 	page := getPage(t, r, "/new")
 
 	assert.Contains(t, page, "<title>Add artifact — Exhibit</title>")
-	assert.Contains(t, page, `<h2>Add to your library</h2>`)
+	assert.Contains(t, page, `<h2>Add to Gallery</h2>`)
 
 	assert.Contains(t, page, `<button type="button" class="route is-selected" data-mode="agent" aria-pressed="true" onclick="setMode('agent')">`)
 	assert.Contains(t, page, `<button type="button" class="route" data-mode="paste" aria-pressed="false" onclick="setMode('paste')">`)
@@ -43,7 +43,7 @@ func TestNewPageOffersThreeRoutes(t *testing.T) {
 	assert.NotContains(t, page, `<a class="route" href="/agent">`)
 
 	// The shared app header retains the gallery return and page title.
-	assert.Contains(t, page, `class="app-header-back app-header-back-collapse" href="/" title="Library"`)
+	assert.Contains(t, page, `class="app-header-back app-header-back-collapse" href="/" title="Gallery"`)
 	assert.Contains(t, page, `<h1 class="app-header-title">Add artifact</h1>`)
 }
 
@@ -125,7 +125,7 @@ func TestNewPageCarriesTheIngestPanel(t *testing.T) {
 	assert.Contains(t, page, `id="network-approval" hx-get="/partials/network-approval"`)
 	assert.Contains(t, page, `<div id="status"></div>`)
 	assert.Contains(t, page, `onclick="ingest()"`)
-	assert.Contains(t, page, `Add to library`)
+	assert.Contains(t, page, `Add to Gallery`)
 	// Cancel goes back to the library, which is also where a finished ingest
 	// leaves from.
 	assert.Contains(t, page, `<a class="btn btn-sec" href="/">Cancel</a>`)
@@ -206,9 +206,9 @@ func TestGalleryEmptyStateLinksToNewPage(t *testing.T) {
 	r := newTestRouter(t)
 	page := getPage(t, r, "/")
 
-	assert.Contains(t, page, `Your library is empty`)
+	assert.Contains(t, page, `Your Gallery is empty`)
 	assert.Contains(t, page, `href="/new"><i class="ph ph-palette" aria-hidden="true"></i>Create your first artifact`)
-	assert.Contains(t, getPage(t, r, "/partials/gallery-grid"), `Your library is empty`)
+	assert.Contains(t, getPage(t, r, "/partials/gallery-grid"), `Your Gallery is empty`)
 }
 
 // The 404 page's second action used to point at a /#upload fragment on the

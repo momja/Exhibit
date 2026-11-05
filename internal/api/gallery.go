@@ -1242,7 +1242,7 @@ func newVersionViews(versions []store.Version) []versionView {
 
 func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, library []*store.Tag, src, widgetSrc string, creds pageCredentials, urls renderURLs, canGenerate bool, generateHint string, versions []store.Version, navigation editNavigation) (string, error) {
 	if navigation.URL == "" {
-		navigation = editNavigation{URL: "/", Label: "Library"}
+		navigation = editNavigation{URL: "/", Label: "Gallery"}
 	}
 	// Only origins with no decision at all are "referenced, not approved" —
 	// a blocked origin is a decision already made and belongs in Blocked.
