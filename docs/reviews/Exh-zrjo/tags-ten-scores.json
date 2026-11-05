@@ -26,6 +26,38 @@
   "applicationCommit": "42c94eb1cb12a74108885cc1cbb7aaf7d11f5721",
   "assetVersion": "aa7a00afd7a2",
   "validationBaseline": "c1156ef15c7f5caa282b1068214492bce42018e1",
-  "rounds": [],
+  "rounds": [
+    {
+      "round": 32,
+      "purpose": "focused_baseline",
+      "applicationCommit": "42c94eb1cb12a74108885cc1cbb7aaf7d11f5721",
+      "assetVersion": "aa7a00afd7a2",
+      "validationBaseline": "c1156ef15c7f5caa282b1068214492bce42018e1",
+      "status": "reviewing",
+      "jointPass": false,
+      "reviewers": [
+        {
+          "reviewer": "sol",
+          "providerInstanceId": "codex",
+          "model": "gpt-6.1-sol",
+          "taskId": "node:delegated-task:command%3Amcp%3Ae394a58e-fb38-4e0c-b7c7-0df413da8a7e%3Adelegate-task%3AExh-zrjo-r32-sol-tags-ten-baseline",
+          "clientRequestId": "Exh-zrjo-r32-sol-tags-ten-baseline",
+          "status": "running",
+          "launchRecord": "round-32-sol-tags-ten-launch.json",
+          "report": "round-32-sol-tags-ten.md"
+        },
+        {
+          "reviewer": "opus",
+          "providerInstanceId": "claudeAgent",
+          "model": "claude-opus-5-5",
+          "taskId": "node:delegated-task:command%3Amcp%3Ae394a58e-fb38-4e0c-b7c7-0df413da8a7e%3Adelegate-task%3AExh-zrjo-r32-opus-tags-ten-baseline",
+          "clientRequestId": "Exh-zrjo-r32-opus-tags-ten-baseline",
+          "status": "running",
+          "launchRecord": "round-32-opus-tags-ten-launch.json",
+          "report": "round-32-opus-tags-ten.md"
+        }
+      ]
+    }
+  ],
   "historicalBroader9": "followup-scores.json: numerical passes, final broad coverage incomplete; superseded by user focused10 instruction, not claimed complete"
 }
