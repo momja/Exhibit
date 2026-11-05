@@ -1,119 +1,51 @@
-# USER REQUESTED PR273 STACK — CURRENT work in progress
+# Current parent-only PR273 stack checkpoint
 
-Latest user: while Claude quota waits, reapply changes stacked on PR273, which
-has major UI/UX changes. Target origin/feature/Exh-77m9/gallery-tabs atab0135c9,
-which is three commits above44def51a. Preserve new Starred/Search/Shared/Activity
-semantics, Activity conversation links, access controls, redirects and migration054.
-Do not overwrite base worktree or main. Current branch backup to be created after
-this evidence commit; then rebase own62+ commits ontoPR273 in SAME worktree.
+# PR273 stack follow-up — in progress
 
-Sol27 COMPLETED all14=9 on old947758e0; report/status saved. Opus27 failed without
-scores. R27 SUPERSEDED by requested restack, no joint pass or missing27 phase
-should be launched later. New stack requires fresh BOTH nextunused28 on validated
-source. Current timer must FIRST delete itself then read ACTUAL current checkpoint;
-its old27 snapshot is obsolete. Update its exact-ID prompt as work advances.
-No main merge/push, no new PR requested. PR273 linked to this thread.
+Changes are stacked on PR273 headab0135c9. Frozen application68655f3a, assets2f37c8103d52.
+Original62+commit history preserved on feature/Exh-zrjo/ui-council-before-pr273-20261105;
+net patch replayc20f6f72 plus integration68655. Main remains clean/onmain.
 
-# Active user screenshot follow-up — parent only
+Preserved Starred/Search/unifiedShared/Activity, personal preferences, conversation
+links/access, migration054, header/account htmx stability. Kept shared UI and exact
+user fixes: concentric inset check badge, compact tag labels/external actions,
+visible Save + sticky dirty/pending/success/review/failure feedback and retry.
+Fixed description -6px cascade clash and removed obsolete two-line phone tab
+minimum. Updated browser/capture paths to newSearch semantics. Before/after and
+validation are being refreshed for this newstack; old947 evidence is historical.
 
-NOT complete. Current follow-up joint streak0/2. Need BOTH Sol+Opus all14>=9
-(seven categories x actual light/dark) in TWO consecutive JOINT rounds on SAME
-corrected app. Old25/26 pass is historical d30dbbe9, not current proof.
+R27 is superseded: Sol14=9 on old947, Opus quota WITHOUTSCORES. Do not fill it.
+FreshR28 Sol independently reviewing68655. Opus28 waits actual05:50UTC reset.
+No scores yet assumed. Current newstack joint passing streak0/2. Need BOTH all14
+atleast9, two consecutiveJOINT rounds sameapp; tests/oldmilestones never substitute.
 
-## Frozen candidate
+Temporary daily05:51UTC continuation nextNov5 deletes itself FIRST before any
+resume, then dedupes currenttasks/source and launches only eligible missingphase.
+Scheduled ID and exact current task IDs: followup-scores.json and followup-resume.md.
+No main merge/push or newPR. Current safe validation: followup-validation.md.
 
-APPLICATION947758e0ed4fee4f3590aa2837981218118520d0, assetsb2069bfa62d2,
-base origin/main44def51a. Worktree /home/maxomdal/.t3/worktrees/Exhibit/feature-Exh-zrjo-ui-council,
-branch feature/Exh-zrjo/ui-council. Later commits evidence only. Strict runtime
-proof ALL internal/web/e2e versus947758e0, NO exclusions. No source edits/rebuild
-while Sol/checks run. Main /home/maxomdal/Exhibit stays clean/onmain, no merge/
-pushmain or PR. Ticket reopened in_progress on FEATURE, close after achievement.
+Resume the user's existing Exhibit UI council target9 in THIS same thread/worktree after Claude's actual five-hour reset. FIRST permanently DELETE THIS temporary scheduled task: scheduled-task:command:mcp:bb622e97-24f4-48e5-90ab-d51f24f155e2:schedule-task:Exh-zrjo-followup-opus-reset-2026-11-05. It is a one-use continuation implemented with a daily05:51UTC trigger; leave no recurring automation. If the user has since cancelled, stop after deletion.
 
-User defects: selected preset badge fringes at border; stretched/odd tag pill;
-phone Save appears a checkbox and gives no persistent feedback. Current fixes:
-inset3+border1+inner4/outer8 concentric check; compact28 label with external32/44
-actions; explicit Save/floppy self-hosted registry78; sticky Saved/Unsaved/Saving/
-Review plus visible issue; clean/pending disabled; keeps editing in place, View
-separate. Existing section persistence/dedup/Save-and-leave intact. Native group
-found REAL stale Review resurfacing after resolved approval; editor-session clears
-issue when working copy clean, existing permission regression then passes18.45s.
+Worktree /home/maxomdal/.t3/worktrees/Exhibit/feature-Exh-zrjo-ui-council, feature/Exh-zrjo/ui-council. Read docs/reviews/Exh-zrjo/followup-resume.md, followup-summary.md, followup-scores.json, followup-validation.md and .tickets/Exh-zrjo.md. Parent-only checkpoints are authoritative if work advanced; NEVER supply them/current peer outcomes to a reviewer.
 
-Actual beforeafter6+6 light/dark1280/390/320 saved followup-before/after; current
-afterb206. Comparison html_preview728 no errors +html_render shown. Current14
-Save-state screenshots followup-save-states/manifest947/b206 from final20-case
-E2E (503 deliberately simulated). No live RunLog sample saves/fixture mutations.
+Latest user asked to reapply our changes stacked on PR273 https://github.com/momja/Exhibit/pull/273. DONE: base ab0135c902559d5912deec420947d6ab3cbdbcf6; current frozen application68655f3a78724ee0ed90f6fa820dd1b12a169432/assets2f37c8103d52. Original full history backed up feature/Exh-zrjo/ui-council-before-pr273-20261105 at a8f9d14e; consolidated net patch replayed ontoPR273 as c20f6f72, integration adapts routes/spacing in68655. Keep PR273 Starred/Search/unifiedShared/Activity, access controls and migration054; don't restore old layout. Later commits may be evidence only; strict runtime/validation diff ALL internal/web/e2e/cmd/scripts/build manifests must be empty for eligible same candidate.
 
-## Round27 — preserve active/completed Sol, Opus failed WITHOUT scores
+Historical completed9 milestone25/26 is oldd30 source. User then reported real tag badge corner/pill spacing/ambiguous Save defects, corrected947. R27 Sol completed14=9 on OLD947, Opus27 failed WITHOUT SCORES at Claude quota; actual reset05:50UTC Nov5. Preserve old receipts, do NOT launch any missing Opus27: R27 is superseded by user-requested PR273 stack.
 
-- sol: `node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r27-sol-followup` → `round-27-sol-followup.md`; status running, request Exh-zrjo-r27-sol-followup
-- opus: `node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r27-opus-followup` → `round-27-opus-followup.md`; status failed_without_scores, request Exh-zrjo-r27-opus-followup
+Fresh R28 Sol has been launched on current68655 and may be active/completed by wake:
+node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r28-sol-followup-pr273
+Read actual task_status/checkpoint, retain terminal report, NEVER duplicate active/completed Sol. R28 Opus was not launched before reset. Dedupe actual checkpoint/post-reset task before any execution. If source unchanged and Sol is eligible (active or completed all14>=9), launch ONLY missing Opus28. If Sol below9/source changed, repair/verify and start fresh BOTH nextunused round; never fill obsolete partial phase. If work advanced, follow actual latest candidate/round rather than blindly restarting28.
 
-Fresh delegate_task/shared/async/review role. Livecatalog confirmed codex/gpt-6.1-sol
-and claudeAgent/claude-opus-5-5. Full original brief/all prior5–26 reports/findings/
-responses/unresolved objections in followup-round-27-brief.md. Both26 valid PRIOR
-context. Current27 peer report/parent aggregates withheld. Read-only except unique
-report, own T3 tabs/actual schemes+matchMedia1280/768/390/320 and short Share.
-No valid persistent actions; local title/preset specimens restored without Save.
-Real pending/error/success images supplement own live dirty/clean checks; honest
-limits. Six fixed visual categories plus added Save discoverability/feedback UX,
-eachlight/dark, all14>=9. No childThreadId/t3_thread_send/top-level continuation.
+Confirm live orchestrator_capabilities codex/gpt-6.1-sol and claudeAgent/claude-opus-5-5. Every new phase uses fresh delegate_task/shared/async/review role, stable distinct clientRequestId and retained ACTUAL taskId. For missing28 Opus stable ID Exh-zrjo-r28-opus-followup-pr273-after-reset-2026-11-05, output docs/reviews/Exh-zrjo/round-28-opus-followup.md. No childThreadId/t3_thread_send or top-level thread continuation. One bounded fresh post-reset Opus execution; if still unavailable record actual task_status/public detailed notices/reset, no invented scores/unbounded retries or timers.
 
-Opus27 task failed at actual quota before report/scores. Public notices retained
-in round-27-opus-followup-quota.json/unavailable.md: resets5:50amUTC Nov5, actual
-2026-11-05T05:50:00Z. Genericstatus Claude API rate limit reached. Try again later.
-Do not duplicate it or invent ratings. One bounded post-reset NEW execution if
-source/Sol still eligible, stable request Exh-zrjo-r27-opus-followup-after-reset-2026-11-05,
-same unique round-27-opus-followup.md output; retain original+new actual IDs.
-Withhold same27 Sol outcome/report/parent aggregates. Use safe brief ONLY.
+Supply ONLY saved followup-round-28-brief.md (original brief plus ALL R5–27 findings/responses/unresolved judgments, currentPR273 instructions/fixtures), safe visual/nine briefs, prior reports through27/change notes through28 and followup-validation.md. WITHHOLD round-28-sol-followup.md, followup-scores/summary/resume, nine-scores/summary/resume, ticket and THIS parent-only prompt. Do not reveal same28 peer ratings. R27 outcomes are valid historical context, not current proof. Archive directions are historical; latest28 header overrides obsolete source/route/timing directions.
 
-## Temporary one-use continuation
+Rubric: Typography; Composition and spacing; Color harmony; Contrast and emphasis; Component visual consistency; Responsive visual polish; PLUS Save discoverability and feedback. Each independent actualLIGHT/DARK0–10 =14/model. User's tag pixels/spacing and mobileSave purpose/dirty/pending/clean/error/retry must earn9 too. BOTH Sol+Opus ALL14>=9 in TWO consecutive JOINT rounds on SAME app. Current newstack joint streakZERO, tests/single-model/missing reviews do not substitute. If joint28passes, fresh BOTH29 confirmation same source; both28 then PRIOR context, current29 peers withheld. Any material sub9 -> fix/verify/freshBOTH honestly.
 
-Actual scheduled ID: scheduled-task:command:mcp:bb622e97-24f4-48e5-90ab-d51f24f155e2:schedule-task:Exh-zrjo-followup-opus-reset-2026-11-05
-NextRunAt 2026-11-05T05:51:00.000Z; underlyingdaily05:51UTC, deletes itself FIRST.
-Source prompt followup-opus-resume-prompt.md; metadata followup-scheduled-resume.json.
-If user cancels, delete before stopping. At wake FIRST permanentdelete then read
-actual latest checkpoint/task_status/source and dedupe; no recurring automation
-left. If Sol below9/source advanced, repair/verify then fresh BOTH nextunused28
-instead of obsolete27. If joint27 passes, streak1 then fresh BOTH28 confirmation
-SAME app; both27 prior context, current28 peers withheld. Two genuine joint14
-passes required. If Claude still unavailable, actual public error/reset record,
-one bounded execution, no unbounded new timers or completion claim.
+Actual bothschemes at EACH1280/768/390/320, own T3 tab/exactID and matchMedia proof, new4destinations/representative app/shortShare320x640,390x640,640x360 first/reopen/scroll BOTHschemes. Read-only except unique report, no valid saves/creates/deletes/grants/transfers/erase/star/content/fixture changes; restore local unsaved title/preset/source specimens. Exclude arbitrary usertool/widget designs/credentialed execution. Pending/error/success screenshots supplement live inspect; only current manifest counts. Don't invent or certify unseen states.
 
-## Current checks
+Validation current: buildpass17.85s;478Nodepass; native PR273/redesign/access/navigation/search/sharing/header/tag/Save/agent group104.59s; final spacing/navigation320/390/768/1280 group42.03s firstfailsold/passesnew. Final21E2E/fullGo/capture drivers were in progress at prompt creation; READ actual final checkpoint/receipts, don't assume pass or repeat unchanged passing suites. /tmp/exhibit-zrjo-pr273-{e2e-confirm,go-confirm,capture}-status.json andlogs. Current captures followup-round-28/. Initial combined Share mouse/touch matrix hit30s test budget; trace showed completed late actions, cleanup404 not appfailure; split into independent mouse/touch cases retaining all assertions/timeouts. No assets rebuild duringGo. Checkpoint may contain later definitive receipts.
 
-Buildpass;468 Node16.743s pass on finalJS; final20 E2E exit0/96.67s; combined
-native header/tag/navigation/permission/lifecycle/icon group exit0/31.53s, both
-applicationUnchangedtrue. Earlier20 pass95.37 on9a + failedgroup94.13 retained;
-real stale-feedback bug fixed, assertions not weakened. First Node omitted VMflag,
-corrected run exposed old syntheticfixture missing newheader targets; updated
-fixture/dirty status expectations+disabled assertions, final468pass.
+Preview http://t3code:18280 /renderer18281, scratchadmin/changeme. RunLog /artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332 and/edit. Sample-only personal stars RunLog+ReadingList seeded, contents/state unchanged; DB backed up before migration. Restart ONLY sample if needed python3 /tmp/exhibit-zrjo-restart.py. User URLs t3code; ticket refs absolute backing file. Actual before/after html_preview then html_render if more UI edits.
 
-Full standardGo current runner128873 and244 capture runner131179:
-/tmp/exhibit-zrjo-followup-progress.json
-/tmp/exhibit-zrjo-followup-go-status.json
-/tmp/exhibit-zrjo-followup-go.log
-/tmp/exhibit-zrjo-nine-followup-capture-status.json
-/tmp/exhibit-zrjo-nine-followup-capture.log
-docs/screenshots/Exh-zrjo/followup-round-27/.
-Read actual final exit/appUnchanged; capture244/allb206/media agreement/errors[]/
-nooverflow proof. Do not repeat passed suites/captures unchanged or rebuild assets
-during Go. Durable results copied below if finished.
-
-Captures {'command': 'node e2e/capture-ui.mjs docs/screenshots/Exh-zrjo/followup-round-27', 'application': '947758e0ed4fee4f3590aa2837981218118520d0', 'exitCode': 0, 'seconds': 315.28, 'log': '/tmp/exhibit-zrjo-nine-followup-capture.log', 'applicationUnchanged': True}
-
-Preview http://t3code:18280, separate renderer http://t3code:18281; admin/changeme.
-RunLog /artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332 and/edit. Restart ONLY sample
-python3 /tmp/exhibit-zrjo-restart.py if needed. Parent owns tab_1p_0d23e38c-d413-4e76-b0eb-59687a206343,
-320dark Tags/no draft. preview_status then exact ownIDs. UserURLs t3code; ticket
-links actual absolute backing .tickets/Exh-zrjo.md. If further UI changes, show
-actual beforeafter html_preview then html_render. After2 joint passes+checks:
-final evidence/scores/limits, close FEATURE ticket, commit/verify bothworktrees;
-no merge/pushmain or PR. End turn for async notifications, no polling/watchers.
-
-LATEST definitive validation update: standard fullGo CONFIRMED PASS exit0/573.41s,
-applicationUnchanged=true on947758e0. Actual log/status saved followup-go.txt and
-followup-go-status.json.244 captures already confirmedexit0/315.28s/allb206/actual
-media/errors[]/containment,14 current Save-state shots947/b206,20 E2E96.67s,
-native combined31.53s,468 Node16.743s allpass. ALL required checks now pass; no
-repeat or rebuild needed. Only fresh council outcomes remain; Sol27 active,
-Opus27 no-score quota failure reset05:50UTC, one-use05:51 continuation as recorded.
+After TWO honest joint14>=9 passes plus requiredchecks, finish evidence/scoretables/limits, close ticket onFEATURE, commit/verify bothworktrees. Keep main clean/onmain, never merge/pushmain. No PR requested; PR273 already linked, list_thread_pull_requests before handoff. User authorized work, proceed without asking again. Keep updates concise.

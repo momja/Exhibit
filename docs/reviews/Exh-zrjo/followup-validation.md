@@ -1,59 +1,46 @@
-# User screenshot follow-up validation
+# PR273 stack validation — current
 
-Frozen application947758e0ed4fee4f3590aa2837981218118520d0, assetsb2069bfa62d2.
-No source changes while reviews/checks run. Buildpass, explicit78-icon registry
-includes self-hosted floppy-disk.468 Node tests pass16.743s on final productionJS.
-Real permission-save native regression now passes exit0/18.45s including Go build.
-Current full20 E2E, combined native browser group and full standardGo run through
-detached sequence128873; final receipts /tmp/exhibit-zrjo-followup-{e2e,focused,go}-status.json
-and correspondinglogs. Read actual results; no current pass yet assumed. Do not
-rebuild assets during Go or repeat passing suites/captures unchanged.
+Frozen application68655f3a78724ee0ed90f6fa820dd1b12a169432, assets2f37c8103d52,
+base PR273 ab0135c9. All pre-stack947 validation is HISTORICAL, preserved in
+followup-validation-before-pr273.md and original receipts. No review ratings here.
 
-The first candidate9a74b48c had20 E2Epass95.37s. The combined native group found
-a REAL feedback bug: after a resolved network review, old issue text resurfaced
-on unrelated permission edits (two32s waits timed out). This was fixed in
-editor-session.editorChanged by clearing the issue when the working copy becomes
-clean. The existing permission workflow then passes18.45s. Failed log retained;
-not weakened to accept stale Review. Final20 E2E/group/fullGo confirmation pending.
+- make build confirmed exit0/17.85s, source unchanged during build. Build started
+  before integration commit68655, whose tree is identical to the built source.
+-478 gallery Node tests pass/0fail in17.633s on integrated productionJS. Raw runner
+  output retained in /tmp/exhibit-zrjo-pr273-node.log; fullGo also owns Node exit.
+- Native integration group confirmed exit0/104.59s (Go package88.114s), unchanged:
+  personal stars/access, Activity owner/conversation, redesign, navigation/races/
+  no-JS, search, unified sharing, app headers, editor navigation/permission saves,
+  tag/lifecycle and agent composer/markdown/panes. Before final spacing-only CSS.
+- Strengthened GallerySpaces first FAILS actual negative description gap, then
+  confirmed exit0/42.03s on final68655:320/390/768/1280, title spacing, all four
+  routes, touch targets/safe area, keyboard/row stability, actual dark.
+- Initial fullE2E retained exit2/131.93s:19 passed; large combined mouse/touch
+  Share-opening matrix hit30s overall deadline, not a failed app assertion.
+  Trace showed completed late touch1280 light checks; cleanup deleted fixture,
+  causing final404 snapshot. Split matrix into independent mouse/touch cases;
+  same assertions/coverage/timeouts. Final21-case run IN PROGRESS.
+- Full standard go test -short ./... IN PROGRESS, detached durable exit/status.
+- Current244 authenticated captures IN PROGRESS, actual schemes and no overflow
+  enforced. Only a complete manifest plus exit receipt counts.
 
-Node first command omitted the documented experimental-vm-modules flag; corrected
-command exposed one outdated synthetic controller fixture without header targets.
-Updated its targets and assertions to actual Saved/Unsaved plus clean-disabled/
-dirty-enabled behavior. Final468 pass. New E2E tests exercise320/390/1280 actual
-light/dark at a deep section: visible Save word, pending header/aria-busy/disabled,
-single write under repeat activation, success persistedAPI+Saved+same editroute,
-and simulated503 visible explanation/no persisted change/retry recovery. Tag
-journey measures actual corner containment and compact label/separate32/44 actions.
-No assertion or timeout weakened.
+Current receipts /tmp/exhibit-zrjo-pr273-{e2e-confirm,go-confirm,capture}-status.json
+and matchinglogs. Do not rebuild assets during Go or repeat passing checks without
+source changes/failures/unresolved concern. ProductionJS unchanged after478 pass.
 
-Actual before6 captures e29fcce0e122 in followup-before. Current after6 captures
-b2069bfa62d2 in followup-after; both schemes at1280/390/320, no document overflow.
-Followup comparison html_preview728 had no errors, rendered inline.14 Save-state
-captures initially from9a candidate in followup-save-states; their manifest states
-that source. They will be refreshed from current final E2E output before final
-review/closure. Simulated failure is deliberate testfixture response, not live
-data corruption. No live RunLog/sample value was saved or changed.
+Disposable sample DB backed up before migration054. Personal star preferences
+seeded forRunLog/ReadingList only; artifact content/state/versions untouched.
+CurrentSave E2E real pending/success/error/retry screenshots use disposable
+artifacts; simulated503 is deliberate. No sample Save or grant performed.
 
-One Chromium engine, emulated viewports/schemes. No physical iPhone/Safari/
-softwarekeyboard/alternateengine or exhaustive accessibility certification. User
-screenshots supplied an actual phone failure that the earlier council missed;
-its corrections require fresh honest review, not automatic reuse of old9 ratings.
+One Chromium engine, real prefers-color-scheme emulation; no physical Safari,
+softwarekeyboard, alternate-engine or exhaustive accessibility certification.
 
-CURRENT final20 E2E confirmedPASS exit0/96.67s, applicationUnchanged=true.
-Combined native AppHeader/Tag/navigation/permission/lifecycle/icon group confirmed
-PASS exit0/31.53s, applicationUnchanged=true. Real stale-Review failure resolved,
-no assertion relaxed. Current14 Save-state captures refreshed from final passing
-E2E; manifest947758e0/b2069bfa62d2. These are CURRENT supplementary evidence.
-FullGo still running; no final result assumed. No rebuild or passed-suite repeats.
-
-LATEST actual receipts:
-
-Captures {'command': 'node e2e/capture-ui.mjs docs/screenshots/Exh-zrjo/followup-round-27', 'application': '947758e0ed4fee4f3590aa2837981218118520d0', 'exitCode': 0, 'seconds': 315.28, 'log': '/tmp/exhibit-zrjo-nine-followup-capture.log', 'applicationUnchanged': True}
-
-LATEST definitive validation update: standard fullGo CONFIRMED PASS exit0/573.41s,
-applicationUnchanged=true on947758e0. Actual log/status saved followup-go.txt and
-followup-go-status.json.244 captures already confirmedexit0/315.28s/allb206/actual
-media/errors[]/containment,14 current Save-state shots947/b206,20 E2E96.67s,
-native combined31.53s,468 Node16.743s allpass. ALL required checks now pass; no
-repeat or rebuild needed. Only fresh council outcomes remain; Sol27 active,
-Opus27 no-score quota failure reset05:50UTC, one-use05:51 continuation as recorded.
+CURRENT final21 E2E CONFIRMED exit0/203.47s, runtimeAndValidationUnchanged=true.
+Current14 Save-state screenshots refreshed in followup-save-states-pr273/,
+manifest68655/2f37; only disposable artifacts were saved. Current244captures
+CONFIRMED exit0/355.81s, every asset2f37/mediaagreement/errors[] and explicit
+nooverflow assertions. Archived initial failing receipts retained.
+Actual stack-comparison.html preview728x935 console[] then rendered inline,
+light/dark controls compare newdestinations plus tag/Save details.
+FullGo still pending; no final result assumed.
