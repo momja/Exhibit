@@ -327,6 +327,7 @@ input,select,textarea{font-size:var(--field-font-size)}
 .banner-detail-url{margin-top:6px;word-break:break-all}
 .banner-detail-url code{background:var(--color-code-on-tint);padding:1px 5px;border-radius:3px;font-size:11px}
 .banner-action{color:var(--brand-blue);text-decoration:none;font-weight:600;white-space:nowrap;display:inline-flex;align-items:center;gap:4px;flex-shrink:0;line-height:1.4}
+.banner-action[hidden]{display:none}
 .banner-action:hover{text-decoration:underline}
 /* The resync notice (av-v991) reports a fact rather than a problem, so it does
    not borrow the warning banner's yellow — a page that shouts about somebody

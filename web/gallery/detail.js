@@ -268,6 +268,7 @@ const CAPABILITY_COPY = {
   },
   'redirected-origin': {
     headline: 'A request was redirected to a site that is not allowed.',
+    hideDirectOpen: true,
     detail: 'An allowed site redirected this request to another site. Your browser hides that destination from Exhibit. ' +
       'If you know it, add it under Edit → Permissions. Opening a new tab does not bypass these permissions; ' +
       'your browser’s Network panel can show the destination.',
@@ -308,6 +309,8 @@ window.addEventListener('message', function(e) {
     // the shared line to say something false.
     const headline = document.getElementById('capability-warning-headline');
     if (headline && copy.headline) headline.textContent = copy.headline;
+    const directOpen = document.getElementById('direct-open-banner');
+    if (directOpen) directOpen.hidden = copy.hideDirectOpen === true;
     if (d.resource) {
       const label = document.createElement('div');
       label.className = 'banner-detail-url';

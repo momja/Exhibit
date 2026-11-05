@@ -21,8 +21,10 @@ Scope: Library/search/empty states; creation; viewer/editor/agent; sharing, dupl
 | 4 | `0a2cb08e` | Sol | 8 | 8 | 8 | Second consecutive Sol pass |
 | 6 | `b2f8def2` | Sol | 8 | 8 | 8 | First joint Sol/Astra pass |
 | 6 | `b2f8def2` | Astra | 8 | 8 | 8 | First joint Sol/Astra pass |
+| 7 | `80c48ae6` | Sol | 8 | 8 | 8 | Second joint Sol/Astra pass |
+| 7 | `80c48ae6` | Astra | 8 | 8 | 8 | Second joint Sol/Astra pass |
 
-**Joint Sol/Astra council acceptance is pending.** Earlier Sol-only passes do not count as joint acceptance. Opus's last actual scores were 7/7/8 from round 2; later Opus attempts returned no scores due a provider quota on 2026-11-04. On 2026-11-05 the user authorized replacing Opus with Codex Astra. Fresh joint Sol/Astra rounds now determine acceptance.
+**Rounds 6 and 7 meet the two-consecutive-joint-pass scoring condition.** Earlier Sol-only passes do not count as joint acceptance. Opus's last actual scores were 7/7/8 from round 2; later Opus attempts returned no scores due a provider quota on 2026-11-04. On 2026-11-05 the user authorized replacing Opus with Codex Astra. Two localized round-7 findings are corrected for one final independent verification before closing the work.
 
 Reports: [Sol R1](round-1-sol.md), [Opus R1](round-1-opus.md), [Sol R2](round-2-sol.md), [Opus R2](round-2-opus.md), [Sol R3](round-3-sol.md), [Sol R4](round-4-sol.md).
 
@@ -46,7 +48,7 @@ Suffixes: `exh-iust-copy-sol-r1`, `exh-iust-copy-opus-r1`, `exh-iust-copy-sol-r2
 
 ## Outstanding work
 
-Complete fresh independent Sol/Astra reviews of the final source and saved screenshots, address any substantive remaining objections, and continue until **two consecutive joint passing rounds** exist. Keep the ticket in progress until this condition is met.
+Verify the two final round-7 corrections with independent Sol/Astra reviewers, publish the complete change inventory, and close the ticket. The required two consecutive joint passing rounds already exist.
 
 ## Validation
 
@@ -57,7 +59,7 @@ Complete fresh independent Sol/Astra reviews of the final source and saved scree
 - Short-test coverage completed across all packages. Long combined invocations ended with SIGTERM (exit 143), so validation was completed in bounded package/test batches rather than reported as a successful uninterrupted `go test -short ./...` run.
 - All 864 top-level API tests were assigned to four exhaustive, disjoint `go test -short -count=1 -p 1 ./internal/api -run ...` batches of 216. Batches 1, 2 and 4 passed. Batch 3 reported only an outdated assertion expecting the removed “pi binary” tooltip; that assertion was corrected and `TestPlatformModeEnablesWidgetGeneration` then passed. The remaining batch-3 tests, including `TestGalleryPageScriptSuite` (the gallery Node regression suite), completed without failures.
 - All 245 top-level store tests passed in two exhaustive batches (123 and 122 tests). The other package checks passed; `internal/tile`, after the interrupted combined run, was checked separately and passed. Normal `-short` skips still apply to optional browser/integration tests.
-- `git diff --check` passed. Main remains clean; all development is on the feature worktree. The ticket remains in progress solely because the joint council scoring condition is not complete.
+- `git diff --check` passed. Main remains clean; all development is on the feature worktree. Ticket closure follows final verification and the complete change handoff.
 
 ## Resumed council — 2026-11-05
 
@@ -75,3 +77,17 @@ Both reviewers scored necessity, clarity, and hierarchy 8/10. This is the first 
 Before confirmation, addressed all findings: artifact-specific Connections only suggests available steps; recipient redirect warnings defer to the owner; post-import review guidance is direction-neutral; preparation noise is hidden in recorded as well as live conversations; connection actions/notices and restoration feedback use consistent nouns/verbs; removed the final decorative 404 caption. Added coverage of unavailable/available connection setup and recipient redirect explanations. The final text inventory includes these changes.
 
 Round-7 preparation validation: `make build` and focused Go checks for connection availability, connection actions, transcript projection, not-found rendering, and `TestGalleryPageScriptSuite` passed. The last includes gallery Node regressions, including the two new recipient-redirect cases. Actual-app screenshots now cover artifact-specific Connections (desktop/phone), 404 without decorative captions, and a recipient redirect warning. The redirect screenshot uses a controlled fixture message from the displayed frame's identity to exercise the real notice handler; it does not claim an actual external redirect. Recipient `READ_ONLY` was true and the notice no longer directs the recipient to Edit → Permissions. No phone document overflow was detected.
+
+Round-7 task IDs:
+- Sol: `node:delegated-task:command%3Amcp%3Af06d7919-58d9-4e1e-a1fd-c28129115a57%3Adelegate-task%3Aexh-iust-copy-sol-r7`
+- Astra: `node:delegated-task:command%3Amcp%3Af06d7919-58d9-4e1e-a1fd-c28129115a57%3Adelegate-task%3Aexh-iust-copy-astra-r7`
+
+These independent confirmation tasks review UI revision `80c48ae6`. No scores are assumed before their actual results return.
+
+### Round-7 outcome and final corrections
+
+Both reviewers again scored necessity, clarity, and hierarchy 8/10, establishing the second consecutive joint passing round. Reports: [Sol R7](round-7-sol.md), [Astra R7](round-7-astra.md).
+
+Both noted a competing **Open in new tab** action on redirected-request warnings; it is now hidden for that failure because a new tab cannot bypass network permissions. The action remains visible for sandbox limitations it can resolve. Sol also found an editor status incorrectly pointing below its network review region; it now says **“Saved. Review network access before leaving.”** Both were localized nonblockers at the qualifying scores; a final round will verify this cleanup against the complete interface.
+
+Final-cleanup validation: `make build` and `go test -short ./internal/api -run '^TestGalleryPageScriptSuite$'` passed. Extended existing network regressions to cover owner/recipient redirects hiding the ineffective action and ordinary preview limitations retaining it. Actual-app checks caught and corrected a shared CSS display rule overriding the button's hidden state; the final phone and desktop checks confirm computed `display: none`, zero button width, and no horizontal overflow. Screenshots: [phone](../screenshots/Exh-iust/round-8-recipient-redirect-phone.png), [desktop](../screenshots/Exh-iust/round-8-recipient-redirect-desktop.png). These use the same controlled fixture message described above, not a real external redirect.

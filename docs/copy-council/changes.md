@@ -61,6 +61,7 @@ Sources: [edit.tmpl](../../internal/api/templates/edit.tmpl), [editnavigation.tm
 - Delete confirmation names the artifact and explicitly lists **versions, saved data, and share links**, retaining **“This cannot be undone.”** Deletion failures now name deletion instead of a generic Error or save failure.
 - The leave-editor dialog no longer adds the tautology “Changes already saved stay saved.”
 - Save, remove, and generate status messages use plain words rather than redundant checkmark/Error prefixes. Widget generation progress is **“Generating widget…”**.
+- Post-save network guidance is **“Saved. Review network access before leaving.”**, removing the incorrect “below” pointer to a review region above the status.
 
 ### Saved data panel
 
@@ -107,6 +108,7 @@ Sources: [detail.tmpl](../../internal/api/templates/detail.tmpl), [direct_open.t
 - Unsupported-feature headline now explains that the preview cannot provide a feature and offers a new tab. For protected connected previews, it instead says the feature is unavailable there.
 - Shortened separate camera, microphone, combined-device, location, background-worker, and fallback details to useful explanations instead of browser-origin theory.
 - Protected-preview details no longer recommend the disabled new-tab remedy. The redirected-request case remains separate and explains that another site needs permission and a new tab does not bypass the restriction. Shared recipients are told to ask the owner to review the request, rather than use owner-only Edit → Permissions controls.
+- Redirect warnings hide **Open in new tab**, since it cannot resolve the permission block. The action remains available for preview limitations it can resolve.
 - Shared-recipient blocked-network guidance now plainly says only the owner can allow new sites. Runtime recipient banners use **artifact** and **sites**, replacing tool/origins.
 - Saved-data-change banner now gives the remedy and its cost: **reload to use the latest data; unsaved input may be lost**. Its button is **Reload artifact**.
 - Download and clipboard consent retain their enduring scope but point to the actual **Edit → Permissions** controls.

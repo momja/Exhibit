@@ -312,7 +312,7 @@ async function save() {
   // never seeded from the scan; only the origins the user selects are written.
   if (pendingSourceFootprint.length > 0 || pendingSourceWarnings.length > 0) {
     showApproval();
-    status.textContent = 'Saved. Review network access below before leaving.';
+    status.textContent = 'Saved. Review network access before leaving.';
     editorChanged();
     return false;
   }

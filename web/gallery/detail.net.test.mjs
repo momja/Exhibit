@@ -57,7 +57,8 @@ async function loadDetail({ readOnly = false, responses = [], headline = "", pro
     // What detail.tmpl renders for the capability banner: hidden, with the
     // shared headline already in place.
     "capability-warning-banner": { hidden: true },
-    "capability-warning-headline": { textContent: headline }
+    "capability-warning-headline": { textContent: headline },
+    "direct-open-banner": { hidden: false }
   });
   // htmx is not in the harness, so the refresh contract is the event itself:
   // the listener the #capability-cluster target stands in for here.
@@ -268,6 +269,7 @@ test("a blocked redirect replaces the banner headline rather than promising a fi
   assert.match(byId("capability-warning-detail").textContent, /Network panel/,
     "the devtools Network panel is where a redirect chain is visible; the console is not");
   assert.equal(byId("net-modal").open, false, "the redirect case must never open the prompt");
+  assert.equal(byId("direct-open-banner").hidden, true, "a new tab cannot resolve a blocked redirect");
 });
 
 // A capability that the sandbox itself causes keeps the shared headline, so the
@@ -282,6 +284,7 @@ test("an ordinary sandbox capability keeps the shared headline", async () => {
 
   assert.equal(byId("capability-warning-banner").hidden, false);
   assert.equal(byId("capability-warning-headline").textContent, "SHARED");
+  assert.equal(byId("direct-open-banner").hidden, false, "a new tab remains available for sandbox limitations");
 });
 
 test("a read-only visitor is not asked a question they cannot answer", async () => {
@@ -346,6 +349,7 @@ for (const protectedPreview of [false, true]) {
     assert.match(detail, /Ask them to review this request/);
     assert.match(detail, /new tab does not bypass these permissions/);
     assert.doesNotMatch(detail, /Edit → Permissions/);
+    assert.equal(byId("direct-open-banner").hidden, true);
     assert.equal(byId("net-modal").open, false);
     assert.deepEqual(originCalls(api), []);
   });
