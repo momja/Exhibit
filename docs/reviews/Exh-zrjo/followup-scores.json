@@ -1,0 +1,93 @@
+{
+  "applicationCommit": "947758e0ed4fee4f3590aa2837981218118520d0",
+  "assetVersion": "b2069bfa62d2",
+  "categories": [
+    "Typography",
+    "Composition and spacing",
+    "Color harmony",
+    "Contrast and emphasis",
+    "Component visual consistency",
+    "Responsive visual polish",
+    "Save discoverability and feedback"
+  ],
+  "threshold": 9,
+  "requiredJointConsecutivePasses": 2,
+  "jointPassingStreak": 0,
+  "completed": false,
+  "historicalMilestone": "nine-summary.md",
+  "rounds": [
+    {
+      "round": 27,
+      "applicationCommit": "947758e0ed4fee4f3590aa2837981218118520d0",
+      "assetVersion": "b2069bfa62d2",
+      "reviewers": [
+        {
+          "reviewer": "sol",
+          "model": "gpt-6.1-sol",
+          "taskId": "node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r27-sol-followup",
+          "status": "completed",
+          "clientRequestId": "Exh-zrjo-r27-sol-followup",
+          "report": "round-27-sol-followup.md",
+          "light": [
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9
+          ],
+          "dark": [
+            9,
+            9,
+            9,
+            9,
+            9,
+            9,
+            9
+          ],
+          "individualPass": true
+        },
+        {
+          "reviewer": "opus",
+          "model": "claude-opus-5-5",
+          "taskId": "node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r27-opus-followup",
+          "status": "failed_without_scores",
+          "clientRequestId": "Exh-zrjo-r27-opus-followup",
+          "report": "round-27-opus-followup.md",
+          "resetAt": "2026-11-05T05:50:00Z",
+          "failureRecord": "round-27-opus-followup-unavailable.md",
+          "attempts": [
+            {
+              "taskId": "node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r27-opus-followup",
+              "clientRequestId": "Exh-zrjo-r27-opus-followup",
+              "status": "failed_without_scores",
+              "scoresProduced": false,
+              "error": "Claude API rate limit reached. Try again later.",
+              "resetAt": "2026-11-05T05:50:00Z"
+            }
+          ]
+        }
+      ],
+      "deferredOpus": {
+        "resetAt": "2026-11-05T05:50:00Z",
+        "plannedClientRequestId": "Exh-zrjo-r27-opus-followup-after-reset-2026-11-05",
+        "scheduledTaskId": "scheduled-task:command:mcp:bb622e97-24f4-48e5-90ab-d51f24f155e2:schedule-task:Exh-zrjo-followup-opus-reset-2026-11-05",
+        "nextRunAt": "2026-11-05T05:51:00.000Z",
+        "scheduledTaskDeleted": false,
+        "boundedFreshExecutions": 1
+      },
+      "jointPass": false,
+      "status": "superseded_by_user_requested_pr273_stack",
+      "reason": "Sol27 all14=9 on947758e0, Opus27 no-score quota. User requests stacking on PR273; this old-base review will not be filled or count toward the stacked app."
+    }
+  ],
+  "restack": {
+    "status": "in_progress",
+    "basePR": "https://github.com/momja/Exhibit/pull/273",
+    "baseHead": "ab0135c902559d5912deec420947d6ab3cbdbcf6",
+    "previousBase": "44def51afa43019771fd258bc61b28e3ebf4613b",
+    "previousApplication": "947758e0ed4fee4f3590aa2837981218118520d0",
+    "backupBranch": "feature/Exh-zrjo/ui-council-before-pr273-20261105"
+  }
+}

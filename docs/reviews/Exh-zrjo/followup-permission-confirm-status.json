@@ -1,0 +1,6 @@
+{
+  "command": "go test ./internal/api -run TestEditNavigationPermissionSavesBrowser$ -count=1",
+  "exitCode": 0,
+  "seconds": 18.45,
+  "log": "/tmp/exhibit-zrjo-followup-permission-confirm.log"
+}

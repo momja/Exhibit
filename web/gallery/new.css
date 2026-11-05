@@ -7,13 +7,13 @@
  * to its own page (av-qo0j); the library sheet keeps search, grid and tags. */
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(--color-ink);min-height:100vh}
-main{padding:var(--space-8);max-width:900px;margin:0 auto}
+main{padding:var(--page-top) var(--page-gutter);max-width:900px;margin:0 auto}
 
 /* --- lede -------------------------------------------------------------- */
 /* The page states its premise before offering controls: three routes, one
  * outcome. The measure is capped so the line doesn't run the panel's width. */
-.lede h2{font-size:28px;font-weight:650;letter-spacing:-.025em}
-.lede p{font-size:14px;color:var(--color-muted);margin-top:7px;line-height:1.55;max-width:620px}
+.lede h2{font-size:var(--page-title-size);line-height:1.25;font-weight:650;letter-spacing:-.025em}
+.lede p{font-size:0.875rem;color:var(--color-muted);margin-top:7px;line-height:1.55;max-width:620px}
 
 /* --- route tiles ------------------------------------------------------- */
 /* Three modes share the chooser; switching keeps each working copy intact.
@@ -23,13 +23,12 @@ main{padding:var(--space-8);max-width:900px;margin:0 auto}
 .route-label-compact,.route-description{display:none}
 .route:focus-visible{outline:2px solid var(--color-ink);outline-offset:4px}
 .route:hover{border-color:var(--color-border)}
-/* Selected reads as a ring rather than a fill, so the tile still shows its
- * own content at full contrast while it is the active mode. */
-.route.is-selected{border-color:var(--brand-blue);box-shadow:0 0 0 3px var(--route-tint)}
-.route-icon{display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:var(--radius-md);background:var(--color-ground);color:var(--color-label);font-size:19px}
+/* A persistent tint and inset ring distinguish the selected method from focus. */
+.route.is-selected{border-color:var(--brand-blue);background:var(--color-accent-tint);box-shadow:inset 0 0 0 1px var(--brand-blue)}
+.route-icon{display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:var(--radius-md);background:var(--color-ground);color:var(--color-label);font-size:1.1875rem}
 .route.is-selected .route-icon{background:var(--route-tint);color:var(--brand-blue)}
-.route b{font-size:14px;font-weight:600}
-.route-note{font-size:12.5px;color:var(--color-muted);line-height:1.5}
+.route b{font-size:0.875rem;font-weight:600}
+.route-note{font-size:0.78125rem;color:var(--color-muted);line-height:1.5}
 
 /* --- panels ------------------------------------------------------------ */
 /* .card carries the surface (components.css); this adds the field rhythm.
@@ -45,21 +44,19 @@ main{padding:var(--space-8);max-width:900px;margin:0 auto}
 #agent-description{height:132px;font-family:inherit;font-size:var(--field-font-size);line-height:1.55}
 .ingest-field{margin-bottom:var(--space-6)}
 .ingest-field[hidden]{display:none}
-/* Small-caps field labels: the panel asks for three unlike things (a name, a
- * document, a URL) and the labels have to separate them without competing
- * with the lede above. */
-.ingest-label{display:block;font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--color-label);margin-bottom:var(--space-2)}
+/* Sentence-case captions share the form hierarchy used by sibling pages. */
+.ingest-label{display:block;font-size:var(--text-label);font-weight:600;letter-spacing:0;text-transform:none;color:var(--color-label);margin-bottom:var(--space-2)}
 .ingest-label-opt{font-weight:400;text-transform:none;letter-spacing:0;color:var(--color-faint)}
-.ingest-panel textarea{width:100%;height:320px;font-family:monospace;font-size:var(--field-code-font-size);border:1px solid var(--color-border);border-radius:var(--radius-md);padding:var(--space-4);resize:vertical;outline:none}
+.ingest-panel textarea{width:100%;height:320px;font-family:monospace;font-size:var(--field-code-font-size);border:1px solid var(--color-field-border);border-radius:var(--radius-md);padding:var(--space-4);resize:vertical;outline:none}
 .ingest-panel textarea:focus{border-color:var(--brand-blue)}
 /* The mounted CodeMirror replaces the textarea in place, so it inherits the
  * same box the textarea drew. */
-.ingest-panel .cm-editor{height:320px;font-size:var(--field-code-font-size);border:1px solid var(--color-border);border-radius:var(--radius-md);overflow:hidden}
+.ingest-panel .cm-editor{height:320px;font-size:var(--field-code-font-size);border:1px solid var(--color-field-border);border-radius:var(--radius-md);overflow:hidden}
 .ingest-panel .cm-editor.cm-focused{outline:none;border-color:var(--brand-blue)}
 .ingest-panel .cm-scroller{overflow:auto}
 /* URL mode only — see new.js setMode for why it can never appear under
  * Paste HTML. */
-.snapshot-row{display:flex;align-items:flex-start;gap:var(--space-2);font-size:13px;color:var(--color-ink-mid);line-height:1.5;margin-bottom:var(--space-6);cursor:pointer}
+.snapshot-row{display:flex;align-items:flex-start;gap:var(--space-2);font-size:0.8125rem;color:var(--color-ink-mid);line-height:1.5;margin-bottom:var(--space-6);cursor:pointer}
 .snapshot-row[hidden]{display:none}
 .snapshot-row input{margin-top:3px;flex:0 0 auto}
 /* Footer: the standing promise on the left, the two exits on the right.
@@ -69,9 +66,9 @@ main{padding:var(--space-8);max-width:900px;margin:0 auto}
 a.btn{text-decoration:none}
 
 /* --- ingest feedback: status line, scan result, snapshot report --------- */
-#status{margin-top:var(--space-4);font-size:13px;color:var(--color-ink-mid)}
+#status{margin-top:var(--space-4);font-size:0.8125rem;color:var(--color-ink-mid)}
 #status a{color:var(--brand-blue)}
-#scan-result{margin-top:var(--space-4);background:var(--color-subtle);border:1px solid var(--color-hairline);border-radius:var(--radius-md);padding:var(--space-5);font-size:13px;display:none}
+#scan-result{margin-top:var(--space-4);background:var(--color-subtle);border:1px solid var(--color-hairline);border-radius:var(--radius-md);padding:var(--space-5);font-size:0.8125rem;display:none}
 .scan-note{color:var(--color-muted);margin:var(--space-1) 0 var(--space-3)}
 .scan-actions{display:flex;gap:var(--space-3);margin-top:var(--space-4)}
 /* One scanned origin awaiting approval. Nothing here is approved until the
@@ -88,8 +85,8 @@ a.btn{text-decoration:none}
 
 /* --- responsive: compact choices, then the selected method and form ----- */
 @media (max-width:640px){
-  main{padding:var(--space-5);padding-bottom:max(var(--space-5),env(safe-area-inset-bottom))}
-  .lede h2{font-size:24px}
+  main{padding:var(--page-top) var(--page-gutter);padding-bottom:max(var(--page-top),env(safe-area-inset-bottom))}
+  .lede h2{font-size:var(--page-title-size)}
   .routes{grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-2);margin:var(--space-6) 0 var(--space-3)}
   .route{min-width:0;min-height:44px;padding:10px 6px;align-items:center;justify-content:center;text-align:center}
   .route b{font-size:.875rem;overflow-wrap:anywhere}
@@ -107,7 +104,7 @@ a.btn{text-decoration:none}
 /* Prose scales with the reader's text preference; source fields keep their
  * dedicated monospace font and field-size token. Method layout stays separate. */
 @media (max-width:767px){
-  .lede h2{font-size:1.5rem}
+  .lede h2{font-size:var(--page-title-size)}
   .lede p,.route b{font-size:var(--text-primary);line-height:1.5}
   .route-note,.ingest-label,.snapshot-row,#status,#scan-result{font-size:var(--text-secondary);line-height:1.5}
   .lede,.route,.ingest-label,#status,#scan-result{overflow-wrap:anywhere;min-width:0}
@@ -115,3 +112,13 @@ a.btn{text-decoration:none}
 
 .snapshot-row small{display:block;margin-top:4px}
 #agent-description-help{margin-top:var(--space-3);line-height:1.5}
+
+.field-error{margin-top:8px;color:var(--color-danger);font-size:var(--text-secondary);line-height:1.5}
+.field-error[hidden]{display:none}
+[aria-invalid=true]{border-color:var(--color-danger)}
+#status:not(:empty){margin-top:16px;padding:12px 14px;border-radius:var(--radius-md);background:var(--color-info-tint);color:var(--color-info-ink);line-height:1.5}
+#status.is-error:not(:empty){background:var(--color-danger-tint);color:var(--color-danger-ink)}
+.route:disabled{cursor:default;opacity:.7}
+@media(max-width:640px){.ingest-foot button[type=submit]{order:-1}}
+
+.ingest-field:has([aria-invalid=true]) .cm-editor{border-color:var(--color-danger)}

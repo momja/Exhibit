@@ -146,12 +146,17 @@ test('origin button changes immediately update the saved status', async () => {
   const {default: Controller} = await page.loadModule(path.join(here, '../../internal/api/assets/gallery/unsaved-changes-controller.js'));
   const controller = Object.create(Controller.prototype);
   Object.defineProperty(controller, 'statusTarget', {value: page.byId('dirty-status')});
+  Object.defineProperty(controller, 'saveButtonTarget', {value: page.byId('save-button')});
+  Object.defineProperty(controller, 'saveMessageTarget', {value: page.byId('save-message')});
+  Object.defineProperty(controller, 'element', {value: page.document.body});
   page.document.body.addEventListener('exhibit:editor-changed', () => controller.refresh());
   controller.refresh();
-  assert.equal(page.byId('dirty-status').textContent, 'All changes saved');
+  assert.equal(page.byId('dirty-status').textContent, 'Saved');
+  assert.equal(page.byId('save-button').disabled, true);
   page.byId('al-add-input').value = 'https://cdn.example.com';
   await page.byId('al-add-btn').click();
-  assert.equal(page.byId('dirty-status').textContent, 'Unsaved changes');
+  assert.equal(page.byId('dirty-status').textContent, 'Unsaved');
+  assert.equal(page.byId('save-button').disabled, false);
   assert.equal(page.api.calls.length, 0, 'button changes are still local until Save');
 });
 

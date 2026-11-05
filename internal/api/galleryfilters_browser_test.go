@@ -71,7 +71,7 @@ func TestGalleryFilterBrowser(t *testing.T) {
 				require.NoError(t, chromedp.Do(ctx, chromedp.Click(chromedp.CSS(`.gallery-filter-trigger`))))
 				check(`getComputedStyle(document.querySelector('.gallery-spaces')).display !== 'none' && document.documentElement.scrollWidth <= innerWidth`)
 			} else {
-				check(`document.querySelector('.gallery-rail').getBoundingClientRect().width === 208 && getComputedStyle(document.querySelector('.gallery-filter-trigger')).display === 'none'`)
+				check(`document.querySelector('.gallery-rail').getBoundingClientRect().right <= document.querySelector('main').getBoundingClientRect().left && getComputedStyle(document.querySelector('.gallery-filter-trigger')).display === 'none'`)
 			}
 			require.NoError(t, chromedp.Do(ctx, chromedp.Click(chromedp.CSS(scope+` a[href="/search?tag=Work"]`))))
 			poll(`location.search === '?tag=Work' && document.querySelectorAll('.card').length === 1 && document.querySelector('.gallery-filter-chips')`)

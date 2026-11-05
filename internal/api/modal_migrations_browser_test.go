@@ -119,11 +119,22 @@ func TestTagModalBrowser(t *testing.T) {
 			b.check(`document.activeElement.matches('[data-action="edit-tag"]')`)
 			b.eval(open)
 			checkModalVisuals(t, b.ctx, "#tag-edit-modal")
+			// The color control is a local working copy: preset and custom inputs
+			// agree, without changing the creation form behind the modal.
+			b.wait(`document.querySelector('#tag-edit-modal .color-custom-row.is-custom')`)
+			b.eval(`window.creationColor=document.querySelector('#tags-panel [data-color-picker-target="hex"]').value; document.querySelector('#tag-edit-modal .color-swatch[data-color="#377A64"]').click()`)
+			b.check(`document.getElementById('tag-edit-color-hex').value==='#377a64' && document.getElementById('tag-edit-color-picker').value==='#377a64' && document.querySelector('#tag-edit-modal [aria-pressed="true"]').dataset.color==='#377A64' && !document.querySelector('#tag-edit-modal .is-custom') && document.querySelector('#tags-panel [data-color-picker-target="hex"]').value===creationColor`)
+			b.eval(`const hex=document.getElementById('tag-edit-color-hex');hex.value='#0088ff';hex.dispatchEvent(new Event('input',{bubbles:true}))`)
+			b.check(`document.getElementById('tag-edit-color-picker').value==='#0088ff' && !document.querySelector('#tag-edit-modal [aria-pressed="true"]') && !!document.querySelector('#tag-edit-modal .is-custom')`)
 			b.capture("Exh-p3ah", width)
 			b.eval(`document.getElementById('tag-edit-name').value='';document.getElementById('tag-edit-save').click()`)
 			b.check(`document.querySelector('#tag-edit-modal').open && document.getElementById('tag-edit-error').textContent==='Name is required.'`)
 			b.eval(`document.getElementById('tag-edit-name').value='Graphs'; document.getElementById('tag-edit-save').click()`)
 			b.wait(`!document.getElementById('tag-edit-modal').open && document.querySelector('[data-tag-name="Graphs"]') && document.activeElement.dataset.tagName==='Graphs'`)
+			// Saving replaces the panel through htmx; the new picker connects too.
+			b.wait(`document.querySelector('#tags-panel [data-color-picker-target="hex"]') && document.querySelector('#tags-panel [aria-pressed="true"]')`)
+			b.eval(`document.querySelector('#tags-panel .color-swatch[data-color="#527CB0"]').click()`)
+			b.check(`document.querySelector('#tags-panel [data-color-picker-target="hex"]').value==='#527cb0' && document.querySelector('#tags-panel [data-color-picker-target="picker"]').value==='#527cb0'`)
 			// A pending mutation blocks every dismissal and another submission.
 			// Failure keeps the working copy and restores the existing buttons.
 			b.eval(open)
@@ -167,7 +178,7 @@ func TestShareModalBrowser(t *testing.T) {
 			b.run(chromedp.Navigate(app.URL + "/artifacts/" + id))
 			b.wait(`document.getElementById('share-open')`)
 			open := `document.getElementById('share-open').click()`
-			b.dialogCycle("#share-panel", open, "#share-add-input")
+			b.dialogCycle("#share-panel", open, "#share-panel .modal-close")
 			b.check(`document.activeElement.id==='share-open'`)
 			b.eval(open)
 			checkModalVisuals(t, b.ctx, "#share-panel")

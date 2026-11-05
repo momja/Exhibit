@@ -251,7 +251,7 @@ func TestEditPageSectionsAreSymmetricPanels(t *testing.T) {
 	assert.Equal(t, 7, strings.Count(page, `class="ph ph-caret-right details-caret details-caret-closed"`))
 	// Both source fields are real textareas the editor island mounts over, so
 	// the widget source is not a second-class field.
-	assert.Contains(t, page, `<textarea id="body" data-revision="`)
+	assert.Contains(t, page, `<textarea id="body" aria-label="Artifact source" data-revision="`)
 	assert.Contains(t, page, `<textarea id="widget-src"`)
 	assert.Contains(t, page, `id="save-button" data-save-editor`)
 	assert.NotContains(t, page, `id="widget-save"`)

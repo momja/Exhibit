@@ -30,23 +30,6 @@ import { modalFor } from './modal.js';
     return data.error || fallback;
   }
 
-  // Keeps swatches, picker and hex field in sync. `scope` holds the swatches.
-  function setColor(prefix, scope, hex) {
-    const hexField = byId(prefix + '-color-hex');
-    const picker = byId(prefix + '-color-picker');
-    if (hexField) hexField.value = hex;
-    if (picker) picker.value = hex;
-    if (!scope) return;
-    scope.querySelectorAll('.color-swatch').forEach(function(sw) {
-      sw.classList.toggle('selected', sw.dataset.color.toLowerCase() === hex.toLowerCase());
-    });
-  }
-
-  function onColorInput(prefix, scope, target) {
-    if (target.id === prefix + '-color-picker') setColor(prefix, scope, target.value);
-    else if (target.id === prefix + '-color-hex' && /^#[0-9a-fA-F]{6}$/.test(target.value)) setColor(prefix, scope, target.value);
-  }
-
   // --- this artifact's tags ----------------------------------------------
 
   async function detach(tagID) {
@@ -103,16 +86,11 @@ import { modalFor } from './modal.js';
     if (action && action.dataset.action === 'edit-tag') {
       return openEditModal(action.dataset.tagId, action.dataset.tagName, action.dataset.tagColor, action);
     }
-    const swatch = target.closest ? target.closest('.color-swatch') : null;
-    if (swatch) return setColor('tag-add', byId('tag-add-create-fields'), swatch.dataset.color);
     if (target.closest && target.closest('#tag-add-confirm')) return addExisting();
     if (target.closest && target.closest('#tag-create-confirm')) return createAndAdd();
     return undefined;
   });
 
-  panel.addEventListener('input', function(e) {
-    onColorInput('tag-add', byId('tag-add-create-fields'), e.target);
-  });
 
   panel.addEventListener('keydown', function(e) {
     if (e.key === 'Enter' && e.target && (e.target.id === 'tag-add-name' || e.target.id === 'tag-add-color-hex')) {
@@ -155,7 +133,9 @@ import { modalFor } from './modal.js';
     if (modal.open) return;
     editingTagID = tagID;
     byId('tag-edit-name').value = name;
-    setColor('tag-edit', modal, hex);
+    byId('tag-edit-color-hex').value = hex;
+    byId('tag-edit-color-picker').value = hex;
+    modal.querySelector('[data-controller~=color-picker]').dispatchEvent(new CustomEvent('color-picker:refresh'));
     setError('tag-edit-error', '');
     editor.show(trigger);
   }
@@ -176,12 +156,9 @@ import { modalFor } from './modal.js';
   if (modal) {
     modal.addEventListener('click', function(e) {
       const target = e.target;
-      const swatch = target.closest ? target.closest('.color-swatch') : null;
-      if (swatch) return setColor('tag-edit', modal, swatch.dataset.color);
       if (target.closest && target.closest('#tag-edit-save')) return saveTag();
       if (target.closest && target.closest('#tag-edit-delete')) return deleteTag();
       return undefined;
     });
-    modal.addEventListener('input', function(e) { onColorInput('tag-edit', modal, e.target); });
   }
 })();

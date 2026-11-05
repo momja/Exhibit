@@ -9,11 +9,11 @@
 </dialog>{{end}}
 
 {{define "editVersionRows"}}
-<p class="text-sm muted">{{len .Versions}} saved version{{if ne (len .Versions) 1}}s{{end}}</p>
+<p class="version-help">{{len .Versions}} saved version{{if ne (len .Versions) 1}}s{{end}}</p>
 {{range .Versions}}<div class="version-row" data-seq="{{.Seq}}">
   <span class="version-seq">v{{.Seq}}</span>
   <span class="version-what"><strong>{{.Label}}</strong>{{if .Message}} <span class="muted">— {{.Message}}</span>{{end}}</span>
   <time class="text-sm muted version-when" datetime="{{.WhenISO}}">{{.When}}</time>
-  {{if .Current}}<span class="text-sm muted">current</span>{{else}}<button type="button" class="btn btn-sm btn-sec" data-action="view" data-seq="{{.Seq}}" hx-get="/partials/version-viewer?artifact={{$.ID | urlquery}}&amp;seq={{.Seq}}&amp;restorable=1" hx-target="#version-viewer-slot" hx-swap="innerHTML"><i class="ph ph-eye" aria-hidden="true"></i> View</button> <button type="button" class="btn btn-sm btn-sec" data-action="restore" data-seq="{{.Seq}}"><i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i> Restore</button>{{end}}
+  <span class="version-actions">{{if .Current}}<span class="badge version-current">Current</span>{{else}}<button type="button" class="btn btn-sm btn-sec" data-action="view" data-seq="{{.Seq}}" hx-get="/partials/version-viewer?artifact={{$.ID | urlquery}}&amp;seq={{.Seq}}&amp;restorable=1" hx-target="#version-viewer-slot" hx-swap="innerHTML"><i class="ph ph-eye" aria-hidden="true"></i> View</button> <button type="button" class="btn btn-sm btn-sec" data-action="restore" data-seq="{{.Seq}}"><i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i> Restore</button>{{end}}</span>
 </div>{{end}}
 {{end}}

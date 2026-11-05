@@ -1,0 +1,24 @@
+{
+  "resetAt": "2026-11-05T00:50:00Z",
+  "resetEpoch": 1793839800,
+  "activity": [
+    {
+      "position": 85,
+      "type": "system_notice",
+      "text": "Claude usage limit reached. This turn is paused until the 5-hour limit resets in 3h 37m.",
+      "itemId": "turn-item:provider:claudeAgent:native-item:usage-limit%3Aprovider-turn%3Aprovider%3AclaudeAgent%3Anative-turn%3Aturn%253Arun-attempt%253Arun%253Arun%25253Athread%25253Athread%2525253Adelegated-task%2525253Acommand%252525253Amcp%252525253A9913d16e-75eb-46de-9b1d-e9986db72056%252525253Adelegate-task%252525253AExh-zrjo-r23-opus-visual-nine%25253Aordinal%25253A1%253Aattempt%253A1%3Afive_hour%3A1793839800"
+    },
+    {
+      "position": 86,
+      "type": "assistant_message",
+      "text": "You've hit your 5-hour limit \u00b7 resets 12:50am (UTC)",
+      "itemId": "turn-item:provider:claudeAgent:native-item:bb255326-3d6e-4ea7-9bd3-cdf3ce5a2167"
+    },
+    {
+      "position": 87,
+      "type": "error",
+      "text": "Claude API rate limit reached. Try again later.",
+      "itemId": "turn-item:provider:claudeAgent:native-item:terminal-failure%3Aprovider-turn%3Aprovider%3AclaudeAgent%3Anative-turn%3Aturn%253Arun-attempt%253Arun%253Arun%25253Athread%25253Athread%2525253Adelegated-task%2525253Acommand%252525253Amcp%252525253A9913d16e-75eb-46de-9b1d-e9986db72056%252525253Adelegate-task%252525253AExh-zrjo-r23-opus-visual-nine%25253Aordinal%25253A1%253Aattempt%253A1"
+    }
+  ]
+}

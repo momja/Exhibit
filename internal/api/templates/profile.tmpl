@@ -24,7 +24,7 @@
 </div>
 
 <div class="card">
-  <h3 class="settings-h3">Profile</h3>
+  <h3 class="settings-h3"><i class="ph ph-user-circle" aria-hidden="true"></i> Profile</h3>
   {{if .Account.SignedIn}}
   <dl class="settings-facts">
     <dt>Signed in as</dt>
@@ -56,7 +56,7 @@
 </div>
 
 {{if .IsAdmin}}<div class="card">
-  <h3 class="settings-h3">Administration</h3>
+  <h3 class="settings-h3"><i class="ph ph-users-three" aria-hidden="true"></i> Administration</h3>
   <a class="btn btn-sec account-admin-link" href="/admin/users"><i class="ph ph-users-three" aria-hidden="true"></i> Accounts</a>
 </div>{{end}}
 
@@ -103,7 +103,7 @@
      registers no /auth/logout at all, so the button would 404 there. */}}
 {{if .Account.CanSignOut}}
 <div class="card">
-  <h3 class="settings-h3">Sign out</h3>
+  <h3 class="settings-h3"><i class="ph ph-sign-out" aria-hidden="true"></i> Sign out</h3>
   <p class="settings-copy">Sign out on this device.</p>
   <form class="settings-foot" method="post" action="/auth/logout">
     <button class="btn btn-sec" type="submit"><i class="ph ph-sign-out" aria-hidden="true"></i> Sign out</button>
@@ -151,12 +151,12 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
   {{end}}
   <div class="settings-foot">
     {{if .Account.DeleteBlocked}}
-    <button class="btn btn-danger" type="button" id="delete-account" disabled data-account-deletion-target="trigger" aria-describedby="delete-account-reason">
+    <button class="btn btn-danger btn-danger-soft" type="button" id="delete-account" disabled data-account-deletion-target="trigger" aria-describedby="delete-account-reason">
       <i class="ph ph-trash" aria-hidden="true"></i> Delete account
     </button>
     <span class="muted text-sm" id="delete-account-reason">{{.Account.DeleteBlocked}}</span>
     {{else}}
-    <button class="btn btn-danger" type="button" id="delete-account" data-account-deletion-target="trigger" data-action="account-deletion#open" aria-expanded="false" aria-controls="delete-confirm">
+    <button class="btn btn-danger btn-danger-soft" type="button" id="delete-account" data-account-deletion-target="trigger" data-action="account-deletion#open" aria-expanded="false" aria-controls="delete-confirm">
       <i class="ph ph-trash" aria-hidden="true"></i> Delete account
     </button>
     {{end}}

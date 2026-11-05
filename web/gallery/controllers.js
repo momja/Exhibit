@@ -4,6 +4,8 @@ import ArtifactStarsController from './artifact-stars-controller.js';
 import { Application } from '../stimulus/stimulus.js';
 import ActionMenuController from './action-menu-controller.js';
 import ModalController from './modal-controller.js';
+import ColorPickerController from './color-picker-controller.js';
+import CapabilityPopoverController from './capability-popover-controller.js';
 import RelayHostController from './relay-host-controller.js';
 import ConnectionsController from './connections-controller.js';
 import UnsavedChangesController from './unsaved-changes-controller.js';
@@ -14,6 +16,8 @@ import AccountDeletionController from './account-deletion-controller.js';
 export const application = Application.start();
 application.register('action-menu', ActionMenuController);
 application.register('modal', ModalController);
+application.register('color-picker', ColorPickerController);
+application.register('capability-popover', CapabilityPopoverController);
 application.register('unsaved-changes', UnsavedChangesController);
 
 application.register('clerk', ClerkController);

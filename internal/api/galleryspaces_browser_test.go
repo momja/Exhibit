@@ -23,7 +23,7 @@ func TestGallerySpacesBrowser(t *testing.T) {
 		name          string
 		width, height int64
 		phone         bool
-	}{{"phone", 390, 844, true}, {"desktop", 1280, 900, false}} {
+	}{{"phone", 390, 844, true}, {"tablet", 768, 900, false}, {"desktop", 1280, 900, false}} {
 		t.Run(viewport.name, func(t *testing.T) {
 			browser, err := chromium.New(chromiumtest.Start(t))
 			require.NoError(t, err)
@@ -56,6 +56,20 @@ func TestGallerySpacesBrowser(t *testing.T) {
 				require.NoError(t, err)
 				require.True(t, ok, message)
 			}
+			checkDesktopRows := func() {
+				if viewport.phone {
+					return
+				}
+				check(`Array.from(document.querySelectorAll('.space-label')).filter(label => label.getClientRects().length).every(label => {
+ const text = document.createRange();
+ text.selectNodeContents(label);
+ return text.getClientRects().length === 1 && label.scrollWidth <= label.clientWidth;
+})`, "desktop destination labels stay on one line alongside two-digit counts")
+				check(`Array.from(document.querySelectorAll('.gallery-spaces a')).filter(a => a.getClientRects().length).every((a, index) => {
+ const rect = a.getBoundingClientRect();
+ return Math.abs(rect.height - 44) < 1 && (!window.spaceRowPositions || Math.abs(rect.top - window.spaceRowPositions[index]) < 1);
+})`, "changing the active destination preserves navigation row heights and positions")
+			}
 			check(`document.querySelectorAll('nav[aria-label="Gallery spaces"]').length === 1 && document.querySelectorAll('.gallery-spaces [aria-current="page"]').length === 1 && document.querySelector('.gallery-spaces [aria-current="page"]').getAttribute('href') === '/shared'`, "one nav and the incoming space is active")
 			check(`Array.from(document.querySelectorAll('.gallery-spaces a')).filter(a => a.getClientRects().length).every(a => a.getBoundingClientRect().width >= 44 && a.getBoundingClientRect().height >= 44) && document.documentElement.scrollWidth <= innerWidth`, "all targets are at least 44px and the page fits")
 			check(fmt.Sprintf(`Array.from(document.querySelectorAll('.space-count')).every(el => (getComputedStyle(el).display === 'none') === %t)`, viewport.phone), "counts appear only in the rail")
@@ -65,22 +79,22 @@ func TestGallerySpacesBrowser(t *testing.T) {
 				require.NoError(t, chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](`window.scrollTo(0, document.documentElement.scrollHeight)`)))
 				check(`Array.from(document.querySelectorAll('.card')).at(-1).getBoundingClientRect().bottom <= document.querySelector('.gallery-rail').getBoundingClientRect().top`, "the last card scrolls fully above the tabs")
 			} else {
-				check(`getComputedStyle(document.querySelector('.gallery-layout')).display === 'grid' && document.querySelector('.gallery-rail').getBoundingClientRect().width === 208 && document.querySelector('.gallery-rail').getBoundingClientRect().right <= document.querySelector('main').getBoundingClientRect().left`, "desktop rail sits beside the grid")
-				check(`Array.from(document.querySelectorAll('.space-label')).filter(el => el.getClientRects().length).every(el => el.scrollWidth <= el.clientWidth)`, "desktop labels fit alongside two-digit counts")
+				check(`getComputedStyle(document.querySelector('.gallery-layout')).display === 'grid' && document.querySelector('.gallery-rail').getBoundingClientRect().right <= document.querySelector('main').getBoundingClientRect().left`, "desktop rail sits beside the grid")
+				checkDesktopRows()
+				require.NoError(t, chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](`window.spaceRowPositions = Array.from(document.querySelectorAll('.gallery-spaces a')).filter(a => a.getClientRects().length).map(a => a.getBoundingClientRect().top)`)))
 			}
 
 			// Ordinary Tab order and visible focus work in both layouts.
 			require.NoError(t, chromedp.Do(ctx, chromedp.Focus(chromedp.CSS(`.gallery-spaces a[href="/"]`)), chromedp.KeyEvent(kb.Tab)))
-			{
-				check(`document.activeElement.getAttribute('href') === '/search'`, "Tab reaches Search second")
-				require.NoError(t, chromedp.Do(ctx, chromedp.KeyEvent(kb.Tab)))
-			}
+			check(`document.activeElement.getAttribute('href') === '/search'`, "Tab reaches Search second")
+			require.NoError(t, chromedp.Do(ctx, chromedp.KeyEvent(kb.Tab)))
 			check(`document.activeElement.getAttribute('href') === '/shared' && document.activeElement.matches(':focus-visible') && getComputedStyle(document.activeElement).outlineStyle === 'solid'`, "Tab reaches the incoming space with a visible outline")
 			require.NoError(t, chromedp.Do(ctx, chromedp.KeyEvent(kb.Tab)))
 			check(`document.activeElement.getAttribute('href') === '/activity'`, "Tab reaches Activity next")
 			err = chromedp.Do(ctx, chromedp.KeyEvent(kb.Enter), chromedp.Poll[chromedp.Void](`location.pathname === "/activity"`))
 			require.NoError(t, err)
 			check(`location.pathname === '/activity' && document.querySelector('.gallery-spaces [aria-current="page"]').getAttribute('href') === '/activity'`, "keyboard activation navigates to Activity")
+			checkDesktopRows()
 			for _, path := range []string{"/", "/shared"} {
 				// Load can finish before pagereveal starts the cross-document
 				// transition, when getAnimations() is still empty. Wait for the
@@ -91,10 +105,12 @@ func TestGallerySpacesBrowser(t *testing.T) {
 				err = chromedp.Do(ctx, chromedp.Click(chromedp.CSS(`.gallery-spaces a[href="`+path+`"]`)), chromedp.Poll[chromedp.Void](`location.pathname === "`+path+`"`))
 				require.NoError(t, err)
 				check(`location.pathname === '`+path+`' && document.querySelector('.gallery-spaces [aria-current="page"]').getAttribute('href') === '`+path+`'`, "space links navigate and update the active space")
+				checkDesktopRows()
 			}
 			_, err = chromedp.Call(ctx, emulation.SetEmulatedMedia, emulation.SetEmulatedMediaParams{Features: []*emulation.MediaFeature{{Name: "prefers-color-scheme", Value: "dark"}}})
 			require.NoError(t, err)
 			check(`matchMedia('(prefers-color-scheme: dark)').matches && getComputedStyle(document.querySelector('.gallery-rail')).backgroundColor === getComputedStyle(document.querySelector('header')).backgroundColor`, "the navigation follows the dark panel token")
+			checkDesktopRows()
 		})
 	}
 }

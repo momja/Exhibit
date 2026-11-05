@@ -51,6 +51,7 @@ type galleryGridData struct {
 	PagePath     string
 	SearchPage   bool
 	Title        string
+	ResetURL     string
 	Filters      galleryFilters
 	Parameters   url.Values
 	ID           string
@@ -65,7 +66,7 @@ type galleryGridData struct {
 
 func (ro *Router) loadGalleryGrid(r *http.Request, gallery galleryDefinition, offset int) (galleryGridData, error) {
 	grid := galleryGridData{
-		Description: gallery.Description, HideSearch: gallery.HideSearch,
+		Description: gallery.Description, HideSearch: gallery.HideSearch, ResetURL: gallery.PagePath,
 		PagePath: gallery.PagePath, SearchPage: gallery.SearchPage, Title: gallery.Title, ID: gallery.ID, FragmentPath: gallery.FragmentPath,
 		Query: strings.TrimSpace(r.URL.Query().Get("q")), Offset: offset,
 		Empty: gallery.Empty,

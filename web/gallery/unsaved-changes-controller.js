@@ -1,9 +1,9 @@
 import { Controller } from '../stimulus/stimulus.js';
 import { modalFor } from './modal.js';
-import { hasEditorChanges, saveEditorChanges, discardEditorChanges, waitForEditorSave } from './editor-session.js';
+import { hasEditorChanges, saveEditorChanges, discardEditorChanges, waitForEditorSave, editorSaveStatus } from './editor-session.js';
 
 export default class UnsavedChangesController extends Controller {
-  static targets = ['dialog', 'status'];
+  static targets = ['dialog', 'status', 'saveButton', 'saveMessage'];
 
   connect() {
     this.modal = modalFor(this.dialogTarget);
@@ -19,7 +19,20 @@ export default class UnsavedChangesController extends Controller {
   }
 
   refresh() {
-    this.statusTarget.textContent = hasEditorChanges() ? 'Unsaved changes' : 'All changes saved';
+    const dirty = hasEditorChanges();
+    const { saving, issue } = editorSaveStatus();
+    this.statusTarget.dataset.state = saving ? 'saving' : dirty ? (issue ? 'attention' : 'dirty') : 'saved';
+    this.statusTarget.textContent = saving ? 'Saving…' : dirty ? (issue ? 'Review' : 'Unsaved') : 'Saved';
+    const button = this.saveButtonTarget;
+    button.classList.toggle('btn-sec', !dirty);
+    button.disabled = saving || !dirty;
+    button.setAttribute('aria-busy', String(saving));
+    this.saveMessageTarget.textContent = dirty && !saving ? issue : '';
+    this.saveMessageTarget.hidden = !dirty || saving || !issue;
+  }
+
+  async save() {
+    await saveEditorChanges();
   }
 
   navigate(event) {

@@ -288,6 +288,10 @@ export function connectFloatingHeader(root) {
       if (e.target.closest('a[href],button')) closePopups();
     });
   }
+  listen(document, 'focusin', function (e) {
+    const open = popups.find(p => !p.panel.hidden);
+    if (open && !open.panel.contains(e.target) && !open.trigger.contains(e.target)) closePopups();
+  });
   listen(window, 'pointerdown', function (e) {
     const inside = popups.some(function (p) {
       return p.panel.contains(e.target) || p.trigger.contains(e.target);
@@ -304,7 +308,24 @@ export function connectFloatingHeader(root) {
   });
   listen(window, 'keydown', function (e) {
     const trigger = openPopupTrigger();
-    if (e.key === 'Escape' && trigger) { closePopups(); trigger.focus(); }
+    if (e.key === 'Escape' && trigger) { closePopups(); trigger.focus(); return; }
+    const menu = popups.find(p => p.align === 'trigger');
+    if (e.target !== menu.trigger && (menu.panel.hidden || !menu.panel.contains(e.target))) return;
+    const items = [...menu.panel.querySelectorAll('a[href],button')].filter(item => !item.disabled && !item.hidden);
+    if (e.target === menu.trigger && ['ArrowDown', 'ArrowUp'].includes(e.key)) {
+      e.preventDefault();
+      openPopup(menu);
+      (e.key === 'ArrowUp' ? items.at(-1) : items[0])?.focus();
+    } else if (!menu.panel.hidden && menu.panel.contains(e.target)) {
+      if (e.key === 'Tab') { closePopups(); trigger?.focus(); }
+      else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) {
+        e.preventDefault();
+        const current = items.indexOf(document.activeElement);
+        const index = e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1
+          : (current + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+        items[index]?.focus();
+      }
+    }
   });
 
   listen(root.querySelector('#pip-hide'), 'click', function () {

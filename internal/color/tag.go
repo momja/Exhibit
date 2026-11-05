@@ -11,12 +11,13 @@ import (
 // spread rather than an exhaustive picker.
 var Presets = []string{
 	"#6B7280", // gray (store.DefaultTagColor)
-	"#EF4444", // red
-	"#F59E0B", // amber
-	"#10B981", // green
-	"#3B82F6", // blue
-	"#8B5CF6", // purple
-	"#EC4899", // pink
+	"#B86562", // rose red
+	"#AB7B3E", // amber
+	"#377A64", // green
+	"#42838C", // teal
+	"#527CB0", // blue
+	"#8470AC", // violet
+	"#AC6F92", // rose
 }
 
 // Normalize validates a tag color for safe use inside an HTML style

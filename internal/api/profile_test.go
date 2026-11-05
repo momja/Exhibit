@@ -285,8 +285,11 @@ func TestGalleryHeaderCarriesBothIconControls(t *testing.T) {
 	// The desktop shortcut keeps its visible and accessible label.
 	assert.Contains(t, page, `<span class="header-link-label">Accounts</span></a>`)
 
-	// Sized as peers: one class, applied to both, so they cannot drift apart.
-	assert.Equal(t, 2, strings.Count(page, "icon-btn"),
-		"both controls wear the same size class, so they cannot drift apart")
+	// Only Settings is icon-only in the standard gallery header. Dialog Close
+	// buttons elsewhere on the page do not change the header's action grammar.
+	headerStart, headerEnd := strings.Index(page, "<header"), strings.Index(page, "</header>")
+	require.True(t, headerStart >= 0 && headerEnd > headerStart)
+	assert.Equal(t, 1, strings.Count(page[headerStart:headerEnd], "icon-btn"),
+		"Settings stays compact while Add artifact has a visible primary label")
 	assert.Contains(t, galleryAsset(t, newTestRouter(t), "/assets/gallery/components.css"), ".icon-btn{")
 }

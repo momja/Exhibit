@@ -48,15 +48,14 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
      history restoration. The header and its Clerk controller never swap. */}}
 {{define "gallerySearchRegion"}}<div id="gallery-search-region">{{template "gallerySearchControls" .}}</div>{{end}}
 {{define "gallerySearchControls"}}
-  <h1 class="app-header-title sr-only">{{if .Title}}{{.Title}}{{else}}Gallery{{end}}</h1>
   {{template "galleryHeaderSearch" .}}
 {{end}}
 
 {{define "gallerySpaceContent"}}<div id="gallery-content" hx-history-elt data-gallery-target="space" data-gallery-read-only="{{if .ReadOnly}}true{{else}}false{{end}}" data-controller="gallery-space artifact-stars">
 <div id="{{.Grid.ID}}">
 {{if or .Spaces .Grid.Filters.Sections}}<div class="gallery-layout{{if not .Spaces}} gallery-layout-solo{{end}}">{{template "gallerySpaces" .}}{{end -}}
-<main>{{if .Grid.Title}}<h2 class="gallery-title">{{.Grid.Title}}</h2>{{end}}
-{{if .Grid.Description}}<p class="gallery-description">{{.Grid.Description}}</p>{{end}}
+<main id="main-content" tabindex="-1">
+<div class="gallery-overview"><h1 class="gallery-title">{{.Grid.Title}}</h1>{{if .Grid.Description}}<p class="gallery-description">{{.Grid.Description}}</p>{{end}}</div>
 {{if .Grid.HideSearch}}{{if not .Grid.Activity}}<div hidden>{{template "gallerySearch" .Grid}}</div>{{end}}{{end}}
 {{if .Grid.SearchPage}}<div class="gallery-page-search">{{template "gallerySearch" .Grid}}</div>{{end}}
 {{/* Cards share their tile, title, status marks, and action menu with every

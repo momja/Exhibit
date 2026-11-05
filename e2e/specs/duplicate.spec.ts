@@ -25,7 +25,7 @@ test('keyboard focus stays in the modal and every cancellation path restores the
   const mutations: string[] = [];
   page.on('request', request => { if (isDuplicate(request)) mutations.push(request.url()); });
   await page.goto('/');
-  for (const dismiss of ['Escape', 'Cancel', 'backdrop']) {
+  for (const dismiss of ['Escape', 'Cancel', 'Close', 'backdrop']) {
     const { trigger, dialog, input } = await openDuplicate(page, artifact.title);
     for (const key of ['Tab', 'Shift+Tab']) {
       for (let step = 0; step < 6; step++) {
@@ -39,6 +39,7 @@ test('keyboard focus stays in the modal and every cancellation path restores the
     await expect(input).toHaveValue('Unsaved working title');
     if (dismiss === 'Escape') await page.keyboard.press('Escape');
     else if (dismiss === 'Cancel') await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+    else if (dismiss === 'Close') await dialog.getByRole('button', { name: 'Close', exact: true }).click();
     else await page.mouse.click(8, 8);
     await expect(dialog).not.toBeVisible();
     await expect(trigger).toBeFocused();
@@ -101,6 +102,7 @@ test('Escape, backdrop, and repeated submission cannot dismiss or duplicate an i
     await requested;
     await expect(input).toBeDisabled();
     await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeDisabled();
+    await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeDisabled();
     await page.keyboard.press('Escape');
     await page.mouse.click(8, 8);
     await page.keyboard.press('Enter');

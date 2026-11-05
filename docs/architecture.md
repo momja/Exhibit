@@ -502,7 +502,8 @@ Malformed or unavailable owners return 400.
 space links retain ordinary `href`s and request htmx fragments from their
 bookmarkable page URLs. Full pages and fragments share `gallerySpaceContent`
 (results, navigation, filters and owner-only dialogs) and `gallerySearchRegion`
-(the heading, search form and phone filter trigger). A switch replaces
+(search form and phone filter trigger). The visible gallery heading belongs to
+the content region. A switch replaces
 `#gallery-content` and swaps the search region out of band; `#gallery-shell`,
 the header and the mounted Clerk control remain connected. Fragment responses
 contain no scripts, bootstrap credentials or account markup.
@@ -535,7 +536,7 @@ Screenshots after a space switch: [desktop](screenshots/Exh-xw54/01-space-switch
 and [phone](screenshots/Exh-xw54/02-space-switch-phone.png).
 
 **Gallery destinations** (Exh-77m9): `gallerySpaces` renders **Starred,
-Search, Shared, Activity** in the 208px desktop rail and fixed phone tab bar.
+Search, Shared, Activity** in the 240px desktop rail and fixed phone tab bar.
 All four remain available when empty. Phone tabs preserve safe-area clearance,
 large-text wrapping, and scroll-chrome behavior. Navigation keeps the app header
 and account island mounted and uses the existing htmx history boundary.

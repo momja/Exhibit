@@ -46,21 +46,28 @@
 
 	/* Neutrals used for small text clear 4.5:1 on panel, ground, subtle
 	 * and hover surfaces. Faint is also text (optional-field hints). */
-	--color-ink:#111;             /* primary text */
-	--color-ink-soft:#333;        /* headings, strong secondary text */
-	--color-ink-mid:#555;         /* body copy that steps back */
-	--color-muted:#656565;        /* metadata, secondary text */
-	--color-label:#626975;        /* small-caps field and column labels */
-	--color-faint:#656565;        /* empty-state glyphs, optional-field hints */
-	--color-placeholder:#656565;  /* field placeholders */
-	--color-ground:#f0f0f0;       /* page background */
+	--color-ink:#17202e;             /* primary text */
+	--color-ink-soft:#303a49;        /* headings, strong secondary text */
+	--color-ink-mid:#475569;      /* body copy that steps back */
+	--color-muted:#5d6878;        /* metadata, secondary text */
+	--color-label:#526174;        /* field and column labels */
+	--color-faint:#5d6878;        /* empty-state glyphs, optional-field hints */
+	--color-placeholder:#5d6878;  /* field placeholders */
+	--color-ground:#f5f6f8;       /* page background */
 	--color-panel:#fff;           /* cards, header, modals */
-	--color-subtle:#f8f8f8;       /* a well inside a panel (scan results, chips) */
-	--color-hairline:#e0e0e0;     /* panel dividers */
-	--color-hairline-strong:#d9d9d9; /* header underline */
-	--color-border:#ddd;          /* control borders */
-	--color-card-border:#cfcfcf;  /* the gallery's flat cards */
-	--color-hover-fill:#e8e8e8;   /* pill behind a hovered icon control */
+	--color-subtle:#f7f8fa;       /* a well inside a panel (scan results, chips) */
+	--color-hairline:#e1e7ef;     /* panel dividers */
+	--color-hairline-strong:#d5deea; /* header underline */
+	--color-border:#d3d9e2;         /* quiet secondary boundaries */
+	--color-field-border:#8792a2;  /* inputs retain at least 3:1 */
+	--color-field:#fff;
+	--color-code-muted:#5e6877;
+	/* The active line sits above CodeMirror's selection layer. */
+	--color-code-active:rgba(240,243,248,.25);
+	--color-code-selection:#dbe7fb; /* primary text selection */
+	--color-code-match:rgba(35,85,158,.08); /* secondary occurrences */
+	--color-card-border:#dce0e6;  /* the gallery's flat cards */
+	--color-hover-fill:#e8eef6;   /* pill behind a hovered icon control */
 	--color-press-fill:rgba(0,0,0,.12); /* a pressed control on a tinted chip */
 	--color-code-on-tint:#fff3;   /* inline code inside a tinted banner */
 	--color-on-accent-edge:rgba(255,255,255,.5); /* an edge drawn on an accent fill */
@@ -75,8 +82,8 @@
 	--color-slate-rule:#d6dae0;
 
 	/* feedback */
-	--color-danger:#c00;
-	--color-danger-hover:#a00;
+	--color-danger:#b42318;
+	--color-danger-hover:#912018;
 	--color-on-danger:#fff;
 	--color-danger-tint:#fee;          /* error notices */
 	--color-danger-tint-border:#fbb;
@@ -117,11 +124,23 @@
 	 * iOS zooms in on focusing a field under 16px and does not zoom back out
 	 * (av-3qmf). The -code- variant is the monospace fields. */
 	--field-font-size:.875rem;
-	--field-code-font-size:.75rem;
+	--field-code-font-size:.8125rem;
 
 	/* Scoped mobile prose: opt in without enlarging icons or source code. */
 	--text-primary:1rem;
 	--text-secondary:.875rem;
+
+	--control-height:44px;
+	--control-height-sm:36px;
+
+	/* Shared reading and page-frame roles. Metadata may retain small caps;
+	 * editable-field labels and helpers use the same grammar on every page. */
+	--text-label:.8125rem;
+	--text-helper:.8125rem;
+	--line-helper:1.5;
+	--page-title-size:1.625rem;
+	--page-top:24px;
+	--page-gutter:24px;
 
 	/* spacing scale */
 	--space-1:4px;
@@ -134,10 +153,10 @@
 	--space-8:24px;
 
 	/* One app bar height on every page, so navigation never shifts content.
-	 * Small because the artifact page should give the artifact the room. */
-	--header-height:37px;
+	 * The full-canvas viewer uses its separate floating variant. */
+	--header-height:56px;
 	/* Square controls in the bar; smaller than it so they don't touch its edges. */
-	--header-control-size:32px;
+	--header-control-size:44px;
 
 	/* radii */
 	--radius-sm:3px;   /* inline code, badges */
@@ -145,6 +164,11 @@
 	--radius-lg:10px;  /* cards, modals */
 	--radius-pill:999px;
 }
+
+@media(max-width:767px){
+	:root{--text-label:.875rem;--text-helper:.875rem;--page-top:28px;--page-gutter:16px}
+}
+@media(max-width:360px){:root{--page-gutter:12px}}
 
 /* 16px is the exact threshold WebKit uses, so this removes the reason for the
  * zoom rather than disabling zooming. Keyed on pointer, not width: a narrow
@@ -179,13 +203,19 @@
 		--color-muted:#9aa0a9;
 		--color-label:#979eaa;
 		--color-faint:#a0a6af;
-		--color-placeholder:#a0a6af;
+		--color-placeholder:#949eac;
 		--color-ground:#16181c;
 		--color-panel:#202328;
 		--color-subtle:#1a1d21;
 		--color-hairline:#2f333a;
 		--color-hairline-strong:#363b42;
-		--color-border:#41464f;
+		--color-border:#3e4652;
+		--color-field-border:#647083;
+		--color-field:#1a1d21;
+		--color-code-muted:#a4aebd;
+		--color-code-active:rgba(35,43,54,.25);
+		--color-code-selection:#27364a;
+		--color-code-match:rgba(126,170,240,.08);
 		--color-card-border:#363b42;
 		--color-hover-fill:#2e3239;
 		--color-press-fill:rgba(255,255,255,.14);
@@ -221,11 +251,11 @@
 		--color-note-tint:#2b2619;
 		--color-note-ink:#d8c38f;
 
-		--tile-face-top:30% 23%;
-		--tile-face-bottom:32% 17%;
-		--tile-mono-fill:30% 32% / .55;
+		--tile-face-top:16% 21%;
+		--tile-face-bottom:14% 17%;
+		--tile-mono-fill:25% 28% / .6;
 		--tile-mono-shadow:0% 0% / .35;
-		--tile-mono-ink:60% 80%;
+		--tile-mono-ink:45% 80%;
 
 		--shadow-header:0 1px 6px rgba(0,0,0,.4);
 		--shadow-card:0 1px 3px rgba(0,0,0,.4);

@@ -41,7 +41,7 @@ const files = [
   // each installs it at load.
   "network-prompt.js",
   "edit.css", "edit.js", "state.js", "state-operations.js", "state-export.js", "assets.js", "assets-export.js", "storage-import.js", "download.js", "versions.js",
-  "tags.js",
+  "tags.js", "color-picker-controller.js", "capability-popover-controller.js",
   "notfound.css", "notfound.js",
   // The account-settings surfaces: av-utap's /admin/users and av-qo05's
   // /profile. settings.css is named for the surface rather than for either

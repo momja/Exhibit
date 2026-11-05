@@ -29,6 +29,7 @@ async function loadTags({ responses = [], initial = {}, confirmed = true } = {})
   });
   page.byId('tags-panel').querySelector = selector => page.byId(selector.slice(1));
   nativeDialog(page, page.byId('tag-edit-modal'), ['tag-edit-save', 'tag-edit-delete', 'tag-edit-cancel'].map(page.byId));
+  page.byId('tag-edit-modal').querySelector = selector => selector === '[data-controller~=color-picker]' ? page.byId('tag-edit-colors') : null;
   page.window.apiFetch = api.apiFetch;
   await page.loadModule(TAGS_JS);
   page.window.location.reload = () => { reloads++; };

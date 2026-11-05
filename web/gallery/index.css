@@ -3,9 +3,9 @@
  * --brand-blue) and components.css (shared .btn/.card/.field/... classes);
  * only index-page-specific rules live here.
  *
- * Layout follows the paper-canvas frame 01-tight (av-uvc6): search in the app
- * bar, a full-width grid of flat cards with 6px gaps, and one meta row under
- * each tile. */
+ * Shared surfaces, stable card actions and readable spacing frame the tools;
+ * the gallery's desktop rail becomes bottom navigation on phones.
+ */
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(--color-ink);min-height:100vh}
 #gallery-search-region{display:contents}
@@ -15,7 +15,7 @@ body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(-
  * defaults to min-width:auto, and an input's intrinsic width is ~229px, so
  * without it the box will not shrink in a narrow window. */
 .search-row{position:relative;display:flex;align-items:center;flex:0 1 340px;min-width:0}
-.search-row .search-icon{position:absolute;left:9px;color:var(--color-muted);font-size:14px;pointer-events:none}
+.search-row .search-icon{position:absolute;left:9px;color:var(--color-muted);font-size:0.875rem;pointer-events:none}
 .search-row input{flex:1;min-width:0;height:var(--header-control-size);padding:0 30px 0 29px;border:1px solid var(--color-border);border-radius:var(--radius-md);font-size:var(--field-font-size);outline:none;background:var(--color-panel);color:var(--color-ink)}
 .search-row input:focus{border-color:var(--brand-blue)}
 /* The `/` key cap (av-6mdw) sits inside the box's right edge while the box is
@@ -29,36 +29,30 @@ body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(-
 @media (pointer:coarse),(max-width:767px){.search-kbd{display:none}}
 /* The clear control sits inside the box's right edge, where it takes no room
  * from the input when there is nothing to clear. */
-.search-clear{position:absolute;right:4px;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border:0;border-radius:var(--radius-pill);background:none;color:var(--color-muted);font-size:13px;cursor:pointer}
+.search-clear{position:absolute;right:4px;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border:0;border-radius:var(--radius-pill);background:none;color:var(--color-muted);font-size:0.8125rem;cursor:pointer}
 .search-clear:hover{background:var(--color-hover-fill);color:var(--color-ink)}
 .search-clear[hidden]{display:none!important}
 
-main{padding:10px 12px}
+main{padding:var(--page-top) var(--page-gutter)}
 /* min() inside the minmax: a bare 226px is a floor even when the container is
  * narrower, pushing the grid past the viewport in a small window. */
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(226px,100%),1fr));gap:6px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(226px,100%),1fr));gap:16px}
 .gallery-more{grid-column:1/-1;display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px 0}
-.gallery-loading{display:none;color:var(--color-muted);font-size:14px}
+.gallery-loading{display:none;color:var(--color-muted);font-size:0.875rem}
 .gallery-more:has(.htmx-request) .gallery-loading{display:block}
-.gallery-error{color:var(--color-muted);font-size:14px;padding:8px 0}
+.gallery-error{color:var(--color-muted);font-size:0.875rem;padding:8px 0}
 .gallery-error[hidden]{display:none}
 
-/* The card is flat: a 1px border and a 2px radius instead of components.css's
- * rounded, shadowed, padded surface. Everything inside it bleeds to that
- * border, so the widget well drops the negative margins it uses to escape a
- * padded card.
- *
- * No overflow:hidden. The capability popover drops out of the card's bottom
- * edge, and clipping the card would clip it. The tile rounds its own top
- * corners instead. position:relative is what the popover anchors to (below). */
-.card{position:relative;display:flex;flex-direction:column;padding:0;border:1px solid var(--color-card-border);border-radius:2px;box-shadow:none;cursor:pointer}
+/* Cards use the shared surface language. Keep overflow visible so action
+ * menus and capability popovers can extend beyond their card. */
+.card{position:relative;display:flex;flex-direction:column;padding:0;border:1px solid var(--color-card-border);border-radius:var(--radius-lg);box-shadow:var(--shadow-card);cursor:pointer}
 .card:hover,.card:focus-within{border-color:var(--brand-blue);box-shadow:0 0 0 1px var(--brand-blue)}
-.card .card-widget{margin:0;border-radius:1px 1px 0 0;border-bottom-color:var(--color-hairline)}
+.card .card-widget{margin:0;border-radius:calc(var(--radius-lg) - 1px) calc(var(--radius-lg) - 1px) 0 0;border-bottom-color:var(--color-hairline)}
 
 /* Keep the compact desktop row, but let it grow with enlarged text or
  * taller metadata controls. Mobile titles wrap below. */
-.card-meta{display:flex;align-items:center;gap:6px;min-height:26px;padding:0 8px;min-width:0}
-.card-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.78125rem;font-weight:600;color:var(--color-ink);text-decoration:none}
+.card-meta{display:flex;align-items:center;gap:6px;min-height:48px;padding:4px 12px;min-width:0}
+.card-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:normal;overflow-wrap:anywhere;font-size:.875rem;line-height:1.45;font-weight:600;color:var(--color-ink);text-decoration:none}
 .card:hover .card-title,.card:focus-within .card-title{color:var(--brand-blue)}
 .card-title:hover{text-decoration:underline}
 
@@ -69,28 +63,21 @@ main{padding:10px 12px}
 .tag-dot-item{display:flex;align-items:center;justify-content:center;width:9px;height:14px}
 .tag-dot-item::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--tag-color,var(--color-muted));box-shadow:inset 0 0 0 1px var(--color-tag-ring)}
 
-/* The posture/sharing trigger on a card: smaller glyphs than the detail
- * toolbar's, and its popover anchors to the card rather than to the trigger.
- * A trigger sits near a card's right edge, and a 260px popover hung off it
- * would run out of the first column's card and off the window. Spanning the
- * card instead keeps it on screen at every column width, phone included. */
+/* Card posture controls remain compact; the shared fixed receipt can exceed
+ * card width while its controller fits/flips it within the viewport. */
 .card .capability-wrap{position:static;flex:0 0 auto}
-.card .capability-cluster{gap:4px;padding:3px 6px;margin:-3px -6px}
-.card .capability-cluster .capability-glyph{font-size:13px}
-.card .capability-cluster .capability-count{font-size:10.5px;margin-left:-2px}
-.card .capability-popover{left:-1px;right:-1px;width:auto;max-width:none;margin-top:4px;cursor:default}
+.card .capability-cluster{gap:4px;min-width:32px;min-height:32px;justify-content:center;padding:3px 6px;margin:0}
+.card .capability-cluster .capability-glyph{font-size:0.8125rem}
+.card .capability-cluster .capability-count{font-size:0.65625rem;margin-left:-2px}
+.card .capability-popover{cursor:default}
 
-/* The action trigger stays reachable by keyboard and touch. The wrapper
- * collapses at rest without clipping its menu or removing the button. */
-.card-actions{position:relative;flex:0 0 auto;display:inline-flex;width:1px;height:20px;margin-left:-6px}
-.card-actions-trigger{display:inline-flex;align-items:center;justify-content:center;width:100%;min-width:0;height:20px;padding:0;overflow:hidden;border:0;border-radius:var(--radius-pill);background:none;color:var(--brand-blue);font-size:15px;cursor:pointer;opacity:0}
-.card:hover .card-actions,.card:focus-within .card-actions,.card-actions.is-open{width:22px;margin:0 -4px 0 -2px}
-.card:hover .card-actions-trigger,.card:focus-within .card-actions-trigger,.card-actions.is-open .card-actions-trigger{opacity:1}
-.card-actions-trigger:hover,.card-actions-trigger:focus-visible,.card-actions-trigger[aria-expanded=true]{background:var(--color-hover-fill)}
+/* Actions have a stable, visible target. Hover never moves the title. */
+.card-actions{position:relative;flex:0 0 32px;display:inline-flex;width:32px;height:32px}
+.card-actions-trigger{display:inline-flex;align-items:center;justify-content:center;width:100%;height:32px;min-height:32px;padding:0;border:0;border-radius:var(--radius-md);background:none;color:var(--color-muted);font-size:1.125rem;cursor:pointer}
+.card-actions-trigger:hover,.card-actions-trigger:focus-visible,.card-actions-trigger[aria-expanded=true]{background:var(--color-accent-tint);color:var(--color-accent)}
 .card-actions-trigger i{line-height:1}
-.card-actions-menu{position:absolute;right:0;top:auto;bottom:calc(100% + 6px);width:180px;max-width:calc(100vw - 32px);z-index:40}
+.card-actions-menu{position:absolute;right:0;top:auto;bottom:calc(100% + 6px);width:200px;max-width:calc(100vw - 32px);z-index:40}
 .card:has(.card-actions.is-open){z-index:31}
-@media (hover:none),(pointer:coarse){.card-actions{width:22px;margin:0 -4px 0 -2px}.card-actions-trigger{opacity:1}}
 
 /* Real, separate hit boxes: no negative margins extending a control over
  * the title or the card's delegated open action. Keep desktop tiles dense. */
@@ -101,13 +88,13 @@ main{padding:10px 12px}
   .card .capability-cluster{min-width:44px;min-height:44px;justify-content:center;flex-wrap:wrap;max-width:100%;padding:4px 6px;margin:0}
   .card .capability-wrap{max-width:100%}
   .card-actions,.card:hover .card-actions,.card:focus-within .card-actions,.card-actions.is-open{width:44px;height:44px;margin:0}
-  .card-actions-trigger{height:44px;opacity:1}
+  .card-actions-trigger{height:44px;min-height:44px;opacity:1}
   .card-actions-menu a,.card-actions-menu button{min-height:44px}
   .card .capability-popover-manage{min-height:44px;display:flex;align-items:center}
   .gallery-filter-sheet .icon-btn{width:44px;height:44px}
 }
 
-.empty{color:var(--color-muted);font-size:14px;padding:20px 0}
+.empty{color:var(--color-muted);font-size:0.875rem;padding:20px 0}
 .empty a{color:var(--brand-blue)}
 
 /* A first artifact deserves more than a missing-results message. The welcome
@@ -116,12 +103,12 @@ main{padding:10px 12px}
 .welcome-art{position:relative;width:340px;max-width:100%;height:200px;margin-bottom:32px;isolation:isolate}
 .welcome-art::before{content:"";position:absolute;inset:12px -24px -16px;border-radius:50%;background:radial-gradient(ellipse,var(--color-accent-tint-strong),transparent 70%);z-index:-1}
 .welcome-tool{position:absolute;width:136px;height:154px;display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding:16px;border:1px solid var(--color-accent-tint-border);border-radius:12px;background:var(--color-panel);box-shadow:var(--shadow-card);color:var(--color-accent);text-align:left}
-.welcome-tool>i{font-size:24px}
-.welcome-tool-timer>i{align-self:center;font-size:64px}
+.welcome-tool>i{font-size:1.5rem}
+.welcome-tool-timer>i{align-self:center;font-size:4rem}
 .welcome-tool-list{left:0;top:28px;transform:rotate(-12deg)}
 .welcome-tool-timer{justify-content:center;left:50%;top:4px;transform:translateX(-50%);z-index:1;height:174px;background:var(--color-accent-tint)}
 .welcome-tool-chart{align-items:flex-end;right:0;top:28px;transform:rotate(12deg)}
-.welcome-checks{display:grid;grid-template-columns:14px 1fr;gap:7px;align-items:center;width:100%;font-size:14px}
+.welcome-checks{display:grid;grid-template-columns:14px 1fr;gap:7px;align-items:center;width:100%;font-size:0.875rem}
 .welcome-checks>span{height:4px;border-radius:var(--radius-pill);background:var(--color-accent-tint-strong)}
 .welcome-checks>span:last-child{width:65%}
 .welcome-progress{width:100%;height:4px;border-radius:var(--radius-pill);background:var(--color-accent-tint-border);overflow:hidden}
@@ -132,10 +119,10 @@ main{padding:10px 12px}
 .welcome-bars>span:nth-child(3){height:48%}
 .welcome-bars>span:nth-child(4){height:78%}
 .welcome-bars>span:nth-child(5){height:100%;background:var(--color-accent)}
-.welcome-eyebrow{color:var(--color-accent);font-size:12px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;margin-bottom:12px}
-.welcome-create{justify-content:center;gap:10px;min-height:48px;margin-top:28px;padding:12px 20px;text-decoration:none;font-size:15px}
+.welcome-eyebrow{color:var(--color-accent);font-size:0.75rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;margin-bottom:12px}
+.welcome-create{justify-content:center;gap:10px;min-height:48px;margin-top:28px;padding:12px 20px;text-decoration:none;font-size:0.9375rem}
 .welcome-create:focus-visible{outline:2px solid var(--color-accent);outline-offset:4px}
-.welcome-create .ph{font-size:18px}
+.welcome-create .ph{font-size:1.125rem}
 @media(max-width:480px){
   .gallery-welcome{padding:36px 12px}
   .welcome-art{width:280px;height:180px;margin-bottom:24px}
@@ -166,24 +153,40 @@ main{padding:10px 12px}
   }
 }
 
-.gallery-title{font-size:18px;font-weight:600;margin:6px 0 16px}
-.card-by{display:flex;align-items:center;gap:6px;padding:0 8px 7px;font-size:12px;color:var(--color-muted);min-width:0}
-.card-owner-initial{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:var(--color-subtle);color:var(--color-ink-mid);font-size:10px}
+.gallery-overview{margin-bottom:24px}
+.gallery-title{font-size:var(--page-title-size);line-height:1.25;letter-spacing:-.025em;font-weight:650;overflow-wrap:anywhere}
+.gallery-description{margin-top:6px;color:var(--color-muted);font-size:.875rem;line-height:1.5}
+.gallery-empty{grid-column:1/-1;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;padding:56px 20px;background:var(--color-panel);border:1px dashed var(--color-card-border);border-radius:var(--radius-lg)}
+.gallery-empty>i{display:grid;place-items:center;width:52px;height:52px;border-radius:var(--radius-lg);background:var(--color-accent-tint);color:var(--color-accent);font-size:1.625rem}
+.gallery-empty .empty{padding:0;font-size:1rem;font-weight:600;color:var(--color-ink-soft);overflow-wrap:anywhere}
+.gallery-empty .empty-hint{max-width:40ch;color:var(--color-muted);font-size:.875rem;line-height:1.6}
+.gallery-search-feedback{display:none;margin-bottom:12px;font-size:.875rem;color:var(--color-muted)}
+#gallery-shell:has(.search-row.htmx-request) .gallery-search-feedback{display:block}
+@media(max-width:767px){
+  .gallery-overview{margin:0 0 24px}
+  .gallery-title{font-size:var(--page-title-size)}
+  .gallery-description{font-size:var(--text-secondary)}
+  .grid{gap:12px}
+  .gallery-empty{padding:40px 16px}
+}
+.card-by{display:flex;align-items:center;gap:6px;padding:0 8px 7px;font-size:0.75rem;color:var(--color-muted);min-width:0}
+.card-owner-initial{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:var(--color-subtle);color:var(--color-ink-mid);font-size:0.625rem}
 .card-owner-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* Gallery spaces stay available even when sharing has no content. The aside is separate
- * from the nav so future filter sections can sit underneath it. */
-.gallery-layout{display:grid;grid-template-columns:208px minmax(0,1fr);min-height:calc(100vh - var(--header-height))}
+ * from the nav so future filter sections can sit underneath it. The rail leaves
+ * room for a bold destination label and counts without reflow on activation. */
+.gallery-layout{display:grid;grid-template-columns:240px minmax(0,1fr);min-height:calc(100vh - var(--header-height))}
 .gallery-layout main{min-width:0}
-.gallery-rail{padding:10px 8px;border-right:1px solid var(--color-hairline-strong);background:var(--color-panel)}
+.gallery-rail{padding:20px 12px;border-right:1px solid var(--color-hairline-strong);background:var(--color-panel)}
 .gallery-spaces ul{display:flex;flex-direction:column;gap:4px;list-style:none}
-.gallery-spaces a{display:flex;align-items:center;gap:6px;min-height:44px;padding:8px;border-radius:var(--radius-md);color:var(--color-ink-mid);text-decoration:none;font-size:13px;line-height:20px}
+.gallery-spaces a{display:flex;align-items:center;gap:10px;min-height:44px;padding:8px;border-radius:var(--radius-md);color:var(--color-ink-mid);text-decoration:none;font-size:0.875rem;line-height:20px}
 .gallery-spaces a:hover{background:var(--color-hover-fill)}
 .gallery-spaces a[aria-current=page]{background:var(--color-accent-tint);color:var(--color-accent);font-weight:600}
 .gallery-spaces a:focus-visible{outline:2px solid var(--color-accent);outline-offset:2px}
-.gallery-spaces i{flex:0 0 auto;font-size:20px;line-height:1}
-.space-label{min-width:0;overflow-wrap:anywhere;line-height:1.333333}
-.space-count{flex:0 0 auto;margin-left:auto;font-size:12px;font-variant-numeric:tabular-nums}
+.gallery-spaces i{flex:0 0 auto;font-size:1.25rem;line-height:1}
+.space-label{min-width:0;text-wrap:balance;overflow-wrap:anywhere;line-height:1.333333}
+.space-count{flex:0 0 auto;margin-left:auto;font-size:0.75rem;font-variant-numeric:tabular-nums}
 
 /* Phone tabs are fixed, not sticky: a sticky bar is held inside the layout and
  * rides up with the content when iOS overscrolls past the end of the page.
@@ -193,7 +196,7 @@ main{padding:10px 12px}
  * bar, for the frame before the controller measures. */
 @media (max-width:767px){
   .gallery-layout{display:flex;flex-direction:column}
-  .gallery-layout main{flex:1;padding-bottom:calc(12px + var(--space-tabs-height,calc(53px + env(safe-area-inset-bottom,0px))));padding-left:max(12px,env(safe-area-inset-left,0px));padding-right:max(12px,env(safe-area-inset-right,0px))}
+  .gallery-layout main{flex:1;padding-bottom:calc(12px + var(--space-tabs-height,calc(53px + env(safe-area-inset-bottom,0px))));padding-left:max(var(--page-gutter),env(safe-area-inset-left,0px));padding-right:max(var(--page-gutter),env(safe-area-inset-right,0px))}
   .gallery-rail{position:fixed;left:0;right:0;bottom:0;z-index:30;border-right:0;border-top:1px solid var(--color-hairline-strong);padding:4px max(8px,env(safe-area-inset-right,0px)) calc(4px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px))}
   .gallery-spaces ul{flex-direction:row;gap:8px}
   .gallery-spaces li{display:flex;flex:1;min-width:0}
@@ -221,19 +224,23 @@ main{padding:10px 12px}
 /* Filters share server markup in the rail and native phone dialog. */
 .gallery-filter-trigger{display:none}
 .gallery-filter-section{margin:20px 0 12px}
-.gallery-filter-section h3{padding:0 8px 6px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--color-muted)}
+.gallery-filter-section h3{padding:0 8px 6px;font-size:0.6875rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--color-muted)}
 .gallery-filter-section ul{list-style:none}
-.gallery-filter-section a{display:flex;align-items:center;gap:8px;min-height:44px;padding:8px;border-radius:var(--radius-md);color:var(--color-ink-mid);text-decoration:none;font-size:13px}
+.gallery-filter-section a{display:flex;align-items:center;gap:8px;min-height:44px;padding:8px;border-radius:var(--radius-md);color:var(--color-ink-mid);text-decoration:none;font-size:0.8125rem}
 .gallery-filter-section a:hover{background:var(--color-hover-fill)}
 .gallery-filter-section a[data-active=true]{background:var(--color-accent-tint);color:var(--color-accent)}
 .gallery-filter-section a>span:not(.gallery-filter-dot){min-width:0;overflow-wrap:anywhere}
 .gallery-filter-section i{margin-left:auto}
 .gallery-filter-dot{width:8px;height:8px;flex:0 0 auto;border-radius:50%;background:var(--tag-color);box-shadow:inset 0 0 0 1px var(--color-tag-ring)}
 .gallery-filter-chips{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:2px 0 10px}
-.gallery-filter-chips a{display:inline-flex;align-items:center;gap:8px;min-height:36px;padding:6px 10px;border:1px solid var(--color-border);border-radius:var(--radius-pill);background:var(--color-panel);color:var(--color-ink-mid);font-size:12px;text-decoration:none}
+.gallery-filter-chips a{display:inline-flex;align-items:center;gap:8px;min-height:36px;padding:6px 10px;border:1px solid var(--color-border);border-radius:var(--radius-pill);background:var(--color-panel);color:var(--color-ink-mid);font-size:0.75rem;text-decoration:none}
 .gallery-filter-chips .gallery-filter-clear{border:0;background:none;color:var(--color-accent)}
 .gallery-filter-section a:focus-visible,.gallery-filter-chips a:focus-visible{outline:2px solid var(--color-accent);outline-offset:2px}
-.gallery-filter-sheet{margin:auto auto 0;width:100%;max-width:560px;max-height:85dvh;overflow:auto;padding-bottom:calc(22px + env(safe-area-inset-bottom,0px));border-radius:var(--radius-lg) var(--radius-lg) 0 0}
+.gallery-filter-sheet.modal-sheet{margin:auto auto 0;width:560px;max-width:100%;padding:0;border-radius:var(--radius-lg) var(--radius-lg) 0 0}
+.gallery-filter-sheet.modal-sheet[open]{max-height:85dvh}
+.gallery-filter-sheet .gallery-filter-section{margin:0 0 20px}
+.gallery-filter-sheet .gallery-filter-section:last-child{margin-bottom:0}
+.gallery-filter-sheet .gallery-filter-section :is(a,h3){padding-left:0;padding-right:0}
 .gallery-filter-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .gallery-filter-done{width:100%}
 @media (max-width:767px){
@@ -244,16 +251,12 @@ main{padding:10px 12px}
   .app-header .gallery-filter-trigger{width:44px;justify-content:center;padding:0}
   .gallery-filter-trigger span{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
   .app-header:has(.search-row)>.spacer{display:none}
-  #gallery-shell:has(.gallery-filter-trigger)>.app-header,#gallery-shell:has(.gallery-filter-trigger)>.app-header .app-header-actions{gap:8px}
   .gallery-rail-filters{display:none}
   .gallery-layout-solo>.gallery-rail{display:none}
   .gallery-layout-solo main{padding-bottom:12px}
   .gallery-filter-chips a{min-height:44px}
 }
 
-@media (max-width:360px){
-  #gallery-shell:has(.gallery-filter-trigger)>.app-header,#gallery-shell:has(.gallery-filter-trigger)>.app-header .app-header-actions{gap:4px}
-}
 
 /* Primary names remain readable in a narrow card, including unbroken names.
  * No line clamp or fixed row height: metadata controls may grow independently. */
@@ -276,7 +279,8 @@ main{padding:10px 12px}
 
 /* Each destination owns its heading and page-level tools. */
 .gallery-description{color:var(--color-muted);font-size:var(--text-secondary);line-height:1.5;margin:-6px 0 20px;max-width:60ch}
-.card-star{color:var(--color-accent);font-size:14px;flex:none}
+.card-star{display:inline-flex;align-items:center;align-self:flex-start;height:32px;color:var(--color-accent);font-size:14px;flex:none}
+@media(max-width:767px){.card-star{height:44px}}
 .empty{grid-column:1/-1;line-height:1.6;max-width:60ch}
 .activity-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;max-width:880px;margin:24px 0 12px}
 .activity-toolbar h3,.activity-heading{font-size:var(--text-secondary);font-weight:600}
@@ -310,3 +314,25 @@ main{padding:10px 12px}
   .activity-detail h4{overflow-wrap:anywhere}
   .activity-placeholder{padding:12px}
 }
+@media(max-width:767px){.card-actions{flex-basis:44px}}
+
+@media(min-width:768px){
+  .card-meta{min-height:62px;padding:10px 12px;align-items:flex-start}
+  .card-title{min-height:2.9em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+}
+.card-owner-initial{background:var(--color-accent-tint);color:var(--color-accent)}
+@media(max-width:767px){
+  .gallery-spaces a{justify-content:flex-start}
+  .gallery-spaces .space-label{min-height:2.666667em}
+  .gallery-page-search .search-clear{position:absolute;right:0;top:0;margin:0;width:44px;height:44px}
+  .gallery-page-search .search-row input{padding-right:52px}
+}
+
+.gallery-empty .empty-hint{text-wrap:balance}
+@media(min-width:768px){
+  .card-title{padding-top:5px}
+  .card .tag-dots{height:32px}
+  .card .capability-cluster{min-height:32px;padding:0 4px;margin:0}
+  .card-by{padding-left:12px;padding-right:12px}
+}
+@media(max-width:767px){.gallery-empty .btn{min-height:44px}}

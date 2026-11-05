@@ -156,19 +156,19 @@ func TestNewPageModeSwitchBrowser(t *testing.T) {
 			run(chromedp.KeyEvent(kb.Enter), chromedp.WaitVisible(chromedp.CSS(`.cm-editor`)))
 			check(`document.activeElement.dataset.mode === 'paste' && document.querySelector('#snapshot-row').hidden && document.querySelector('#url-field').hidden`)
 			run(chromedp.Click(chromedp.CSS(`#ingest-panel .ingest-foot button`)))
-			check(`document.querySelector('#status').textContent === 'Paste HTML first.'`)
+			check(`document.querySelector('#body-error').textContent === 'Paste HTML first.' && !document.querySelector('#body-error').hidden && document.activeElement.getAttribute('aria-label') === 'HTML source'`)
 			run(chromedp.SendKeys(chromedp.CSS(`#title`), "Saved source"), chromedp.SendKeys(chromedp.CSS(`.cm-content`), "Preserved source"),
 				chromedp.Evaluate[chromedp.Void](`window.originalEditor = document.querySelector('.cm-editor')`),
 				chromedp.Focus(chromedp.CSS(`[data-mode="paste"]`)), chromedp.KeyEvent(kb.Tab), chromedp.KeyEvent(" "))
 			check(`document.activeElement.dataset.mode === 'url' && !document.querySelector('#snapshot-row').hidden && document.querySelector('#source-field').hidden`)
 			run(chromedp.Click(chromedp.CSS(`#ingest-panel .ingest-foot button`)))
-			check(`document.querySelector('#status').textContent === 'Enter a URL first.'`)
+			check(`document.querySelector('#url-input-error').textContent === 'Enter a URL first.' && !document.querySelector('#url-input-error').hidden && document.activeElement.id === 'url-input'`)
 			run(chromedp.SendKeys(chromedp.CSS(`#url-input`), "https://example.test/tool.html"), chromedp.Click(chromedp.CSS(`#snapshot-toggle`)),
 				chromedp.Click(chromedp.CSS(`[data-mode="agent"]`)))
 			check(`document.querySelector('#agent-title').value === 'Session timer' && document.querySelector('#agent-description').value === 'Keep my session time'`)
 			run(chromedp.Click(chromedp.CSS(`[data-mode="paste"]`)))
 			check(`document.querySelector('.cm-editor') === originalEditor && document.querySelectorAll('.cm-editor').length === 1 && document.querySelector('#body').value === 'Preserved source' && document.querySelector('#title').value === 'Saved source'`)
-			run(chromedp.Click(chromedp.CSS(`#ingest-panel .ingest-foot button`)), chromedp.Poll[chromedp.Void](`document.querySelector('#status').textContent === 'Error: Test ingest refusal'`))
+			run(chromedp.Click(chromedp.CSS(`#ingest-panel .ingest-foot button`)), chromedp.Poll[chromedp.Void](`document.querySelector('#status').textContent === 'Couldn’t add the artifact: Test ingest refusal'`))
 			select {
 			case payload := <-payloads:
 				require.Equal(t, "Preserved source", payload["body"])
@@ -179,7 +179,7 @@ func TestNewPageModeSwitchBrowser(t *testing.T) {
 			}
 			run(chromedp.Click(chromedp.CSS(`[data-mode="url"]`)))
 			check(`document.querySelector('#url-input').value === 'https://example.test/tool.html' && !document.querySelector('#snapshot-toggle').checked`)
-			run(chromedp.Click(chromedp.CSS(`#ingest-panel .ingest-foot button`)), chromedp.Poll[chromedp.Void](`document.querySelector('#status').textContent === 'Error: Test ingest refusal'`))
+			run(chromedp.Click(chromedp.CSS(`#ingest-panel .ingest-foot button`)), chromedp.Poll[chromedp.Void](`document.querySelector('#status').textContent === 'Couldn’t add the artifact: Test ingest refusal'`))
 			select {
 			case payload := <-payloads:
 				require.Equal(t, "https://example.test/tool.html", payload["url"])

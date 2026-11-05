@@ -37,6 +37,7 @@ ph-dots-three-vertical
 ph-download-simple
 ph-upload-simple
 ph-eye
+ph-floppy-disk
 ph-frame-corners
 ph-gear
 ph-globe
@@ -87,3 +88,6 @@ ph-plus-circle
 
 # Personal artifact shortcuts
 ph-star
+
+# Saved-data sharing note
+ph-info

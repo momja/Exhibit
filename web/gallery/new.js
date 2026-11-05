@@ -1,3 +1,5 @@
+import { apiFetch } from './api-module.js';
+
 /* Add-artifact (ingest) page script. Served from the app origin at
  * /assets/gallery/new.js. The page's inline bootstrap <script> defines the
  * per-request global this file reads before it loads:
@@ -16,7 +18,9 @@
  */
 
 let currentMode = 'agent';
-let pendingIngestArtifactId = '';
+window.pendingIngestArtifactId = '';
+let ingestPending = false;
+let createdArtifactId = '';
 
 // The CodeMirror island mounts the first time Paste HTML is selected, not at
 // load. The page no longer opens on paste, and an editor mounted inside a
@@ -34,6 +38,8 @@ function mountEditor() {
 // The route tiles are the page's mode switch: which panel is on screen and,
 // for the two ingest modes, what that panel asks for.
 function setMode(mode) {
+  if (ingestPending || createdArtifactId) return;
+  clearFeedback();
   currentMode = mode;
   document.querySelectorAll('.route[data-mode]').forEach(function(tile) {
     const on = tile.dataset.mode === mode;
@@ -74,7 +80,8 @@ const BRIEF_KEY = 'exhibit:agent-brief';
 function startAgent(event) {
   if (event) event.preventDefault();
   const description = document.getElementById('agent-description');
-  if (!description.value.trim()) { description.focus(); return; }
+  clearFeedback();
+  if (!description.value.trim()) { showFieldError(description, 'Describe what you want the tool to do.'); return; }
   const brief = {
     title: document.getElementById('agent-title').value.trim(),
     description: description.value.trim()
@@ -112,71 +119,117 @@ async function errorMessage(resp) {
   return text || resp.statusText || ('HTTP ' + resp.status);
 }
 
+function showFieldError(field, message) {
+  const error = document.getElementById(field.id + '-error');
+  error.textContent = message;
+  error.hidden = false;
+  field.setAttribute('aria-invalid', 'true');
+  const editable = field.nextElementSibling?.querySelector('.cm-content') || field;
+  editable.setAttribute('aria-invalid', 'true');
+  editable.focus();
+}
+
+function clearFeedback() {
+  for (const field of document.querySelectorAll('[aria-invalid]')) field.removeAttribute('aria-invalid');
+  for (const error of document.querySelectorAll('.field-error')) error.hidden = true;
+  const status = document.getElementById('status');
+  status.textContent = '';
+  status.classList.remove('is-error');
+}
+
+function showIngestError(message) {
+  const status = document.getElementById('status');
+  status.textContent = message;
+  status.classList.add('is-error');
+}
+
+function lockIngest(pending) {
+  ingestPending = pending;
+  const panel = document.getElementById('ingest-panel');
+  panel.setAttribute('aria-busy', String(pending));
+  for (const field of panel.querySelectorAll('.ingest-field input,.ingest-field textarea,#snapshot-toggle')) field.disabled = pending || !!createdArtifactId;
+  const source = panel.querySelector('.cm-content');
+  if (source) source.contentEditable = String(!pending && !createdArtifactId);
+  for (const control of panel.querySelectorAll('#network-approval button,#network-approval input')) control.disabled = pending;
+  for (const control of document.querySelectorAll('.route, #ingest-panel .ingest-foot button')) control.disabled = pending || !!createdArtifactId;
+}
+
 async function ingest() {
+  if (ingestPending || createdArtifactId) return;
+  clearFeedback();
   const title = document.getElementById('title').value.trim();
   const status = document.getElementById('status');
   const scanDiv = document.getElementById('scan-result');
-  status.textContent = 'Adding artifact…';
   scanDiv.style.display = 'none';
 
   let payload;
   if (currentMode === 'url') {
     const url = document.getElementById('url-input').value.trim();
-    if (!url) { status.textContent = 'Enter a URL first.'; return; }
+    if (!url) { showFieldError(document.getElementById('url-input'), 'Enter a URL first.'); return; }
+    try {
+      if (!['http:', 'https:'].includes(new URL(url).protocol)) throw new Error('protocol');
+    } catch { showFieldError(document.getElementById('url-input'), 'Enter a full http:// or https:// page URL.'); return; }
     const snapshot = document.getElementById('snapshot-toggle').checked;
-    if (snapshot) status.textContent = 'Fetching the page and its files…';
     payload = {title: title || '', url, snapshot, network_allowlist: []};
   } else {
     const body = document.getElementById('body').value.trim();
-    if (!body) { status.textContent = 'Paste HTML first.'; return; }
+    if (!body) { showFieldError(document.getElementById('body'), 'Paste HTML first.'); return; }
     payload = {title: title || 'Untitled', body, network_allowlist: []};
   }
 
-  let resp;
+  status.textContent = currentMode === 'url' && payload.snapshot
+    ? 'Fetching the page and its files…' : 'Adding artifact…';
+  lockIngest(true);
   try {
-    resp = await apiFetch('/api/artifacts', {
-      method: 'POST',
-      body: JSON.stringify(payload)
-    });
-  } catch (err) {
-    // The request never completed — offline, DNS, a dropped connection. Say so
-    // rather than leaving the last progress message on screen, which reads as a
-    // hang and is indistinguishable from a slow snapshot.
-    status.textContent = 'Couldn’t reach the server. Check your connection and try again.';
-    return;
-  }
+    let resp;
+    try {
+      resp = await apiFetch('/api/artifacts', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+    } catch (err) {
+      // The request never completed — offline, DNS, a dropped connection. Say so
+      // rather than leaving the last progress message on screen, which reads as a
+      // hang and is indistinguishable from a slow snapshot.
+      showIngestError('Couldn’t reach the server. Check your connection and try again.');
+      return;
+    }
 
-  // The failure branch has to come before parsing, and parsing has to tolerate
-  // a non-JSON body. The API's error path is http.Error, which writes plain
-  // text: calling resp.json() first threw on every failed ingest, and with
-  // nothing catching it the status stayed on 'Fetching page and snapshotting
-  // assets…' forever. A dead URL looked identical to a slow one.
-  if (!resp.ok) {
-    status.textContent = 'Couldn’t add the artifact: ' + (await errorMessage(resp));
-    return;
-  }
+    // The failure branch has to come before parsing, and parsing has to tolerate
+    // a non-JSON body. The API's error path is http.Error, which writes plain
+    // text: calling resp.json() first threw on every failed ingest, and with
+    // nothing catching it the status stayed on 'Fetching page and snapshotting
+    // assets…' forever. A dead URL looked identical to a slow one.
+    if (!resp.ok) {
+      showIngestError('Couldn’t add the artifact: ' + (await errorMessage(resp)));
+      return;
+    }
 
-  let data;
-  try {
-    data = await resp.json();
-  } catch (err) {
-    status.textContent = 'Couldn’t read the server’s response. Try again.';
-    return;
-  }
+    let data;
+    try {
+      data = await resp.json();
+    } catch (err) {
+      showIngestError('Couldn’t read the server’s response. Try again.');
+      return;
+    }
 
-  const id = data.artifact.id;
-  const footprint = data.network_footprint || [];
-  snapshotReportHTML = renderSnapshotReport(data.snapshot);
-  snapshotNeedsAttention = snapshotHasProblems(data.snapshot);
-  if (footprint.length > 0 || (data.network_warnings || []).length > 0) {
-    // The artifact is saved but network-blocked (CSP connect-src 'none').
-    // Pause here for explicit approval — nothing is added to the allowlist,
-    // and no origin gains network access, until the user decides.
-    status.textContent = 'Saved. Review network access before continuing.';
-    showApproval(id);
-    return;
+    const id = data.artifact.id;
+    createdArtifactId = id;
+    const footprint = data.network_footprint || [];
+    snapshotReportHTML = renderSnapshotReport(data.snapshot);
+    snapshotNeedsAttention = snapshotHasProblems(data.snapshot);
+    if (footprint.length > 0 || (data.network_warnings || []).length > 0) {
+      // The artifact is saved but network-blocked (CSP connect-src 'none').
+      // Pause here for explicit approval — nothing is added to the allowlist,
+      // and no origin gains network access, until the user decides.
+      status.textContent = 'Saved. Review network access before continuing.';
+      showApproval(id);
+      return;
+    }
+    finishIngest(id);
+  } finally {
+    lockIngest(false);
   }
-  finishIngest(id);
 }
 
 // The current ingest's snapshot report, kept so it stays on screen through the
@@ -244,7 +297,7 @@ function renderSnapshotReport(rep) {
 // The snapshot report, when one exists, is shown above the approval controls.
 function showApproval(id) {
   const scanDiv = document.getElementById('scan-result');
-  pendingIngestArtifactId = id;
+  window.pendingIngestArtifactId = id;
   scanDiv.style.display = 'block';
   document.getElementById('snapshot-report').innerHTML = snapshotReportHTML;
   document.body.dispatchEvent(new CustomEvent('exhibit:network-approval-changed'));
@@ -252,15 +305,24 @@ function showApproval(id) {
 
 // approveOrigins writes the user-selected origins to the artifact's allowlist.
 async function approveOrigins(id) {
+  if (ingestPending) return;
   const selected = Array.from(document.querySelectorAll('.al-origin:checked')).map(c => c.value);
   const status = document.getElementById('status');
+  status.classList.remove('is-error');
   status.textContent = 'Applying…';
-  const r = await apiFetch('/api/artifacts/' + id, {
-    method: 'PATCH',
-    body: JSON.stringify({network_allowlist: selected})
-  });
-  if (!r.ok) { status.textContent = 'Couldn’t update allowed sites.'; return; }
-  finishIngest(id);
+  lockIngest(true);
+  try {
+    const response = await apiFetch('/api/artifacts/' + id, {
+      method: 'PATCH',
+      body: JSON.stringify({network_allowlist: selected})
+    });
+    if (!response.ok) throw new Error(await errorMessage(response));
+    finishIngest(id);
+  } catch (error) {
+    showIngestError('Couldn’t update allowed sites: ' + error.message);
+  } finally {
+    lockIngest(false);
+  }
 }
 
 // The page's job ends when the artifact exists, so it hands off to the
@@ -285,4 +347,20 @@ function finishIngest(id) {
   }
   status.textContent = '✓ Saved — opening artifact…';
   location.href = href;
+}
+
+// Feature handlers stay local to this module. The network approval partial is
+// also used by the classic editor and retains its explicit callback bridge.
+window.approveOrigins = approveOrigins;
+window.finishIngest = finishIngest;
+for (const route of document.querySelectorAll('.route[data-mode]')) {
+  route.addEventListener('click', () => setMode(route.dataset.mode));
+}
+document.getElementById('agent-panel').addEventListener('submit', startAgent);
+document.getElementById('ingest-panel').addEventListener('submit', event => {
+  event.preventDefault();
+  ingest();
+});
+for (const field of document.querySelectorAll('#agent-description,#body,#url-input')) {
+  field.addEventListener('input', () => { if (!ingestPending && !createdArtifactId) clearFeedback(); });
 }

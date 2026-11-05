@@ -1,0 +1,25 @@
+
+> test
+> playwright test
+
+
+Running 14 tests using 1 worker
+
+(node:4150954) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   1 [chromium] › specs/duplicate.spec.ts:23:1 › keyboard focus stays in the modal and every cancellation path restores the menu trigger (3.6s)
+  ✓   2 [chromium] › specs/duplicate.spec.ts:49:1 › save refreshes server-rendered cards and replacement components work across two cycles (1.8s)
+  ✓   3 [chromium] › specs/duplicate.spec.ts:86:1 › Escape, backdrop, and repeated submission cannot dismiss or duplicate an in-flight save (1.2s)
+  ✓   4 [chromium] › specs/duplicate.spec.ts:121:1 › a committed save with a lost response retries the same identity and creates only one copy (1.2s)
+  ✓   5 [chromium] › specs/duplicate.spec.ts:155:1 › a definite refusal leaves editable input and permits a corrected save (1.1s)
+  ✓   6 [chromium] › specs/state.spec.ts:7:1 › localStorage survives reload and a fresh owner browser context through server state (2.0s)
+  ✓   7 [chromium] › specs/ui-appearance.spec.ts:3:1 › source editor remains legible through actual light/dark changes (1.1s)
+  ✓   8 [chromium] › specs/ui-appearance.spec.ts:44:1 › source syntax stays differentiated and readable in both color schemes (4.4s)
+  ✓   9 [chromium] › specs/ui-appearance.spec.ts:106:1 › word selection remains visible on the active source line (6.5s)
+  ✓  10 [chromium] › specs/ui-appearance.spec.ts:191:1 › source find and line-navigation controls follow the shared UI in both themes (9.8s)
+  ✓  11 [chromium] › specs/ui-appearance.spec.ts:248:1 › phone share controls and choices compose cleanly in both themes (2.3s)
+  ✓  12 [chromium] › specs/ui-feedback.spec.ts:3:1 › creation validation names and focuses the field for each method (1.3s)
+  ✓  13 [chromium] › specs/ui-feedback.spec.ts:41:1 › pending creation submits once, preserves input, and recovers from a refusal (1.1s)
+  ✓  14 [chromium] › specs/ui-feedback.spec.ts:73:1 › history and viewer controls fit a narrow phone and enlarged text (2.4s)
+
+  14 passed (42.7s)
