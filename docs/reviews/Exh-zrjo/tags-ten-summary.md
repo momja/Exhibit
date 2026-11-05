@@ -1,14 +1,16 @@
 # Tag editing: focused10/10 progress
 
-The refined candidate is72be0ccc, assetsbc262e992d4d, on the PR273 stack. It fixes
-color sample/check overlap, aligns tag rows, names palette choices, separates
-Custom selection from focus, explains tag scope, localizes validation and retained
-feedback, and adds an in-sheet delete step. Actual before/after comparison is
-[here](../../screenshots/Exh-zrjo/tags-ten-comparison-round33.html).
+The current candidate is62328d49, assetsef44b49026ee, on the PR273 stack.
+After both33 completed, it fixes invalid-color border/feedback, Create validity,
+dialog geometry, row/palette grouping and partial creation recovery. New actual
+[before/after](../../screenshots/Exh-zrjo/tags-ten-comparison-round34.html) is saved.
+Fresh independent Sol and Opus round34 reviews are running. No focused joint pass
+is claimed:33 Sol14x10, Opus6x10/8x9.5 was a joint failure, and scores do not carry
+over to changed source. Target remains two consecutive BOTH-model all14x10 rounds.
 
-Both round33 reviews completed: Sol14scores10, Opus6scores10and8scores9.5. The joint round failed, so there is no focused passing round yet. Remaining blockers are invalid-color feedback/cascade, create validity consistency and desktop row grouping. A focused response34 is being prepared. Completion
-requires each model's14light/dark values10 in two consecutive joint rounds on the
-same UI; independent opinions must be supported by real focused matrix coverage.
+Build,478Node,focused3E2E,nativeTag and full24E2E pass on unchanged current scope.
+Full standardGo short is running, final receipt pending. Parent32livephotos and
+24disposableoutcome/draft photos are supplementary, not council rating evidence.
 
 ## Baseline32 (historical candidate, before these fixes)
 
@@ -22,8 +24,7 @@ same UI; independent opinions must be supported by real focused matrix coverage.
 | Responsive visual polish | 9.5/9.5 | 8.5/8.5 |
 | Tag workflow clarity and feedback | 8.5/8.5 | 7.5/7.5 |
 
-Current build,478Node,23E2E and native Tag modal pass. Full Go short remains a
-required final check. See [validation](tags-ten-validation.md), actual
+Current checks and full-Go progress are recorded in validation. See [validation](tags-ten-validation.md), actual
 [task IDs/scores](tags-ten-scores.json) and independent round32 reports. Tests do
 not establish UI scores. No physical-phone/Safari/screen-reader certification.
 Broader9/10 incomplete coverage is historical and superseded by this narrower

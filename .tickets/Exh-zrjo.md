@@ -224,3 +224,7 @@ Refined tag candidate72be0ccc/assetsbc262e992d4d is built and frozen. Current so
 **2026-11-05T18:06:52Z**
 
 Both focused33 reviews completed on72be0ccc/bc262: Solall14=10; Opus6x10+8x9.5, so jointFAIL/streak0. Opus found real invalid-hex border specificity failure, duplicate/distant hint+error with stale preview/Custom caption, inconsistent invalid Create action, detached desktop rows, small validation recenter jump/palette sparsity. Parent reproduced computed border and35.5/37px error gap with4real before photos/0APIwrites. Preserve both reports; next34 must be fresh BOTH after fixes. Current23E2E/478Node/native/build pass, fullGo stillpending. Old validation archived. No source changes untilboth33terminal; nowresponse34 ready.
+
+**2026-11-05T18:34:49.907039+00:00**
+
+Both33 terminal jointFAIL despite Sol14x10. After real old-binary failures, candidate62328d49/ef44b49026ee repairs invalid state, stable validation geometry, Create validity, row/palette grouping and partial creation recovery. Build,478Node,focused3E2E,nativeTag and full24E2E PASS; full standardGo confirmation running durably. Saved24Main+8playground actualscheme views and24disposableoutcome photos; actual before/after34 previewed/rendered. Fresh independent BOTH34 shared reviews active, actualIDs retained; current peers withheld. Scope frozen until bothterminal; jointstreak0/2, no10completion claim. Main unchanged, no recurring tasks or newPR.

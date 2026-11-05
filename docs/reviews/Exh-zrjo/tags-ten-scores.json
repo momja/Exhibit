@@ -23,9 +23,9 @@
   "requiredJointConsecutivePasses": 2,
   "jointPassingStreak": 0,
   "completed": false,
-  "applicationCommit": "72be0ccc60f8b8820ad0715c5113f5a6f0cb44aa",
-  "assetVersion": "bc262e992d4d",
-  "validationBaseline": "72be0ccc60f8b8820ad0715c5113f5a6f0cb44aa",
+  "applicationCommit": "62328d495baa4dc3c049ffa818b0679980938221",
+  "assetVersion": "ef44b49026ee",
+  "validationBaseline": "62328d495baa4dc3c049ffa818b0679980938221",
   "rounds": [
     {
       "round": 32,
@@ -169,8 +169,45 @@
         }
       ],
       "validationArchive": "round-33-validation"
+    },
+    {
+      "round": 34,
+      "applicationCommit": "62328d495baa4dc3c049ffa818b0679980938221",
+      "assetVersion": "ef44b49026ee",
+      "reviewers": [
+        {
+          "reviewer": "sol",
+          "providerInstanceId": "codex",
+          "model": "gpt-6.1-sol",
+          "taskId": "node:delegated-task:command%3Amcp%3Ae394a58e-fb38-4e0c-b7c7-0df413da8a7e%3Adelegate-task%3AExh-zrjo-r34-sol-tags-ten",
+          "status": "running",
+          "clientRequestId": "Exh-zrjo-r34-sol-tags-ten",
+          "report": "round-34-sol-tags-ten.md",
+          "launchRecord": "round-34-sol-tags-ten-launch.json",
+          "light": null,
+          "dark": null,
+          "individualPass": null
+        },
+        {
+          "reviewer": "opus",
+          "providerInstanceId": "claudeAgent",
+          "model": "claude-opus-5-5",
+          "taskId": "node:delegated-task:command%3Amcp%3Ae394a58e-fb38-4e0c-b7c7-0df413da8a7e%3Adelegate-task%3AExh-zrjo-r34-opus-tags-ten",
+          "status": "running",
+          "clientRequestId": "Exh-zrjo-r34-opus-tags-ten",
+          "report": "round-34-opus-tags-ten.md",
+          "launchRecord": "round-34-opus-tags-ten-launch.json",
+          "light": null,
+          "dark": null,
+          "individualPass": null
+        }
+      ],
+      "purpose": "refined_candidate",
+      "validationBaseline": "62328d495baa4dc3c049ffa818b0679980938221",
+      "status": "running",
+      "jointPass": null
     }
   ],
   "historicalBroader9": "followup-scores.json: numerical passes, final broad coverage incomplete; superseded by user focused10 instruction, not claimed complete",
-  "validationStatus": "focused_checks_pass_final_full_go_pending"
+  "validationStatus": "Build,478Node,focused3E2E,nativeTag and full24E2E pass. Current full Go short required; starting durable confirmation."
 }

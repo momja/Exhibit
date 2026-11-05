@@ -1,53 +1,70 @@
-# Current tag-only10 council: both33 terminal, response34 ready
+# Current tag-only10 council: fresh BOTH34 active
 
-User's current scope ONLY editor Tags section +Edit tag sheet, target10 from BOTH
-models for all7categories in Light/Dark (14/model), TWOconsecutive joint passes.
-Streak0/2. Broad9coverage is historical/superseded, never claim it completed.
+Latest user target is10 ONLY Tags section/Edit tag sheet, fixed7categories each
+actual light/dark (14/model), TWO consecutive joint passes on same interface.
+Streak0/2. Broad9 incomplete addendum is superseded history, not completed.
 
-Current source/runtime72be0ccc60f8b8820ad0715c5113f5a6f0cb44aa/assetsbc262e992d4d.
-Both33 are TERMINAL COMPLETED, do not duplicate. Solall14=10; Opus6x10+8x9.5,
-so JOINTFAIL. Reports/statuses/taskIDs and actual tables saved in tags-ten-scores.
-All16actualrequiredviews per reviewer completed. Source stayed frozen untilboth
-terminal. Sol missed a real computed invalid-hex border cascade issue found by
-Opus; no single-model10 credit. Read both reports for the next fresh round.
+Frozen APPLICATION62328d495baa4dc3c049ffa818b0679980938221, assetsef44b49026ee.
+Strict entire internal web e2e cmd scripts Makefile go.mod go.sum diff/porcelain
+against62328d49 must be empty, no exclusions. Later commits are evidence only.
+Fingerprint240e924dd429ff3bc85da24b2778024d879ed12e1e130a657bc663972bfdac2f.
+Runtime identity proves bin/server/Main/playground exeSHA all37a01fee... . No VCS
+stamp exists; provenance is scoped source/buildreceipt/assets/executable hash.
 
-Required response in tags-ten-round-34-plan.md. Parent just captured4real BEFORE
-invalid-hex photos on72/bc at1280/390 bothschemes in tags-ten-round-34-before/:
-normal border despite aria-invalidtrue, error35.5/37px away, stale purple preview,
-Custom caption,0APIwrites. All cancelled; own tab closed. Valid-state before photos
-already in tags-ten-round-33/. Do not rebuild before preserving this evidence.
+Both33 were terminal BEFORE changes: Sol14x10, Opus6x10/8x9.5, jointFAIL0.
+Preserved reports/statuses; never duplicate33 or reuse its single-model10 after
+source changes. Response34: actual invalid border cascade, one reserved6px hint/
+error slot, no stale sample/caption, consistent valid Create/Save, anchored rows,
+outlined palette, stable pending buttons, partial201/attach503 retry SAME tag
+with nearby error and selection/focus restoration. New assertions fail old72 and
+pass current. See changes/brief and honest validation; tests never award scores.
 
-No34task started. Next: strengthen meaningful existing E2E assertions to reproduce
-invalid state beforefix on currentbin; implement plan, build/check/capture/publish
-new actual beforeafter, then fresh BOTH34 on newcandidate. Same34peer withheld.
-Do not duplicate33Sol or try to reuse it after source changes. Actual taskIDs in
-scores/launch/status files. No childThreadId/t3_thread_send/top-level continuation.
+Fresh shared/async/review tasks34 active; actualIDs in tags-ten-scores.json and
+round-34-*-tags-ten-launch.json. NEVERduplicate active/completed phases or reveal
+same34peer/aggregate results. Operative prompt tags-ten-round-34-brief.md plus
+original focused brief, BOTH32+33 prior reports/responses. No app/assets edits
+until BOTH34 terminal. Tasks notify parent; no polling watcher or top-levelthread.
+No childThreadId/t3_thread_send continuation. Every next round fresh delegate.
 
-Current72checks PASS: build8.08s,478Node16.86s,23E2E106.83s,nativeTag14.19s wrapper
-(actual1280/390 subtests2.21s). Receipts/fingerprintbb765b... in safevalidation.
-FullGo short on newtagUI NOT yetrun, requiredbeforefinalfinish. NoGo suiteactive,
-so next source/assets changes are safe. Do not repeat passed checks unchanged.
-Current proof archive round-33-validation preserves72 before futuregenericreceipt
-updates. Parent20T3photos+22E2Ephotos current72/bc;8oldbefore photos42/aa7.
-Actual before/after comparison published viahtml_preview728/360console[] then
-html_render, receiptfile saved; no generated-image substitute.
+Current PASS: gallery assets copy/syntax, build4.69s,478Node16.55s,focused3E2E33.38s,
+nativeTag17.53s(actual1280/390,no skips),complete24E2E111.08s. Entire scope unchanged
+during each. Full standardGo short is NOW running on frozen candidate: durable
+/tmp/exhibit-zrjo-tags10-r34-go-final-status.json, .log; runnerPID285584, receipt
+metadata tags-ten-r34-go-running.json. Read actual exit, do NOTclaim pass early.
+Do not rebuild assets during Go compilation; don't repeat passing checks unchanged.
 
-Main18280/render18281 onlycurrenttaginstance; admin/changeme, RunLogartifact
-461183aa-ca77-41f8-a4c0-6bbbe189b332. Its4tagsunchanged Health/Reading/Test/Utilities.
-OldEMPTY18380 outdated/outscope. Plan a separate scratchTagplayground18480/18481
-if free, samecurrentbinary, longattachedtag+unattachedtag, incognito profile;
-never changeMain library toexpose Add. CookieHOSTscoped: main/default, newfixture/
-incognito. Testspersist onlyindisposable18080fixture. Normalnavigation receipts
-allowed; no realRunLogtagwrites. CurrentmainPID275988/bin matchsha, noVCS stamp.
-Use scopedsource/buildreceipt/assets/processsha forprovenance.
+Parent24Main+8playground T3 photos confirm actual schemes/no document overflow,
+plus24disposableE2E outcome/draft images. Full source-keyed manifests. Actual
+before/after34 already previewed728/360console[] then html_render; saved HTML and
+render receipt. Parent visually inspected selected images, not reviewer coverage.
 
-CurrentNewTagUI Enter IN BOTHcreate/editName/hex saves; reviewers mustnotpressit.
-Readonlyexceptunique reports; no valid Save/Create/Add/Remove/finalDelete. Safe
-Delete entry/Keep, localworkingcopiesrestored/cancelled. Own T3tabs/exactIDs.
-No tests/builds/app edits/subdelegationbyreviewers. UserURLs t3code; ticketrefs
-actualabsolutefile .tickets/Exh-zrjo.md. No physicalSafari/a11ycertificationclaims.
+Main http://t3code:18280/render18281, RunLog artifact461183aa-ca77-41f8-a4c0-6bbbe189b332
+/edit, default profile. Isolated Tag playground http://t3code:18580/render18581,
+artifact252b5594-bfb3-4df5-bb9e-3d91579a5be8/edit, incognito profile; SAMEbinary.
+Host cookies span ports, don't cross-login profiles. Main tags unchanged Health,
+Reading,Test,Utilities. Playground longattachedlabel+availableUtilities; readonly.
+Public fixture tags-ten-playground.json.18580 chosen because18480/18481 belong to
+another task; those were untouched. Privateconfig/token NEVERcommit or print.
+OldEMPTY18380 outdated/outscope. Main restart ONLYsample python3/tmp/exhibit-zrjo-restart.py
+(with a space after python3); playground helper/tmp/exhibit-zrjo-tags-playground.py
+uses its own recordedPID/data/ports. Don't restart unchanged unless needed.
 
-No recurring automation. Ifquotafails recordactual publicreset, no inventedscore
-or unboundedretrytimer. Aftertwohonestjoint10passes+finalchecks: finish evidence,
-closeFEATUREticket, commit/verifybothworktrees. Mainclean/onmain; no merge/pushmain,
-no newPR. Existing273linked; list/unwatchbeforehandoff. Alreadyauthorized.
+Reviewers need Main16actual viewed panel+sheet images at1280/768/390/320 both
+schemes and4playground actual panel pairs1280/320light/dark, scrolling bottoms.
+No hiddenframes/unviewedresize coverage. Enter in BOTHcreate/editName/hex SAVES:
+no Enter there. All valid Save/Create/Add/Remove/finalDelete forbidden; local
+Deleteentry/Keep and unsaved drafts allowed/restored. Parent persistence tests
+use disposable18080 only. Own T3tabs/exactIDs. Parent tabs closed already.
+
+After34terminal: read task_status/report, verify14values and actual coverage.
+If BOTHall14=10, streak1 then fresh BOTH35 confirmation SAMEapp. BOTH34 become
+prior context; current35peer withheld. Any sub10: preserve actual judgments,
+repair/verify then fresh BOTH nextunused round, resetstreak. Onlytwoactualjoint
+passes+requiredchecks finish. If quota fails preserve actual publicreset/no-score
+failure, bounded behavior, no invented score/unboundedretry/automation.
+
+No recurring automation. After actual success closeFEATUREticket, finishevidence,
+commit/verify bothworktrees. Main/home/maxomdal/Exhibit stays clean/onmain; never
+merge/pushmain. PR273linked, no newPR requested; list/unwatch beforehandoff.
+User URLs use t3code, ticket refs actual absolute .tickets/Exh-zrjo.md. Already
+authorized, conciseupdates; do not ask permission to continue.
