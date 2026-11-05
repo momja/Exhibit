@@ -25,8 +25,10 @@ Scope: Gallery/search/empty states; creation; viewer/editor/agent; sharing, dupl
 | 7 | `80c48ae6` | Astra | 8 | 8 | 8 | Second joint Sol/Astra pass |
 | 8 | `66e95a57` | Sol | 8 | 8 | 8 | Final verification; third joint pass |
 | 8 | `66e95a57` | Astra | 8 | 8 | 8 | Final verification; third joint pass |
+| 9 | `53a4e262` | Sol | 8 | 8 | 8 | Official Gallery naming; fourth joint pass |
+| 9 | `53a4e262` | Astra | 8 | 8 | 8 | Official Gallery naming; fourth joint pass |
 
-**Rounds 6–8 achieved three consecutive joint Sol/Astra passes at UI revision `66e95a57`.** Both reviewers independently scored necessity, clarity, and hierarchy 8/10. The user's subsequent clarification that **Gallery is the official name of the artifacts library** supersedes the earlier Library recommendation; that correction is undergoing final verification. Earlier Sol-only passes do not count as joint acceptance. Opus's last actual scores were 7/7/8 from round 2; later Opus attempts returned no scores due a provider quota on 2026-11-04. On 2026-11-05 the user authorized replacing Opus with Codex Astra.
+**Accepted: four consecutive joint Sol/Astra passes, including official Gallery naming at UI revision `53a4e262`.** Both reviewers independently scored necessity, clarity, and hierarchy 8/10 in rounds 6–9. Round 9 confirms the user's correction that **Gallery is the official name of the artifacts library**, superseding the earlier Library recommendation. Neither reviewer found concrete naming regressions or acceptance blockers. Earlier Sol-only passes do not count as joint acceptance. Opus's last actual scores were 7/7/8 from round 2; later Opus attempts returned no scores due a provider quota on 2026-11-04. On 2026-11-05 the user authorized replacing Opus with Codex Astra.
 
 Reports: [Sol R1](round-1-sol.md), [Opus R1](round-1-opus.md), [Sol R2](round-2-sol.md), [Opus R2](round-2-opus.md), [Sol R3](round-3-sol.md), [Sol R4](round-4-sol.md).
 
@@ -48,9 +50,9 @@ All IDs have prefix:
 
 Suffixes: `exh-iust-copy-sol-r1`, `exh-iust-copy-opus-r1`, `exh-iust-copy-sol-r2`, `exh-iust-copy-opus-r2`, `exh-iust-copy-sol-r3`, `exh-iust-copy-opus-r3` (usage limit), `exh-iust-copy-opus-r3b` (usage limit), `exh-iust-copy-sol-r4`.
 
-## Naming correction in progress
+## Completion
 
-The ticket is reopened on the feature branch to apply the user's official Gallery naming. The [interactive summary](summary.html) and [change inventory](changes.md) will reflect that correction, followed by fresh council verification. Historical reports recommending Library remain intact as evidence. Main remains clean and on `main`.
+All requested copy work, including the user's official Gallery naming correction, is complete. The ticket is closed on the feature branch. The [interactive summary](summary.html) and [change inventory](changes.md) reflect the final text and locations. Historical reports recommending Library remain intact as evidence. Main remains clean and on `main`.
 
 ## Validation
 
@@ -109,3 +111,10 @@ Round-8 task IDs:
 On 2026-11-05 the user clarified: “Gallery is the official name of the artifacts library.” Navigation, headings, accessible labels, search and empty states, creation actions, recovery links, sign-in/OAuth, Settings and connected-agent scope, administration, and widget notices now use Gallery. Existing identifiers and the literal typed deletion phrase `delete my library` remain API values rather than destination names. No authorization, deletion, or data behavior changes. The final inventory supersedes earlier recommendations to rename the destination Library.
 
 Validation: `make build` passed. Focused API checks for editor return navigation, Gallery sections/filters/empty states, creation, search, not-found pages, Settings/deletion disclosures, and OAuth consent passed, including `TestGalleryPageScriptSuite` (the complete gallery Node suite). Existing assertions were updated; no new copy-only tests were added. Actual-app screenshots cover the empty Gallery and creation page at 390px/1280px, plus the 404 recovery page at 390px. All five checks found no horizontal overflow. Screenshots are saved as `round-9-{gallery,new}-{phone,desktop}.png` and `round-9-404-phone.png` in the evidence directory.
+
+Round 9: [Sol](round-9-sol.md) and [Astra](round-9-astra.md) each scored necessity, clarity, and hierarchy 8/10 on `53a4e262`. Both confirmed the official Gallery name and found no concrete regressions or acceptance blockers. This preserves four consecutive joint passing rounds. No further round is required.
+
+Task IDs:
+
+- Sol: `node:delegated-task:command%3Amcp%3Af06d7919-58d9-4e1e-a1fd-c28129115a57%3Adelegate-task%3Aexh-iust-copy-sol-r9-gallery`
+- Astra: `node:delegated-task:command%3Amcp%3Af06d7919-58d9-4e1e-a1fd-c28129115a57%3Adelegate-task%3Aexh-iust-copy-astra-r9-gallery`

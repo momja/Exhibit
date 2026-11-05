@@ -1,6 +1,6 @@
 ---
 id: Exh-iust
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-04T15:35:00Z
@@ -35,3 +35,7 @@ User authorized Codex Astra instead of unavailable Opus on 2026-11-05. Resuming 
 **2026-11-05T02:59:45Z**
 
 Completed the user-authorized Sol + Astra council: both reviewers scored necessity, clarity, and hierarchy 8/10 in three consecutive joint rounds (6, 7, 8). Final reviewed UI revision 66e95a57 resolves the last redirect-action and editor-direction findings. Build, gallery Node regressions, focused Go checks, earlier exhaustive short-test batches, and actual-app phone/desktop checks passed as documented. Complete change inventory, interactive summary, review reports, and screenshots are in docs/copy-council and docs/screenshots/Exh-iust. Main remains clean; all changes and closure are on the feature branch.
+
+**2026-11-05T03:20:42Z**
+
+Applied the user correction: Gallery is the official name of the artifacts library. Restored it across navigation, accessible labels, empty/search states, creation and recovery actions, authentication/consent, Settings, administration and widget copy. Updated the full inventory and interactive summary. Build, affected Go tests and full gallery Node suite passed; new phone/desktop screenshots show no overflow. Sol and Astra both scored necessity, clarity and hierarchy 8/10 in round 9 at UI revision 53a4e262, preserving four consecutive joint passes.
