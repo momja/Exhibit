@@ -13,9 +13,11 @@ R30 BOTH actual14tables ALL9: firstqualifyingJOINTpass. Currentstreak1/2, NOTdon
 Need BOTH31ALL14>=9 onSAMEinterface forsecondpass, plusactualchecks. Historical
 25/26/27/28/29 notcurrentqualifyingpasses. Nevercounttests/one-model/missingreview.
 
-R31 Sol task stillactive atlastcheck; maycompletebeforewake. NEVERduplicate:
+R31 Sol has COMPLETED independently with all14 scores9 on unchanged42/aa7.
+Actual table parsed and verified; terminal status/report/rating receipt saved.
+This is parent-only: withhold current31 Sol results from same-round Opus. NEVERduplicate:
 node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r31-sol-confirmation-pr273
-Readactualtask_status/checkpoint andpreserveitsreport/terminaloutcome. Current31
+Preserve its completed report/status; only missing Opus31 is eligible. Current31
 peer material MUSTNOT be suppliedtosame-roundOpus.
 
 R31 original Opus FAILED WITHOUTSCORES, noreport/14table:

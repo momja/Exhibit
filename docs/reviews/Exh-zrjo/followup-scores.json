@@ -277,8 +277,10 @@
         }
       ],
       "jointPass": true,
-      "validationStatus": "pending_test_expectation_confirmation",
-      "coverageNote": "Both honest reports retain filter-only livegap; native40 and corpus supplement. Parent preparing valid filterfixture for31."
+      "validationStatus": "all_pass",
+      "coverageNote": "Both honest reports retain filter-only livegap; native40 and corpus supplement. Parent preparing valid filterfixture for31.",
+      "finalValidationBaseline": "c1156ef15c7f5caa282b1068214492bce42018e1",
+      "finalValidationRecord": "round-31-go-confirm-status.json"
     },
     {
       "round": 31,
@@ -295,9 +297,31 @@
           "model": "gpt-6.1-sol",
           "clientRequestId": "Exh-zrjo-r31-sol-confirmation-pr273",
           "taskId": "node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r31-sol-confirmation-pr273",
-          "status": "running",
+          "status": "completed",
           "report": "round-31-sol-followup.md",
-          "launchRecord": "round-31-sol-followup-launch.json"
+          "launchRecord": "round-31-sol-followup-launch.json",
+          "scoresProduced": true,
+          "light": [
+            9.0,
+            9.0,
+            9.0,
+            9.0,
+            9.0,
+            9.0,
+            9.0
+          ],
+          "dark": [
+            9.0,
+            9.0,
+            9.0,
+            9.0,
+            9.0,
+            9.0,
+            9.0
+          ],
+          "individualPass": true,
+          "statusRecord": "round-31-sol-followup-status.json",
+          "ratingVerification": "round-31-sol-rating-verification.json"
         },
         {
           "reviewer": "opus",

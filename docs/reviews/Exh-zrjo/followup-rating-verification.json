@@ -14,9 +14,31 @@
       "model": "gpt-6.1-sol",
       "clientRequestId": "Exh-zrjo-r31-sol-confirmation-pr273",
       "taskId": "node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r31-sol-confirmation-pr273",
-      "status": "running",
+      "status": "completed",
       "report": "round-31-sol-followup.md",
-      "launchRecord": "round-31-sol-followup-launch.json"
+      "launchRecord": "round-31-sol-followup-launch.json",
+      "scoresProduced": true,
+      "light": [
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0
+      ],
+      "dark": [
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0
+      ],
+      "individualPass": true,
+      "statusRecord": "round-31-sol-followup-status.json",
+      "ratingVerification": "round-31-sol-rating-verification.json"
     },
     {
       "reviewer": "opus",
@@ -43,5 +65,7 @@
       ]
     }
   ],
-  "validationStatus": "all_pass"
+  "validationStatus": "all_pass",
+  "currentCompletedScoreCount": 14,
+  "jointResult": "not_established_opus_missing"
 }
