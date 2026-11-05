@@ -252,3 +252,7 @@ Both35 terminal: Sol14x10, Opus composition9.5both/other12x10 fromactualtable (r
 **2026-11-05T21:58:38.653669+00:00**
 
 Opus36 COMPLETED independently on unchangedf58de10b/4beedb277545: all14 actual tablevalues10, full Main16core +4samplepairs including fullyexposed lowerCreate everypair; restored0writes/own-tabsclosed. Report/status/table parsed and retained, same36 outcome withheld from activeSol36. FullcurrentGo CONFIRMED PASS exit0/441.10s(API426.015/store188.443), fingerprintunchanged. ALL requiredchecks pass with disclosed479Nodecarry on unchangedJS/tests. No rebuild/repeats; sourcefrozen. Jointstreak0 until Sol36 alsoqualifies; no completionclaim. No recurringautomation/mainchanges/newPR.
+
+**2026-11-05T22:03:53.668007+00:00**
+
+BOTH36 independently completed ALL14exact10, full Main16 +4samplepair coverage including every lowerCreate. Actual28table values verified; first qualifying jointpass on unchangedf58de10b/4bee, streak1/2. All requiredchecks pass (fullGo441.10s/sourceunchanged;479Nodecarry on unchangedJS explicitly proved). Fresh BOTH37 confirmation shared/async/review launched SAMEsource/processes after strict whole-scope+hash recheck; actualtaskIds retained. Both36 nowpriorcontext/current37 peers withheld. No source edits, repeats/rebuilds or newcaptures. Ticket staysin_progress until genuine secondjointpass. Mainclean, no recurringautomation/newPR.

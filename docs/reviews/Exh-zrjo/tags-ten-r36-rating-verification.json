@@ -1,0 +1,59 @@
+{
+  "round": 36,
+  "applicationCommit": "f58de10bf88acff268b9339e0c7dae406a93c664",
+  "assetVersion": "4beedb277545",
+  "reports": [
+    {
+      "reviewer": "sol",
+      "file": "docs/reviews/Exh-zrjo/round-36-sol-tags-ten.md",
+      "sha256": "c8ce443a571a001d1f3bf8b1575bac7b378b766fcca0de725d3c01ee593109c5",
+      "light": [
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0
+      ],
+      "dark": [
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0
+      ],
+      "requiredViewedCoverageComplete": true
+    },
+    {
+      "reviewer": "opus",
+      "file": "docs/reviews/Exh-zrjo/round-36-opus-tags-ten.md",
+      "sha256": "2b580a9de6fa16ee2345508967fed641da65ed7be76ebd74b90bae296578954e",
+      "light": [
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0
+      ],
+      "dark": [
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0
+      ],
+      "requiredViewedCoverageComplete": true
+    }
+  ],
+  "numericValuesVerified": 28,
+  "allExactly10": true,
+  "jointPass": true,
+  "jointPassingStreakAfter": 1
+}

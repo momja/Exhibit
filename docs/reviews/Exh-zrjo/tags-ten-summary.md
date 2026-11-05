@@ -1,27 +1,27 @@
-# Tag editing council: target 10
+# Tag editing council: first joint 10 pass, confirmation running
 
-Current application `f58de10b`, assets `4beedb277545`, remains stacked on PR273.
-Only Tags and Edit tag are in scope. Both independent reviewers must award all
-seven categories 10 in light and dark, in two consecutive joint rounds on the
-same interface with complete required live coverage. The current streak is 0/2.
-Broader historical 9 coverage is superseded/incomplete, not claimed completed.
+Both independent round36 reviewers award every one of the seven categories10
+in light and dark: all28 actual table values verified. Both completed the live
+16Main states plus4sample pairs, including every required lower Create view.
+This is the FIRST qualifying joint pass. Fresh BOTH37 confirmation reviews are
+now running on the SAME unchanged application f58de10b / assets4beedb277545.
+Current qualifying streak1/2; completion is not yet claimed.
 
-Round35 Sol awarded all14 values10. Opus's actual table has composition9.5 in both
-schemes and twelve10s (its prose miscounts); that joint round failed. Opus also
-honestly declared some unviewed lower controls, retained as limits. Both reports
-were terminal before the current change. Fresh36 explicitly requires actual full
-lower views in every relevant Main/sample pair, without cross-theme substitution.
+Both36 reports are now prior context; each current37 peer/aggregate is withheld.
+The entire runtime/validation scope and both running executables were checked
+unchanged before launch. No new tests, rebuild or captures on unchanged source.
+All required checks pass: build17.61s, icon/native20.14s,24E2E119.39s, fullGo441.10s;
+479Node carries on unchanged JS/tests with explicit one-file CSS delta proof.
 
-The remaining desktop Add row overhang was reproduced at81px in both themes.
-Three CSS rules align the whole row with the tag list/create column, keeping
-phone controls full width. Actual after geometry at all four widths/both themes
-is0px overhang, no overflow or tag requests. Eight before/eight after photographs
-and an [actual comparison](../../screenshots/Exh-zrjo/tags-ten-comparison-round36.html)
-are saved and published. No new automated test for this small layout-only fix.
+The current interface retains the inset check/clear color sample, compact aligned
+pills, named keyboard palette, explicit immediate/library-wide scope and Save tag,
+nearby stable validation, pending/error/retry feedback and safe Delete/Keep flow.
+The last desktop Add overhang is aligned; actual eight-pair before/after geometry
+confirms81px→0px while phones remain full width. [Actual comparison](../../screenshots/Exh-zrjo/tags-ten-comparison-round36.html)
+is saved and published; earlier substantive before/after comparisons are retained.
 
-Current full build, native/icon checks and all24E2E pass.479Node results carry on
-unchanged JS/tests with explicit whole-scope delta proof. Full standardGo36 also PASS: exit0,441.10s, whole source unchanged.
-Opus36 completed all14 scores10 with complete actual coverage; Sol36 remains
-active, same-round peer outcomes withheld. Jointstreak stays0 pending Sol. No10 milestone or one-model pass carried across the change. No recurring
-automation, new PR, main merge or push. No physical-phone/Safari/a11y certification.
+No recurring automation, new PR, main merge or push. No physical-phone/Safari/
+screen-reader certification or personally exercised persisted outcomes claimed
+by reviewers. Parent persistence checks are isolated disposable tests. Broader
+historical9coverage remains superseded/incomplete, not retroactively completed.
 Safe [validation](tags-ten-validation.md); parent [scores](tags-ten-scores.json).
