@@ -181,7 +181,8 @@ input.state-input{max-width:340px}
 /* --- tags panel: controls always visible (no hover on touch) ----------- */
 .tag-status{margin:0 0 12px}
 .tag-edit-list{display:grid;grid-template-columns:minmax(0,1fr);gap:4px;max-width:320px;list-style:none;margin-bottom:12px}
-.tag-edit-item{display:flex;align-items:center;gap:8px;max-width:100%;min-width:0;min-height:32px}
+.tag-edit-item{display:flex;align-items:center;gap:8px;max-width:100%;min-width:0;min-height:32px;border-bottom:1px solid var(--color-hairline)}
+.tag-edit-item:last-child{border-bottom:0}
 .tag-edit-item>.tag-pill{height:auto;min-height:28px;padding:5px 9px;min-width:0;font-size:.8125rem;color:var(--color-ink-soft);margin-right:auto}
 .tag-edit-item .tag-dot{box-shadow:0 0 0 1px var(--color-tag-ring)}
 .tag-edit-item .tag-pill-label{min-width:0;line-height:1.4}
@@ -195,7 +196,7 @@ input.state-input{max-width:340px}
 .tag-create{display:flex;flex-direction:column;gap:4px;margin-top:20px;max-width:320px;min-width:0;padding:0;border:0}
 .tag-create h3,.security-col h3{font-size:.875rem;line-height:1.5;font-weight:600;color:var(--color-ink-soft)}
 .tag-create h3{margin:0 0 8px}
-.tag-create .btn{align-self:flex-start;margin-top:8px}
+.tag-create .btn{align-self:flex-start;margin-top:8px;min-width:min(200px,100%)}
 .tag-error{color:var(--color-danger-hover);margin-top:8px}
 .tag-available-note{margin-top:8px}
 @media(max-width:767px){.tag-edit-list{grid-template-columns:minmax(0,1fr);max-width:none}}

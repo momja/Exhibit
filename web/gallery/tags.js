@@ -46,10 +46,14 @@ function connectTags(panel) {
   panel.addEventListener('htmx:after:swap', () => {
     for (const [id, message] of retainedErrors) setError(id, message);
     syncAdd();
+    syncCreate();
     if (!focusTagID || modal.open) return;
     const pencil = [...panel.querySelectorAll('[data-action="edit-tag"]')]
       .find(button => button.dataset.tagId === focusTagID);
-    (pencil || byId('tag-add-select') || byId('tag-add-name'))?.focus();
+    const select = byId('tag-add-select');
+    if (!pencil && [...(select?.options || [])].some(option => option.value === focusTagID)) select.value = focusTagID;
+    syncAdd();
+    (pencil || select || byId('tag-add-name'))?.focus();
     focusTagID = null;
   });
 
@@ -69,6 +73,8 @@ function connectTags(panel) {
   function nameError(inputID, errorID, message) {
     byId(inputID).setAttribute('aria-invalid', String(!!message));
     setError(errorID, message);
+    const hint = byId(errorID.replace(/-error$/, '-hint'));
+    if (hint) hint.hidden = !!message;
   }
 
   function readDetails(kind) {
@@ -83,6 +89,7 @@ function connectTags(panel) {
     if (!validColor(color)) {
       byId(prefix + '-color-hex').setAttribute('aria-invalid', 'true');
       setError(prefix + '-color-error', 'Enter a six-digit color, like #377a64.');
+      byId(prefix + '-color-controls').dispatchEvent(new CustomEvent('color-picker:refresh'));
       byId(prefix + '-color-hex').focus();
       return null;
     }
@@ -92,6 +99,11 @@ function connectTags(panel) {
   function syncAdd() {
     const button = byId('tag-add-confirm');
     if (button) button.disabled = panelPending || !byId('tag-add-select')?.value;
+  }
+
+  function syncCreate() {
+    const name = byId('tag-add-name');
+    byId('tag-create-confirm').disabled = panelPending || !name.value.trim() || !validColor(byId('tag-add-color-hex').value) || name.getAttribute('aria-invalid') === 'true';
   }
 
   async function runPanel(message, operation) {
@@ -109,6 +121,7 @@ function connectTags(panel) {
       panelPending = false;
       panel.removeAttribute('aria-busy');
       syncAdd();
+      syncCreate();
     }
   }
 
@@ -151,6 +164,8 @@ function connectTags(panel) {
 
   async function createAndAdd() {
     if (panelPending) return;
+    const name = byId('tag-add-name');
+    if (name.value.trim() && name.getAttribute('aria-invalid') === 'true') { name.focus(); return; }
     setError('tag-create-error', '');
     const details = readDetails('create');
     if (!details) return;
@@ -168,12 +183,13 @@ function connectTags(panel) {
           return;
         }
         const created = await response.json();
+        byId('tag-add-name').value = '';
         const attached = await attach(created.id);
         if (!attached?.ok) {
           setError('tag-add-error', 'Tag created, but not added. ' + await errorOf(attached, 'Choose it above to try again.'));
           status('Tag created. Choose it above to add it.');
           // The new tag must become available, and the nearby error must survive.
-          refresh(null);
+          refresh(created.id);
           return;
         }
         status('Tag created and added.');
@@ -278,8 +294,9 @@ function connectTags(panel) {
   });
   panel.addEventListener('input', event => {
     if (event.target.id === 'tag-add-name') {
-      nameError('tag-add-name', 'tag-create-name-error', '');
+      nameError('tag-add-name', 'tag-create-name-error', event.target.value.trim() ? '' : 'Name is required.');
       setError('tag-create-error', '');
+      syncCreate();
     }
     if (event.target.id === 'tag-edit-name') {
       nameError('tag-edit-name', 'tag-edit-name-error', event.target.value.trim() ? '' : 'Name is required.');
@@ -289,6 +306,7 @@ function connectTags(panel) {
   });
   panel.addEventListener('color-picker:change', event => {
     if (modal.contains(event.target)) { setError('tag-edit-error', ''); syncSave(); }
+    else syncCreate();
   });
   panel.addEventListener('keydown', event => {
     if (event.key === 'Enter' && ['tag-add-name', 'tag-add-color-hex'].includes(event.target.id)) {
@@ -307,4 +325,5 @@ function connectTags(panel) {
     if (event.target.closest?.('#tag-edit-confirm-delete')) return mutateTag('DELETE');
   });
   syncAdd();
+  syncCreate();
 }

@@ -397,11 +397,11 @@ button.banner-action{background:none;border:0;padding:0;font:inherit;cursor:poin
 .tag-pill-label{overflow-wrap:anywhere}
 /* Tag color picker: presets + custom. */
 .tag-color-fields{margin-top:16px;min-width:0}
-.tag-color-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.tag-color-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:24px}
 .tag-color-heading>.field-label{margin:0}
 .color-selection{padding:2px 8px;border-radius:var(--radius-pill);background:var(--color-accent-tint);color:var(--color-accent);font-size:.75rem;line-height:1.5}
 .color-presets{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:8px}
-.color-swatch{--swatch-radius:8px;--swatch-check-inset:3px;position:relative;display:grid;place-content:center;width:100%;height:56px;border:1px solid transparent;border-radius:var(--swatch-radius);background:none;cursor:pointer;padding:0}
+.color-swatch{--swatch-radius:8px;--swatch-check-inset:3px;position:relative;display:grid;place-content:center;width:100%;height:56px;border:1px solid var(--color-hairline);border-radius:var(--swatch-radius);background:none;cursor:pointer;padding:0}
 .color-swatch>span{width:22px;height:22px;border-radius:50%;background:var(--swatch-color);box-shadow:inset 0 0 0 1px var(--color-tag-ring)}
 .color-swatch:hover{background:var(--color-hover-fill)}
 .color-swatch[aria-checked=true]{border-color:var(--color-accent);background:var(--color-accent-tint)}
@@ -413,15 +413,13 @@ button.banner-action{background:none;border:0;padding:0;font:inherit;cursor:poin
 .color-custom-row input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
 .color-custom-row input[type=color]::-moz-color-swatch{border:0;border-radius:3px}
 .color-custom-row input[type=text]{flex:1;min-width:0}
-.color-hint{margin-top:6px}
-.tag-field-error{color:var(--color-danger-hover);font-size:.75rem;line-height:1.5;margin-top:10px}
-.tag-color-fields input[aria-invalid=true],#tag-edit-name[aria-invalid=true],#tag-add-name[aria-invalid=true]{border-color:var(--color-danger)}
+.color-input-wrap{position:relative;display:block;flex:0 0 44px;width:44px;height:44px}
+.color-empty{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;border:1px solid var(--color-field-border);border-radius:6px;background:var(--color-field);color:var(--color-muted);font-size:16px}
 .tag-panel [hidden],.tag-edit-dialog [hidden]{display:none!important}
 .tag-delete-entry{margin-top:24px;padding-top:16px;border-top:1px solid var(--color-hairline)}
 .modal-dialog.tag-edit-dialog .tag-dialog-footer{flex-direction:row}
-.tag-edit-dialog .tag-dialog-footer>.btn{order:0;width:auto;margin:0}
+.tag-edit-dialog .tag-dialog-footer>.btn{order:0;width:auto;margin:0;flex:0 1 128px}
 @media(max-width:400px){.tag-edit-dialog .tag-dialog-footer>.btn{flex:1}}
-@media(max-width:767px){.tag-color-fields .tag-field-error{font-size:var(--text-secondary)}}
 
 /* Native dialogs share their frame and content defaults. Content geometry is
  * the only feature-level variation; see docs/ui-components.md. */
@@ -460,6 +458,14 @@ button.banner-action{background:none;border:0;padding:0;font:inherit;cursor:poin
 .modal-dialog input:disabled,.modal-dialog select:disabled{opacity:.55;cursor:not-allowed}
 .modal-dialog input[readonly]{background:var(--color-ground);color:var(--color-ink-mid);cursor:default}
 .modal-dialog .modal-actions{display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}
+
+/* Field states follow the shared field shell, including its modal defaults. */
+.tag-color-fields input[aria-invalid=true],#tag-edit-name[aria-invalid=true],#tag-add-name[aria-invalid=true]{border-color:var(--color-danger)}
+.tag-edit-dialog .tag-name-field{margin-top:16px}
+.tag-name-field>label[for]{margin-top:0}
+.tag-field-feedback{margin-top:6px;min-height:1.5em;font-size:var(--text-helper);line-height:var(--line-helper)}
+.tag-field-feedback>.form-help{margin:0;font:inherit}
+.tag-field-feedback>.tag-field-error{color:var(--color-danger-hover)}
 
 
 .modal-dialog .modal-error,.modal-dialog [data-permission-status]{color:var(--color-danger-hover);font-size:0.75rem;margin-top:10px}

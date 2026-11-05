@@ -24,6 +24,7 @@ test('tag editing keeps color samples intact, controls aligned and validation lo
       await page.setViewportSize({ width, height: 844 });
       for (const colorScheme of ['light', 'dark'] as const) {
         await page.emulateMedia({ colorScheme });
+        await page.evaluate(() => document.fonts.ready);
         expect(await page.evaluate(() => matchMedia('(prefers-color-scheme: dark)').matches)).toBe(colorScheme === 'dark');
         await page.mouse.move(0, 0);
         const rows = await page.locator('.tag-edit-item').evaluateAll(items => items.map(item => {
@@ -41,6 +42,7 @@ test('tag editing keeps color samples intact, controls aligned and validation lo
         const save = modal.locator('#tag-edit-save');
         await expect(save).toHaveText('Save tag');
         await expect(save).toBeDisabled();
+        const cleanTop = await modal.evaluate(element => element.getBoundingClientRect().top);
         const green = modal.getByRole('radio', { name: /^Green / });
         await expect(green).toBeChecked();
         await green.press('ArrowRight');
@@ -52,6 +54,19 @@ test('tag editing keeps color samples intact, controls aligned and validation lo
         await expect(hex).toHaveAttribute('aria-invalid', 'true');
         await expect(modal.locator('#tag-edit-color-error')).toBeVisible();
         await expect(save).toBeDisabled();
+        const invalidPaint = await hex.evaluate(element => {
+          const reference = document.createElement('span'); reference.style.color = 'var(--color-danger)'; document.body.append(reference);
+          const danger = getComputedStyle(reference).color; reference.remove();
+          const field = element.getBoundingClientRect(), error = document.getElementById('tag-edit-color-error')!.getBoundingClientRect();
+          return { border: getComputedStyle(element).borderColor, danger, gap: error.top - field.bottom };
+        });
+        expect(invalidPaint.border, 'invalid hex uses the same danger border as invalid Name').toBe(invalidPaint.danger);
+        expect(invalidPaint.gap).toBeGreaterThanOrEqual(4);
+        expect(invalidPaint.gap).toBeLessThanOrEqual(8);
+        await expect(modal.locator('#tag-edit-color-hint')).toBeHidden();
+        await expect(modal.locator('.color-selection')).toBeHidden();
+        await expect(modal.locator('.color-empty')).toBeVisible();
+        expect(Math.abs(await modal.evaluate(element => element.getBoundingClientRect().top) - cleanTop), 'local color validation does not recenter the sheet').toBeLessThan(1);
         await hex.fill('#8a5db0');
         await expect(modal.locator('.color-selection')).toHaveText('Custom');
         expect(await modal.locator('.color-custom-row').evaluate(element => getComputedStyle(element).outlineStyle)).toBe('none');
@@ -59,9 +74,10 @@ test('tag editing keeps color samples intact, controls aligned and validation lo
         await name.fill('');
         await expect(name).toHaveAttribute('aria-invalid', 'true');
         await expect(modal.locator('#tag-edit-name-error')).toHaveText('Name is required.');
+        expect(Math.abs(await modal.evaluate(element => element.getBoundingClientRect().top) - cleanTop), 'local name validation does not recenter the sheet').toBeLessThan(1);
         expect(await name.evaluate(element => {
           const field = element.getBoundingClientRect(), error = document.getElementById('tag-edit-name-error')!.getBoundingClientRect();
-          return error.top >= field.bottom && error.top - field.bottom <= 12;
+          return error.top >= field.bottom && error.top - field.bottom <= 8;
         })).toBe(true);
         await name.fill(`${tags[0].name} draft`);
         await expect(save).toBeEnabled();
@@ -79,6 +95,19 @@ test('tag editing keeps color samples intact, controls aligned and validation lo
         await modal.locator('#tag-edit-cancel').click();
         await expect(edit).toBeFocused();
       }
+    }
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme });
+      await page.locator('#tag-add-name').fill('Local draft');
+      await page.locator('#tag-add-color-hex').fill('#12');
+      await expect(page.locator('#tag-create-confirm')).toBeDisabled();
+      await expect(page.locator('#tag-add-color-hint')).toBeHidden();
+      await expect(page.locator('#tag-add-color-controls .color-empty')).toBeVisible();
+      await expect(page.locator('#tag-add-color-controls .color-selection')).toBeHidden();
+      await page.locator('#tag-add-color-hex').fill('#6b7280');
+      await expect(page.locator('#tag-create-confirm')).toBeEnabled();
+      await page.locator('#tag-add-name').fill('');
+      await expect(page.locator('#tag-create-confirm')).toBeDisabled();
     }
     for (const size of [{ width: 320, height: 640 }, { width: 640, height: 360 }]) {
       await page.setViewportSize(size);
@@ -98,6 +127,47 @@ test('tag editing keeps color samples intact, controls aligned and validation lo
   } finally {
     for (const tag of tags) expect((await api.delete(`/api/tags/${tag.id}`)).ok()).toBeTruthy();
   }
+});
+
+test('partial tag creation retains nearby attach error and retries the same tag', async ({ page, api, artifacts }) => {
+  test.setTimeout(60_000);
+  const remaining = new Set<string>();
+  try {
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.emulateMedia({ colorScheme });
+      const artifact = await artifacts.create('<h1>Partial tag creation</h1>');
+      const name = `Partial-${artifact.id.slice(0, 8)}`;
+      await page.goto(`/artifacts/${artifact.id}/edit`);
+      await page.locator('#tags-panel > summary').click();
+      let refuse = true, creates = 0;
+      page.on('request', request => { if (request.url().endsWith('/api/tags') && request.method() === 'POST') creates++; });
+      const attachURL = `**/api/tags/*/artifacts/${artifact.id}`;
+      await page.route(attachURL, route => refuse ? route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Temporary attach failure. Try again.' }) }) : route.continue());
+      await page.locator('#tag-add-name').fill(name);
+      const response = page.waitForResponse(response => response.url().endsWith('/api/tags') && response.request().method() === 'POST');
+      await page.locator('#tag-create-confirm').click();
+      const created = await (await response).json(); remaining.add(created.id);
+      const select = page.locator('#tag-add-select');
+      await expect(select).toHaveValue(created.id);
+      await expect(select).toBeFocused();
+      await expect(page.locator('#tag-add-confirm')).toBeEnabled();
+      await expect(page.locator('#tag-add-error')).toHaveText('Tag created, but not added. Temporary attach failure. Try again.');
+      expect(await page.locator('#tag-add-error').evaluate(element => {
+        const error = element.getBoundingClientRect(), row = document.querySelector('.tag-add-row')!.getBoundingClientRect(), create = document.getElementById('tag-create-heading')!.getBoundingClientRect();
+        return error.top >= row.bottom && error.top - row.bottom <= 12 && error.bottom < create.top;
+      })).toBe(true);
+      await page.screenshot({ path: test.info().outputPath(`tag-partial-create-error-${colorScheme}.png`) });
+      refuse = false;
+      await page.locator('#tag-add-confirm').click();
+      await expect(page.locator('#tag-add-error')).toBeHidden();
+      await expect(page.locator(`[data-action=edit-tag][data-tag-id="${created.id}"]`)).toBeFocused();
+      expect((await (await api.get(`/api/artifacts/${artifact.id}`)).json()).tags).toHaveLength(1);
+      expect(creates).toBe(1);
+      await page.unroute(attachURL);
+      expect((await api.delete(`/api/tags/${created.id}`)).ok()).toBeTruthy(); remaining.delete(created.id);
+    }
+  } finally { for (const id of remaining) await api.delete(`/api/tags/${id}`); }
 });
 
 test('tag changes persist with clear pending, local failure and retry feedback without page Save', async ({ page, api, artifacts }) => {

@@ -3,7 +3,7 @@ import { Controller } from '../stimulus/stimulus.js';
 // Local working-copy state only. The tag feature still owns saving, while
 // htmx and Stimulus own replacement and reconnection of the creation fields.
 export default class extends Controller {
-  static targets = ['picker', 'hex', 'swatch', 'selection', 'error'];
+  static targets = ['picker', 'hex', 'swatch', 'selection', 'hint', 'error', 'empty'];
 
   connect() { this.refresh(); }
 
@@ -25,6 +25,11 @@ export default class extends Controller {
   refresh() {
     const value = this.hexTarget.value.trim();
     if (/^#[0-9a-f]{6}$/i.test(value)) this.setColor(value);
+    else {
+      this.showValidity(false);
+      this.renderSelection(null);
+      this.dispatch('change', { detail: { valid: false } });
+    }
   }
 
   setColor(value) {
@@ -46,12 +51,15 @@ export default class extends Controller {
     }
     (selectedPreset || this.swatchTargets[0]).tabIndex = 0;
     this.selectionTarget.textContent = selectedPreset?.dataset.colorName || 'Custom';
+    this.selectionTarget.hidden = !hex;
   }
 
   showValidity(valid) {
     this.hexTarget.setAttribute('aria-invalid', String(!valid));
     this.errorTarget.textContent = valid ? '' : 'Enter a six-digit color, like #377a64.';
     this.errorTarget.hidden = valid;
+    this.hintTarget.hidden = !valid;
+    this.emptyTarget.hidden = valid;
   }
 
   navigate(event) {

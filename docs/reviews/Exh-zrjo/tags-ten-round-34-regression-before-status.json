@@ -1,0 +1,19 @@
+{
+  "command": [
+    "npx",
+    "--no-install",
+    "playwright",
+    "test",
+    "specs/tags.spec.ts",
+    "--grep",
+    "tag editing keeps|partial tag creation"
+  ],
+  "cwd": "e2e",
+  "head": "38acf09c7a286f8c2bd5f8ea455d9139d654f1ae",
+  "startedAt": "2026-11-05T18:16:56.523458+00:00",
+  "seconds": 19.55,
+  "exitCode": 1,
+  "sourceFingerprint": "44154dca82f9a58f81999a290e7cfe3444c5677bfe34dbc5a252012e901ee3db",
+  "sourceUnchanged": true,
+  "log": "/tmp/exhibit-zrjo-tags10-r34-before.log"
+}

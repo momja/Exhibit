@@ -40,11 +40,13 @@
   {{template "colorSwatches" .Presets}}
   <label class="field-label" for="{{.Prefix}}-color-hex">Custom color</label>
   <div class="color-custom-row">
-    <input type="color" id="{{.Prefix}}-color-picker" value="{{.DefaultColor}}" aria-label="Choose a custom color" data-color-picker-target="picker" data-action="input->color-picker#input">
+    <span class="color-input-wrap"><input type="color" id="{{.Prefix}}-color-picker" value="{{.DefaultColor}}" aria-label="Choose a custom color" data-color-picker-target="picker" data-action="input->color-picker#input"><span class="color-empty" aria-hidden="true" data-color-picker-target="empty" hidden><i class="ph ph-minus"></i></span></span>
     <input type="text" id="{{.Prefix}}-color-hex" class="field" value="{{.DefaultColor}}" placeholder="#rrggbb" maxlength="7" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="{{.Prefix}}-color-hint {{.Prefix}}-color-error" data-color-picker-target="hex" data-action="input->color-picker#input">
   </div>
-  <div class="form-help color-hint" id="{{.Prefix}}-color-hint">Use the picker or a six-digit hex color.</div>
-  <div id="{{.Prefix}}-color-error" class="modal-error tag-field-error" role="alert" data-color-picker-target="error" hidden></div>
+  <div class="tag-field-feedback">
+    <div class="form-help" id="{{.Prefix}}-color-hint" data-color-picker-target="hint">Use the picker or a six-digit hex color.</div>
+    <div id="{{.Prefix}}-color-error" class="form-help tag-field-error" role="alert" data-color-picker-target="error" hidden></div>
+  </div>
 </div>{{end}}
 
 {{/* editTagModal renames, recolors or deletes a tag library-wide; opened
@@ -53,9 +55,11 @@
   <div class="modal-header"><h2 id="tag-edit-title">Edit tag</h2>{{template "modalClose"}}</div>
   <div class="modal-body"><fieldset id="tag-edit-fields" class="modal-fields" aria-label="Tag details">
     <p id="tag-edit-scope" class="form-help tag-scope-note">Changes apply to this tag on every artifact in your library.</p>
-    <label for="tag-edit-name">Name</label>
-    <input type="text" id="tag-edit-name" maxlength="60" required aria-describedby="tag-edit-name-error" autofocus>
-    <div id="tag-edit-name-error" class="modal-error tag-field-error" role="alert" hidden></div>
+    <div class="tag-name-field">
+      <label for="tag-edit-name">Name</label>
+      <input type="text" id="tag-edit-name" maxlength="60" required aria-describedby="tag-edit-name-hint tag-edit-name-error" autofocus>
+      <div class="tag-field-feedback"><div class="form-help" id="tag-edit-name-hint">Up to 60 characters.</div><div id="tag-edit-name-error" class="form-help tag-field-error" role="alert" hidden></div></div>
+    </div>
     {{template "tagColorFields" (tagColors "tag-edit" .)}}
     <div id="tag-edit-error" class="modal-error" role="alert" hidden></div>
     <div class="tag-delete-entry"><button type="button" class="btn btn-sec btn-danger-outline" id="tag-edit-delete"><i class="ph ph-trash" aria-hidden="true"></i> Delete tag…</button></div>
@@ -169,11 +173,13 @@
   <div id="tag-add-error" class="text-sm tag-error" role="alert" hidden></div>
   <fieldset id="tag-add-create-fields" class="tag-create" aria-labelledby="tag-create-heading">
     <h3 id="tag-create-heading" class="tag-section-heading">Create new tag</h3>
-    <label for="tag-add-name" class="field-label">Name</label>
-    <input type="text" id="tag-add-name" class="field" maxlength="60" required aria-describedby="tag-create-name-error">
-    <div id="tag-create-name-error" class="text-sm tag-error" role="alert" hidden></div>
+    <div class="tag-name-field">
+      <label for="tag-add-name" class="field-label">Name</label>
+      <input type="text" id="tag-add-name" class="field" maxlength="60" required aria-describedby="tag-create-name-hint tag-create-name-error">
+      <div class="tag-field-feedback"><div class="form-help" id="tag-create-name-hint">Up to 60 characters.</div><div id="tag-create-name-error" class="form-help tag-field-error" role="alert" hidden></div></div>
+    </div>
     {{template "tagColorFields" (tagColors "tag-add" .Presets)}}
-    <button type="button" class="btn" id="tag-create-confirm"><i class="ph ph-plus" aria-hidden="true"></i> <span id="tag-create-label">Create and add tag</span></button>
+    <button type="button" class="btn" id="tag-create-confirm" disabled><i class="ph ph-plus" aria-hidden="true"></i> <span id="tag-create-label">Create and add tag</span></button>
     <div id="tag-create-error" class="text-sm tag-error" role="alert" hidden></div>
   </fieldset>
 </div>{{end}}
