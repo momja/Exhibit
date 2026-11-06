@@ -562,8 +562,11 @@ focuses the replacement pencil or the existing-tag selector after deletion.
 Fields are resolved inside the owning panel rather than globally.
 
 The stable `#tags-body` fieldset locks its controls during a mutation and the
-following htmx refresh. A failed refresh keeps stale controls locked and exposes
-the template's Refresh tags button, which retries only the partial GET. The
+following htmx refresh. A failed refresh exposes the template's Refresh tags
+button, which retries only the partial GET. A transport failure keeps stale
+controls locked; a server failure first swaps in its server-rendered error
+notice. Session-recovery headers and missing-artifact fragments use htmx's
+normal behavior. The
 feature handles its own swap/error events; it does not wrap htmx in a Promise or
 restore references to controls that a swap has replaced.
 

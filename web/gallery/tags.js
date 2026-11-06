@@ -69,21 +69,25 @@ function connectTags(panel) {
     refreshNotice.hidden = false;
     byId('tag-refresh').focus();
   }
-  panel.addEventListener('htmx:after:request', event => {
-    if (event.target === fields && event.detail.ctx.response.status >= 400) {
-      event.preventDefault();
-      refreshFailed();
-    }
-  });
   panel.addEventListener('htmx:error', event => {
     if (event.target === fields) refreshFailed();
   });
   panel.addEventListener('htmx:after:swap', event => {
     if (event.target !== fields) return;
+    // Let htmx honor session-recovery headers and render server error fragments.
+    // A server failure offers a GET retry after its notice has replaced the body.
+    if (event.detail.ctx.response.status >= 500) { refreshFailed(); return; }
     needsRefresh = false;
     setPanelPending(false);
-    if (!refreshNotice.hidden) status('Tags refreshed.');
+    const retried = !refreshNotice.hidden;
     refreshNotice.hidden = true;
+    if (!byId('tag-add-name')) {
+      retainedErrors.clear();
+      focusTagID = null;
+      status('');
+      return;
+    }
+    if (retried) status('Tags refreshed.');
     for (const [id, message] of retainedErrors) setError(id, message);
     if (!focusTagID || modal.open) return;
     const pencil = [...panel.querySelectorAll('[data-action="edit-tag"]')]
@@ -139,6 +143,7 @@ function connectTags(panel) {
 
   function syncCreate() {
     const name = byId('tag-add-name');
+    if (!name) return; // A missing-artifact/error fragment has no creation form.
     byId('tag-create-confirm').disabled = panelPending || !name.value.trim() || !validColor(byId('tag-add-color-hex').value) || name.getAttribute('aria-invalid') === 'true';
   }
 

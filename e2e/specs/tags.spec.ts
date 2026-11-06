@@ -12,9 +12,10 @@ test('a tag mutation stays locked through refresh failure and retries only the f
     const gate = new Promise<void>(resolve => { release = resolve; });
     let refreshes = 0;
     await page.route('**/partials/tag-panel?*', async route => {
-      if (++refreshes !== 1) return route.continue();
-      await gate;
-      await route.fulfill({ status: 503, contentType: 'text/plain', body: 'Temporary refresh failure' });
+      refreshes++;
+      if (refreshes === 1) { await gate; return route.abort('failed'); }
+      if (refreshes === 2) return route.fulfill({ status: 503, contentType: 'text/plain', body: 'Temporary refresh failure' });
+      return route.continue();
     });
     await page.goto(`/artifacts/${artifact.id}/edit`);
     await page.locator('#tags-panel > summary').click();
@@ -28,12 +29,44 @@ test('a tag mutation stays locked through refresh failure and retries only the f
     await expect(retry).toBeVisible();
     await expect(page.locator('#tag-add-name')).toBeDisabled();
     await retry.click();
+    await expect(page.locator('#tags-body')).toHaveText('Temporary refresh failure');
+    await expect(page.locator('#tag-add-name')).toHaveCount(0);
+    await expect(retry).toBeEnabled();
+    await retry.click();
     await expect(page.getByRole('button', { name: `Edit tag ${tag.name}`, exact: true })).toBeEnabled();
     await expect(retry).toBeHidden();
     await expect(page.locator('#tag-add-name')).toBeEnabled();
     expect(writes).toBe(1);
-    expect(refreshes).toBe(2);
+    expect(refreshes).toBe(3);
   } finally { expect((await api.delete(`/api/tags/${tag.id}`)).ok()).toBeTruthy(); }
+});
+
+test('tag refresh honors session expiry through htmx login recovery', async ({ page, context, artifacts }) => {
+  const artifact = await artifacts.create('<h1>Expired tag session</h1>');
+  await page.goto(`/artifacts/${artifact.id}/edit`);
+  await page.locator('#tags-panel > summary').click();
+  await context.clearCookies();
+  await page.evaluate(() => document.body.dispatchEvent(new CustomEvent('exhibit:tags-changed')));
+  await expect(page).toHaveURL(/\/auth\/login\?/);
+});
+
+test('tag refresh renders a missing-artifact notice without a script error', async ({ page, api }) => {
+  const created = await api.post('/api/artifacts', { data: { body: '<h1>Deleted tag fixture</h1>' } });
+  expect(created.status()).toBe(201);
+  const { artifact } = await created.json();
+  let removed = false;
+  try {
+    const errors: string[] = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await page.goto(`/artifacts/${artifact.id}/edit`);
+    await page.locator('#tags-panel > summary').click();
+    expect((await api.delete(`/api/artifacts/${artifact.id}`)).ok()).toBeTruthy();
+    removed = true;
+    await page.evaluate(() => document.body.dispatchEvent(new CustomEvent('exhibit:tags-changed')));
+    await expect(page.locator('#tags-body')).toHaveText('Artifact not found. It may have been deleted.');
+    await expect(page.locator('#tag-add-name')).toHaveCount(0);
+    expect(errors).toEqual([]);
+  } finally { if (!removed) await api.delete(`/api/artifacts/${artifact.id}`); }
 });
 
 test('tag editing keeps color samples intact, controls aligned and validation local in both schemes', async ({ page, api, artifacts }) => {
@@ -81,6 +114,13 @@ test('tag editing keeps color samples intact, controls aligned and validation lo
         const cleanTop = await modal.evaluate(element => element.getBoundingClientRect().top);
         const green = modal.getByRole('radio', { name: /^Green / });
         await expect(green).toBeChecked();
+        await modal.locator('#tag-edit-color-picker').evaluate(input => {
+          (input as HTMLInputElement).value = '#8a5db0';
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        await expect(modal.locator('#tag-edit-color-hex')).toHaveValue('#8a5db0');
+        await expect(modal.locator('.color-selection')).toHaveText('Custom');
+        await green.click();
         await green.press('ArrowRight');
         await expect(modal.getByRole('radio', { name: /^Teal / })).toBeChecked();
         await expect(modal.locator('#tag-edit-color-hex')).toHaveValue('#42838c');

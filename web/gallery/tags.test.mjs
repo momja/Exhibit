@@ -202,7 +202,7 @@ test("attachment errors after creation survive the panel refresh", async () => {
   assert.equal(t.byId("tag-add-error").textContent, "Tag created, but not added. Could not attach");
   t.byId("tag-add-error").textContent = "";
   t.byId("tag-add-select").options = [{ value: "new-tag" }];
-  await t.byId("tags-panel").dispatchEvent({type: "htmx:after:swap", target: t.byId('tags-body')});
+  await t.byId("tags-panel").dispatchEvent({type: "htmx:after:swap", target: t.byId('tags-body'), detail: { ctx: { response: { status: 200 } } }});
   assert.equal(t.byId("tag-add-error").textContent, "Tag created, but not added. Could not attach", "nearby feedback survives replacing its markup");
   assert.equal(t.byId("tag-add-select").value, "new-tag");
   assert.equal(t.byId("tag-add-select").focused, true);

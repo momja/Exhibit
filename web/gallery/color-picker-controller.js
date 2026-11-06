@@ -12,7 +12,10 @@ export default class extends Controller {
     this.setColor(event.currentTarget.dataset.color);
   }
 
-  input() { this.refresh(); }
+  input(event) {
+    this.hexTarget.value = event.target.value;
+    this.refresh();
+  }
 
   refresh() {
     const value = this.hexTarget.value.trim();
