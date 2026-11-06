@@ -44,7 +44,7 @@
            hx-sync="this:replace"
            hx-swap="innerHTML">{{template "tagPanelBody" .TagPanel}}</fieldset>
       <div id="tag-refresh-notice" hidden>
-        <p class="text-sm tag-error" role="alert">Tags could not refresh. Refresh the tags to continue.</p>
+        <p class="form-help tag-error" role="alert">Tags could not refresh. Refresh the tags to continue.</p>
         <button type="button" class="btn btn-sec" id="tag-refresh">Refresh tags</button>
       </div>
       {{template "editTagModal" .Presets}}
