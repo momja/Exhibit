@@ -1,0 +1,1 @@
+ok  	github.com/momja/Exhibit/internal/api	0.266s

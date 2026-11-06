@@ -1,6 +1,6 @@
 ---
 id: Exh-zrjo
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-04T06:41:33Z
@@ -264,3 +264,7 @@ Completed the latest tag-only10 scope: rounds36 and37 each contain14 exact10 val
 **2026-11-06T01:05:19Z**
 
 Reopened for the user-requested simplicity review. Three independent subagents reviewed the pinned cumulative diff atop PR273. Follow-up fixes htmx pending ownership, CodeMirror state ownership, completed-ingest history restoration, and redundant shared styling/validation/menu/palette definitions. Historical visual ratings remain attached to their reviewed application; this is a code-quality follow-up.
+
+**2026-11-06T01:43:19Z**
+
+Completed the user-requested code simplicity follow-up. Independent Standards, Spec and reuse reviews identified and resolved htmx pending ownership, editor-state ownership, completed-import restoration and duplicated component logic/styles. Fresh review also caught cleanup regressions; tests reproduced and verified their fixes. Final component composition review has zero remaining findings. Application742301c5; full Go passed on907cb944, full29 browser/479 Node on8a4c0fe1, and final style-only delta passed focused native/four Tag browser checks. Exact revisions/diffs, failures, limits, runtime hashes and actual before/after captures are in docs/reviews/Exh-zrjo/code-review.md and code-validation.md. Historical visual ratings were not reassigned. Main remained clean/on main; no merge, push or PR creation.

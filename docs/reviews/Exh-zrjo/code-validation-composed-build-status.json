@@ -1,0 +1,15 @@
+{
+  "command": [
+    "bash",
+    "-c",
+    "node web/gallery/build.mjs && go build -o bin/server ./cmd/server"
+  ],
+  "cwd": "/home/maxomdal/.t3/worktrees/Exhibit/feature-Exh-zrjo-ui-council",
+  "head": "742301c5a8270cfeb242db300d009f0829ee9ad0",
+  "startedAt": "2026-11-06T01:36:58.568737+00:00",
+  "seconds": 8.07,
+  "exitCode": 0,
+  "sourceFingerprint": "fc2a4d6792895a86adcc575cb8c0c713590982cb6e332368407778a67e784ebf",
+  "sourceUnchanged": true,
+  "log": "/tmp/exhibit-zrjo-tags10-simplicity-composed-build.log"
+}

@@ -1,0 +1,32 @@
+26dae10d Complete tag-only ten council with audited reports and close ticket
+227f1335 Record first joint tag tens and start fresh unchanged confirmation
+b5c0e54d Record Opus36 tens and passing full Go confirmation
+d62235a0 Preserve Add-column evidence and fresh independent round36 council
+f58de10b Align existing-tag selector and action with the tag column
+8506d136 Resume only missing independent Opus35 and remove temporary trigger
+99697da8 Record independent Sol35 tens and passing full Go confirmation
+bbcba3ab Preserve round34 findings and verified round35 tag council continuation
+235a5c9e Keep rejected tag edits blocked for keyboard submit and register empty icon
+e439f22f Record actual Opus34 quota failure without scores
+2e0940c2 Save current tag evidence and independent round34 council checkpoint
+62328d49 Polish tag validation geometry and recover partial creation
+38acf09c Preserve tag refinements, passing checks and independent round33 findings
+72be0ccc Refine tag editing selection, layout and workflow feedback
+8abb3cd7 Record focused tag baseline blockers and response plan
+9f04c316 Save tag-only baseline reviews and actual before captures
+4e7509a3 Scope fresh council to10 on tag editing
+99834cc4 Preserve partial live council evidence and actual quota reset
+3054fd6b Preserve9 scores and require missing live Opus coverage
+b95670a4 Resume only independent Opus confirmation after quota reset
+f89dffc1 Preserve independent Sol9 confirmation pending Opus reset
+948317e6 Record first joint9 pass and defer quota-limited confirmation
+c1156ef1 Update UI validation expectations for Save and Shared copy
+b0f13a59 Record shared UI grammar and independent round30 progress
+42c94eb1 Unify gallery empty states and Save presentation
+5c293c14 Resume independent Opus29 and remove temporary automation
+89835412 Record Sol29 passing review and final PR273 validation
+9b297200 Save empty-state repair and fresh PR273 council checkpoint
+575559b5 Restore destination-specific gallery empty actions
+287d95f7 Record PR273 UI restack and fresh council evidence
+68655f3a Adapt UI polish and browser coverage to gallery tabs
+c20f6f72 Polish Exhibit UI and clarify editor Save feedback

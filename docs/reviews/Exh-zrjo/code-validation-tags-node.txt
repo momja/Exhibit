@@ -1,0 +1,21 @@
+(node:331840) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ remove detaches the tag from this artifact and re-renders the panel (47.541432ms)
+✔ adding an existing tag attaches it, and nothing is created (5.564064ms)
+✔ create new makes the tag with its name and color, then attaches it (7.329211ms)
+✔ add with nothing chosen sends nothing and says why (4.381368ms)
+✔ a refused create is reported and never attaches (8.483323ms)
+✔ the edit dialog renames the tag library-wide and re-renders the panel (8.993734ms)
+✔ Edit Enter keeps a rejected name blocked until its value changes (7.677165ms)
+✔ deleting shows a local confirmation, and Keep tag sends nothing (9.685268ms)
+✔ creating validates its own name even when an existing tag is selected (6.245098ms)
+✔ Enter in the new tag name creates without consulting the dropdown (6.861382ms)
+✔ attachment errors after creation survive the panel refresh (8.030661ms)
+ℹ tests 11
+ℹ suites 0
+ℹ pass 11
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 274.859245

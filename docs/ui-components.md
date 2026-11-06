@@ -566,9 +566,8 @@ following htmx refresh. A failed refresh exposes the template's Refresh tags
 button, which retries only the partial GET. A transport failure keeps stale
 controls locked; a server failure first swaps in its server-rendered error
 notice. Session-recovery headers and missing-artifact fragments use htmx's
-normal behavior. The
-feature handles its own swap/error events; it does not wrap htmx in a Promise or
-restore references to controls that a swap has replaced.
+normal behavior. The feature handles its own swap/error events; it does not wrap
+htmx in a Promise or restore references to controls that a swap has replaced.
 
 Run `go test ./internal/api -run 'Test(ModalInterfaceBrowser|TagModalBrowser)$' -count=1` for native
 focus/Tab, Escape/backdrop, validation, save/htmx, and disconnect/reconnect

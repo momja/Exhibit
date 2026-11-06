@@ -1,0 +1,17 @@
+{
+  "command": [
+    "npm",
+    "test",
+    "--",
+    "--grep",
+    "tag refresh honors|tag refresh renders|tag editing keeps color"
+  ],
+  "cwd": "/home/maxomdal/.t3/worktrees/Exhibit/feature-Exh-zrjo-ui-council/e2e",
+  "head": "2e2fc9bc6aa0dcdb03dfa829921479a4c56045e4",
+  "startedAt": "2026-11-06T01:10:15.830000+00:00",
+  "seconds": 40.67,
+  "exitCode": 1,
+  "sourceFingerprint": "c16c0ffffd44f2b850a96970cb7794780d67014111551def56866d38de215726",
+  "sourceUnchanged": true,
+  "log": "/tmp/exhibit-zrjo-tags10-simplicity-review-regressions-before.log"
+}

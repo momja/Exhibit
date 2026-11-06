@@ -1,0 +1,15 @@
+
+> test
+> playwright test --grep a tag mutation stays locked|tag refresh honors|tag refresh renders|tag editing keeps color
+
+
+Running 4 tests using 1 worker
+
+(node:342486) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium] › specs/tags.spec.ts:3:1 › a tag mutation stays locked through refresh failure and retries only the fragment (2.7s)
+  ✓  2 [chromium] › specs/tags.spec.ts:44:1 › tag refresh honors session expiry through htmx login recovery (2.2s)
+  ✓  3 [chromium] › specs/tags.spec.ts:53:1 › tag refresh renders a missing-artifact notice without a script error (1.5s)
+  ✓  4 [chromium] › specs/tags.spec.ts:72:1 › tag editing keeps color samples intact, controls aligned and validation local in both schemes (18.1s)
+
+  4 passed (26.9s)
