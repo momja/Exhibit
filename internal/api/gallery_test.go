@@ -108,7 +108,9 @@ func TestEditPageRendersTagsPanel(t *testing.T) {
 
 	assert.Contains(t, page, `<details class="details-panel" id="tags-panel" data-artifact-id="`+id+`">`)
 	assert.Contains(t, page, `hx-get="/partials/tag-panel?artifact=`+id+`"`)
-	assert.Contains(t, page, `hx-trigger="exhibit:tags-changed from:body"`)
+	// Mutations and GET-only recovery refresh the same stable native fieldset.
+	assert.Contains(t, page, `<fieldset id="tags-body"`)
+	assert.Contains(t, page, `hx-trigger="exhibit:tags-changed from:body, click from:#tag-refresh"`)
 	assert.Contains(t, page, `data-action="edit-tag" data-tag-id="`+charts.ID+`" data-tag-name="charts" data-tag-color="#ffffff"`)
 	assert.Contains(t, page, `data-action="detach-tag" data-tag-id="`+charts.ID+`" aria-label="Remove tag charts from this artifact"`)
 	// The dropdown offers what is not yet attached.
