@@ -6,43 +6,35 @@ import (
 	"github.com/momja/Exhibit/internal/store"
 )
 
-// Presets is the preset swatch palette offered in the tag edit/add modals,
-// alongside a custom hex input. A small, distinct, colorblind-friendlyish
-// spread rather than an exhaustive picker.
-var Presets = []string{
-	"#6B7280", // gray (store.DefaultTagColor)
-	"#B86562", // rose red
-	"#AB7B3E", // amber
-	"#377A64", // green
-	"#42838C", // teal
-	"#527CB0", // blue
-	"#8470AC", // violet
-	"#AC6F92", // rose
+var tagPalette = []struct{ hex, name string }{
+	{"#6B7280", "Gray"}, // store.DefaultTagColor
+	{"#B86562", "Red"},
+	{"#AB7B3E", "Amber"},
+	{"#377A64", "Green"},
+	{"#42838C", "Teal"},
+	{"#527CB0", "Blue"},
+	{"#8470AC", "Violet"},
+	{"#AC6F92", "Pink"},
 }
+
+// Presets is the ordered swatch palette offered alongside a custom hex input.
+var Presets = func() []string {
+	hexes := make([]string, len(tagPalette))
+	for i, preset := range tagPalette {
+		hexes[i] = preset.hex
+	}
+	return hexes
+}()
 
 // PresetName names the palette for people choosing a color, while the hex value
 // remains available for precise custom colors.
 func PresetName(hex string) string {
-	switch strings.ToUpper(hex) {
-	case "#6B7280":
-		return "Gray"
-	case "#B86562":
-		return "Red"
-	case "#AB7B3E":
-		return "Amber"
-	case "#377A64":
-		return "Green"
-	case "#42838C":
-		return "Teal"
-	case "#527CB0":
-		return "Blue"
-	case "#8470AC":
-		return "Violet"
-	case "#AC6F92":
-		return "Pink"
-	default:
-		return "Custom"
+	for _, preset := range tagPalette {
+		if strings.EqualFold(hex, preset.hex) {
+			return preset.name
+		}
 	}
+	return "Custom"
 }
 
 // Normalize validates a tag color for safe use inside an HTML style

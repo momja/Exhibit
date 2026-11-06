@@ -1,5 +1,41 @@
 import { test, expect } from '../fixtures';
 
+test('a tag mutation stays locked through refresh failure and retries only the fragment', async ({ page, api, artifacts }) => {
+  const artifact = await artifacts.create('<h1>Tag refresh fixture</h1>');
+  const response = await api.post('/api/tags', { data: { name: `Refresh-${artifact.id}`, color: '#377a64' } });
+  expect(response.status()).toBe(201);
+  const tag = await response.json();
+  try {
+    let writes = 0;
+    page.on('request', request => { if (request.method() === 'POST' && request.url().endsWith(`/api/tags/${tag.id}/artifacts/${artifact.id}`)) writes++; });
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    let refreshes = 0;
+    await page.route('**/partials/tag-panel?*', async route => {
+      if (++refreshes !== 1) return route.continue();
+      await gate;
+      await route.fulfill({ status: 503, contentType: 'text/plain', body: 'Temporary refresh failure' });
+    });
+    await page.goto(`/artifacts/${artifact.id}/edit`);
+    await page.locator('#tags-panel > summary').click();
+    await page.locator('#tag-add-select').selectOption(tag.id);
+    await page.locator('#tag-add-confirm').click();
+    await expect.poll(() => refreshes).toBe(1);
+    await expect(page.locator('#tag-add-name')).toBeDisabled();
+    await expect(page.locator('#tag-add-confirm')).toBeDisabled();
+    release();
+    const retry = page.getByRole('button', { name: 'Refresh tags', exact: true });
+    await expect(retry).toBeVisible();
+    await expect(page.locator('#tag-add-name')).toBeDisabled();
+    await retry.click();
+    await expect(page.getByRole('button', { name: `Edit tag ${tag.name}`, exact: true })).toBeEnabled();
+    await expect(retry).toBeHidden();
+    await expect(page.locator('#tag-add-name')).toBeEnabled();
+    expect(writes).toBe(1);
+    expect(refreshes).toBe(2);
+  } finally { expect((await api.delete(`/api/tags/${tag.id}`)).ok()).toBeTruthy(); }
+});
+
 test('tag editing keeps color samples intact, controls aligned and validation local in both schemes', async ({ page, api, artifacts }) => {
   test.setTimeout(90_000);
   const artifact = await artifacts.create('<h1>Tag UI fixture</h1>');

@@ -60,10 +60,7 @@ function mountEditorWhenOpen(panelID, textareaID) {
 function setSource(textareaID, text) {
   const textarea = document.getElementById(textareaID);
   if (textarea) textarea.value = text;
-  const view = editors[textareaID];
-  if (view) {
-    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text } });
-  }
+  editors[textareaID]?.setValue(text);
 }
 
 mountEditorWhenOpen('source-panel', 'body');

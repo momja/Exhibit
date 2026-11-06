@@ -21,6 +21,7 @@ let currentMode = 'agent';
 window.pendingIngestArtifactId = '';
 let ingestPending = false;
 let createdArtifactId = '';
+let ingestComplete = false;
 
 // The CodeMirror island mounts the first time Paste HTML is selected, not at
 // load. The page no longer opens on paste, and an editor mounted inside a
@@ -28,11 +29,10 @@ let createdArtifactId = '';
 // something forces a remeasure. The editor keeps textarea.value in sync, so
 // ingest() below still reads the field — and if the bundle failed to load, the
 // plain textarea still works.
-let editorMounted = false;
+let sourceEditor;
 function mountEditor() {
-  if (editorMounted || !window.ArtifactEditor) return;
-  ArtifactEditor.mount(document.getElementById('body'));
-  editorMounted = true;
+  if (sourceEditor || !window.ArtifactEditor) return;
+  sourceEditor = ArtifactEditor.mount(document.getElementById('body'));
 }
 
 // The route tiles are the page's mode switch: which panel is on screen and,
@@ -124,13 +124,15 @@ function showFieldError(field, message) {
   error.textContent = message;
   error.hidden = false;
   field.setAttribute('aria-invalid', 'true');
-  const editable = field.nextElementSibling?.querySelector('.cm-content') || field;
-  editable.setAttribute('aria-invalid', 'true');
-  editable.focus();
+  if (field.id === 'body' && sourceEditor) {
+    sourceEditor.setInvalid(true);
+    sourceEditor.focus();
+  } else field.focus();
 }
 
 function clearFeedback() {
   for (const field of document.querySelectorAll('[aria-invalid]')) field.removeAttribute('aria-invalid');
+  sourceEditor?.setInvalid(false);
   for (const error of document.querySelectorAll('.field-error')) error.hidden = true;
   const status = document.getElementById('status');
   status.textContent = '';
@@ -148,8 +150,7 @@ function lockIngest(pending) {
   const panel = document.getElementById('ingest-panel');
   panel.setAttribute('aria-busy', String(pending));
   for (const field of panel.querySelectorAll('.ingest-field input,.ingest-field textarea,#snapshot-toggle')) field.disabled = pending || !!createdArtifactId;
-  const source = panel.querySelector('.cm-content');
-  if (source) source.contentEditable = String(!pending && !createdArtifactId);
+  sourceEditor?.setReadOnly(pending || !!createdArtifactId);
   for (const control of panel.querySelectorAll('#network-approval button,#network-approval input')) control.disabled = pending;
   for (const control of document.querySelectorAll('.route, #ingest-panel .ingest-foot button')) control.disabled = pending || !!createdArtifactId;
 }
@@ -331,6 +332,7 @@ async function approveOrigins(id) {
 // away would throw away the only account of what didn't vendor, so that stays
 // on screen behind an explicit link.
 function finishIngest(id) {
+  ingestComplete = true;
   const status = document.getElementById('status');
   const href = '/artifacts/' + id;
   if (snapshotNeedsAttention) {
@@ -348,6 +350,12 @@ function finishIngest(id) {
   status.textContent = '✓ Saved — opening artifact…';
   location.href = href;
 }
+
+// Back may restore this module and its completed-import lock from BFCache.
+// A fresh page starts another capture; unfinished network approval stays intact.
+window.addEventListener('pageshow', event => {
+  if (event.persisted && ingestComplete) location.reload();
+});
 
 // Feature handlers stay local to this module. The network approval partial is
 // also used by the classic editor and retains its explicit callback bridge.

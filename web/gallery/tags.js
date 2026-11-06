@@ -12,8 +12,11 @@ function connectTags(panel) {
   const byId = id => panel.querySelector('#' + id);
   const modal = byId('tag-edit-modal');
   const editor = modalFor(modal);
+  const fields = byId('tags-body');
+  const refreshNotice = byId('tag-refresh-notice');
   const retainedErrors = new Map();
   let panelPending = false;
+  let needsRefresh = false;
   let editingTagID = null;
   let originalName = '';
   let originalColor = '';
@@ -40,13 +43,48 @@ function connectTags(panel) {
 
   function refresh(tagID) {
     focusTagID = tagID;
+    needsRefresh = true;
+    setPanelPending(true);
     document.body.dispatchEvent(new CustomEvent('exhibit:tags-changed'));
   }
 
-  panel.addEventListener('htmx:after:swap', () => {
-    for (const [id, message] of retainedErrors) setError(id, message);
+  function setPanelPending(pending) {
+    panelPending = pending;
+    fields.disabled = pending || needsRefresh;
+    byId('tag-refresh').disabled = pending;
+    if (pending) panel.setAttribute('aria-busy', 'true');
+    else panel.removeAttribute('aria-busy');
     syncAdd();
     syncCreate();
+  }
+
+  panel.addEventListener('htmx:before:request', event => {
+    if (event.target !== fields) return;
+    needsRefresh = true;
+    setPanelPending(true);
+  });
+  function refreshFailed() {
+    needsRefresh = true;
+    setPanelPending(false);
+    refreshNotice.hidden = false;
+    byId('tag-refresh').focus();
+  }
+  panel.addEventListener('htmx:after:request', event => {
+    if (event.target === fields && event.detail.ctx.response.status >= 400) {
+      event.preventDefault();
+      refreshFailed();
+    }
+  });
+  panel.addEventListener('htmx:error', event => {
+    if (event.target === fields) refreshFailed();
+  });
+  panel.addEventListener('htmx:after:swap', event => {
+    if (event.target !== fields) return;
+    needsRefresh = false;
+    setPanelPending(false);
+    if (!refreshNotice.hidden) status('Tags refreshed.');
+    refreshNotice.hidden = true;
+    for (const [id, message] of retainedErrors) setError(id, message);
     if (!focusTagID || modal.open) return;
     const pencil = [...panel.querySelectorAll('[data-action="edit-tag"]')]
       .find(button => button.dataset.tagId === focusTagID);
@@ -87,8 +125,6 @@ function connectTags(panel) {
     nameError(nameID, errorID, name ? '' : 'Name is required.');
     if (!name) { byId(nameID).focus(); return null; }
     if (!validColor(color)) {
-      byId(prefix + '-color-hex').setAttribute('aria-invalid', 'true');
-      setError(prefix + '-color-error', 'Enter a six-digit color, like #377a64.');
       byId(prefix + '-color-controls').dispatchEvent(new CustomEvent('color-picker:refresh'));
       byId(prefix + '-color-hex').focus();
       return null;
@@ -107,22 +143,12 @@ function connectTags(panel) {
   }
 
   async function runPanel(message, operation) {
-    if (panelPending || editor.pending) return;
-    panelPending = true;
+    if (panelPending || needsRefresh || editor.pending) return;
     clearPanelErrors();
-    const controls = [...panel.querySelectorAll('#tags-body button, #tags-body input, #tags-body select')]
-      .map(control => [control, control.disabled]);
-    for (const [control] of controls) control.disabled = true;
-    panel.setAttribute('aria-busy', 'true');
+    setPanelPending(true);
     status(message);
     try { await operation(); }
-    finally {
-      for (const [control, disabled] of controls) control.disabled = disabled;
-      panelPending = false;
-      panel.removeAttribute('aria-busy');
-      syncAdd();
-      syncCreate();
-    }
+    finally { if (!needsRefresh) setPanelPending(false); }
   }
 
   async function detach(tagID) {
@@ -220,7 +246,7 @@ function connectTags(panel) {
   }
 
   function openEditModal(tagID, name, color, trigger) {
-    if (modal.open || panelPending) return;
+    if (modal.open || panelPending || needsRefresh) return;
     editingTagID = tagID;
     originalName = name;
     originalColor = color.toLowerCase();

@@ -1,6 +1,6 @@
 ---
 id: Exh-zrjo
-status: closed
+status: in_progress
 deps: []
 links: []
 created: 2026-11-04T06:41:33Z
@@ -260,3 +260,7 @@ BOTH36 independently completed ALL14exact10, full Main16 +4samplepair coverage i
 **2026-11-05T22:23:47Z**
 
 Completed the latest tag-only10 scope: rounds36 and37 each contain14 exact10 values from BOTH independent models, all56 verified on unchanged applicationf58de10b/assets4beedb277545 with full Main16states +4samplepairs per review. Opus37 completed its authored report/cleanup before a later quota error; parent audited exact file payload, all12 actual media/image pairs and chronology, preserving the original FAILED execution status. No missing rating inferred. All required checks pass;479Node results carry on unchanged JS/tests with explicit proof. Actual before/after33–36 and final score artifact saved. Ticket closed on FEATURE only; main clean/onmain, no merge/push or newPR, PR273 linked/unwatched, no recurring automation.
+
+**2026-11-06T01:05:19Z**
+
+Reopened for the user-requested simplicity review. Three independent subagents reviewed the pinned cumulative diff atop PR273. Follow-up fixes htmx pending ownership, CodeMirror state ownership, completed-ingest history restoration, and redundant shared styling/validation/menu/palette definitions. Historical visual ratings remain attached to their reviewed application; this is a code-quality follow-up.

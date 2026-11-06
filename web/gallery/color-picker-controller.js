@@ -12,15 +12,7 @@ export default class extends Controller {
     this.setColor(event.currentTarget.dataset.color);
   }
 
-  input(event) {
-    const value = event.target.value.trim();
-    if (/^#[0-9a-f]{6}$/i.test(value)) this.setColor(value);
-    else {
-      this.showValidity(false);
-      this.renderSelection(null);
-      this.dispatch('change', { detail: { valid: false } });
-    }
-  }
+  input() { this.refresh(); }
 
   refresh() {
     const value = this.hexTarget.value.trim();

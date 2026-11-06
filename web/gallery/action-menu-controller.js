@@ -1,4 +1,5 @@
 import { Controller } from '../stimulus/stimulus.js';
+import { moveMenuFocus } from './menu-focus.js';
 import { consumeOutsidePress } from './outside-press.js';
 
 // Markup comes from the actionMenu Go partial. Each instance owns only its
@@ -81,6 +82,7 @@ export default class extends Controller {
       return;
     }
     if (this.menuTarget.hidden) return;
+    if (moveMenuFocus(event, this.items)) return;
     if (key === 'Escape') {
       event.preventDefault();
       event.stopPropagation();
@@ -88,13 +90,6 @@ export default class extends Controller {
     } else if (key === 'Tab') {
       // Continue the browser's tab sequence from the visible trigger.
       this.close(true);
-    } else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(key)) {
-      event.preventDefault();
-      const items = this.items;
-      const current = items.indexOf(document.activeElement);
-      const next = key === 'Home' ? 0 : key === 'End' ? items.length - 1
-        : (current + (key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
-      items[next]?.focus();
     } else if (key === ' ' && event.target.closest('a')) {
       event.preventDefault();
       event.target.closest('a').click();

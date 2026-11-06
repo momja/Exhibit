@@ -52,10 +52,17 @@ test('pending creation submits once, preserves input, and recovers from a refusa
   await page.locator('[data-mode=paste]').click();
   const source = page.getByRole('textbox', { name: 'HTML source', exact: true });
   await source.fill('<h1>Keep my working copy</h1>');
+  await source.press('ControlOrMeta+f');
+  const search = page.locator('.cm-search');
+  await search.locator('input[name=search]').fill('Keep');
+  await search.locator('input[name=replace]').fill('Changed');
   await page.getByRole('button', { name: 'Add to library', exact: true }).click();
   await expect(page.locator('#ingest-panel')).toHaveAttribute('aria-busy', 'true');
   await expect(page.getByRole('button', { name: 'Add to library', exact: true })).toBeDisabled();
   await expect(page.locator('[data-mode=url]')).toBeDisabled();
+  // Search commands must respect the editor state, not just contentEditable.
+  await search.getByRole('button', { name: 'Replace all', exact: true }).click();
+  await expect(source).toHaveText('<h1>Keep my working copy</h1>');
   await page.locator('#ingest-panel').evaluate(form => {
     (form as HTMLFormElement).requestSubmit();
     (form as HTMLFormElement).requestSubmit();

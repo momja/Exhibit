@@ -13,6 +13,7 @@ import {
   VELOCITY_WINDOW_MS, arrowMove, cornerForTab, cornerPosition, isLeft,
   pointerVelocity, popupPlacement, releaseCorner, stashEdgeAt
 } from './pip-placement.js';
+import { moveMenuFocus } from './menu-focus.js';
 
 const STORE_KEY = 'exhibit.pipControls';
 const DRAG_SLOP_PX = 4;      // less movement than this is a press, not a drag
@@ -318,13 +319,7 @@ export function connectFloatingHeader(root) {
       (e.key === 'ArrowUp' ? items.at(-1) : items[0])?.focus();
     } else if (!menu.panel.hidden && menu.panel.contains(e.target)) {
       if (e.key === 'Tab') { closePopups(); trigger?.focus(); }
-      else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) {
-        e.preventDefault();
-        const current = items.indexOf(document.activeElement);
-        const index = e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1
-          : (current + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
-        items[index]?.focus();
-      }
+      else moveMenuFocus(e, items);
     }
   });
 

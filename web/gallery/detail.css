@@ -107,10 +107,7 @@ body[data-pip-corner^=t] .pip-notices{top:auto;bottom:0}
 
 .modal-dialog .share-data-note{display:flex;align-items:flex-start;gap:8px;margin:0;padding:12px;border-radius:var(--radius-md);background:var(--color-subtle);color:var(--color-ink-mid);font-size:var(--text-helper);line-height:var(--line-helper)}
 .share-data-note>i{flex:0 0 auto;font-size:1rem;line-height:1.5;color:var(--color-accent)}
-.modal-dialog .share-help,#share-link-permissions,.share-field-hint{font-size:var(--text-helper);line-height:var(--line-helper);color:var(--color-muted)}
 .share-col .modal-check{margin-top:0}
 #share-panel .share-replace-row>.btn,#share-panel .share-grant>.btn{min-height:44px}
 .state-choice input{left:14px;top:15px;z-index:1;opacity:1;width:18px;height:18px;accent-color:var(--color-accent);margin:0}
 @media(max-width:480px){.state-choice>span{padding-left:44px}}
-
-#share-panel .share-field-hint{font-size:var(--text-helper);line-height:var(--line-helper);color:var(--color-muted)}

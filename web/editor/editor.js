@@ -136,6 +136,8 @@ const themeFor = (dark) => [
 
 function mount(textarea) {
   const theme = new Compartment();
+  const readOnly = new Compartment();
+  const editability = locked => [EditorState.readOnly.of(locked), EditorView.editable.of(!locked)];
   const extensions = [
     basicSetup,
     EditorState.phrases.of({ next: 'Next', previous: 'Previous', all: 'All', replace: 'Replace', 'replace all': 'Replace all', 'match case': 'Match case', regexp: 'Regex', 'by word': 'Whole word', close: 'Close', go: 'Go' }),
@@ -154,6 +156,7 @@ function mount(textarea) {
     keymap.of([indentWithTab]),
     html(),
     theme.of(themeFor(darkScheme.matches)),
+    readOnly.of(editability(false)),
     EditorView.updateListener.of((update) => {
       if (update.docChanged) {
         textarea.value = update.state.doc.toString();
@@ -171,7 +174,12 @@ function mount(textarea) {
   });
   textarea.insertAdjacentElement('afterend', view.dom);
   textarea.style.display = 'none';
-  return view;
+  return {
+    focus() { view.focus(); },
+    setInvalid(invalid) { view.contentDOM.setAttribute('aria-invalid', String(invalid)); },
+    setValue(value) { view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value } }); },
+    setReadOnly(locked) { view.dispatch({ effects: readOnly.reconfigure(editability(locked)) }); },
+  };
 }
 
 window.ArtifactEditor = { mount };

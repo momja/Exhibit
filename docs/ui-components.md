@@ -561,6 +561,12 @@ existing refresh event. After the server-rendered body swaps, the feature
 focuses the replacement pencil or the existing-tag selector after deletion.
 Fields are resolved inside the owning panel rather than globally.
 
+The stable `#tags-body` fieldset locks its controls during a mutation and the
+following htmx refresh. A failed refresh keeps stale controls locked and exposes
+the template's Refresh tags button, which retries only the partial GET. The
+feature handles its own swap/error events; it does not wrap htmx in a Promise or
+restore references to controls that a swap has replaced.
+
 Run `go test ./internal/api -run 'Test(ModalInterfaceBrowser|TagModalBrowser)$' -count=1` for native
 focus/Tab, Escape/backdrop, validation, save/htmx, and disconnect/reconnect
 checks. Set `MODAL_SCREENSHOT_DIR="$PWD/docs/screenshots"` to refresh captures.
@@ -800,6 +806,14 @@ creation while an API request is pending. The editor island transfers each
 textarea's accessible name and description to CodeMirror. Source and widget
 editors have distinct names. Field errors are associated inline; progress and
 server errors use the page's live status region.
+
+`ArtifactEditor.mount(textarea)` returns a small handle with `focus`,
+`setInvalid`, `setValue`, and `setReadOnly`. Page code uses this handle rather
+than changing CodeMirror's DOM or dispatching editor transactions itself.
+Read-only mode configures both CodeMirror's state and content editability, so
+commands such as Replace all respect a pending import. A completed import
+restored by a persisted `pageshow` reloads the creation page; unfinished network
+approval retains its working state.
 
 The floating viewer keeps its positioning lifecycle, with 36px desktop and
 44px phone/coarse controls and restore target. Its menu supports arrows,

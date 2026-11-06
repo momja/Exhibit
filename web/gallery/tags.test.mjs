@@ -30,15 +30,13 @@ async function loadTags({ responses = [], initial = {}, confirmed = true } = {})
   });
   page.byId('tags-panel').querySelector = selector => page.byId(selector.slice(1));
   nativeDialog(page, page.byId('tag-edit-modal'), ['tag-edit-save', 'tag-edit-delete', 'tag-edit-cancel', 'tag-delete-cancel', 'tag-edit-confirm-delete'].map(page.byId));
-  const controls = ['tag-add-name', 'tag-add-color-hex', 'tag-add-select', 'tag-add-confirm', 'tag-create-confirm'].map(page.byId);
-  for (const control of controls) control.disabled = false;
   for (const id of ['tag-add-name', 'tag-edit-name', 'tag-add-color-hex', 'tag-edit-color-hex']) {
     const attributes = new Map(), element = page.byId(id);
     element.setAttribute = (name, value) => attributes.set(name, String(value));
     element.getAttribute = name => attributes.get(name) ?? null;
     element.removeAttribute = name => attributes.delete(name);
   }
-  page.byId('tags-panel').querySelectorAll = selector => selector.startsWith('#tags-body ') ? controls : [];
+  page.byId('tags-panel').querySelectorAll = () => [];
   page.byId('tag-edit-modal').querySelector = selector => selector === '[data-controller~=color-picker]' ? page.byId('tag-edit-colors') : null;
   page.window.apiFetch = api.apiFetch;
   await page.loadModule(TAGS_JS);
@@ -204,7 +202,7 @@ test("attachment errors after creation survive the panel refresh", async () => {
   assert.equal(t.byId("tag-add-error").textContent, "Tag created, but not added. Could not attach");
   t.byId("tag-add-error").textContent = "";
   t.byId("tag-add-select").options = [{ value: "new-tag" }];
-  await t.byId("tags-panel").dispatchEvent({type: "htmx:after:swap"});
+  await t.byId("tags-panel").dispatchEvent({type: "htmx:after:swap", target: t.byId('tags-body')});
   assert.equal(t.byId("tag-add-error").textContent, "Tag created, but not added. Could not attach", "nearby feedback survives replacing its markup");
   assert.equal(t.byId("tag-add-select").value, "new-tag");
   assert.equal(t.byId("tag-add-select").focused, true);
