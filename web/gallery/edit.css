@@ -198,7 +198,7 @@ input.state-input{max-width:340px}
 .tag-create h3,.security-col h3{font-size:.875rem;line-height:1.5;font-weight:600;color:var(--color-ink-soft)}
 .tag-create h3{margin:0 0 8px}
 .tag-create .btn{align-self:flex-start;margin-top:8px;min-width:min(200px,100%)}
-.tag-error{color:var(--color-danger-hover);margin-top:8px}
+.tag-error,.form-help.tag-error{color:var(--color-danger-hover);margin-top:8px}
 .tag-available-note{margin-top:8px}
 @media(max-width:767px){.tag-edit-list{grid-template-columns:minmax(0,1fr);max-width:none}.tag-add-row{max-width:none}}
 
