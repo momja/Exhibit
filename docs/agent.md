@@ -157,7 +157,7 @@ AGENT_MARKDOWN_SCREENSHOT_DIR="$PWD/docs/screenshots/Exh-1e7n" \
 What an agent reads goes to the inference provider that runs it, so agents do
 not see saved data until the owner says they may (Exh-dabd). **Settings → Agents
 and saved data** is the account-wide answer, off by default. Each artifact's edit
-page, under **Stored state**, can follow it, allow, or refuse, whatever the
+page, under **Saved data**, can follow it, allow, or refuse, whatever the
 default says. Both apply to the built-in agent and to connected agents.
 
 - **Pi.** A session gets `get_state`, `set_state` and `delete_state`, and a

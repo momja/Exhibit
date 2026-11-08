@@ -211,7 +211,7 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
     <input type="checkbox" id="agent-state-access-default" data-agent-state-access-target="input" data-action="change->agent-state-access#save"{{if .Allowed}} checked{{end}}>
     Let agents read and change saved data
   </label>
-  <p class="muted text-sm settings-note">Applies to the built-in agent and to agents you connect. You can allow or refuse it for one artifact on its edit page, under Stored state. Agents always see an artifact's code, and anything you select or paste into the chat.</p>
+  <p class="muted text-sm settings-note">Applies to the built-in agent and to agents you connect. You can allow or refuse it for one artifact on its edit page, under Saved data. Agents always see an artifact's code, and anything you select or paste into the chat.</p>
   <p class="settings-status" data-agent-state-access-target="status" role="status" aria-live="polite" hidden></p>
 </section>{{end}}
 
@@ -237,7 +237,7 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
        hx-swap="innerHTML">{{template "agentGrantsPanelBody" .}}</div>
   {{if .MCPURL}}<form id="agent-grant-form" class="settings-form agent-grant-form" aria-describedby="agent-token-scope">
     <h4 class="settings-h4">Use a token instead</h4>
-    <p class="settings-copy" id="agent-token-scope">Anyone with this token can search, create, read, and edit artifacts and widgets throughout your Gallery, and read saved data. They cannot share or delete artifacts, or change saved data. Access lasts until you revoke it.</p>
+    <p class="settings-copy" id="agent-token-scope">Anyone with this token can search, create, read, and edit artifacts and widgets throughout your Gallery, and read saved data where you allow agents to. They cannot share or delete artifacts, or change saved data. Access lasts until you revoke it.</p>
     <label class="settings-label" for="agent-grant-label">Connection label</label>
     <div class="agent-grant-create">
       <input class="field" id="agent-grant-label" name="label" maxlength="100" placeholder="External agent" autocomplete="off">

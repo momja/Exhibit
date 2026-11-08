@@ -18,7 +18,7 @@
   {{if .Error}}<p class="login-error" role="alert"><i class="ph ph-warning-circle" aria-hidden="true"></i> {{.Error}}</p>{{end}}
   {{with .Request}}
   <p class="login-sub">An application calling itself <strong>“<bdi>{{$.ClientName}}</bdi>”</strong>, returning to <code><bdi>{{$.RedirectHost}}</bdi></code>, wants access to your whole Gallery.</p>
-  <p class="login-sub">Approving lets it search, create, read and edit artifacts and widgets, and read saved data. It cannot share or delete artifacts, or change saved data.</p>
+  <p class="login-sub">Approving lets it search, create, read and edit artifacts and widgets, and read saved data where you allow agents to. It cannot share or delete artifacts, or change saved data.</p>
   <p class="login-sub">It stays connected until you revoke it in <strong>Settings → Connected agents</strong>.</p>
   <form class="login-form" method="post" action="/oauth/authorize">
     <input type="hidden" name="response_type" value="code">

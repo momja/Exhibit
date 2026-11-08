@@ -250,7 +250,7 @@ func (ro *Router) artifactExists(w http.ResponseWriter, r *http.Request, artifac
 // can change it.
 const agentStateRefusal = "the owner has not allowed agents to read or change this artifact's saved data. " +
 	"Do not retry. If the request needs it, tell the person they can allow it on the artifact's edit page " +
-	"(Stored state) or for every artifact in Settings."
+	"(Saved data) or for every artifact in Settings."
 
 // agentStateAllowed resolves whether agents may use a's saved data: the
 // artifact's own override, else its owner's account default. a must be read
