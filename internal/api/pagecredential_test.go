@@ -56,6 +56,8 @@ var appOriginGETRoutePaths = []pageRoute{
 	{route: "/.well-known/oauth-authorization-server", path: "/.well-known/oauth-authorization-server"},
 	{route: "/oauth/authorize", path: "/oauth/authorize"},
 	{route: "/search", path: "/search?q=owner"},
+	{route: "/activity", path: "/activity"},
+	{route: "/partials/gallery-grid/activity", path: "/partials/gallery-grid/activity"},
 	{route: "/partials/gallery-grid/search", path: "/partials/gallery-grid/search?q=owner"},
 	{route: "/shared", path: "/shared"},
 	{route: "/shared-by-me", path: "/shared-by-me"},

@@ -84,3 +84,6 @@ ph-package
 ph-plugs
 ph-plugs-connected
 ph-plus-circle
+
+# Personal artifact shortcuts
+ph-star

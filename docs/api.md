@@ -345,6 +345,21 @@ As with any ingest, residual origins surface in `network_footprint` for
 **explicit** approval — the snapshot never seeds the `network_allowlist`, so a
 snapshotted artifact stays network-inert until you approve its residual origins.
 
+## Personal artifact preferences
+
+Authenticated owners and grant recipients may update their own preferences for
+an artifact they can currently read. Public links alone confer no access here.
+Neither endpoint changes artifact content, saved data, or version history.
+
+- `PUT /api/artifacts/:id/starred` with `{"starred": true}` or `false` sets the
+  caller's Starred preference. The field is required and strictly boolean.
+- `POST /api/artifacts/:id/opened` takes no body and records the caller's most
+  recent opening. The app viewer sends it when an artifact is opened.
+
+Both return 204, or 404 for an unknown or inaccessible artifact. Viewer and
+artifact deletion cascade to these records. Agent-scoped credentials do not
+have access to these personal endpoints.
+
 ## Stored-data imports
 
 ```

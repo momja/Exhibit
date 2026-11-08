@@ -29,7 +29,7 @@ func TestCapabilityPopoverTriggerIsFocusable(t *testing.T) {
 		"downloads_approved": true,
 	}).Code)
 
-	page := getPage(t, r, "/")
+	page := getPage(t, r, "/search")
 	assert.Contains(t, page, `tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-`+id+`" data-capability-trigger`)
 	assert.Contains(t, page, `<div class="capability-popover" id="capability-popover-`+id+`">`)
 	assert.Contains(t, page, `<div class="capability-popover-header">Permissions</div>`)
@@ -97,7 +97,7 @@ func TestCapabilityPopoverNetworkRowListsOriginsAndPluralizes(t *testing.T) {
 	})
 	require.Equal(t, http.StatusOK, w.Code)
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest("GET", "/search", nil)
 	w2 := httptest.NewRecorder()
 	r.ServeHTTP(w2, req)
 	require.Equal(t, http.StatusOK, w2.Code)
@@ -113,7 +113,7 @@ func TestCapabilityPopoverNetworkRowListsOriginsAndPluralizes(t *testing.T) {
 	})
 	require.Equal(t, http.StatusOK, w3.Code)
 
-	req2 := httptest.NewRequest("GET", "/", nil)
+	req2 := httptest.NewRequest("GET", "/search", nil)
 	w4 := httptest.NewRecorder()
 	r.ServeHTTP(w4, req2)
 	require.Equal(t, http.StatusOK, w4.Code)
@@ -134,7 +134,7 @@ func TestCapabilityPopoverDownloadsAndClipboardRowsPerFlag(t *testing.T) {
 	})
 	require.Equal(t, http.StatusOK, w.Code)
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest("GET", "/search", nil)
 	w2 := httptest.NewRecorder()
 	r.ServeHTTP(w2, req)
 	require.Equal(t, http.StatusOK, w2.Code)
@@ -148,7 +148,7 @@ func TestCapabilityPopoverDownloadsAndClipboardRowsPerFlag(t *testing.T) {
 	})
 	require.Equal(t, http.StatusOK, w3.Code)
 
-	req2 := httptest.NewRequest("GET", "/", nil)
+	req2 := httptest.NewRequest("GET", "/search", nil)
 	w4 := httptest.NewRecorder()
 	r.ServeHTTP(w4, req2)
 	require.Equal(t, http.StatusOK, w4.Code)
@@ -169,7 +169,7 @@ func TestCapabilityPopoverLinksRowPerFlag(t *testing.T) {
 	})
 	require.Equal(t, http.StatusOK, w.Code)
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest("GET", "/search", nil)
 	w2 := httptest.NewRecorder()
 	r.ServeHTTP(w2, req)
 	require.Equal(t, http.StatusOK, w2.Code)
@@ -216,7 +216,7 @@ func TestCapabilityPopoverDeviceAndLocationRowsPerFlag(t *testing.T) {
 			w := doJSON(t, r, "PATCH", "/api/artifacts/"+id, map[string]any{tc.field: true})
 			require.Equal(t, http.StatusOK, w.Code)
 
-			req := httptest.NewRequest("GET", "/", nil)
+			req := httptest.NewRequest("GET", "/search", nil)
 			w2 := httptest.NewRecorder()
 			r.ServeHTTP(w2, req)
 			require.Equal(t, http.StatusOK, w2.Code)
@@ -247,7 +247,7 @@ func TestCapabilityPopoverManageLinkOnGalleryAndDetail(t *testing.T) {
 		"downloads_approved": true,
 	}).Code)
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest("GET", "/search", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)

@@ -47,7 +47,7 @@ func TestMobileTargetsBrowser(t *testing.T) {
 			}
 			_, err := chromedp.Call(ctx, emulation.SetDeviceMetricsOverride, emulation.SetDeviceMetricsOverrideParams{Width: width, Height: 844, DeviceScaleFactor: 1})
 			require.NoError(t, err)
-			run(chromedp.Navigate(app.URL+"/?q=long"), chromedp.Poll[chromedp.Void](`document.querySelector('.card-actions-trigger') && !document.querySelector('[data-gallery-clear]').hidden`))
+			run(chromedp.Navigate(app.URL+"/search?q=long"), chromedp.Poll[chromedp.Void](`document.querySelector('.card-actions-trigger') && !document.querySelector('[data-gallery-clear]').hidden`))
 			check(`(() => {
     const header = [...document.querySelectorAll('.app-header a,.app-header button,.app-header input:not([type=hidden])')];
     const card = [...document.querySelectorAll('.card-title,[data-capability-trigger],.card-actions-trigger')];
@@ -57,7 +57,7 @@ func TestMobileTargetsBrowser(t *testing.T) {
      if (r.width < 44 || r.height < 44) return false;
      return all.slice(i+1).every(other => {const s=other.getBoundingClientRect();return r.right<=s.left || s.right<=r.left || r.bottom<=s.top || s.bottom<=r.top});
     });
-    return apart(header) && apart(card) && document.documentElement.scrollWidth <= innerWidth && !document.querySelector('header [data-gallery-query]').getClientRects().length;
+    return apart(header) && apart(card) && document.documentElement.scrollWidth <= innerWidth && !document.querySelector('header [data-gallery-query]')?.getClientRects().length;
    })()`)
 			for _, scheme := range []string{"light", "dark"} {
 				_, err := chromedp.Call(ctx, emulation.SetEmulatedMedia, emulation.SetEmulatedMediaParams{Features: []*emulation.MediaFeature{{Name: "prefers-color-scheme", Value: scheme}}})
@@ -69,17 +69,17 @@ func TestMobileTargetsBrowser(t *testing.T) {
 				point, err := chromedp.Run(ctx, chromedp.Evaluate[struct{ X, Y float64 }](fmt.Sprintf(`(() => {const r=document.querySelector(%q).getBoundingClientRect();return {X:r.left+2,Y:r.top+r.height/2}})()`, target.selector)))
 				require.NoError(t, err)
 				run(chromedp.MouseClickXY(point.X, point.Y), chromedp.Poll[chromedp.Void](fmt.Sprintf(`document.querySelector(%q)`, target.open), chromedp.WithPollingTimeout(5*time.Second)))
-				check(`location.pathname === '/'`)
+				check(`location.pathname === '/search'`)
 				run(chromedp.KeyEvent(kb.Escape))
 			}
-			// Query controls now live on Search, outside the mobile header.
-			run(chromedp.Click(chromedp.CSS(`.gallery-spaces a[href="/search"]`)), chromedp.Poll[chromedp.Void](`location.pathname === '/search' && document.querySelector('.gallery-page-search')`))
+			// Query controls live on Search, outside the mobile header.
+			run(chromedp.Click(chromedp.CSS(`.gallery-spaces a[href="/search"]`)), chromedp.Poll[chromedp.Void](`location.pathname === '/search' && location.search === '' && document.querySelector('.gallery-page-search')`))
 			run(chromedp.SendKeys(chromedp.CSS(`[data-gallery-query]`), "long"), chromedp.Poll[chromedp.Void](`document.querySelector('.card-title') && location.search === '?q=long'`))
 			run(chromedp.Click(chromedp.CSS(`[data-gallery-clear]`)), chromedp.Poll[chromedp.Void](`document.querySelector('[data-gallery-query]').value === '' && document.querySelector('[data-gallery-clear]').hidden`))
 			check(`document.activeElement.matches('[data-gallery-query]')`)
 			run(chromedp.Evaluate[chromedp.Void](`document.querySelector('[data-gallery-query]').style.fontSize='32px'`))
 			check(`document.documentElement.scrollWidth <= innerWidth`)
-			run(chromedp.Click(chromedp.CSS(`.gallery-spaces a[href="/"]`)), chromedp.Poll[chromedp.Void](`location.pathname === '/' && document.querySelector('.card-title')`))
+			run(chromedp.Poll[chromedp.Void](`location.pathname === '/search' && document.querySelector('.card-title')`))
 			// Typography may wrap the title or change its leading/padding. The
 			// anchor's target floor must not depend on any of those choices.
 			run(chromedp.Evaluate[chromedp.Void](`Object.assign(document.querySelector('.card-title').style,{fontSize:'16px',lineHeight:'1.4',paddingBlock:'6px'})`))

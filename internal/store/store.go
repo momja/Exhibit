@@ -454,6 +454,11 @@ type Store interface {
 	// SearchArtifactsReadableBy searches owned artifacts and incoming grants in
 	// one stable page. Anonymous links alone do not authorize discovery.
 	SearchArtifactsReadableBy(ctx context.Context, viewer ViewerID, query string, limit, offset int) ([]*SharedArtifact, error)
+	ListViewerGallery(ctx context.Context, viewer ViewerID, opts ViewerGalleryOptions) ([]*SharedArtifact, error)
+	SetArtifactStarred(ctx context.Context, viewer ViewerID, id string, starred bool) error
+	RecordArtifactOpened(ctx context.Context, viewer ViewerID, id string) error
+	ArtifactPreferences(ctx context.Context, viewer ViewerID, ids []string) (map[string]ArtifactPreference, error)
+	ListArtifactActivity(ctx context.Context, ownerID int64, limit, offset int) ([]ArtifactActivity, error)
 	// SharedWithOwners counts incoming artifacts per owner, ordered by display
 	// name then ID. SpaceCounts counts incoming artifacts and owned artifacts
 	// with any share, respectively; neither count depends on list filters.

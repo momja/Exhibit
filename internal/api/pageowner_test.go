@@ -79,6 +79,8 @@ type pageOwnerRoute struct {
 // appOriginGETOwnerScope is every GET route the app mux registers. A route
 // missing from here fails the walk on purpose.
 var appOriginGETOwnerScope = []pageOwnerRoute{
+	{route: "/activity", scopedByHandler: true, coveredBy: "galleryredesign_test.go", why: "Owner-scoped version activity and conversations"},
+	{route: "/partials/gallery-grid/activity", scopedByHandler: true, coveredBy: "galleryredesign_test.go", why: "Same owner-scoped activity selection"},
 	{route: "/.well-known/oauth-authorization-server", why: "Public static metadata; reads no library"},
 	{route: "/oauth/authorize", scopedByHandler: true, coveredBy: "oauth_test.go", why: "Consent reads no artifacts; approval binds the grant to the session owner, or the no-login operator"},
 	{route: "/partials/agent-grants", scopedByHandler: true, coveredBy: "agentgrants_test.go", why: "Lists only the caller’s library grants, with no owner id accepted; tested with two owners and a no-login instance"},
@@ -417,6 +419,8 @@ func assertFramesName(t *testing.T, ro *Router, w *httptest.ResponseRecorder, wa
 
 func TestEveryAppOriginGETRouteDeclaresItsOwnerScope(t *testing.T) {
 	in := newTwoOwnerInstance(t)
+	require.NoError(t, in.ro.cfg.Store.SetArtifactStarred(t.Context(), store.ViewerID(in.ownerOne), in.artifactOne, true))
+	require.NoError(t, in.ro.cfg.Store.SetArtifactStarred(t.Context(), store.ViewerID(in.ownerTwo), in.artifactTwo, true))
 	cfg := in.ro.cfg
 	cfg.MCPURL = "https://agents.example.test/mcp"
 	in.ro = NewRouter(cfg)
@@ -458,6 +462,8 @@ func TestEveryAppOriginGETRouteDeclaresItsOwnerScope(t *testing.T) {
 // page emits names them.
 func TestPageRoutesRenderTheSessionOwnersLibrary(t *testing.T) {
 	in := newTwoOwnerInstance(t)
+	require.NoError(t, in.ro.cfg.Store.SetArtifactStarred(t.Context(), store.ViewerID(in.ownerOne), in.artifactOne, true))
+	require.NoError(t, in.ro.cfg.Store.SetArtifactStarred(t.Context(), store.ViewerID(in.ownerTwo), in.artifactTwo, true))
 
 	exercised := 0
 	for _, row := range appOriginGETOwnerScope {
@@ -508,6 +514,8 @@ func TestPageRoutesRenderTheSessionOwnersLibrary(t *testing.T) {
 // produce are checked too.
 func TestNoRenderURLOnASecondOwnersPageServesAnotherOwnersArtifactOrState(t *testing.T) {
 	in := newTwoOwnerInstance(t)
+	require.NoError(t, in.ro.cfg.Store.SetArtifactStarred(t.Context(), store.ViewerID(in.ownerOne), in.artifactOne, true))
+	require.NoError(t, in.ro.cfg.Store.SetArtifactStarred(t.Context(), store.ViewerID(in.ownerTwo), in.artifactTwo, true))
 
 	// Non-vacuity: the render surface really does hand over owner one's body
 	// and inlined state to a token that names owner one. That document is what
@@ -567,6 +575,7 @@ func TestSingleUserPagesStillRenderOwnerOnesLibrary(t *testing.T) {
 	// Conditional network and connection fragments need a warning and a pending
 	// request to render. Use the same nonempty fixture as the session walk.
 	id := seedOwnedArtifact(t, r, defaultOwnerID, "single-user-artifact", "Single User Shelf", "Single user body", "Single user state")
+	require.NoError(t, r.cfg.Store.SetArtifactStarred(t.Context(), store.ViewerID(defaultOwnerID), id, true))
 
 	for _, row := range appOriginGETOwnerScope {
 		if !row.ownerScoped {
@@ -622,6 +631,8 @@ func TestAnonymousPublicVisitorStillResolvesThePublicOwner(t *testing.T) {
 // only supplies one when nobody upstream did.
 func TestSessionOwnerReachesTheHandlerAlongsideTheSessionMarker(t *testing.T) {
 	in := newTwoOwnerInstance(t)
+	require.NoError(t, in.ro.cfg.Store.SetArtifactStarred(t.Context(), store.ViewerID(in.ownerOne), in.artifactOne, true))
+	require.NoError(t, in.ro.cfg.Store.SetArtifactStarred(t.Context(), store.ViewerID(in.ownerTwo), in.artifactTwo, true))
 
 	var owner int64
 	var marked bool
@@ -656,6 +667,8 @@ func TestOwnerIDFromCtxFailsClosed(t *testing.T) {
 	// so a handler that somehow reached the store with it gets an empty
 	// library instead of somebody's.
 	in := newTwoOwnerInstance(t)
+	require.NoError(t, in.ro.cfg.Store.SetArtifactStarred(t.Context(), store.ViewerID(in.ownerOne), in.artifactOne, true))
+	require.NoError(t, in.ro.cfg.Store.SetArtifactStarred(t.Context(), store.ViewerID(in.ownerTwo), in.artifactTwo, true))
 	arts, err := in.ro.cfg.Store.ListArtifacts(context.Background(), store.ListOptions{OwnerID: noOwner, Limit: 100})
 	require.NoError(t, err)
 	assert.Empty(t, arts, "the unattributed owner must match no artifact")

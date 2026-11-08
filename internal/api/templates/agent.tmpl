@@ -34,7 +34,7 @@
   </div>
 </div>
 <div class="layout" id="agent-layout">
-  <div class="chat" id="pane-chat" role="region" aria-label="Chat" tabindex="-1">
+  <div class="chat{{if .Conversation}} history-open{{end}}" id="pane-chat" role="region" aria-label="Chat" tabindex="-1" data-agent-live-session="{{.LiveSession}}"{{if .Conversation}} data-agent-conversation="true"{{end}}>
     {{/* The chat's own controls. History lists the conversations kept with this
          artifact (av-y7td) in a pane that takes the place of the messages and
          the composer while it is open — a conversation you are only reading
@@ -48,7 +48,7 @@
     </div>
     <template id="agent-message-template">{{template "agentMessage" ""}}</template>
     <div id="messages"></div>
-    <div id="history"></div>
+    <div id="history">{{if .Conversation}}{{template "agentTranscript" .Conversation}}{{end}}</div>
     <div class="composer">
       <div class="composer-notices">
         <div id="agent-network-warnings" hx-get="/partials/network-warnings"

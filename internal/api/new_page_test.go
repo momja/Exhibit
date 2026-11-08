@@ -175,7 +175,7 @@ func TestNewPageKeepsApproveThenPatchFlow(t *testing.T) {
 // called, not what it looks like.)
 func TestGalleryIndexHasNoIngestMarkup(t *testing.T) {
 	r := newTestRouter(t)
-	page := getPage(t, r, "/")
+	page := getPage(t, r, "/search")
 
 	for _, id := range []string{`id="upload"`, `id="body"`, `id="url-input"`, `id="snapshot-row"`, `id="scan-result"`, `id="status"`} {
 		assert.NotContains(t, page, id, "ingest markup must not survive on the library index")
@@ -204,11 +204,11 @@ func TestGalleryIndexHasNoIngestMarkup(t *testing.T) {
 // longer above it.
 func TestGalleryEmptyStateLinksToNewPage(t *testing.T) {
 	r := newTestRouter(t)
-	page := getPage(t, r, "/")
+	page := getPage(t, r, "/search")
 
-	assert.Contains(t, page, `Your Gallery is empty`)
+	assert.Contains(t, page, `Welcome to Exhibit`)
 	assert.Contains(t, page, `href="/new"><i class="ph ph-palette" aria-hidden="true"></i>Create your first artifact`)
-	assert.Contains(t, getPage(t, r, "/partials/gallery-grid"), `Your Gallery is empty`)
+	assert.Contains(t, getPage(t, r, "/partials/gallery-grid/search"), `Welcome to Exhibit`)
 }
 
 // The 404 page's second action used to point at a /#upload fragment on the

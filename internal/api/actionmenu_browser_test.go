@@ -192,7 +192,7 @@ func TestGalleryActionMenuDuplicationBrowser(t *testing.T) {
 	trigger := `#card-actions-` + id + `-trigger`
 	menu := `#card-actions-` + id
 	require.NoError(t, chromedp.Do(ctx,
-		chromedp.Navigate(srv.URL),
+		chromedp.Navigate(srv.URL+"/search"),
 		chromedp.Focus(chromedp.CSS(trigger)),
 		chromedp.Poll[chromedp.Void](`document.querySelector('`+trigger+`').getAttribute('aria-expanded') === 'false'`),
 		chromedp.KeyEvent(kb.ArrowDown), chromedp.KeyEvent(kb.End), chromedp.KeyEvent(kb.Enter),

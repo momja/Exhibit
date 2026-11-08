@@ -39,7 +39,7 @@ func TestGalleryIndexRendersTagDots(t *testing.T) {
 	}
 
 	untaggedID := createTestArtifact(t, r, "Untagged")
-	page := getPage(t, r, "/")
+	page := getPage(t, r, "/search")
 
 	// av-uvc6: a tag on a card is its color alone. The name is not drawn,
 	// but it is the dot's tooltip and the screen reader's text, so the
@@ -73,7 +73,7 @@ func TestGalleryTagsAreStatic(t *testing.T) {
 	w := doJSON(t, r, "POST", "/api/tags/"+tag.ID+"/artifacts/"+id, nil)
 	require.Equal(t, http.StatusNoContent, w.Code)
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest("GET", "/search", nil)
 	w2 := httptest.NewRecorder()
 	r.ServeHTTP(w2, req)
 	require.Equal(t, http.StatusOK, w2.Code)
@@ -179,7 +179,7 @@ func TestGallerySearchIsEagerInput(t *testing.T) {
 	r := newTestRouter(t)
 	createTestArtifact(t, r, "Findable")
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest("GET", "/search", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
@@ -187,8 +187,8 @@ func TestGallerySearchIsEagerInput(t *testing.T) {
 
 	assert.Contains(t, page, `<input type="text" name="q" data-gallery-query`)
 	assert.Contains(t, page, `placeholder="Search"`)
-	assert.Contains(t, page, `hx-get="/partials/gallery-grid"`)
-	assert.Contains(t, page, `hx-target="#library-gallery-results"`)
+	assert.Contains(t, page, `hx-get="/partials/gallery-grid/search"`)
+	assert.Contains(t, page, `hx-target="#search-gallery-results"`)
 	assert.Contains(t, page, `<script type="module" src="`+assetURL("gallery/index.js")+`"></script>`)
 	assert.NotContains(t, page, `>Search</button>`)
 }
@@ -200,7 +200,7 @@ func TestGallerySearchIsEagerInput(t *testing.T) {
 // before the input would stay on screen over the query.
 func TestGallerySearchAdvertisesSlashShortcut(t *testing.T) {
 	r := newTestRouter(t)
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest("GET", "/search", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
@@ -240,7 +240,7 @@ func TestGalleryCardHasNoRedundantDetailsLink(t *testing.T) {
 	r := newTestRouter(t)
 	id := createTestArtifact(t, r, "Openless")
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest("GET", "/search", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
@@ -258,7 +258,7 @@ func TestGalleryCardHasNoRedundantDetailsLink(t *testing.T) {
 	assert.Contains(t, page, `class="action-menu-container card-actions" data-controller="action-menu"`)
 	assert.Contains(t, page, `aria-label="Actions for Openless" title="Actions" aria-haspopup="menu" aria-expanded="false" aria-controls="card-actions-`+id+`"`)
 	assert.Contains(t, page, `id="card-actions-`+id+`" role="menu" aria-labelledby="card-actions-`+id+`-trigger"`)
-	assert.Contains(t, page, `<a href="/artifacts/`+id+`/edit?return_to=%2F" role="menuitem"`)
+	assert.Contains(t, page, `<a href="/artifacts/`+id+`/edit?return_to=%2Fsearch" role="menuitem"`)
 	assert.Contains(t, page, `<script type="module" src="`+assetURL("gallery/controllers.js")+`"></script>`)
 	assert.NotContains(t, page, `class="card-edit"`)
 
@@ -293,7 +293,7 @@ func TestGalleryCardActionsStayReachableWithoutHover(t *testing.T) {
 func TestGalleryCardShowsNoMarksWhenSandboxedAndPrivate(t *testing.T) {
 	r := newTestRouter(t)
 	createTestArtifact(t, r, "Plain")
-	page := getPage(t, r, "/")
+	page := getPage(t, r, "/search")
 
 	assert.NotContains(t, page, "capability-cluster")
 	assert.NotContains(t, page, "capability-popover")
@@ -316,7 +316,7 @@ func TestGalleryCardShowsNetworkCount(t *testing.T) {
 	})
 	require.Equal(t, http.StatusOK, w.Code)
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest("GET", "/search", nil)
 	w2 := httptest.NewRecorder()
 	r.ServeHTTP(w2, req)
 	require.Equal(t, http.StatusOK, w2.Code)
@@ -338,7 +338,7 @@ func TestGalleryCardShowsCapabilityGlyphsPerFlag(t *testing.T) {
 	})
 	require.Equal(t, http.StatusOK, w.Code)
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest("GET", "/search", nil)
 	w2 := httptest.NewRecorder()
 	r.ServeHTTP(w2, req)
 	require.Equal(t, http.StatusOK, w2.Code)
@@ -354,7 +354,7 @@ func TestGalleryCardShowsCapabilityGlyphsPerFlag(t *testing.T) {
 	})
 	require.Equal(t, http.StatusOK, w3.Code)
 
-	req2 := httptest.NewRequest("GET", "/", nil)
+	req2 := httptest.NewRequest("GET", "/search", nil)
 	w4 := httptest.NewRecorder()
 	r.ServeHTTP(w4, req2)
 	require.Equal(t, http.StatusOK, w4.Code)

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/momja/Exhibit/internal/agent"
 	"github.com/momja/Exhibit/internal/store"
 )
 
@@ -20,7 +21,9 @@ import (
 // '&' by default, which is what keeps this safe to embed in a <script>
 // block despite the title coming from user-authored artifact data.
 type agentPageData struct {
-	Header appHeaderView
+	Conversation *agentTranscriptData
+	LiveSession  string
+	Header       appHeaderView
 	// Favicon is a data: URI (base64 SVG); typed template.URL because
 	// html/template rejects the data: scheme in URL contexts by default.
 	Favicon template.URL
@@ -179,6 +182,31 @@ func (ro *Router) agentPage(w http.ResponseWriter, r *http.Request) {
 		Preview:         ro.newAgentPreviewData(r, artifact),
 	}
 	data.DirectOpen.ID = data.Preview.ID
+	// A deep link selects a conversation for reading. Merely opening a
+	// historical entry never resumes a process or rolls back the artifact.
+	conversation := r.URL.Query().Get("conversation")
+	if live := r.URL.Query().Get("live"); live != "" {
+		if ro.cfg.Agent != nil {
+			if session := ro.cfg.Agent.Get(ownerIDFromCtx(r.Context()), live); session != nil && session.ArtifactID() == r.URL.Query().Get("artifact") {
+				data.LiveSession = session.ID
+			}
+		}
+		if data.LiveSession == "" {
+			conversation = live
+		}
+	}
+	if conversation != "" {
+		transcript, head, err := ro.transcript(r, ownerIDFromCtx(r.Context()), r.URL.Query().Get("artifact"), conversation)
+		if err != nil {
+			serverError(w, r, "activity conversation", err)
+			return
+		}
+		if transcript == nil {
+			ro.notFound(w, r)
+			return
+		}
+		data.Conversation = &agentTranscriptData{conversationView: newConversationView(*transcript, head), HeadSeq: head, Messages: agent.Messages(transcript), AgentEnabled: ro.cfg.Agent != nil}
+	}
 	data.DirectOpen.OpenURL = data.Preview.OpenURL
 	data.DirectOpen.ViewerPreference = strconv.FormatInt(ownerIDFromCtx(r.Context()), 10)
 	if ro.renderURLs(r).anonymous {
