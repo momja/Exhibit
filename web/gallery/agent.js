@@ -115,7 +115,7 @@ async function refreshKeyStatus() {
     document.getElementById('key-model').value = d.model || '';
     const cur = document.getElementById('current-key');
     cur.hidden = false;
-    cur.textContent = 'A key is already configured for ' + d.provider + '. Saving keeps it unless you delete the masked value below and enter a new one.';
+    cur.textContent = 'A key is saved for ' + d.provider + '. Keep the masked value to use it, or enter a replacement.';
     document.getElementById('key-delete').hidden = false;
   } else {
     btn.classList.add('btn-warn');
@@ -235,7 +235,7 @@ async function saveKey() {
   closeKeyModal();
   // A new key means the next prompt should start a fresh session.
   resetSession();
-  addMsg('sys', 'API key saved. The key is encrypted on the server and never returned to the browser.');
+  addMsg('sys', 'API key saved.');
   // The brief that couldn't be sent a moment ago goes now. send() reads the
   // composer rather than the stored brief, so an edit made while the modal was
   // up is what gets sent. Only a *save* spends it: cancelling the modal leaves
@@ -511,10 +511,9 @@ function handleAgentEvent(ev) {
       artifact = {id: ev.artifactId, title: ev.title || 'Artifact'};
       refreshPreview();
       nudgePreview();
-      let note = (ev.action === 'created' ? 'Artifact created' : 'Artifact updated') +
-        (mobileQuery.matches ? ' — tap Preview to view it.' : ' — preview on the right.');
+      let note = ev.action === 'created' ? 'Artifact created.' : 'Artifact updated.';
       if (ev.footprint && ev.footprint.length) {
-        note += ' It references external origins (' + ev.footprint.join(', ') + '); they stay blocked until you approve them on the artifact page.';
+        note += ' Network access to ' + ev.footprint.join(', ') + ' stays blocked until you approve it.';
       }
       if (ev.warnings && ev.warnings.length) note += ' Review the network warnings below before allowing access.';
       addMsg('sys', note);
@@ -534,9 +533,9 @@ function handleAgentEvent(ev) {
       }
       refreshPreview();
       nudgePreview();
-      const label = ev.action === 'cleared_all' ? 'Erased all state'
-        : ev.action === 'deleted_key' ? 'Deleted state key "' + ev.key + '"'
-        : 'Set state key "' + ev.key + '"';
+      const label = ev.action === 'cleared_all' ? 'Erased current saved data'
+        : ev.action === 'deleted_key' ? 'Deleted saved data key "' + ev.key + '"'
+        : 'Set saved data key "' + ev.key + '"';
       addMsg('sys', label + (mobileQuery.matches ? ' — tap Preview to see it.' : ' — preview refreshed.'));
       break;
     }
@@ -548,9 +547,9 @@ function handleAgentEvent(ev) {
       // rather than merely pending; say so plainly.
       if (!artifact) artifact = {id: ev.artifactId, title: 'Artifact'};
       refreshPreview();
-      let note = 'Gallery widget saved — it appears on this artifact’s card in the library.';
+      let note = 'Card widget saved. It now appears in your Gallery.';
       if (ev.unapproved && ev.unapproved.length) {
-        note += ' It references ' + ev.unapproved.join(', ') + ', which the artifact’s allowlist does not cover, so the browser blocks those.';
+        note += ' It references ' + ev.unapproved.join(', ') + ', which are blocked until you allow them under Edit → Permissions.';
       }
       addMsg('sys', note);
       break;
@@ -568,10 +567,9 @@ function handleAgentEvent(ev) {
       setStreaming(false);
       break;
     case 'exhibit_source_prepared':
-      addMsg('sys', 'Prepared artifact source.');
       break;
     case 'extension_error':
-      addMsg('err', 'Extension error: ' + (ev.error || 'unknown'));
+      addMsg('err', 'The agent encountered an error. Try again.');
       break;
     case 'exhibit_session_closed': {
       const ended = sessionId;
@@ -586,7 +584,7 @@ function handleAgentEvent(ev) {
       break;
     }
     case 'auto_retry_start':
-      addMsg('sys', 'Provider hiccup — retrying (' + ev.attempt + '/' + ev.maxAttempts + ')…');
+      addMsg('sys', 'The AI provider didn’t respond. Retrying (' + ev.attempt + '/' + ev.maxAttempts + ')…');
       break;
   }
 }
@@ -613,9 +611,9 @@ function toolLabel(name, args) {
     case 'get_widget': return 'Reading widget';
     case 'get_selection': return 'Reading selected elements';
     case 'ask_user': return 'Asking you';
-    case 'get_state': return 'Reading artifact state';
-    case 'set_state': return 'Setting state key "' + (args.key || '') + '"';
-    case 'delete_state': return args.key ? 'Deleting state key "' + args.key + '"' : 'Erasing all state';
+    case 'get_state': return 'Reading saved data';
+    case 'set_state': return 'Setting saved data key "' + (args.key || '') + '"';
+    case 'delete_state': return args.key ? 'Deleting saved data key "' + args.key + '"' : 'Erasing saved data';
     default: return name;
   }
 }
@@ -862,7 +860,7 @@ document.getElementById('history').addEventListener('click', (e) => {
   if (btn) resumeConversation(btn.dataset.resume, Number(btn.dataset.rollback) || 0);
 });
 
-const RESTORE_UNCERTAINTY = 'The rollback could not be confirmed and may have completed. The conversation was not continued. Check the artifact before trying again.';
+const RESTORE_UNCERTAINTY = 'The restore could not be confirmed and may have completed. The conversation was not continued. Check the artifact before trying again.';
 
 function detachHistoryCandidate(attempt) {
   const candidateId = attempt.candidateId;
@@ -954,7 +952,7 @@ async function resumeConversation(conversationId, rollbackTo) {
             const why = await back.json().catch(() => ({}));
             // Only this explicit 409 means there was nothing to put back.
             if (back.status !== 409 || why.code !== 'already_current') {
-              const error = new Error('Could not roll back: ' + (why.error || 'HTTP ' + back.status) + ' The conversation was not continued.');
+              const error = new Error('Could not restore: ' + (why.error || 'HTTP ' + back.status) + ' The conversation was not continued.');
               error.restoreRefused = true;
               throw error;
             }
@@ -973,7 +971,7 @@ async function resumeConversation(conversationId, rollbackTo) {
     // What was said, as the fragment drew it, becomes the chat: the conversation
     // being continued, with the next message after it.
     messagesEl.innerHTML = pastMarkup;
-    addMsg('sys', (rollbackTo ? 'Rolled back to v' + rollbackTo + '. ' : '') +
+    addMsg('sys', (rollbackTo ? 'Restored v' + rollbackTo + '. ' : '') +
       'Continuing this conversation. The agent will read the artifact again before it changes anything.');
     closeHistory();
     // The pane shows the artifact the conversation now continues on. After a

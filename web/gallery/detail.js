@@ -251,73 +251,38 @@ if (stateReloadBtn) {
 // generic description so an added detection is never left with empty details.
 const CAPABILITY_COPY = {
   camera: {
-    detail: 'This artifact asked for your camera. No browser can give a camera to the ' +
-      "embedded preview — its sandboxed frame has no stable origin, and a device " +
-      'permission is granted to an origin. Opening the artifact directly gives it a real ' +
-      'origin, where it reaches the camera under the approval you already granted.',
+    detail: 'The preview can’t use your camera. Open this artifact in a new tab, where your browser can ask for permission.',
     resourceLabel: 'Device'
   },
   microphone: {
-    detail: 'This artifact asked for your microphone. No browser can give a microphone to ' +
-      "the embedded preview — its sandboxed frame has no stable origin, and a device " +
-      'permission is granted to an origin. Opening the artifact directly gives it a real ' +
-      'origin, where it reaches the microphone under the approval you already granted.',
+    detail: 'The preview can’t use your microphone. Open this artifact in a new tab, where your browser can ask for permission.',
     resourceLabel: 'Device'
   },
   'camera-microphone': {
-    detail: 'This artifact asked for your camera and microphone. No browser can give a ' +
-      "capture device to the embedded preview — its sandboxed frame has no stable origin, " +
-      'and a device permission is granted to an origin. Opening the artifact directly gives ' +
-      'it a real origin, where it reaches them under the approval you already granted.',
+    detail: 'The preview can’t use your camera or microphone. Open this artifact in a new tab, where your browser can ask for permission.',
     resourceLabel: 'Device'
   },
-  // av-f446. Unlike the devices above, a browser *could* hand this frame a
-  // location (Chromium does, given an allow= delegation), so the copy does not
-  // say it can't. What it says is the actual reason: the grant would belong to
-  // the library rather than to this artifact.
   geolocation: {
-    detail: 'This artifact asked for your location. The embedded preview does not pass ' +
-      "your location to artifacts: its sandboxed frame has no stable origin of its own, so " +
-      "your browser's location permission could only be granted to the library, not to " +
-      'this artifact. Opening the artifact directly gives it a real origin, where it reads ' +
-      'your location under the approval you already granted.',
+    detail: 'The preview does not share your location. Open this artifact in a new tab, where your browser can ask for permission.',
     resourceLabel: 'Request'
   },
-  // av-kmwj. The artifact asked for an origin its allowlist already permits and
-  // the browser blocked it anyway, which means the request did not end where it
-  // started. CSP re-checks every redirect hop, and it deliberately reports the
-  // URL the artifact asked for rather than the one it was sent to — a policy
-  // must not become a way to probe where a cross-origin redirect leads. So
-  // nobody on this page can name the origin that actually needs approving, and
-  // the network prompt stays out of the way rather than offering to grant a
-  // permission that is already granted.
-  //
-  // It carries its own headline because the shared one is wrong here: opening
-  // the artifact directly does not fix a redirect, the policy is identical
-  // there. What it does buy is a console that names the blocked URL.
   'redirected-origin': {
-    headline: 'A request was blocked after being redirected to an unapproved origin.',
-    detail: 'This artifact contacted a host you have already allowed, but that host ' +
-      'forwarded the request somewhere else, and the destination is not on the ' +
-      "allowlist. Browsers hide a redirect's destination from the page, so Exhibit " +
-      'cannot offer it for approval — if you know the host it forwards to, add it in ' +
-      "allowlist settings. Opening the artifact directly runs it under the same " +
-      "policy, where your browser's Network panel shows the redirect and names " +
-      'the destination.',
+    headline: 'A request was redirected to a site that is not allowed.',
+    hideDirectOpen: true,
+    detail: 'An allowed site redirected this request to another site. Your browser hides that destination from Exhibit. ' +
+      'If you know it, add it under Edit → Permissions. Opening a new tab does not bypass these permissions; ' +
+      'your browser’s Network panel can show the destination.',
+    recipientDetail: 'An allowed site redirected this request to another site. Your browser hides that destination from Exhibit. ' +
+      'Only the owner can allow this destination. Ask them to review this request. Opening a new tab does not bypass these permissions.',
     resourceLabel: 'Blocked request'
   },
   'module-worker': {
-    detail: "This artifact spawns a module worker (new Worker(url, { type: 'module' })), " +
-      'which browsers refuse to run in the embedded preview because its sandboxed ' +
-      'frame has no stable origin. Opening the artifact directly gives it a real ' +
-      'origin, where it runs normally.',
+    detail: 'The preview can’t run this artifact’s background worker. Open it in a new tab to run it.',
     resourceLabel: 'Worker script'
   }
 };
 const CAPABILITY_COPY_FALLBACK = {
-  detail: "This artifact uses a browser capability the embedded preview's sandboxed " +
-    'frame cannot provide. Opening the artifact directly runs it in a normal ' +
-    'browsing context, where the capability is available.',
+  detail: 'The preview can’t provide this browser feature. Try opening this artifact in a new tab.',
   resourceLabel: 'Resource'
 };
 window.addEventListener('message', function(e) {
@@ -333,13 +298,19 @@ window.addEventListener('message', function(e) {
   const detail = document.getElementById('capability-warning-detail');
   if (detail && !detail.textContent) {
     const copy = CAPABILITY_COPY[d.capability] || CAPABILITY_COPY_FALLBACK;
-    detail.textContent = copy.detail;
+    const connectedPreview = typeof CONNECTION_PROTECTED === 'boolean' && CONNECTION_PROTECTED;
+    const explanation = READ_ONLY && copy.recipientDetail ? copy.recipientDetail : copy.detail;
+    detail.textContent = connectedPreview && d.capability !== 'redirected-origin'
+      ? 'This feature is unavailable while the artifact uses connected accounts or private saved data in Exhibit.'
+      : explanation;
     // Most capabilities share the banner's headline ("open it directly to run
     // it"), which is true of every failure the sandbox causes. A capability
     // that opening directly does NOT fix supplies its own rather than leaving
     // the shared line to say something false.
     const headline = document.getElementById('capability-warning-headline');
     if (headline && copy.headline) headline.textContent = copy.headline;
+    const directOpen = document.getElementById('direct-open-banner');
+    if (directOpen) directOpen.hidden = copy.hideDirectOpen === true;
     if (d.resource) {
       const label = document.createElement('div');
       label.className = 'banner-detail-url';
@@ -926,9 +897,9 @@ function explainBlockedOrigin(origin) {
   const headline = document.getElementById('origin-blocked-headline');
   if (headline) {
     headline.textContent = blockedOrigins.length === 1
-      ? 'This tool tried to reach ' + origin + '. Its owner has not allowed that.'
-      : 'This tool tried to reach ' + blockedOrigins.length +
-        ' origins its owner has not allowed.';
+      ? 'This artifact tried to reach ' + origin + '. The owner has not allowed it.'
+      : 'This artifact tried to reach ' + blockedOrigins.length +
+        ' sites the owner has not allowed.';
   }
   const list = document.getElementById('origin-blocked-list');
   if (list) {
@@ -977,13 +948,11 @@ networkPrompt.install({
 // "Update from source" — only reachable from the controls' ⋮ menu, which the
 // server renders only for URL-ingested artifacts (SOURCE_URL is '' otherwise).
 async function refetchSource() {
-  const warning = 'Re-fetch a fresh snapshot from the source URL?\n\n' +
+  const warning = 'Update from the source URL?\n\n' +
     SOURCE_URL + '\n\n' +
-    'This replaces the stored content with whatever the URL returns now, and ' +
-    'saves its images, styles, scripts and runtime files into the artifact. ' +
-    'The allowlist is never changed: new origins need your approval before ' +
-    'they load. It is NOT versioned and cannot be undone. ' +
-    "The artifact's saved state/data may break if the new content changed.";
+    'The fetched page and its files are saved as a new version. You can restore the current version from Edit → Versions. ' +
+    'Network permissions stay the same; new sites need your approval. ' +
+    'Saved data is kept, but may not work with the updated page.';
   if (!confirm(warning)) return;
   const st = document.getElementById('al-status');
   st.textContent = 'Fetching…';
@@ -994,31 +963,31 @@ async function refetchSource() {
     });
     if (!r.ok) {
       const txt = await r.text().catch(() => '');
-      st.textContent = '✗ Error: ' + (txt.trim() || r.statusText);
+      st.textContent = 'Couldn’t update: ' + (txt.trim() || r.statusText);
       return;
     }
     const data = await r.json().catch(() => ({}));
     if (data.updated === false) {
-      st.textContent = '✓ Already up to date.';
+      st.textContent = 'Already up to date.';
       return;
     }
     sourceRevision = data.artifact.source_revision;
     const note = refetchNote(data);
     if (!note) {
-      st.textContent = '✓ Updated — reloading…';
+      st.textContent = 'Updated. Reloading…';
       window.location.reload();
       return;
     }
     // Something here needs reading, so the page stays until the user is done
     // with it rather than reloading out from under them.
-    st.textContent = '✓ Updated. ' + note + ' ';
+    st.textContent = 'Updated. ' + note + ' ';
     const reload = document.createElement('button');
     reload.type = 'button';
     reload.textContent = 'Reload';
     reload.addEventListener('click', () => window.location.reload());
     st.appendChild(reload);
   } catch (e) {
-    st.textContent = '✗ Error: ' + e.message;
+    st.textContent = 'Couldn’t update: ' + e.message;
   }
 }
 

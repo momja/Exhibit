@@ -61,7 +61,7 @@ func TestAgentGrantsRemainRevocableAfterMCPIsDisabled(t *testing.T) {
 		assert.NotContains(t, page, "data-mcp-url")
 		assert.NotContains(t, page, `id="agent-mcp-url"`)
 		assert.NotContains(t, page, `id="agent-mcp-command"`)
-		assert.NotContains(t, page, "For clients without browser sign-in")
+		assert.NotContains(t, page, "Use a token instead")
 		assert.NotContains(t, page, issued.Token)
 	}
 	w = doJSON(t, r, http.MethodGet, "/api/agent-grants", nil)

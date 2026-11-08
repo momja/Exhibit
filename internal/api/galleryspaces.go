@@ -14,7 +14,7 @@ type gallerySpace struct {
 
 func newGallerySpaces(activePath string, sharedWith, sharedBy int) []gallerySpace {
 	spaces := []gallerySpace{
-		{Path: "/", Label: "Library", Icon: "ph-books"},
+		{Path: "/", Label: "Gallery", Icon: "ph-books"},
 		{Path: "/search", Label: "Search", Icon: "ph-magnifying-glass", MobileOnly: true},
 		{Path: "/shared", Label: "Shared with me", Icon: "ph-tray-arrow-down", Count: sharedWith, ShowCount: true},
 		{Path: "/shared-by-me", Label: "Shared by me", Icon: "ph-share-network", Count: sharedBy, ShowCount: true},

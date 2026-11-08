@@ -32,7 +32,7 @@ func TestCapabilityPopoverTriggerIsFocusable(t *testing.T) {
 	page := getPage(t, r, "/")
 	assert.Contains(t, page, `tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-`+id+`" data-capability-trigger`)
 	assert.Contains(t, page, `<div class="capability-popover" id="capability-popover-`+id+`">`)
-	assert.Contains(t, page, `<div class="capability-popover-header">Sandbox posture</div>`)
+	assert.Contains(t, page, `<div class="capability-popover-header">Permissions</div>`)
 }
 
 // On the detail page the receipt is opened by the posture button (Exh-ghuv),
@@ -49,7 +49,7 @@ func TestDetailPagePostureButtonOpensTheReceipt(t *testing.T) {
 	assert.Contains(t, page, `<span class="pip-posture" data-posture-glyph><i class="ph ph-shield-check" aria-hidden="true"></i><span class="sr-only">Sandboxed.</span></span>`,
 		"a sandboxed artifact's mark is the shield, and the posture button's name says so")
 	assert.Contains(t, page, `<div class="capability-popover" id="capability-popover-`+id+`">`)
-	assert.Contains(t, page, `<div class="capability-popover-header">Sandbox posture</div>`)
+	assert.Contains(t, page, `<div class="capability-popover-header">Permissions</div>`)
 	assert.NotContains(t, page, "data-capability-trigger",
 		"the posture button is the trigger here; a second one would be a second way to open the same receipt")
 }
@@ -66,7 +66,7 @@ func TestDetailPagePostureMarkListsGrants(t *testing.T) {
 	}).Code)
 	page := getPage(t, r, "/artifacts/"+id)
 
-	assert.Contains(t, page, `<span class="pip-posture" data-posture-glyph><i class="ph ph-globe" aria-hidden="true"></i><span class="capability-count" aria-hidden="true">2</span><span class="sr-only">Network access to 2 origins.</span><i class="ph ph-download-simple" aria-hidden="true"></i><span class="sr-only">Downloads allowed.</span></span>`)
+	assert.Contains(t, page, `<span class="pip-posture" data-posture-glyph><i class="ph ph-globe" aria-hidden="true"></i><span class="capability-count" aria-hidden="true">2</span><span class="sr-only">Network access to 2 sites.</span><i class="ph ph-download-simple" aria-hidden="true"></i><span class="sr-only">Downloads allowed.</span></span>`)
 }
 
 // No grants at all collapses the popover body to a single reassurance row
@@ -103,7 +103,7 @@ func TestCapabilityPopoverNetworkRowListsOriginsAndPluralizes(t *testing.T) {
 	require.Equal(t, http.StatusOK, w2.Code)
 	page := w2.Body.String()
 
-	assert.Contains(t, page, `<div class="capability-popover-label">Network — 1 origin</div>`)
+	assert.Contains(t, page, `<div class="capability-popover-label">Network — 1 site</div>`)
 	assert.Contains(t, page, `<code>https://one.example.com</code>`)
 	assert.NotContains(t, page, "1 origins")
 
@@ -119,7 +119,7 @@ func TestCapabilityPopoverNetworkRowListsOriginsAndPluralizes(t *testing.T) {
 	require.Equal(t, http.StatusOK, w4.Code)
 	page2 := w4.Body.String()
 
-	assert.Contains(t, page2, `<div class="capability-popover-label">Network — 2 origins</div>`)
+	assert.Contains(t, page2, `<div class="capability-popover-label">Network — 2 sites</div>`)
 	assert.Contains(t, page2, `<code>https://a.example.com</code>`)
 	assert.Contains(t, page2, `<code>https://b.example.com</code>`)
 }
@@ -251,14 +251,14 @@ func TestCapabilityPopoverManageLinkOnGalleryAndDetail(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
-	assert.Contains(t, w.Body.String(), `<a class="capability-popover-manage" href="/artifacts/`+id+`/edit#security-panel">Manage security settings →</a>`)
+	assert.Contains(t, w.Body.String(), `<a class="capability-popover-manage" href="/artifacts/`+id+`/edit#security-panel">Edit permissions →</a>`)
 
 	req2 := httptest.NewRequest("GET", "/artifacts/"+id, nil)
 	w2 := httptest.NewRecorder()
 	r.ServeHTTP(w2, req2)
 	require.Equal(t, http.StatusOK, w2.Code)
 	page2 := w2.Body.String()
-	assert.Contains(t, page2, `<a class="capability-popover-manage" href="/artifacts/`+id+`/edit#security-panel">Manage security settings →</a>`)
+	assert.Contains(t, page2, `<a class="capability-popover-manage" href="/artifacts/`+id+`/edit#security-panel">Edit permissions →</a>`)
 	// The viewer's receipt is the same component, opened by the title.
 	assert.Contains(t, page2, `aria-controls="pip-info"`)
 }
@@ -318,16 +318,16 @@ func TestCapabilityPopoverManageLinkGatedByShowManage(t *testing.T) {
 
 	htmlShown, err := renderPartial(t, "capabilityCluster", shown)
 	require.NoError(t, err)
-	assert.Contains(t, htmlShown, `Manage security settings`)
+	assert.Contains(t, htmlShown, `Edit permissions`)
 	assert.Contains(t, htmlShown, `href="/artifacts/art-shown/edit#security-panel"`)
 
 	htmlHidden, err := renderPartial(t, "capabilityCluster", hidden)
 	require.NoError(t, err)
-	assert.NotContains(t, htmlHidden, `Manage security settings`)
+	assert.NotContains(t, htmlHidden, `Edit permissions`)
 	assert.NotContains(t, htmlHidden, `capability-popover-manage`)
 	// Everything else about the popover still renders — ShowManage gates
 	// only the footer link, not the rest of the "receipt".
-	assert.Contains(t, htmlHidden, `Sandbox posture`)
+	assert.Contains(t, htmlHidden, `Permissions`)
 	assert.Contains(t, htmlHidden, `Downloads — Can save files to your device`)
 	assert.True(t, strings.Contains(htmlHidden, `https://example.com`))
 }
@@ -359,7 +359,7 @@ func TestCapabilityClusterPartialReflectsCurrentAllowlist(t *testing.T) {
 	fragment := getPage(t, r, "/partials/capability-cluster?artifact="+id)
 	assert.Contains(t, fragment, `<span class="capability-count" aria-hidden="true">1</span>`)
 	assert.Contains(t, fragment, `<code>https://cdn.example.com</code>`)
-	assert.Contains(t, fragment, `Manage security settings`,
+	assert.Contains(t, fragment, `Edit permissions`,
 		"the owner's fragment keeps the popover's footer link, like the owner's page")
 
 	// The fragment renders the same partial the full page render used — one
@@ -396,12 +396,12 @@ func TestCapabilityClusterPartialRecipientReadsPostureWithoutManageLink(t *testi
 	in := newGrantedInstance(t)
 
 	owner := responseText(in.get(t, "/partials/capability-cluster?artifact="+in.granted, in.cookieOne))
-	assert.Contains(t, owner, `Manage security settings`)
+	assert.Contains(t, owner, `Edit permissions`)
 
 	recipient := in.get(t, "/partials/capability-cluster?artifact="+in.granted, in.cookieTwo)
 	require.Equal(t, http.StatusOK, recipient.Code)
-	assert.Contains(t, responseText(recipient), `Sandbox posture`)
-	assert.NotContains(t, responseText(recipient), `Manage security settings`)
+	assert.Contains(t, responseText(recipient), `Permissions`)
+	assert.NotContains(t, responseText(recipient), `Edit permissions`)
 	assert.NotContains(t, responseText(recipient), `capability-popover-manage`)
 }
 

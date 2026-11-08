@@ -164,7 +164,7 @@ func TestOAuthAuthorizationCodeFlowIssuesALibraryGrant(t *testing.T) {
 	assert.Contains(t, resp.Header.Get("Content-Security-Policy"), "frame-ancestors 'none'")
 	assert.Contains(t, page, "Test Agent")
 	assert.Contains(t, page, "http://127.0.0.1:4567")
-	assert.Contains(t, strings.ToLower(page), "whole library")
+	assert.Contains(t, strings.ToLower(page), "whole gallery")
 	assert.Contains(t, page, "Connected agents")
 	assert.NotContains(t, page, `name="artifact_id"`)
 	assert.NotContains(t, page, ownerTwoTitle)

@@ -254,7 +254,7 @@ func TestGalleryCardHasNoRedundantDetailsLink(t *testing.T) {
 	assert.Contains(t, page, `<a class="card-title" href="/artifacts/`+id+`">Openless</a>`)
 
 	// The redundant 'Details' link is gone (it duplicated the title click).
-	assert.NotContains(t, page, `>Details</a>`)
+	assert.NotContains(t, page, `>View artifact</a>`)
 	assert.Contains(t, page, `class="action-menu-container card-actions" data-controller="action-menu"`)
 	assert.Contains(t, page, `aria-label="Actions for Openless" title="Actions" aria-haspopup="menu" aria-expanded="false" aria-controls="card-actions-`+id+`"`)
 	assert.Contains(t, page, `id="card-actions-`+id+`" role="menu" aria-labelledby="card-actions-`+id+`-trigger"`)
@@ -323,7 +323,7 @@ func TestGalleryCardShowsNetworkCount(t *testing.T) {
 	page := w2.Body.String()
 
 	// Glyphs alone name nothing, so the compact card trigger names itself.
-	assert.Contains(t, page, `<div class="capability-cluster has-grants" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-`+id+`" data-capability-trigger aria-label="Sandbox posture">`)
+	assert.Contains(t, page, `<div class="capability-cluster has-grants" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-`+id+`" data-capability-trigger aria-label="Permissions">`)
 	assert.Contains(t, page, `<span class="capability-glyph"><i class="ph ph-globe"></i></span><span class="capability-count">2</span>`)
 	assert.NotContains(t, page, "Sandboxed")
 }
@@ -344,7 +344,7 @@ func TestGalleryCardShowsCapabilityGlyphsPerFlag(t *testing.T) {
 	require.Equal(t, http.StatusOK, w2.Code)
 	page := w2.Body.String()
 
-	assert.Contains(t, page, `<div class="capability-cluster has-grants" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-`+id+`" data-capability-trigger aria-label="Sandbox posture">`)
+	assert.Contains(t, page, `<div class="capability-cluster has-grants" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-`+id+`" data-capability-trigger aria-label="Permissions">`)
 	assert.Contains(t, page, `<span class="capability-glyph"><i class="ph ph-download-simple"></i></span>`)
 	assert.NotContains(t, page, "ph-clipboard")
 	assert.NotContains(t, page, "ph-globe")

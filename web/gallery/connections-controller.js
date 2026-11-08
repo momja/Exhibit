@@ -128,7 +128,7 @@ export default class extends Controller {
   revoke(event) {
     this.action(event, async () => {
       const { connectionId, connectionName } = event.currentTarget.dataset;
-      if (!window.confirm('Disconnect ' + connectionName + '? Tools using this account will lose access. Saved results will remain.')) return;
+      if (!window.confirm('Disconnect ' + connectionName + '? Artifacts using this account will lose access. Saved results will remain.')) return;
       await this.request('/api/connections/' + encodeURIComponent(connectionId), { method: 'DELETE' });
       this.changed('Account disconnected. Saved results remain.');
     });
@@ -144,7 +144,7 @@ export default class extends Controller {
         if (!connection) throw new Error('Choose a current connection.');
         for (const origin of connection.origins) {
           const response = await apiFetch('/api/artifacts/' + encodeURIComponent(this.artifactIdValue) + '/origins', { method: 'POST', body: JSON.stringify({ origin, decision: 'allow', source: 'connection-consent' }) });
-          if (!response.ok) throw new Error('Could not approve the connection origin.');
+          if (!response.ok) throw new Error('Could not allow the account’s service.');
         }
       }
       await this.request(this.artifactPath('/connections'), { method: 'POST', body: JSON.stringify({ connection_id: connectionId }) });
@@ -161,7 +161,7 @@ export default class extends Controller {
 
   clearData(event) {
     this.action(event, async () => {
-      if (!window.confirm('Clear this artifact’s saved data? This also clears saved version data when you own the artifact. Connection grants and network approvals stay in place. Open pages may still hold copies.')) return;
+      if (!window.confirm('Permanently clear saved data for this artifact? If you own it, this also clears data in saved versions; otherwise, it clears your saved data. This cannot be undone. Account and network permissions stay unchanged. Open pages may still hold copies.')) return;
       await this.request(this.artifactPath('/connection-data'), { method: 'DELETE' });
       this.changed('Saved data cleared.');
     });

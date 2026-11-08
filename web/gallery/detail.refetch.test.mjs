@@ -62,7 +62,7 @@ test("an unchanged source says so and does not reload", async () => {
 
   assert.equal(api.calls[0].path, "/api/artifacts/art-1/refetch");
   assert.deepEqual(JSON.parse(api.calls[0].body), {expected_source_revision:"source-v1"});
-  assert.equal(status.textContent, "✓ Already up to date.");
+  assert.equal(status.textContent, "Already up to date.");
   assert.equal(reloads(), 0);
 });
 
@@ -76,7 +76,7 @@ test("an update with nothing to report reloads straight away", async () => {
   });
 
   assert.equal(reloads(), 1, "every new origin is already decided, so there is nothing to read");
-  assert.match(status.textContent, /reloading/);
+  assert.match(status.textContent, /reloading/i);
 });
 
 test("only undecided origins are named, and the reload waits for the user", async () => {

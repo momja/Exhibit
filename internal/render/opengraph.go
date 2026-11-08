@@ -125,7 +125,7 @@ func (rd *Renderer) serveShareNotFound(w http.ResponseWriter) {
 	w.WriteHeader(http.StatusNotFound)
 	_, _ = w.Write([]byte("<!doctype html>\n<html><head><meta charset=\"utf-8\">\n<title>Exhibit</title>\n" +
 		rd.genericTags() +
-		"</head><body><p>This link is not available.</p></body></html>\n"))
+		"</head><body><p>This link is unavailable. Ask the sender for a new link.</p></body></html>\n"))
 }
 
 // ServeSharePreviewImage serves the PNG a live share link's og:image names:

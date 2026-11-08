@@ -75,7 +75,7 @@ test('saved-data cleanup is optional and does not change connection grants or or
   await page.clear();
   assert.deepEqual(page.calls, [{ path: '/api/artifacts/connected-app/connection-data', method: 'DELETE', data: null }]);
   assert.deepEqual(page.approvals, []);
-  assert.match(page.confirmations[0], /Connection grants and network approvals stay in place/);
+  assert.match(page.confirmations[0], /Account and network permissions stay unchanged/);
   assert.equal(page.controller.feedbackTarget.textContent, 'Saved data cleared.');
 });
 

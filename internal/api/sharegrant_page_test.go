@@ -171,7 +171,7 @@ func TestOnlyTheRecipientsPageCarriesTheBlockedOriginExplanation(t *testing.T) {
 	assert.Contains(t, recipient, `id="origin-blocked-banner"`)
 	assert.Contains(t, recipient, `id="origin-blocked-headline"`)
 	assert.Contains(t, recipient, `id="origin-blocked-list"`)
-	assert.Contains(t, recipient, "Only this artifact's owner can change what it is allowed to contact",
+	assert.Contains(t, recipient, "Only the owner can allow new sites for this artifact",
 		"the failure this page exists to prevent is a tool that silently does nothing")
 
 	owner := in.get(t, "/artifacts/"+in.artifactOne, in.cookieOne).Body.String()

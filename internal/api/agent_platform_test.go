@@ -115,7 +115,7 @@ func TestPlatformModeAgentPageHasNoKeyUI(t *testing.T) {
 
 	for _, absent := range []string{
 		"key-btn", "key-modal", "key-provider", "key-model", "key-secret", "key-thinking",
-		"openKeyModal()", "Bring your own key",
+		"openKeyModal()", "Your key is encrypted on the Exhibit server",
 		"exhibit-mock", "platform-secret-key",
 	} {
 		assert.NotContains(t, body, absent, "platform mode must not render %q", absent)
@@ -137,7 +137,7 @@ func TestBYOKAgentPageRendersKeyUI(t *testing.T) {
 
 	for _, present := range []string{
 		"key-btn", "key-modal", "key-provider", "key-model", "key-secret", "key-thinking",
-		"Bring your own key", "const BYOK = true",
+		"Your key is encrypted on the Exhibit server", "const BYOK = true",
 	} {
 		assert.Contains(t, body, present)
 	}
@@ -176,11 +176,11 @@ func TestPlatformModeEnablesWidgetGeneration(t *testing.T) {
 	r := newTestRouter(t)
 	req := httptest.NewRequest("GET", "/", nil)
 
-	// With no agent manager at all, availability is still about pi, in either
-	// mode — the message a user can act on.
+	// With no agent manager, either mode offers manual widget editing.
 	ok, why := r.widgetGenerateAvailability(req)
 	require.False(t, ok)
-	assert.Contains(t, why, "pi binary")
+	assert.Contains(t, why, "The agent is unavailable.")
+	assert.Contains(t, why, "Widget HTML manually")
 
 	r.cfg.Agent = &agent.Manager{}
 	ok, why = r.widgetGenerateAvailability(req)

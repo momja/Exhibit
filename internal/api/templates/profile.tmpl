@@ -20,8 +20,7 @@
 {{template "appHeader" .Header}}
 <main class="settings">
 <div class="lede">
-  <h2>Settings.</h2>
-  <p>Manage your storage, connected agents and Exhibit account.</p>
+  <h2>Settings</h2>
 </div>
 
 <div class="card">
@@ -38,21 +37,21 @@
     <dt>Sign-in</dt>
     <dd>{{if .Account.HasPassword}}<i class="ph ph-key" aria-hidden="true"></i> Password{{else}}<i class="ph ph-shield-check" aria-hidden="true"></i> Identity provider{{end}}</dd>
   </dl>
-  {{if .Account.NameIsSubject}}<p class="muted text-sm settings-note">Your identity provider sent no email address for this account, so the name above is the subject identifier it does send. It is the string an administrator would use to find you.</p>{{end}}
+  {{if .Account.NameIsSubject}}<p class="muted text-sm settings-note">Your identity provider did not share an email address. The account ID above identifies you to administrators.</p>{{end}}
   {{if .Clerk}}
   <div class="settings-foot" data-controller="clerk" data-clerk-mode-value="manage">
     <button class="btn btn-sec" type="button" data-action="clerk#openProfile"><i class="ph ph-user-circle" aria-hidden="true"></i> Manage profile</button>
     <span data-clerk-target="status" role="status"></span>
   </div>
   <p class="muted text-sm settings-note">Update your name, email, and sign-in methods in your profile.</p>
-  {{else if not .Account.HasPassword}}<p class="muted text-sm settings-note">Your identity provider owns this sign-in. There is no password here to change, and Exhibit cannot change one there.</p>{{end}}
+  {{else if not .Account.HasPassword}}<p class="muted text-sm settings-note">Manage your password and sign-in methods with your identity provider.</p>{{end}}
   {{else}}
   {{/* No login is configured on this instance, so sessionGate is a
        pass-through, ownerMiddleware supplied the single-user default, and
        there is no users row behind it. Nothing is missing — that is the
        self-hoster's default shape — so the page says what it is instead of
        showing an account it made up. */}}
-  <p class="muted">This instance has no login configured, so there is no account to describe. Its library belongs to whoever can reach the origin, and the API is guarded by the service token alone.</p>
+  <p class="muted">Sign-in is not configured. Anyone who can reach this Exhibit instance can access its Gallery.</p>
   {{end}}
 </div>
 
@@ -68,7 +67,7 @@
     <dt>Storage used</dt><dd>{{.Account.Storage}}</dd>
     <dt>Artifacts</dt><dd>{{.Account.Artifacts}}</dd>
   </dl>
-  <p class="muted text-sm settings-note">Total storage used by your artifact files, widgets, saved versions, and stored assets.</p>
+  <p class="muted text-sm settings-note">Includes artifact files, widgets, versions, and assets.</p>
 </section>
 {{end}}
 
@@ -76,12 +75,10 @@
 {{if .Connections.Enabled}}
 <div class="card">
   <h3 class="settings-h3">Connected accounts <span class="muted text-sm">Experimental</span></h3>
-  <p class="settings-copy">Choose which tools can use your accounts. Account access stays personal when you share a tool.</p>
+  <p class="settings-copy">Choose which artifacts can use your accounts. Account access stays personal when you share an artifact.</p>
   <div class="settings-foot"><a class="btn btn-sec" href="/connections"><i class="ph ph-key" aria-hidden="true"></i> Manage connections</a></div>
-  <details class="settings-note"><summary>Advanced · Experimental</summary>
-    <p class="settings-copy">Custom API setup and request diagnostics are for experienced users.{{if not .Connections.CustomEnabled}} Custom connection setup is disabled by this instance’s configuration.{{end}}</p>
+  <details class="settings-note"><summary>Connection limits</summary>
     <dl class="settings-facts"><dt>Custom connections</dt><dd>{{.Connections.Native}}</dd><dt>Service accounts</dt><dd>{{.Connections.OAuth}}</dd><dt>Managed accounts</dt><dd>{{.Connections.Vendor}}</dd><dt>Scheduled fetches</dt><dd>{{.Connections.Schedules}}</dd></dl>
-    <a href="/connections?advanced=1">Advanced connections</a>
   </details>
 </div>
 {{end}}
@@ -107,7 +104,7 @@
 {{if .Account.CanSignOut}}
 <div class="card">
   <h3 class="settings-h3">Sign out</h3>
-  <p class="settings-copy">Sign out of this device. Your library will be here when you return.</p>
+  <p class="settings-copy">Sign out on this device.</p>
   <form class="settings-foot" method="post" action="/auth/logout">
     <button class="btn btn-sec" type="submit"><i class="ph ph-sign-out" aria-hidden="true"></i> Sign out</button>
   </form>
@@ -136,15 +133,15 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
 
 {{define "accountDeletion"}}<div class="card card-danger" data-controller="account-deletion" data-account-deletion-hosted-value="{{if .Clerk}}true{{else}}false{{end}}">
   <h3 class="settings-h3 settings-h3-danger"><i class="ph ph-warning-octagon" aria-hidden="true"></i> Delete account</h3>
-  <p class="settings-danger-copy">Permanently delete your Exhibit account, library, saved data, and shared artifacts. This cannot be undone.</p>
-  {{if .Connections.Enabled}}<p class="settings-danger-copy">External OAuth connections are revoked before deletion. If a provider is unavailable, your account stays here so you can retry; some connections may already have been disconnected.</p>{{end}}
+  <p class="settings-danger-copy">Permanently delete your Exhibit account, Gallery, saved data, and share links.</p>
+  {{if .Connections.Enabled}}<p class="settings-danger-copy">Connected services are disconnected first. If a service is unavailable, deletion pauses so you can retry. Some services may already be disconnected.</p>{{end}}
   {{if .Account.SignedIn}}
   {{/* Counted rather than gestured at, and shares first among equals: an
        artifact is your own, but a share is access somebody else may be
        relying on — a link anyone may hold, or a grant on their account —
        with no account here guaranteed and no way to be told it stopped
        working. */}}
-  <p class="settings-danger-copy">This account holds <strong>{{.Account.Artifacts}}</strong>.{{if .Account.ShareCount}} Deleting it breaks <strong>{{.Account.Shares}}</strong> that other people may be holding.{{end}}</p>
+  <p class="settings-danger-copy">This account holds <strong>{{.Account.Artifacts}}</strong>.{{if .Account.ShareCount}} Deleting it ends <strong>{{.Account.Shares}}</strong>, including access other people rely on.{{end}}</p>
   {{/* State the different reach of hosted and self-hosted deletion. */}}
   {{if .Clerk}}
   <p class="settings-danger-copy">Your profile and sign-in methods stored with Clerk will also be deleted. Your Google, Apple, or other provider accounts are unaffected.</p>
@@ -170,20 +167,20 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
     {{/* Assembled from clauses that are each conditional on their own count,
          because a sentence built around "your no artifacts" is how a
          confirmation stops being read. */}}
-    <p class="settings-danger-copy"><strong>This cannot be undone.</strong> Everything created or owned by you is permanently inaccessible{{if .Account.ArtifactCount}} including {{.Account.Artifacts}} and everything saved inside{{end}}.{{if .Account.ShareCount}} {{.Account.Shares}} will stop working for whoever is holding them.{{end}}</p>
+    <p class="settings-danger-copy"><strong>This cannot be undone.</strong> Your Gallery will be permanently deleted{{if .Account.ArtifactCount}} including {{.Account.Artifacts}} and everything saved inside{{end}}.{{if .Account.ShareCount}} {{.Account.Shares}} will stop working.{{end}}</p>
     {{if .Clerk}}
-    <p class="settings-danger-copy">Your Exhibit library and your sign-in account will be permanently deleted. You will be signed out on every device. This does not delete your Google, Apple, or other provider accounts.</p>
+    <p class="settings-danger-copy">Your Exhibit Gallery and your sign-in account will be permanently deleted. You will be signed out on every device. This does not delete your Google, Apple, or other provider accounts.</p>
     {{else if .Account.HasPassword}}
     <p class="settings-danger-copy">If you revisit this site, you will be treated as a new user.</p>
     {{else}}
-    <p class="settings-danger-copy">Signing in again will still work via your identity provider. You will arrive at a new account, with an empty library.</p>
+    <p class="settings-danger-copy">Signing in again will still work via your identity provider. You will arrive at a new account, with an empty Gallery.</p>
     {{end}}
     <label class="settings-label" for="delete-phrase">Type <code>delete my library</code> to confirm</label>
     <input class="field settings-confirm-field" type="text" id="delete-phrase" data-account-deletion-target="phrase" data-action="input->account-deletion#update" autocomplete="off"
            autocapitalize="none" spellcheck="false" placeholder="delete my library">
     <div class="settings-foot">
       <button class="btn btn-danger" type="button" id="delete-confirm-go" data-account-deletion-target="submit" data-action="account-deletion#submit" disabled>
-        <i class="ph ph-trash" aria-hidden="true"></i> {{if .Clerk}}Delete my account permanently{{else}}Delete my library permanently{{end}}
+        <i class="ph ph-trash" aria-hidden="true"></i> {{if .Clerk}}Delete my account permanently{{else}}Delete my Gallery permanently{{end}}
       </button>
       <button class="btn" type="button" id="delete-cancel" data-account-deletion-target="cancel" data-action="account-deletion#cancel">Cancel</button>
     </div>
@@ -200,7 +197,7 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
 
 {{define "agentGrantsPanel"}}<section class="card" id="agent-grants-panel"{{if .MCPURL}} data-mcp-url="{{.MCPURL}}"{{end}} aria-labelledby="agent-grants-heading">
   <h3 class="settings-h3" id="agent-grants-heading"><i class="ph ph-robot" aria-hidden="true"></i> Connected agents</h3>
-  {{if .MCPURL}}<p class="settings-copy">Connect your own agent to find, create and edit artifacts in your library. Each connection stays active until you revoke it.</p>
+  {{if .MCPURL}}<p class="settings-copy">Connect your own agent to find, create and edit artifacts in your Gallery. Each connection stays active until you revoke it.</p>
   <label class="settings-label" for="agent-mcp-url">MCP endpoint</label>
   <div class="agent-grant-create">
     <input class="field agent-grant-token" id="agent-mcp-url" value="{{.MCPURL}}" readonly spellcheck="false">
@@ -218,8 +215,9 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
        hx-get="/partials/agent-grants" hx-headers="{{.RefreshHeaders}}"
        hx-trigger="exhibit:agent-grants-changed from:body"
        hx-swap="innerHTML">{{template "agentGrantsPanelBody" .}}</div>
-  {{if .MCPURL}}<form id="agent-grant-form" class="settings-form agent-grant-form">
-    <h4 class="settings-h4">For clients without browser sign-in</h4>
+  {{if .MCPURL}}<form id="agent-grant-form" class="settings-form agent-grant-form" aria-describedby="agent-token-scope">
+    <h4 class="settings-h4">Use a token instead</h4>
+    <p class="settings-copy" id="agent-token-scope">Anyone with this token can search, create, read, and edit artifacts and widgets throughout your Gallery, and read saved data. They cannot share or delete artifacts, or change saved data. Access lasts until you revoke it.</p>
     <label class="settings-label" for="agent-grant-label">Connection label</label>
     <div class="agent-grant-create">
       <input class="field" id="agent-grant-label" name="label" maxlength="100" placeholder="External agent" autocomplete="off">
@@ -230,7 +228,7 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
        can be recovered from the store or rendered in a later page request. */}}
   <div class="agent-grant-issued" id="agent-grant-issued" hidden>
     <h4 class="settings-h4">Your connection token</h4>
-    <p class="settings-copy">Copy this token now. Exhibit cannot show it again.</p>
+    <p class="settings-copy">Copy this token now and keep it private. Exhibit cannot show it again.</p>
     <label class="settings-label" for="agent-grant-token">Token</label>
     <div class="agent-grant-create">
       <input class="field agent-grant-token" id="agent-grant-token" readonly autocomplete="off" spellcheck="false">

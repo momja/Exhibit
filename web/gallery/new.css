@@ -112,3 +112,6 @@ a.btn{text-decoration:none}
   .route-note,.ingest-label,.snapshot-row,#status,#scan-result{font-size:var(--text-secondary);line-height:1.5}
   .lede,.route,.ingest-label,#status,#scan-result{overflow-wrap:anywhere;min-width:0}
 }
+
+.snapshot-row small{display:block;margin-top:4px}
+#agent-description-help{margin-top:var(--space-3);line-height:1.5}

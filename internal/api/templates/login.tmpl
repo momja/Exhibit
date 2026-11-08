@@ -29,7 +29,7 @@
 {{template "appHeader" .Header}}
 <div class="login-content">
 <main class="login">
-  <p class="login-sub">Sign in to your library.</p>
+  <p class="login-sub">Sign in to your Gallery.</p>
 
   {{if .Error}}
   {{/* role=alert so the message is announced when the page reloads into it —
@@ -55,9 +55,30 @@
   <div class="login-or"><span>or</span></div>
   {{/* A link, not a second form: /auth/sso is the provider redirect, and the
        browser has to make a top-level navigation for the round trip to work. */}}
-  <a class="btn btn-sec login-sso" href="{{.SSOHref}}"><i class="ph ph-shield-check"></i> Continue with your identity provider</a>
+  <a class="btn btn-sec login-sso" href="{{.SSOHref}}"><i class="ph ph-shield-check"></i> Sign in with SSO</a>
   {{end}}
 </main>
 </div>
+</body>
+</html>{{end}}
+
+{{define "loginFailure"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sign-in failed — Exhibit</title>
+<link rel="icon" type="image/svg+xml" href="{{.Favicon}}">
+<link rel="stylesheet" href="{{asset "phosphor/regular.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/tokens.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/components.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/login.css"}}">
+</head>
+<body class="login-page">
+{{template "appHeader" .Header}}
+<div class="login-content"><main class="login">
+  <p class="login-error" role="alert">{{.Error}}</p>
+  <a class="btn login-submit" href="/auth/login">Return to sign in</a>
+</main></div>
 </body>
 </html>{{end}}

@@ -99,7 +99,7 @@ func TestAgentComposerBrowser(t *testing.T) {
 					require.LessOrEqual(t, metrics.ScrollHeight, metrics.SingleLine+1, "empty placeholder must occupy at most one line: %+v", metrics)
 					require.LessOrEqual(t, metrics.ScrollHeight, metrics.ClientHeight+1, "empty placeholder must not overflow vertically: %+v", metrics)
 					require.True(t, metrics.Fits, "composer controls must fit the pane")
-					require.Equal(t, "Ask Exhibit...", metrics.Placeholder)
+					require.Equal(t, "Describe what you want to build or change…", metrics.Placeholder)
 					if fontSize == 32 {
 						if root := os.Getenv("AGENT_COMPOSER_SCREENSHOT_DIR"); root != "" {
 							require.NoError(t, os.MkdirAll(root, 0755))
@@ -121,9 +121,9 @@ func TestAgentComposerBrowser(t *testing.T) {
 		run(chromedp.Evaluate[chromedp.Void](`document.querySelector('#input').value=''; document.querySelector('#input').dispatchEvent(new Event('input',{bubbles:true}))`))
 		events <- []byte(`{"type":"exhibit_questions","requestId":"composer-question","pending":true}`)
 		run(chromedp.Poll[chromedp.Void](`document.querySelector('#hint').hidden`))
-		check(`document.querySelector('#input').placeholder === 'Ask Exhibit...'`)
+		check(`document.querySelector('#input').placeholder === 'Describe what you want to build or change…'`)
 		events <- []byte(`{"type":"agent_settled"}`)
 		run(chromedp.Poll[chromedp.Void](`getComputedStyle(document.querySelector('#stop-btn')).display === 'none'`))
-		check(`document.querySelector('#input').placeholder === 'Ask Exhibit...'`)
+		check(`document.querySelector('#input').placeholder === 'Describe what you want to build or change…'`)
 	}
 }

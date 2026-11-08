@@ -267,7 +267,7 @@ func TestProfileDeleteSectionSaysSigningInAgainGivesAnEmptyAccount(t *testing.T)
 	// works *and lands somewhere empty*.
 	assert.Contains(t, page, "you will be treated as a new user")
 	assert.Contains(t, page, "Signing in again will still work via your identity provider")
-	assert.Contains(t, page, "You will arrive at a new account, with an empty library")
+	assert.Contains(t, page, "You will arrive at a new account, with an empty Gallery")
 }
 
 // A local account gets the opposite sentence, because it has no provider to
@@ -316,7 +316,7 @@ func TestProfileDeleteSectionCountsLiveShares(t *testing.T) {
 	// before the phrase is typed — the count is not left behind on the step
 	// somebody has already scrolled past.
 	assert.Contains(t, page, "including 1 artifact and everything saved inside")
-	assert.Contains(t, page, "2 shares will stop working for whoever is holding them")
+	assert.Contains(t, page, "2 shares will stop working")
 }
 
 // An account with no shares is not warned about links that will stop working;
@@ -337,7 +337,7 @@ func TestProfileDeleteSectionOmitsSharesWhenThereAreNone(t *testing.T) {
 	// The confirmation's clauses are each guarded by their own count, so an
 	// empty library gets a sentence rather than one built around "your no
 	// artifacts" — which is how a confirmation stops being read.
-	assert.Contains(t, page, "Everything created or owned by you is permanently inaccessible.")
+	assert.Contains(t, page, "Your Gallery will be permanently deleted.")
 	assert.NotContains(t, page, "everything saved inside")
 }
 

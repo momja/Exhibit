@@ -1,6 +1,6 @@
 {{/* Spaces and filters share a desktop rail. Only spaces become phone tabs. */}}
 {{define "gallerySpaces"}}<aside class="gallery-rail"{{if .Spaces}} data-controller="space-tabs"{{end}}>
-  {{if .Spaces}}<nav class="gallery-spaces" aria-label="Library spaces">
+  {{if .Spaces}}<nav class="gallery-spaces" aria-label="Gallery spaces">
     <ul>{{range .Spaces}}
       <li{{if .MobileOnly}} class="space-mobile-only"{{end}}><a href="{{.Path}}"{{if .Active}} aria-current="page"{{end}} data-gallery-space-link
         hx-get="{{.Path}}" hx-target="#gallery-content" hx-swap="outerHTML" hx-push-url="true" hx-sync="#gallery-shell:replace">

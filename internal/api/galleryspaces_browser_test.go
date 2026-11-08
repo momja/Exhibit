@@ -56,7 +56,7 @@ func TestGallerySpacesBrowser(t *testing.T) {
 				require.NoError(t, err)
 				require.True(t, ok, message)
 			}
-			check(`document.querySelectorAll('nav[aria-label="Library spaces"]').length === 1 && document.querySelectorAll('.gallery-spaces [aria-current="page"]').length === 1 && document.querySelector('.gallery-spaces [aria-current="page"]').getAttribute('href') === '/shared'`, "one nav and the incoming space is active")
+			check(`document.querySelectorAll('nav[aria-label="Gallery spaces"]').length === 1 && document.querySelectorAll('.gallery-spaces [aria-current="page"]').length === 1 && document.querySelector('.gallery-spaces [aria-current="page"]').getAttribute('href') === '/shared'`, "one nav and the incoming space is active")
 			check(`Array.from(document.querySelectorAll('.gallery-spaces a')).filter(a => a.getClientRects().length).every(a => a.getBoundingClientRect().width >= 44 && a.getBoundingClientRect().height >= 44) && document.documentElement.scrollWidth <= innerWidth`, "all targets are at least 44px and the page fits")
 			check(fmt.Sprintf(`Array.from(document.querySelectorAll('.space-count')).every(el => (getComputedStyle(el).display === 'none') === %t)`, viewport.phone), "counts appear only in the rail")
 			if viewport.phone {
@@ -138,7 +138,7 @@ func TestGalleryEmptySpacesBrowser(t *testing.T) {
 			require.NoError(t, err)
 			visit("/shared")
 			check(`document.querySelector('.empty').textContent === 'Nothing has been shared with you yet.' && document.querySelector('#gallery-content').dataset.galleryReadOnly === 'true' && !document.querySelector('[data-duplicate-dialog],.card-actions')`)
-			check(`Array.from(document.querySelectorAll('.space-label')).map(el=>el.textContent).join('|') === 'Library|Search|Shared with me|Shared by me'`)
+			check(`Array.from(document.querySelectorAll('.space-label')).map(el=>el.textContent).join('|') === 'Gallery|Search|Shared with me|Shared by me'`)
 			check(`document.documentElement.scrollWidth <= innerWidth && Array.from(document.querySelectorAll('.gallery-spaces a')).filter(a => a.getClientRects().length).every(a=>a.getBoundingClientRect().width >= 44 && a.getBoundingClientRect().height >= 44)`)
 			check(`Array.from(document.querySelectorAll('.space-label')).filter(el => el.getClientRects().length).every(el=>getComputedStyle(el).visibility === 'visible' && el.scrollWidth <= el.clientWidth && el.scrollHeight <= el.clientHeight)`)
 			if dir := os.Getenv("GALLERY_SCREENSHOT_DIR"); dir != "" {
@@ -148,7 +148,7 @@ func TestGalleryEmptySpacesBrowser(t *testing.T) {
 				require.NoError(t, os.WriteFile(filepath.Join(dir, fmt.Sprintf("empty-%d-%s.png", width, scheme)), shot, 0644))
 			}
 			visit("/shared-by-me")
-			check(`document.querySelector('.empty').textContent.includes('Share an artifact from its share panel.') && document.querySelector('#gallery-content').dataset.galleryReadOnly === 'false'`)
+			check(`document.querySelector('.empty').textContent.includes('Open an artifact and choose Share.') && document.querySelector('#gallery-content').dataset.galleryReadOnly === 'false'`)
 			visit("/")
 			check(`document.querySelector('header') === originalHeader && document.querySelectorAll('.gallery-spaces a').length === 4`)
 		}

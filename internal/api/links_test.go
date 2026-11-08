@@ -130,7 +130,7 @@ func TestDetailPageRendersLinkConfirmationModal(t *testing.T) {
 	assert.Contains(t, page, `aria-labelledby="link-title"`)
 	assert.Contains(t, page, `<h2 id="link-title">Allow opening links?</h2>`)
 	assert.Contains(t, page,
-		`You are opening a link to <code id="link-host">example.com</code>. Exhibit cannot verify the safety of external sites. Make sure you trust this destination before allowing links. You can revoke this at any time from its security settings.`)
+		`You are opening a link to <code id="link-host">example.com</code>. Allowing lets this artifact open external links from now on, including links to other sites. Only allow sites you trust; Exhibit cannot verify their safety. You can change this under Edit → Permissions.`)
 	assert.Contains(t, page, `id="link-allow"`)
 	assert.Contains(t, page, `id="link-block"`)
 

@@ -27,12 +27,12 @@ func editorReturn(r *http.Request, artifact *store.Artifact) editNavigation {
 	}
 	u, err := url.Parse(candidate)
 	if err != nil || u.IsAbs() || u.Host != "" || u.User != nil || u.Opaque != "" || u.Fragment != "" || u.RawPath != "" {
-		return editNavigation{URL: "/", Label: "My library"}
+		return editNavigation{URL: "/", Label: "Gallery"}
 	}
 	var label string
 	switch u.Path {
 	case "/":
-		label = "My library"
+		label = "Gallery"
 	case "/search":
 		label = "Search"
 	case "/shared":
@@ -42,7 +42,7 @@ func editorReturn(r *http.Request, artifact *store.Artifact) editNavigation {
 	case "/artifacts/" + artifact.ID:
 		label = artifact.Title
 	default:
-		return editNavigation{URL: "/", Label: "My library"}
+		return editNavigation{URL: "/", Label: "Gallery"}
 	}
 	return editNavigation{URL: u.String(), Label: label}
 }

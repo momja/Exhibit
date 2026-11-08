@@ -437,7 +437,7 @@ func (ro *Router) showConsent(w http.ResponseWriter, r *http.Request, req *authz
 	data := oauthConsentData{ClientName: req.Client.Name, RedirectHost: redirectHost(req.RedirectURI), Request: req}
 	status := http.StatusOK
 	if !ro.mayManageAgentGrants(r) {
-		data.Error = "Sign in to connect an agent to your library."
+		data.Error = "Sign in to connect an agent to your Gallery."
 		data.Request = nil
 		status = http.StatusForbidden
 	}

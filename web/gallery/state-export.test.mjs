@@ -58,7 +58,7 @@ test('empty saved state exports as an empty object', async () => {
 for (const [name, fetch, message] of [
   ['refused read', async () => new Response('', { status: 403 }), 'HTTP 403'],
   ['network failure', async () => { throw new Error('offline'); }, 'offline'],
-  ['invalid JSON', async () => new Response('not JSON'), 'Could not export state']
+  ['invalid JSON', async () => new Response('not JSON'), 'Could not export saved data']
 ]) {
   test(name + ' reports an error without downloading and allows retry', async () => {
     const t = await fixture(fetch);

@@ -917,13 +917,13 @@ func newShareBadgeView(a *store.Artifact) shareBadgeView {
 	detail := []string{}
 	if grants > 0 {
 		if a.ShareStateMode == store.ShareStateShared {
-			detail = append(detail, people+" can open this artifact, and everyone using it reads and writes one shared copy of its data.")
+			detail = append(detail, people+" can open this artifact and view and update the owner’s saved data.")
 		} else {
 			detail = append(detail, people+" can open this artifact. Each keeps their own data.")
 		}
 	}
 	if link {
-		detail = append(detail, "Anyone with its public link can open it and read the owner's saved data.")
+		detail = append(detail, "Anyone with its public link can open it and read the owner’s saved data, but cannot save changes.")
 	}
 
 	badge := shareBadgeView{Detail: strings.Join(detail, " ")}
@@ -1242,7 +1242,7 @@ func newVersionViews(versions []store.Version) []versionView {
 
 func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, library []*store.Tag, src, widgetSrc string, creds pageCredentials, urls renderURLs, canGenerate bool, generateHint string, versions []store.Version, navigation editNavigation) (string, error) {
 	if navigation.URL == "" {
-		navigation = editNavigation{URL: "/", Label: "My library"}
+		navigation = editNavigation{URL: "/", Label: "Gallery"}
 	}
 	// Only origins with no decision at all are "referenced, not approved" —
 	// a blocked origin is a decision already made and belongs in Blocked.

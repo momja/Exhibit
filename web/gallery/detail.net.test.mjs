@@ -24,12 +24,13 @@ const ID = "art-1";
 const OPEN_URL = "/artifacts/art-1/open";
 
 // Loads detail.js with the bootstrap globals its page template renders.
-async function loadDetail({ readOnly = false, responses = [], headline = "" } = {}) {
+async function loadDetail({ readOnly = false, responses = [], headline = "", protectedPreview = false } = {}) {
   const api = recordingApi(responses);
   const capabilitiesChanged = [];
   const page = loadPageScript([], {
     TOKEN: "",
     READ_ONLY: readOnly,
+    CONNECTION_PROTECTED: protectedPreview,
     STATE_WRITABLE: !readOnly,
     SHARED_STATE: false,
     ID,
@@ -56,7 +57,8 @@ async function loadDetail({ readOnly = false, responses = [], headline = "" } = 
     // What detail.tmpl renders for the capability banner: hidden, with the
     // shared headline already in place.
     "capability-warning-banner": { hidden: true },
-    "capability-warning-headline": { textContent: headline }
+    "capability-warning-headline": { textContent: headline },
+    "direct-open-banner": { hidden: false }
   });
   // htmx is not in the harness, so the refresh contract is the event itself:
   // the listener the #capability-cluster target stands in for here.
@@ -262,11 +264,12 @@ test("a blocked redirect replaces the banner headline rather than promising a fi
   });
 
   assert.equal(byId("capability-warning-banner").hidden, false);
-  assert.match(byId("capability-warning-headline").textContent, /redirected to an unapproved origin/);
-  assert.match(byId("capability-warning-detail").textContent, /forwarded the request somewhere else/);
+  assert.match(byId("capability-warning-headline").textContent, /redirected to a site that is not allowed/);
+  assert.match(byId("capability-warning-detail").textContent, /redirected this request to another site/);
   assert.match(byId("capability-warning-detail").textContent, /Network panel/,
     "the devtools Network panel is where a redirect chain is visible; the console is not");
   assert.equal(byId("net-modal").open, false, "the redirect case must never open the prompt");
+  assert.equal(byId("direct-open-banner").hidden, true, "a new tab cannot resolve a blocked redirect");
 });
 
 // A capability that the sandbox itself causes keeps the shared headline, so the
@@ -281,6 +284,7 @@ test("an ordinary sandbox capability keeps the shared headline", async () => {
 
   assert.equal(byId("capability-warning-banner").hidden, false);
   assert.equal(byId("capability-warning-headline").textContent, "SHARED");
+  assert.equal(byId("direct-open-banner").hidden, false, "a new tab remains available for sandbox limitations");
 });
 
 test("a read-only visitor is not asked a question they cannot answer", async () => {
@@ -319,5 +323,34 @@ for (const dismiss of [false, true]) for (const grant of [false, true]) {
       assert.equal(page.byId('clip-modal').open, true, 'failed grant remains retryable');
       assert.equal(page.byId('clip-allow').disabled, false);
     }
+  });
+}
+
+
+test("a connected preview explains unavailable features without prescribing a disabled new tab", async () => {
+  for (const capability of ["camera", "geolocation", "module-worker", "future-feature"]) {
+    const { byId, postFromFrame } = await loadDetail({ protectedPreview: true });
+    await postFromFrame({ __avCapabilityWarning: true, artifactId: ID, capability });
+    assert.match(byId("capability-warning-detail").textContent, /unavailable while the artifact uses connected accounts or private saved data/);
+    assert.doesNotMatch(byId("capability-warning-detail").textContent, /new tab/);
+  }
+  const { byId, postFromFrame } = await loadDetail({ protectedPreview: true });
+  await postFromFrame({ __avCapabilityWarning: true, artifactId: ID, capability: "redirected-origin" });
+  assert.match(byId("capability-warning-detail").textContent, /redirected this request/);
+});
+
+
+for (const protectedPreview of [false, true]) {
+  test(`a recipient's redirected request asks the owner to review access (connected=${protectedPreview})`, async () => {
+    const { byId, postFromFrame, api } = await loadDetail({ readOnly: true, protectedPreview });
+    await postFromFrame({ __avCapabilityWarning: true, artifactId: ID, capability: "redirected-origin" });
+    const detail = byId("capability-warning-detail").textContent;
+    assert.match(detail, /Only the owner can allow this destination/);
+    assert.match(detail, /Ask them to review this request/);
+    assert.match(detail, /new tab does not bypass these permissions/);
+    assert.doesNotMatch(detail, /Edit → Permissions/);
+    assert.equal(byId("direct-open-banner").hidden, true);
+    assert.equal(byId("net-modal").open, false);
+    assert.deepEqual(originCalls(api), []);
   });
 }

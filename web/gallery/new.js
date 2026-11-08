@@ -116,7 +116,7 @@ async function ingest() {
   const title = document.getElementById('title').value.trim();
   const status = document.getElementById('status');
   const scanDiv = document.getElementById('scan-result');
-  status.textContent = 'Uploading…';
+  status.textContent = 'Adding artifact…';
   scanDiv.style.display = 'none';
 
   let payload;
@@ -124,11 +124,11 @@ async function ingest() {
     const url = document.getElementById('url-input').value.trim();
     if (!url) { status.textContent = 'Enter a URL first.'; return; }
     const snapshot = document.getElementById('snapshot-toggle').checked;
-    if (snapshot) status.textContent = 'Fetching page and snapshotting assets…';
+    if (snapshot) status.textContent = 'Fetching the page and its files…';
     payload = {title: title || '', url, snapshot, network_allowlist: []};
   } else {
     const body = document.getElementById('body').value.trim();
-    if (!body) { status.textContent = 'Paste an artifact first.'; return; }
+    if (!body) { status.textContent = 'Paste HTML first.'; return; }
     payload = {title: title || 'Untitled', body, network_allowlist: []};
   }
 
@@ -142,7 +142,7 @@ async function ingest() {
     // The request never completed — offline, DNS, a dropped connection. Say so
     // rather than leaving the last progress message on screen, which reads as a
     // hang and is indistinguishable from a slow snapshot.
-    status.textContent = 'Error: could not reach the server (' + err.message + ')';
+    status.textContent = 'Couldn’t reach the server. Check your connection and try again.';
     return;
   }
 
@@ -152,7 +152,7 @@ async function ingest() {
   // nothing catching it the status stayed on 'Fetching page and snapshotting
   // assets…' forever. A dead URL looked identical to a slow one.
   if (!resp.ok) {
-    status.textContent = 'Error: ' + (await errorMessage(resp));
+    status.textContent = 'Couldn’t add the artifact: ' + (await errorMessage(resp));
     return;
   }
 
@@ -160,7 +160,7 @@ async function ingest() {
   try {
     data = await resp.json();
   } catch (err) {
-    status.textContent = 'Error: the server sent a response this page could not read.';
+    status.textContent = 'Couldn’t read the server’s response. Try again.';
     return;
   }
 
@@ -172,7 +172,7 @@ async function ingest() {
     // The artifact is saved but network-blocked (CSP connect-src 'none').
     // Pause here for explicit approval — nothing is added to the allowlist,
     // and no origin gains network access, until the user decides.
-    status.textContent = '✓ Saved — review network access below.';
+    status.textContent = 'Saved. Review network access before continuing.';
     showApproval(id);
     return;
   }
@@ -210,17 +210,16 @@ function snapshotHasProblems(rep) {
 function renderSnapshotReport(rep) {
   if (!rep) return '';
   if (!rep.applied) {
-    return '<div class="snapshot-report"><strong>Snapshot failed</strong> — stored the original page with a ' +
-      '<code>&lt;base href&gt;</code> fallback so relative references still resolve.' +
+    return '<div class="snapshot-report"><strong>Couldn’t save the page’s files</strong>. The original page was saved, but its files still need network access.' +
       (rep.error ? '<div class="snapshot-bad">' + esc(rep.error) + '</div>' : '') +
       '</div>';
   }
   const urls = rep.vendored_urls || [];
-  let html = '<div class="snapshot-report"><strong>Snapshot report</strong>' +
+  let html = '<div class="snapshot-report"><strong>Saved files</strong>' +
     '<div class="snapshot-line">' + urls.length + ' asset' + (urls.length === 1 ? '' : 's') +
-    ' vendored into the file (' + fmtBytes(rep.vendored_bytes || 0) + ').</div>';
+    ' saved with the artifact (' + fmtBytes(rep.vendored_bytes || 0) + ').</div>';
   if (urls.length > 0) {
-    html += '<details class="snapshot-line"><summary>Vendored assets</summary>' +
+    html += '<details class="snapshot-line"><summary>Saved assets</summary>' +
       '<ul class="snapshot-list">' +
       urls.map(u => '<li><code>' + esc(u) + '</code></li>').join('') +
       '</ul></details>';
@@ -228,14 +227,14 @@ function renderSnapshotReport(rep) {
   const fails = rep.failures || [];
   if (fails.length > 0) {
     html += '<div class="snapshot-bad">' + fails.length + ' asset' + (fails.length === 1 ? '' : 's') +
-      ' could not be inlined (reference kept, see origins below):</div>' +
+      ' could not be saved. These files still need network access:</div>' +
       '<ul class="snapshot-list">' +
       fails.map(f => '<li><code>' + esc(f.ref) + '</code> — ' + esc(f.kind) +
         (f.detail ? ' (' + esc(f.detail) + ')' : '') + '</li>').join('') +
       '</ul>';
   }
   if ((rep.residual_origins || []).length === 0) {
-    html += '<div class="snapshot-good">No residual network references — the artifact is fully self-contained.</div>';
+    html += '<div class="snapshot-good">The scan found no remaining external references.</div>';
   }
   return html + '</div>';
 }
@@ -260,7 +259,7 @@ async function approveOrigins(id) {
     method: 'PATCH',
     body: JSON.stringify({network_allowlist: selected})
   });
-  if (!r.ok) { status.textContent = '✗ Failed to update allowlist'; return; }
+  if (!r.ok) { status.textContent = 'Couldn’t update allowed sites.'; return; }
   finishIngest(id);
 }
 

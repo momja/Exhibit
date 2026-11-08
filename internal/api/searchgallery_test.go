@@ -74,7 +74,7 @@ func TestSearchGalleryAccessibleCards(t *testing.T) {
 		cards, next := galleryCardsAndNext(page.Body.String())
 		assert.Empty(t, cards)
 		assert.Empty(t, next)
-		assert.Contains(t, page.Body.String(), "Search your library and artifacts shared with you.")
+		assert.Contains(t, page.Body.String(), "Search your Gallery and artifacts shared with you.")
 	}
 	assert.Contains(t, in.get(t, "/search?q=notfound", in.cookieTwo).Body.String(), "No artifacts match your search.")
 	for _, offset := range []string{"-1", "bad"} {

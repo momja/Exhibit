@@ -350,7 +350,7 @@ func TestEditPageGenerateButtonDisabledWithReason(t *testing.T) {
 	page := w.Body.String()
 
 	assert.Contains(t, page, `id="widget-generate"`)
-	assert.Contains(t, page, `disabled title="Agent support is off on this server`)
+	assert.Contains(t, page, `disabled title="The agent is unavailable.`)
 	// No widget yet, so the button offers to make one rather than replace one.
 	assert.Contains(t, page, `<span id="widget-generate-label">Generate widget</span>`)
 }

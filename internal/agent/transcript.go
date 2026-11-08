@@ -142,8 +142,6 @@ func project(msgs []piMessage) []TranscriptMessage {
 					out[row].Questions = &result.QuestionRequest
 				}
 			}
-		case "prepared_source":
-			out = append(out, TranscriptMessage{Role: "tool", Text: "Prepared artifact source"})
 		case "user":
 			text, images := userContent(m.Content)
 			out = append(out, TranscriptMessage{Role: "user", Text: text, Images: images})
@@ -232,14 +230,14 @@ func toolLabel(name string, args map[string]any) string {
 	case "get_widget":
 		return "Reading widget"
 	case "get_state":
-		return "Reading artifact state"
+		return "Reading saved data"
 	case "set_state":
-		return `Setting state key "` + str("key", "") + `"`
+		return `Setting saved data key "` + str("key", "") + `"`
 	case "delete_state":
 		if k := str("key", ""); k != "" {
-			return `Deleting state key "` + k + `"`
+			return `Deleting saved data key "` + k + `"`
 		}
-		return "Erasing all state"
+		return "Erasing saved data"
 	case "get_selection":
 		return "Reading selected elements"
 	case "ask_user":
