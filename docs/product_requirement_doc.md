@@ -160,11 +160,17 @@ artifacts(
   microphone_approved,     --   document's Permissions-Policy (§6.3)
   geolocation_approved,    -- likewise for location, and the same header
   widget_blob_id,          -- the card's widget document; empty = default tile (§5.5)
-  share_state_mode         -- whose state a recipient writes: their own, or the
+  share_state_mode,        -- whose state a recipient writes: their own, or the
                            -- owner's shared board. One answer per ARTIFACT, not
                            -- per grant, which would admit one recipient on their
                            -- own rows while another writes the owner's.
+  agent_state_access       -- inherit | allow | deny: may agents read and change
+                           -- this tool's saved data (§8.7). inherit follows
+                           -- owner_settings; nothing is allowed by default.
 )
+-- account-wide preferences, keyed by owner with no users FK (a no-login owner
+-- has no users row). agent_state_access defaults to off.
+owner_settings(owner_id, agent_state_access, updated_at)
 -- one decision per (artifact, origin), cascading with the artifact (§6)
 artifact_network_origins(
   artifact_id, origin,
@@ -660,8 +666,17 @@ API as the built-in agent. Every source or widget change is a version you can
 restore.
 
 The connection covers **your own library**, not artifacts shared with you. It
-can read saved data to understand a tool, but cannot write or erase it: a saved
-note has no independently restorable version of its own. Sharing and deletion
+can read saved data to understand a tool, where you allow agents to, but cannot
+write or erase it: a saved note has no independently restorable version of its
+own.
+
+**Saved data is yours to share with an agent.** Whatever an agent reads is sent
+to the AI provider that runs it, so no agent — the built-in one or one you
+connect — reads or changes what you have entered into your tools until you say
+it may. **Settings → Agents and saved data** is the answer for your whole
+library, off by default; each artifact's edit page can follow it, allow, or
+refuse. Agents still see an artifact's code, and anything you select or paste
+into the chat. An agent cannot change either answer. Sharing and deletion
 remain yours. Treat the connected agent like a device you leave signed in;
 Settings lists every connection and its last use, and revoking one stops its
 next request. Securing that agent and where it keeps the token is your job.

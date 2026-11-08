@@ -21,7 +21,7 @@
 <main class="settings">
 <div class="lede">
   <h2>Settings.</h2>
-  <p>Manage your storage, connected agents and Exhibit account.</p>
+  <p>Manage your storage, agents and Exhibit account.</p>
 </div>
 
 <div class="card">
@@ -72,6 +72,7 @@
 </section>
 {{end}}
 
+{{with .AgentStateAccess}}{{template "agentStateAccessPanel" .}}{{end}}
 {{with .AgentGrants}}{{template "agentGrantsPanel" .}}{{end}}
 {{if .Connections.Enabled}}
 <div class="card">
@@ -197,6 +198,25 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
   <div class="settings-status" id="profile-status" data-account-deletion-target="status" role="status" aria-live="polite" hidden></div>
 </div>{{end}}
 
+
+{{/* The account-wide answer to whether agents may read and change saved data
+     (Exh-dabd), for the built-in agent and connected ones alike. Off until the
+     person turns it on; applied the moment it changes. Each artifact can
+     override it on its edit page. Data: profileAgentStateAccess. */}}
+{{define "agentStateAccessPanel"}}<section class="card" id="agent-state-access" aria-labelledby="agent-state-access-heading"
+     data-controller="agent-state-access"
+     data-agent-state-access-url-value="/api/settings/agent-state-access"
+     data-agent-state-access-method-value="PUT"
+     data-agent-state-access-field-value="allowed">
+  <h3 class="settings-h3" id="agent-state-access-heading"><i class="ph ph-lock-key" aria-hidden="true"></i> Agents and saved data</h3>
+  <p class="settings-copy">An agent sends what it reads to the AI provider that runs it. Saved data is what you have entered into your tools, so agents cannot read or change it unless you allow it.</p>
+  <label class="settings-check">
+    <input type="checkbox" id="agent-state-access-default" data-agent-state-access-target="input" data-action="change->agent-state-access#save"{{if .Allowed}} checked{{end}}>
+    Let agents read and change saved data
+  </label>
+  <p class="muted text-sm settings-note">Applies to the built-in agent and to agents you connect. You can allow or refuse it for one artifact on its edit page, under Stored state. Agents always see an artifact's code, and anything you select or paste into the chat.</p>
+  <p class="settings-status" data-agent-state-access-target="status" role="status" aria-live="polite" hidden></p>
+</section>{{end}}
 
 {{define "agentGrantsPanel"}}<section class="card" id="agent-grants-panel"{{if .MCPURL}} data-mcp-url="{{.MCPURL}}"{{end}} aria-labelledby="agent-grants-heading">
   <h3 class="settings-h3" id="agent-grants-heading"><i class="ph ph-robot" aria-hidden="true"></i> Connected agents</h3>

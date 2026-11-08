@@ -92,6 +92,17 @@ func modePrompt(opts CreateOpts) string {
 	return ""
 }
 
+// stateGuidance names the state tools when the owner allows agents to use the
+// artifact's saved data, and says it is unavailable otherwise (Exh-dabd). It
+// follows the same switch as the extension's tool registration, so the prompt
+// never lists a tool the session does not have.
+func stateGuidance(opts CreateOpts) string {
+	if opts.StateTools {
+		return "\n\n" + renderPrompt("state_tools", nil)
+	}
+	return "\n\n" + renderPrompt("state_unavailable", nil)
+}
+
 // Platform capabilities are explicit session facts. The default instance has
 // no relay; its prompt must never promise requests the server cannot service.
 func networkGuidance(opts CreateOpts) string {
@@ -120,7 +131,7 @@ func buildSystemPrompt(override string, opts CreateOpts) string {
 	if !opts.WidgetOnly {
 		guidance = "\n\n" + questionGuidance
 	}
-	return role + networkGuidance(opts) + modePrompt(opts) + guidance + "\n\n" + dataContract
+	return role + stateGuidance(opts) + networkGuidance(opts) + modePrompt(opts) + guidance + "\n\n" + dataContract
 }
 
 // selectionNotice is the fixed sentence appended to a prompt that carries a

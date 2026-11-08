@@ -746,6 +746,12 @@ func (ro *Router) setupRoutes() {
 		// argument, and registering the two apart is where it is visible.
 		r.Delete("/api/account", ro.deleteAccount)
 
+		// The caller's own default for whether agents may use saved data
+		// (Exh-dabd). Like the route above it takes no id; it is outside
+		// agentScopeAllows, so no agent can widen its own access.
+		r.Get("/api/settings/agent-state-access", ro.getAgentStateAccessDefault)
+		r.Put("/api/settings/agent-state-access", ro.putAgentStateAccessDefault)
+
 		r.Route("/api/shares", func(r chi.Router) {
 			r.Post("/", ro.createShare)
 			r.Delete("/{shareID}", ro.deleteShare)

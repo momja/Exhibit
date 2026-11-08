@@ -44,8 +44,9 @@ setting enables the OAuth routes below and the connection UI in **Settings →
 Connected agents**. It never mounts an MCP transport in the core (Exh-uhvu).
 
 A library grant can list/search/create artifacts, get/patch artifacts **owned by
-its owner**, read and write their widgets, read their saved state, and read asset
-metadata. Incoming shares and other owners' artifacts return 404. The route
+its owner**, read and write their widgets, read their saved state where the owner
+allows agents to (see [Agents and saved data](#agents-and-saved-data)), and read
+asset metadata. Incoming shares and other owners' artifacts return 404. The route
 allowlist refuses everything else: state writes and erasure, artifact deletion,
 shares/grants, origin-decision routes, versions/restore, tags/collections,
 duplicate, refetch, imports/exports, account/admin, pages and partials. Saved data
@@ -53,7 +54,7 @@ is read-only because its ordinary mutations do not create restorable versions;
 source and widget changes do (Exh-l2xj).
 
 Ordinary API validation, quotas and revision preconditions still apply. Agent
-PATCH cannot set `share_state_mode`; it **can** set `network_allowlist` and
+PATCH cannot set `share_state_mode` or `agent_state_access`; it **can** set `network_allowlist` and
 capability approval fields, as Pi can. No MCP tool exposes those fields; the
 absence of an approval tool is not a field-level API restriction. Versions take
 `origin=agent`, the grant label as `message`, and `grant:<id>` as `session_id`
@@ -484,7 +485,9 @@ percent-encode the value (`encodeURIComponent`).
 
 Both deletes answer `204` and are **idempotent**: a key that was never stored is
 already absent, which is all the caller asked for. They 404 only on an unknown
-artifact. Erasing all state touches state alone: the artifact's body, origin
+artifact. An agent credential gets `403` on every route here unless the owner
+allows agents to use this artifact's saved data
+([Agents and saved data](#agents-and-saved-data)). Erasing all state touches state alone: the artifact's body, origin
 decisions, and capability approvals are untouched.
 
 Deleting is a genuine row removal. The shim's `removeItem` drives this route, so
@@ -646,7 +649,27 @@ A share has no lifetime of its own: it is live from the moment it is minted unti
 
 ```
 DELETE /api/account                {"confirm":"delete my library"}   → 204
+GET    /api/settings/agent-state-access                 → {"allowed": false}
+PUT    /api/settings/agent-state-access  {"allowed": true} → {"allowed": true}
 ```
+
+### Agents and saved data
+
+Whether agents — the built-in Pi agent and connected MCP agents alike — may read
+and change saved data (Exh-dabd). Two answers combine:
+
+- **The account default**, `/api/settings/agent-state-access`. `false` until the
+  owner sets it. Takes no id: it is the caller's own setting. `allowed` must be a
+  JSON boolean (`400` otherwise).
+- **A per-artifact override**, `agent_state_access` on `GET`/`PATCH
+  /api/artifacts/:id`: `"inherit"` (the default, follows the account setting),
+  `"allow"` or `"deny"`. Any other value is a `400`. Duplication copies it.
+
+When the effective answer is no, every state route below answers an agent
+credential `403` with a message telling the agent not to retry and where the
+person can change it. People's own requests are unaffected. Agent credentials can
+set neither answer: `PATCH agent_state_access` with one is `403`, and the
+settings route is outside every agent scope. See `security.md` §5.6.
 
 Erases the caller's account and everything this instance holds for it: every artifact and its file (bytes, not only rows), all saved state, tags, collections, share links, the stored agent key and its transcripts, and the `users` row itself. It is permanent — there is no soft delete, no trash and no snapshot — and it revokes every share link over that library at once, for holders who have no account here and are not notified.
 

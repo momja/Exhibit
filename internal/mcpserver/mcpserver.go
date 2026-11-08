@@ -163,7 +163,9 @@ func (t *tools) register(s *mcp.Server) {
 	mcp.AddTool(s, &mcp.Tool{Name: "get_state", Title: "Read artifact state",
 		Description: "Read every key/value the artifact has stored (what its localStorage writes through to), " +
 			"verbatim. Saved data is read-only here: it is what the person entered into their tool, and an " +
-			"agent never writes or erases it. Use it to understand the data the source must keep working with.",
+			"agent never writes or erases it. Use it to understand the data the source must keep working with. " +
+			"The owner decides per artifact whether agents may read it at all; when they have not, the call " +
+			"is refused and retrying will not help.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true}}, t.getState)
 	mcp.AddTool(s, &mcp.Tool{Name: "get_widget", Title: "Read widget",
 		Description: "Read the artifact's gallery widget source, or learn that it has none yet.",
@@ -229,6 +231,11 @@ func refusal(method, path string, resp *Response) error {
 	case http.StatusUnauthorized:
 		return errors.New("Exhibit no longer accepts this token: the owner may have revoked it. Ask them to issue a new one")
 	case http.StatusForbidden:
+		// Saved data is withheld per artifact by its owner (Exh-dabd), which is
+		// a decision about this artifact, not about the token's reach.
+		if strings.HasSuffix(path, "/state") {
+			return fmt.Errorf("Exhibit did not share this artifact's saved data: %s", firstNonEmpty(body.Error, "forbidden"))
+		}
 		return fmt.Errorf("Exhibit refused %s %s: %s. This token reaches only its owner's library", method, path, firstNonEmpty(body.Error, "forbidden"))
 	case http.StatusNotFound:
 		return errors.New("the artifact does not exist in this library. Search with search_artifacts; artifacts shared with the owner are not accessible through this connection")

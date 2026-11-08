@@ -85,6 +85,10 @@ input.state-input{max-width:340px}
 .state-readonly pre{margin-top:var(--space-2);font-family:monospace;font-size:12px;white-space:pre-wrap;word-break:break-word;max-height:220px;overflow:auto}
 .state-empty{display:flex;align-items:center;gap:var(--space-3);padding:16px 0;color:var(--color-muted);font-size:13px}
 .state-empty i{font-size:18px;color:var(--color-faint)}
+.state-agent-access{margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--color-hairline)}
+.state-agent-access .row{flex-wrap:wrap}
+.state-agent-access .spacer{min-width:14rem}
+.state-agent-access p{margin-top:var(--space-2)}
 .state-add{display:flex;align-items:center;gap:var(--space-2);margin-top:12px;padding-top:12px;border-top:1px solid var(--color-hairline);flex-wrap:wrap}
 .state-add .field{max-width:220px}
 

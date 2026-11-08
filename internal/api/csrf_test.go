@@ -184,6 +184,7 @@ var appOriginGETRoutes = []getRoute{
 	{route: "/api/artifacts/{artifactID}/transcripts"},
 	{route: "/api/artifacts/{artifactID}/transcripts/{sessionID}"},
 	{route: "/api/agent/key"},
+	{route: "/api/settings/agent-state-access"},
 	{route: "/api/agent/sessions/{sessionID}/questions/{requestID}"},
 	// SSE. It subscribes to a live session's event stream; it starts no turn
 	// and persists nothing.

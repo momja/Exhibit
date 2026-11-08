@@ -104,9 +104,17 @@ type profilePageData struct {
 	Favicon     template.URL
 	Account     profileAccount
 	AgentGrants *agentGrantsPanelView
-	Connections profileConnectionAllowance
-	IsAdmin     bool
+	// AgentStateAccess is the owner's account-wide answer to whether agents may
+	// read and change saved data (Exh-dabd); nil when this instance runs no
+	// agents at all, so the card is not offered for a choice that does nothing.
+	AgentStateAccess *profileAgentStateAccess
+	Connections      profileConnectionAllowance
+	IsAdmin          bool
 	pageCredentials
+}
+
+type profileAgentStateAccess struct {
+	Allowed bool
 }
 
 type profileConnectionAllowance struct {
@@ -178,6 +186,16 @@ func (ro *Router) profilePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var agentStateAccess *profileAgentStateAccess
+	if ro.cfg.Agent != nil || ro.cfg.MCPURL != "" {
+		allowed, err := ro.cfg.Store.AgentStateAccessDefault(ctx, ownerIDFromCtx(ctx))
+		if err != nil {
+			serverError(w, r, "profile agent state access", err)
+			return
+		}
+		agentStateAccess = &profileAgentStateAccess{Allowed: allowed}
+	}
+
 	creds := ro.pageCredentials(r)
 	var connectionAllowance profileConnectionAllowance
 	if ro.cfg.Relay.Enabled || ro.cfg.Connections != nil {
@@ -189,13 +207,14 @@ func (ro *Router) profilePage(w http.ResponseWriter, r *http.Request) {
 		connectionAllowance = profileConnectionAllowance{Enabled: true, CustomEnabled: ro.cfg.Connections != nil && ro.cfg.Connections.CustomEnabled(), Native: connectionLimitDescription(allowance.Connections.Native, "connection"), OAuth: connectionLimitDescription(allowance.Connections.OAuth, "connection"), Vendor: connectionLimitDescription(allowance.Connections.Vendor, "connection"), Schedules: connectionLimitDescription(allowance.Schedules, "schedule")}
 	}
 	page, err := renderPage("profile", profilePageData{
-		Header:          profileHeader(creds.Clerk),
-		Favicon:         template.URL(exhibitLogoDataURI),
-		Account:         acct,
-		AgentGrants:     agentGrants,
-		Connections:     connectionAllowance,
-		IsAdmin:         ro.adminRequest(r),
-		pageCredentials: creds,
+		Header:           profileHeader(creds.Clerk),
+		Favicon:          template.URL(exhibitLogoDataURI),
+		Account:          acct,
+		AgentGrants:      agentGrants,
+		AgentStateAccess: agentStateAccess,
+		Connections:      connectionAllowance,
+		IsAdmin:          ro.adminRequest(r),
+		pageCredentials:  creds,
 	})
 	if err != nil {
 		serverError(w, r, "profile render", err)

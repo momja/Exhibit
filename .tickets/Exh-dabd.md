@@ -1,6 +1,6 @@
 ---
 id: Exh-dabd
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-08T16:15:53Z
@@ -37,3 +37,9 @@ Make access to saved data an explicit owner decision, denied by default to match
 6. Account deletion removes owner_settings rows (TestEveryTableIsAccountedForInAccountDeletion).
 7. Docs updated: PRD §4.4/§8.7, architecture §3.1/§3.3/§3.7, security.md §5, agent.md, api.md.
 
+
+## Notes
+
+**2026-11-08T16:44:53Z**
+
+Implemented as designed. Migration 054 adds owner_settings and artifacts.agent_state_access. Enforcement is the agent branch of state.go artifactExists (403 for Pi and library grants). Pi registers state tools only with EXHIBIT_STATE_TOOLS=1 (CreateOpts.StateTools, computed at session start); the prompt gets state_tools.tmpl or state_unavailable.tmpl. MCP get_state maps the 403 to a do-not-retry tool error. UI: Settings card (checkbox, PUT /api/settings/agent-state-access) and a select in the edit page's Stored state panel (PATCH agent_state_access), both through the agent-state-access Stimulus controller and applied immediately. Not covered, and documented in security.md 5.6: source, preview selections and chat text.

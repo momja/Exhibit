@@ -237,6 +237,13 @@ type CreateOpts struct {
 	// write_artifact, which is exactly the wrong thing here: the artifact's
 	// own source must not change.
 	WidgetOnly bool
+	// StateTools says the owner allows agents to read and change this
+	// session's artifact's saved data (Exh-dabd) — the artifact's own setting,
+	// or the owner's account default in create mode. Without it the session
+	// has no state tools and its prompt says saved data is unavailable. The
+	// state routes enforce the same answer on every request, so a setting
+	// changed mid-session refuses at once and changes the tools next session.
+	StateTools bool
 	// PlatformPaid marks a session running on the instance's own credential
 	// (av-siqf) rather than a BYO key: it is who the provider bills, and so
 	// the one question av-99f4's enforcement keys off (a BYO-key session
@@ -408,6 +415,9 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 	}
 	if opts.WidgetOnly {
 		cmd.Env = append(cmd.Env, "EXHIBIT_WIDGET_ONLY=1")
+	}
+	if opts.StateTools {
+		cmd.Env = append(cmd.Env, "EXHIBIT_STATE_TOOLS=1")
 	}
 	if opts.ConnectionsEnabled && opts.NetworkRelayEnabled && !opts.WidgetOnly {
 		cmd.Env = append(cmd.Env, "EXHIBIT_CONNECTIONS_ENABLED=1")

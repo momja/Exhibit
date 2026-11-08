@@ -48,7 +48,8 @@ The only way data changes. Full route reference: `api.md`.
   `geolocation_approved`, named once in `store.ApprovalColumns`, which drives a
   strict-boolean check in both handler and store),
   `share_state_mode` (checked against `store.ValidShareStateMode` in handler *and*
-  store, av-6xjd), other scalars. A changed body is a new blob and a new version (§3.3b);
+  store, av-6xjd), `agent_state_access` (`inherit|allow|deny`, likewise checked;
+  refused to agent principals, Exh-dabd), other scalars. A changed body is a new blob and a new version (§3.3b);
   an identical one writes nothing. The response carries the new footprint and
   `footprint_changed`, which re-runs the approval gate. If the previous body's
   bytes are missing the write still goes through (it is the repair) and
@@ -86,7 +87,9 @@ The only way data changes. Full route reference: `api.md`.
   it (av-hh1o). A present-but-empty `key` is the empty-string key. Deletes are
   idempotent. The only route
   family a grantee may write (av-v991): handlers resolve one principal, the viewer,
-  and the store's `…AsViewer` methods decide whose rows that means.
+  and the store's `…AsViewer` methods decide whose rows that means. An agent
+  principal gets 403 unless the owner allows agents to use this artifact's saved
+  data (Exh-dabd, §3.7).
 - `GET …/export`: the artifact as one self-contained file, assets folded back in as
   `data:` URIs (av-vnkt). The file is the canonical artifact; the URL form is
   internal and is materialized wherever the artifact leaves the service. One failed
@@ -123,6 +126,8 @@ The only way data changes. Full route reference: `api.md`.
   owner-only; recipient is a query parameter (av-hh1o). Missing grants answer 404,
   matching link deletes. Grant views carry recipient ids, never row ids.
 - `GET /api/artifacts/:id/shares`: link and grants, owner-only (a recipient gets 404).
+- `GET/PUT /api/settings/agent-state-access`: the caller's account-wide default
+  for agents and saved data (Exh-dabd). No id; outside every agent scope.
 - `DELETE /api/account`: erase the caller's own account and library (av-4wyq). Takes
   no id, requires a session (not the service token) and the typed confirmation
   phrase server-side. Refuses the last enabled admin (`ErrLastAdmin`).
@@ -309,6 +314,11 @@ and writes state.
   through them. State is the one deliberate exception to "a grant widens nothing"
   (`TestAGrantDoesNotWidenAnyOwnerScopedMethod`). Never keyed by device. Rows go
   with the artifact (FK) and the viewer (trigger on `users` DELETE).
+- **Agents and saved data** (Exh-dabd, migration 054): `owner_settings(owner_id,
+  agent_state_access)` holds the account default (missing row: off), with no users
+  FK for the reason `agent_grants` has none; account deletion removes it.
+  `artifacts.agent_state_access` is the override. `Artifact.AgentStateAllowed` is
+  the only resolver. Not versioned; duplication copies it.
 - **Origin decisions**: `artifact_network_origins`, primary key (artifact, origin),
   cascading. The store normalizes origins too (av-i7hd); Go migration 23 repaired
   old rows, preferring `block` on collision. Only `allow` feeds the CSP; `block`
@@ -733,7 +743,9 @@ Full flow: `agent.md`.
   (`internal/agent/ext/exhibit.ts`) whose tools (`create_artifact`,
   `write_artifact`, `edit_artifact`, `get_artifact`, `get_state`, `set_state`,
   `delete_state`, `set_widget`, `edit_widget`, `get_widget`, `get_selection`) call
-  the HTTP API or read selected elements. `ask_user` uses Pi's interactive RPC
+  the HTTP API or read selected elements. The three state tools are registered,
+  and named in the prompt, only when `CreateOpts.StateTools` says the owner
+  allows agents to use the artifact's saved data (Exh-dabd). `ask_user` uses Pi's interactive RPC
   channel for chat questions (`agent.md`). Output is scanned like any ingest,
   never auto-approved.
 - **Scoped credential** (av-e0yj): `internal/agentscope` mints a token resolving to
@@ -799,6 +811,17 @@ Full flow: `agent.md`.
 - **Guardrail** (av-gust): with `GUARDRAIL_*`, `ext/guard.ts` screens each user
   message on Pi's `input` hook; a failed screen blocks. `security.md` §5.4.
 
+#### Agents and saved data (Exh-dabd)
+
+What an agent reads goes to its inference provider, so neither kind of agent
+reads or changes saved data until the owner allows it: an account default in
+Settings (off) and a per-artifact override on the edit page, both applied the
+moment they change. The state handlers' agent branch (`artifactExists`,
+`internal/api/state.go`) is the boundary and answers 403; Pi's tool registration
+and prompt paragraph follow the answer at session start, and the MCP `get_state`
+turns the refusal into a do-not-retry tool error. Agents can set neither answer.
+Source, selections and chat text are not covered. `security.md` §5.6.
+
 #### External agents (MCP)
 
 A connected agent acts for its owner across their library, like a signed-in
@@ -817,8 +840,8 @@ accepted cross-artifact prompt-injection risk: `security.md` §5 (Exh-17a5).
   grants remain listed for revocation and the empty panel disappears. The panel
   refreshes through `/partials/agent-grants` on `exhibit:agent-grants-changed`.
 - **One owner's own artifacts** (Exh-l2xj): `agentScopeAllows` admits library
-  search/create, artifact get/patch, widget read/write, saved-state reads and
-  asset metadata reads. Incoming shares and other owners' artifacts are 404.
+  search/create, artifact get/patch, widget read/write, saved-state reads (where
+  the owner allows them, below) and asset metadata reads. Incoming shares and other owners' artifacts are 404.
   Saved-data writes and erasure are refused because they have no independently
   restorable versions. Account/admin, pages, shares/grants, origins, history/
   restore, deletion, tags/collections and import/export stay outside the route

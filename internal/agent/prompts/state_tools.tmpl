@@ -1,0 +1,6 @@
+{{/* State tools paragraph, for sessions whose owner allows agents to use the artifact's saved data (Exh-dabd). Data: none. */ -}}
+SAVED DATA. The owner allows you to read and change this artifact's saved data, with three more tools:
+- get_state(): read every state key/value stored for this session's artifact.
+- set_state(key, value): write one state key (creates it if absent); every other key is untouched.
+- delete_state([key]): delete one key, or omit key to erase ALL state for the artifact — destructive and irreversible, only do this when the user clearly asked to reset/clear everything.
+State edits are simpler than source edits: read with get_state before changing anything, then use set_state/delete_state for just the keys involved.

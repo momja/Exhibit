@@ -26,7 +26,8 @@ browser chat UI ──POST prompt──► Go service ──JSONL stdin──►
 The single write path is preserved: the agent's only tools are
 `create_artifact` / `write_artifact` / `edit_artifact` / `get_artifact` for the document,
 `get_state` / `set_state` / `delete_state` for the artifact's stored state
-(av-lvi1), and `set_widget` / `edit_widget` / `get_widget` for the artifact's gallery tile
+(av-lvi1; only when the owner allows agents to use saved data, see
+[Saved data](#saved-data-is-the-owners-to-share)), and `set_widget` / `edit_widget` / `get_widget` for the artifact's gallery tile
 (av-fafu), plus `get_selection` for the elements the user picked in the preview and
 `ask_user` for questions in the chat —
 all registered by a Pi extension (`internal/agent/ext/exhibit.ts`,
@@ -94,7 +95,7 @@ one you mean before changing anything (Exh-q6xo).
 | `get_artifact(artifact_id)` | Read source, title, allowlist and asset metadata; remember source and widget revisions |
 | `edit_artifact(artifact_id, edits)` | Targeted `{oldText, newText}` replacements; each old text must match exactly once, and edits must not touch or overlap |
 | `write_artifact(artifact_id, body[, title])` | Replace the complete source, optionally retitling it; for full rewrites |
-| `get_state(artifact_id)` | Read stored key/value strings verbatim; saved data is read-only |
+| `get_state(artifact_id)` | Read stored key/value strings verbatim; saved data is read-only, and refused unless the owner allows agents to read it |
 | `get_widget(artifact_id)` | Read the gallery tile and its revision, or learn that none exists |
 | `set_widget(artifact_id, body)` | Save a complete gallery tile after `get_widget` or `get_artifact` |
 | `edit_widget(artifact_id, edits)` | Targeted replacements in a tile whose text was read with `get_widget` |
@@ -151,6 +152,31 @@ AGENT_MARKDOWN_SCREENSHOT_DIR="$PWD/docs/screenshots/Exh-1e7n" \
   go test ./internal/api -run '^TestAgentMarkdownBrowser$' -count=1
 ```
 
+## Saved data is the owner's to share
+
+What an agent reads goes to the inference provider that runs it, so agents do
+not see saved data until the owner says they may (Exh-dabd). **Settings → Agents
+and saved data** is the account-wide answer, off by default. Each artifact's edit
+page, under **Stored state**, can follow it, allow, or refuse, whatever the
+default says. Both apply to the built-in agent and to connected agents.
+
+- **Pi.** A session gets `get_state`, `set_state` and `delete_state`, and a
+  prompt paragraph listing them, only when its artifact's answer is yes (in create
+  mode: the account default, which the new artifact will follow). Otherwise the
+  prompt says saved data is unavailable and where the person can change that.
+  The answer is fixed when the session starts; the state routes check it on every
+  request, so turning access off refuses at once.
+- **MCP.** `get_state` stays listed, since a connection spans the library. On an
+  artifact whose answer is no it returns a tool error saying the owner has not
+  shared its saved data and that retrying will not help.
+
+Agents still see an artifact's source and anything selected in the preview or
+pasted into the chat. Enforcement and limits: `security.md` §5.6.
+
+Screenshots: [Settings](screenshots/Exh-dabd/01-settings-default.png),
+[edit page](screenshots/Exh-dabd/02-edit-override.png) and
+[edit page on a phone](screenshots/Exh-dabd/03-edit-override-phone.png).
+
 ## Pi scope: one session, one artifact
 
 A session reaches exactly one artifact, and that is enforced twice — once for
@@ -158,7 +184,7 @@ ergonomics, once for real. `security.md` §5 is the full statement; the shape:
 
 - **No tool takes an artifact id.** `create_artifact(title, body)`,
   `write_artifact(body[, title])`, `edit_artifact(edits)`, `get_artifact()`, `get_state()`,
-  `set_state(key, value)`, `delete_state([key])`, `set_widget(body)`, `edit_widget(edits)`,
+  `set_state(key, value)`, `delete_state([key])` (when allowed, above), `set_widget(body)`, `edit_widget(edits)`,
   `get_widget()`, `get_selection()`, `ask_user(questions)`. A tool with no artifact id parameter cannot be talked into a
   different target, which matters because artifact bodies and titles are
   untrusted text that reaches the model's context. The extension resolves the
