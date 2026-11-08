@@ -107,7 +107,7 @@ test('tag editing keeps color samples intact, controls aligned and validation lo
         await edit.click();
         const modal = page.locator('#tag-edit-modal');
         await expect(modal).toBeVisible();
-        await expect(modal.locator('#tag-edit-scope')).toContainText('every artifact in your library');
+        await expect(modal.locator('#tag-edit-scope')).toContainText('every artifact in your Gallery');
         const save = modal.locator('#tag-edit-save');
         await expect(save).toHaveText('Save tag');
         await expect(save).toBeDisabled();
@@ -299,7 +299,7 @@ test('tag changes persist with clear pending, local failure and retry feedback w
       await expect(modal).not.toBeVisible();
       expect(writes).toBe(1);
       await page.unroute(tagURL);
-      await expect(page.locator('#tag-status')).toHaveText('Tag saved across your library.');
+      await expect(page.locator('#tag-status')).toHaveText('Tag saved across your Gallery.');
       for (const artifact of [first, second]) {
         const saved = await (await api.get(`/api/artifacts/${artifact.id}`)).json();
         expect(saved.tags.find((tag: { id: string }) => tag.id === created.id)).toMatchObject({ name: renamed, color: '#527cb0' });
@@ -369,7 +369,7 @@ test('tag changes persist with clear pending, local failure and retry feedback w
       await expect(modal.locator('#tag-delete-error')).toBeHidden();
       await modal.locator('#tag-edit-confirm-delete').click();
       await expect(modal).not.toBeVisible();
-      await expect(page.locator('#tag-status')).toHaveText('Tag deleted from your library.');
+      await expect(page.locator('#tag-status')).toHaveText('Tag deleted from your Gallery.');
       remaining.delete(created.id);
       for (const artifact of [first, second]) expect((await (await api.get(`/api/artifacts/${artifact.id}`)).json()).tags).toHaveLength(0);
       await page.screenshot({ path: test.info().outputPath(`tag-deleted-${colorScheme}.png`) });

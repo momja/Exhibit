@@ -81,7 +81,7 @@ function startAgent(event) {
   if (event) event.preventDefault();
   const description = document.getElementById('agent-description');
   clearFeedback();
-  if (!description.value.trim()) { showFieldError(description, 'Describe what you want the tool to do.'); return; }
+  if (!description.value.trim()) { showFieldError(description, 'Describe what you want the artifact to do.'); return; }
   const brief = {
     title: document.getElementById('agent-title').value.trim(),
     description: description.value.trim()

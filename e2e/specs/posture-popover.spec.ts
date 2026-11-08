@@ -59,7 +59,7 @@ test('posture receipt stays within the viewport through keyboard, resize and ser
   // A Safari null-relatedTarget focusout must not swallow the Manage tap.
   await trigger.dispatchEvent('focusout', { relatedTarget: null });
   await expect(panel).toBeVisible();
-  await panel.getByRole('link', { name: 'Manage security settings →', exact: true }).click();
+  await panel.getByRole('link', { name: 'Edit permissions →', exact: true }).click();
   await expect.poll(() => { const url = new URL(page.url()); return url.pathname + url.hash; }).toBe(`/artifacts/${artifact.id}/edit#security-panel`);
   await page.goto(`/artifacts/${artifact.id}`);
   await page.locator('.pip-title').click();

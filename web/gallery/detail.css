@@ -96,7 +96,6 @@ body[data-pip-corner^=t] .pip-notices{top:auto;bottom:0}
 .share-replace-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 .share-link-row>.field{text-overflow:ellipsis}
 .share-link-row>.field:focus{text-overflow:clip}
-#share-panel .share-field-hint{margin:0}
 @media(max-width:767px){
   .share-link-row>.btn,.share-add>.btn{min-height:44px;align-self:stretch}
   .share-replace-row{flex-direction:column;align-items:flex-start;gap:6px}

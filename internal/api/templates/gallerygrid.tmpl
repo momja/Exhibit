@@ -11,7 +11,7 @@
 </form>{{end}}
 
 {{define "galleryResults"}}<p class="gallery-error" data-gallery-search-error role="alert" hidden>Couldn’t load {{if .Activity}}activity{{else}}artifacts{{end}}. <button class="btn btn-sec" type="submit" form="{{.ID}}-search">Try again</button></p>
-<p class="gallery-search-feedback" role="status">{{if .Activity}}Loading activity…{{else if .HideSearch}}Loading artifacts…{{else}}Searching your library…{{end}}</p>
+<p class="gallery-search-feedback" role="status">{{if .Activity}}Loading activity…{{else if .HideSearch}}Loading artifacts…{{else}}Searching your Gallery…{{end}}</p>
 <p class="sr-only" id="{{.ID}}-status" role="status" aria-live="polite" aria-atomic="true">{{template "galleryResultStatus" .}}</p>
 <div class="grid{{if .Activity}} activity-feed{{end}}" id="{{.ID}}-results" data-gallery-results>{{template "galleryGrid" .}}</div>{{end}}
 

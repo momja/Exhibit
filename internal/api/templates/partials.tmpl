@@ -54,7 +54,7 @@
 {{define "editTagModal"}}<dialog id="tag-edit-modal" class="modal-dialog modal-sheet tag-edit-dialog" aria-labelledby="tag-edit-title" aria-describedby="tag-edit-scope" data-controller="modal">
   <div class="modal-header"><h2 id="tag-edit-title">Edit tag</h2>{{template "modalClose"}}</div>
   <div class="modal-body"><fieldset id="tag-edit-fields" class="modal-fields" aria-label="Tag details">
-    <p id="tag-edit-scope" class="form-help tag-scope-note">Changes apply to this tag on every artifact in your library.</p>
+    <p id="tag-edit-scope" class="form-help tag-scope-note">Changes apply to this tag on every artifact in your Gallery.</p>
     <div class="tag-name-field">
       <label for="tag-edit-name">Name</label>
       <input type="text" id="tag-edit-name" maxlength="60" required aria-describedby="tag-edit-name-hint tag-edit-name-error" autofocus>
@@ -65,7 +65,7 @@
     <div class="tag-delete-entry"><button type="button" class="btn btn-sec btn-danger-outline" id="tag-edit-delete"><i class="ph ph-trash" aria-hidden="true"></i> Delete tag…</button></div>
   </fieldset>
   <fieldset id="tag-delete-fields" class="modal-fields" aria-label="Confirm tag deletion" hidden>
-    <p>Delete <strong id="tag-delete-name"></strong> from your library?</p>
+    <p>Delete <strong id="tag-delete-name"></strong> from your Gallery?</p>
     <p id="tag-delete-help" class="form-help">It will be removed from every artifact. Your artifacts will be kept.</p>
     <div id="tag-delete-error" class="modal-error" role="alert" hidden></div>
   </fieldset></div>

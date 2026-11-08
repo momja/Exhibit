@@ -80,7 +80,7 @@ test('failed editor Save keeps its explanation visible and supports a successful
     const explanation = page.locator('.editor-save-message');
     await expect(explanation).toBeVisible();
     await expect(explanation).toContainText('Temporary save failure');
-    await expect(explanation).toHaveText('Temporary save failure. Try again.');
+    await expect(explanation).toHaveText('Couldn’t save: Temporary save failure. Try again.');
     await expect(explanation.locator('.ph-warning')).toBeVisible();
     expect(await explanation.evaluate(element => { const r = element.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth; })).toBe(true);
     await expect(save).toBeEnabled();

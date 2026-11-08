@@ -6,7 +6,7 @@
     {{range .Allowlist}}<div class="allowlist-row" data-origin="{{.}}">
       <code title="{{.}}">{{.}}</code>
       <button type="button" class="btn btn-sm btn-sec" data-action="remove">Remove</button>
-    </div>{{else}}<p class="form-help allowlist-empty">No origins approved.</p>{{end}}
+    </div>{{else}}<p class="form-help allowlist-empty">No sites allowed yet.</p>{{end}}
   </div>
   {{if .Unapproved}}
   <h3>Found in source, not allowed</h3>

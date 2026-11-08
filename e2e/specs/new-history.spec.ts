@@ -4,14 +4,14 @@ test('Back from a completed import restores a usable creation page', async ({ pa
   await page.goto('/new');
   await page.locator('[data-mode=paste]').click();
   await page.getByRole('textbox', { name: 'HTML source', exact: true }).fill('<h1>History import</h1>');
-  await page.getByRole('button', { name: 'Add to library', exact: true }).click();
+  await page.getByRole('button', { name: 'Add to Gallery', exact: true }).click();
   await expect(page).toHaveURL(/\/artifacts\/[^/]+$/);
   artifacts.track({ id: new URL(page.url()).pathname.split('/').at(-1)!, title: 'History import' });
   await page.goBack();
   await expect(page).toHaveURL(/\/new$/);
   await expect(page.locator('[data-mode=paste]')).toBeEnabled();
   await page.locator('[data-mode=paste]').click();
-  await expect(page.getByRole('button', { name: 'Add to library', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Add to Gallery', exact: true })).toBeEnabled();
 });
 
 test('persisted-page recovery resets a completed import and preserves unfinished approval', async ({ page, artifacts }) => {
@@ -26,8 +26,8 @@ test('persisted-page recovery resets a completed import and preserves unfinished
     await page.goto('/new');
     await page.locator('[data-mode=paste]').click();
     await page.getByRole('textbox', { name: 'HTML source', exact: true }).fill('<h1>Restoration fixture</h1>');
-    await page.getByRole('button', { name: 'Add to library', exact: true }).click();
-    await expect(page.locator('#status')).toContainText(complete ? 'Saved —' : 'review network access');
+    await page.getByRole('button', { name: 'Add to Gallery', exact: true }).click();
+    await expect(page.locator('#status')).toContainText(complete ? 'Saved —' : 'Review network access');
     await expect(page.locator('[data-mode=paste]')).toBeDisabled();
     if (complete) {
       const reload = page.waitForRequest(request => request.isNavigationRequest() && new URL(request.url()).pathname === '/new');
@@ -40,7 +40,7 @@ test('persisted-page recovery resets a completed import and preserves unfinished
         dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
         await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       });
-      await expect(page.locator('#status')).toContainText('review network access');
+      await expect(page.locator('#status')).toContainText('Review network access');
       await expect(page.locator('[data-mode=paste]')).toBeDisabled();
     }
     await page.unroute('**/api/artifacts');

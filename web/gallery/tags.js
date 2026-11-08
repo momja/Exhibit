@@ -294,7 +294,7 @@ function connectTags(panel) {
         return true;
       });
       if (saved) {
-        status(deleting ? 'Tag deleted from your library.' : 'Tag saved across your library.');
+        status(deleting ? 'Tag deleted from your Gallery.' : 'Tag saved across your Gallery.');
         editor.close();
         refresh(editingTagID);
       } else if (focusName) byId('tag-edit-name').focus();

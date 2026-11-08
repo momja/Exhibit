@@ -7,7 +7,7 @@ test('creation validation names and focuses the field for each method', async ({
   });
   await page.goto('/new');
   await page.getByRole('button', { name: 'Start building', exact: true }).click();
-  const description = page.getByRole('textbox', { name: 'Description', exact: true });
+  const description = page.getByRole('textbox', { name: 'What should it do?', exact: true });
   await expect(description).toBeFocused();
   await expect(description).toHaveAttribute('aria-invalid', 'true');
   await expect(page.locator('#agent-description-error')).toBeVisible();
@@ -15,7 +15,7 @@ test('creation validation names and focuses the field for each method', async ({
 
   await page.locator('[data-mode=paste]').click();
   const source = page.getByRole('textbox', { name: 'HTML source', exact: true });
-  await page.getByRole('button', { name: 'Add to library', exact: true }).click();
+  await page.getByRole('button', { name: 'Add to Gallery', exact: true }).click();
   await expect(source).toBeFocused();
   await expect(source).toHaveAttribute('aria-invalid', 'true');
   await expect(source).toHaveAttribute('aria-describedby', 'body-error');
@@ -25,15 +25,15 @@ test('creation validation names and focuses the field for each method', async ({
   await page.locator('[data-mode=url]').click();
   const url = page.getByRole('textbox', { name: 'Page URL', exact: true });
   await expect(page.locator('#status')).toBeEmpty();
-  await page.getByRole('button', { name: 'Add to library', exact: true }).click();
+  await page.getByRole('button', { name: 'Add to Gallery', exact: true }).click();
   await expect(url).toBeFocused();
   await expect(page.locator('#status')).toBeEmpty();
   await url.fill('not a page address');
-  await page.getByRole('button', { name: 'Add to library', exact: true }).click();
+  await page.getByRole('button', { name: 'Add to Gallery', exact: true }).click();
   await expect(url).toBeFocused();
   await expect(page.locator('#url-input-error')).toHaveText('Enter a full http:// or https:// page URL.');
   await expect(page.locator('#status')).toBeEmpty();
-  await expect(page.getByRole('button', { name: 'Add to library', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Add to Gallery', exact: true })).toBeEnabled();
   await expect(page.locator('[data-mode=paste]')).toBeEnabled();
   expect(submissions).toBe(0);
 });
@@ -56,9 +56,9 @@ test('pending creation submits once, preserves input, and recovers from a refusa
   const search = page.locator('.cm-search');
   await search.locator('input[name=search]').fill('Keep');
   await search.locator('input[name=replace]').fill('Changed');
-  await page.getByRole('button', { name: 'Add to library', exact: true }).click();
+  await page.getByRole('button', { name: 'Add to Gallery', exact: true }).click();
   await expect(page.locator('#ingest-panel')).toHaveAttribute('aria-busy', 'true');
-  await expect(page.getByRole('button', { name: 'Add to library', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Add to Gallery', exact: true })).toBeDisabled();
   await expect(page.locator('[data-mode=url]')).toBeDisabled();
   // Search commands must respect the editor state, not just contentEditable.
   await search.getByRole('button', { name: 'Replace all', exact: true }).click();
@@ -69,9 +69,9 @@ test('pending creation submits once, preserves input, and recovers from a refusa
   });
   expect(submissions).toBe(1);
   release();
-  await expect(page.locator('#status')).toHaveText('Error: Please try again.');
+  await expect(page.locator('#status')).toHaveText('Couldn’t add the artifact: Please try again.');
   await expect(page.locator('#ingest-panel')).toHaveAttribute('aria-busy', 'false');
-  await expect(page.getByRole('button', { name: 'Add to library', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Add to Gallery', exact: true })).toBeEnabled();
   await expect(page.locator('[data-mode=url]')).toBeEnabled();
   await expect(source).toHaveText('<h1>Keep my working copy</h1>');
   await source.fill('<h1>Retry with an edit</h1>');

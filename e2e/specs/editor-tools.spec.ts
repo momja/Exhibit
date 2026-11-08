@@ -46,7 +46,7 @@ test('expanded editor tools keep descriptions with actions and consistent operab
         expect(permissionRoles.labels).toHaveLength(6);
         for (const label of permissionRoles.labels) expect(label).toEqual(permissionRoles.sharedLabel);
         expect(permissionRoles.add).toEqual(permissionRoles.sharedAdd);
-        await expect(page.locator('#allowlist-rows')).toContainText('No origins approved.');
+        await expect(page.locator('#allowlist-rows')).toContainText('No sites allowed yet.');
         const toggleTargets = await page.locator('.state-toggle').evaluateAll(elements => elements.map(element => element.getBoundingClientRect().height));
         expect(toggleTargets.length).toBeGreaterThan(0);
         expect(Math.min(...toggleTargets), `${width}px ${colorScheme} boolean target`).toBeGreaterThanOrEqual(44);
@@ -110,10 +110,10 @@ test('expanded editor tools keep descriptions with actions and consistent operab
     }
     // Server-rendered working-copy rows replace the empty note and restore it
     // when removed, without changing the artifact's saved permissions.
-    await page.getByLabel('Add origin', { exact: true }).fill('https://draft.example.test');
+    await page.getByLabel('Site to allow', { exact: true }).fill('https://draft.example.test');
     await page.locator('#al-add-btn').click();
     await expect(page.locator('#allowlist-rows .allowlist-row')).toHaveCount(1);
-    await expect(page.locator('#allowlist-rows')).not.toContainText('No origins approved.');
+    await expect(page.locator('#allowlist-rows')).not.toContainText('No sites allowed yet.');
     const draftRow = await page.locator('#allowlist-rows .allowlist-row').evaluate(row => {
       const origin = row.querySelector('code')!.getBoundingClientRect();
       const action = row.querySelector('button')!.getBoundingClientRect();
@@ -122,7 +122,7 @@ test('expanded editor tools keep descriptions with actions and consistent operab
     expect(draftRow).toEqual({ separated: true, fits: true });
     await page.locator('#allowlist-rows').getByRole('button', { name: 'Remove', exact: true }).click();
     await expect(page.locator('#allowlist-rows .allowlist-row')).toHaveCount(0);
-    await expect(page.locator('#allowlist-rows')).toContainText('No origins approved.');
+    await expect(page.locator('#allowlist-rows')).toContainText('No sites allowed yet.');
     const savedArtifact = await api.get(`/api/artifacts/${artifact.id}`);
     expect((await savedArtifact.json()).network_allowlist).toEqual([]);
     // The enlarged chip action still opens/cancels the native editor.
