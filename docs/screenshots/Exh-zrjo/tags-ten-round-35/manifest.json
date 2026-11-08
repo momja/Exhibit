@@ -1,0 +1,91 @@
+{
+  "application": "235a5c9ecddd7494a20eaef32e55c0320994adad",
+  "asset": "b1f015b9d4bf",
+  "source": "Four parent actual invalid-color views, cancelled without persistence; not full council matrix",
+  "entries": [
+    {
+      "width": 1280,
+      "height": 800,
+      "scheme": "light",
+      "state": "invalid",
+      "proof": {
+        "width": 1280,
+        "height": 800,
+        "dark": false,
+        "border": "rgb(180, 35, 24)",
+        "gap": 6,
+        "iconContent": "\"\ue32a\"",
+        "captionHidden": true,
+        "emptyVisible": true,
+        "overflow": false,
+        "asset": "b1f015b9d4bf"
+      },
+      "url": "http://t3code:18280/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit?return_to=%2Fsearch",
+      "screenshotPath": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw3wcqwd-58043acc.png",
+      "path": "docs/screenshots/Exh-zrjo/tags-ten-round-35/1280-light-invalid.png"
+    },
+    {
+      "width": 1280,
+      "height": 800,
+      "scheme": "dark",
+      "state": "invalid",
+      "proof": {
+        "width": 1280,
+        "height": 800,
+        "dark": true,
+        "border": "rgb(242, 114, 106)",
+        "gap": 6,
+        "iconContent": "\"\ue32a\"",
+        "captionHidden": true,
+        "emptyVisible": true,
+        "overflow": false,
+        "asset": "b1f015b9d4bf"
+      },
+      "url": "http://t3code:18280/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit?return_to=%2Fsearch",
+      "screenshotPath": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw3wcrwf-9f66b20a.png",
+      "path": "docs/screenshots/Exh-zrjo/tags-ten-round-35/1280-dark-invalid.png"
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "state": "invalid",
+      "proof": {
+        "width": 390,
+        "height": 844,
+        "dark": false,
+        "border": "rgb(180, 35, 24)",
+        "gap": 6,
+        "iconContent": "\"\ue32a\"",
+        "captionHidden": true,
+        "emptyVisible": true,
+        "overflow": false,
+        "asset": "b1f015b9d4bf"
+      },
+      "url": "http://t3code:18280/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit?return_to=%2Fsearch",
+      "screenshotPath": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw3wcsh9-d5d9ac8f.png",
+      "path": "docs/screenshots/Exh-zrjo/tags-ten-round-35/390-light-invalid.png"
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "state": "invalid",
+      "proof": {
+        "width": 390,
+        "height": 844,
+        "dark": true,
+        "border": "rgb(242, 114, 106)",
+        "gap": 6,
+        "iconContent": "\"\ue32a\"",
+        "captionHidden": true,
+        "emptyVisible": true,
+        "overflow": false,
+        "asset": "b1f015b9d4bf"
+      },
+      "url": "http://t3code:18280/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit?return_to=%2Fsearch",
+      "screenshotPath": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw3wcsuh-8c2ab330.png",
+      "path": "docs/screenshots/Exh-zrjo/tags-ten-round-35/390-dark-invalid.png"
+    }
+  ]
+}

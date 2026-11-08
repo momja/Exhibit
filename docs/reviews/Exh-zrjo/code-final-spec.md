@@ -1,0 +1,9 @@
+Remaining spec findings: **0** — (a) missing/partial requirements: 0; (b) unrequested behavior: 0; (c) incorrect implementation: 0.
+
+Reviewed pinned final patch `2e2fc9bc...8a4c0fe1` and complete code-quality follow-up `26dae10d...8a4c0fe1`, with originating cumulative context, original/follow-up/final briefs, complete commit history, all six prior reports, parent responses, ticket acceptance/history, focused Tags brief, product requirements, and pertinent repository standards.
+
+No remaining concrete regression was found in the requested paths. Native color input now copies its originating value before the shared synchronization/validation path (`web/gallery/color-picker-controller.js:15`). Tag refresh preserves htmx 4's session-recovery headers and server error fragments; missing controls are guarded before initialization/focus work (`web/gallery/tags.js:75,144`). The stable native fieldset remains locked through mutation and GET refresh, with transport/5xx recovery retrying only the declarative partial GET (`internal/api/templates/edit.tmpl:41`; `web/gallery/tags.js:44,66`).
+
+Both located editor consumers use the island handle; its compartment configures state read-only and content editability together, while programmatic source replacement retains its former behavior (`web/editor/editor.js:137,177`; `web/gallery/edit.js:60`). Persisted-page recovery depends on completed ingestion, so unfinished network approval keeps its working state (`web/gallery/new.js:331,353`). Successful tag refresh resolves replacement controls before restoring focus (`web/gallery/tags.js:92`).
+
+These are source conclusions, not runtime certification. No builds, tests, servers, browser actions, source edits, or same-phase peer reports. Actual BFCache restoration, native picker interaction, and live focus/error outcomes were not independently exercised. Historical visual ratings were not reassessed.

@@ -60,10 +60,7 @@ function mountEditorWhenOpen(panelID, textareaID) {
 function setSource(textareaID, text) {
   const textarea = document.getElementById(textareaID);
   if (textarea) textarea.value = text;
-  const view = editors[textareaID];
-  if (view) {
-    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text } });
-  }
+  editors[textareaID]?.setValue(text);
 }
 
 mountEditorWhenOpen('source-panel', 'body');
@@ -609,7 +606,7 @@ const widgetPanel = (function() {
 })();
 
 savedArtifact = artifactDraft();
-registerEditorSection('artifact', {isDirty: artifactDirty, save, discard: discardArtifact});
+registerEditorSection('artifact', {isDirty: artifactDirty, save, discard: discardArtifact, saveMessage: () => document.getElementById('status').textContent});
 renderSecurityPanel();
 // Legacy entry links can use the same-origin referrer on their first request.
 // Record the server's validated answer in the URL before a reload or bookmark.
@@ -618,12 +615,6 @@ if (document.body.dataset.editorReturnUrl && window.history?.replaceState) {
   address.searchParams.set('return_to', document.body.dataset.editorReturnUrl);
   window.history.replaceState(window.history.state, '', address);
 }
-document.querySelectorAll('[data-save-editor]').forEach(button => button.addEventListener('click', async () => {
-  const buttons = document.querySelectorAll('[data-save-editor]');
-  buttons.forEach(control => { control.disabled = true; });
-  try { await saveEditorChanges(); }
-  finally { buttons.forEach(control => { control.disabled = false; }); }
-}));
 document.querySelector('[data-delete-artifact]')?.addEventListener('click', deleteArtifact);
 document.getElementById('title').addEventListener('input', () => {
   document.getElementById('edit-title').textContent = document.getElementById('title').value || 'Untitled';

@@ -1,0 +1,14 @@
+{
+  "command": [
+    "npm",
+    "test"
+  ],
+  "cwd": "/home/maxomdal/.t3/worktrees/Exhibit/feature-Exh-zrjo-ui-council/e2e",
+  "head": "2e2fc9bc6aa0dcdb03dfa829921479a4c56045e4",
+  "startedAt": "2026-11-06T01:06:47.342746+00:00",
+  "seconds": 102.91,
+  "exitCode": 143,
+  "sourceFingerprint": "071c06f8127020335335f061566f05b53ef749893a75ee4fee9024d4d05cabb8",
+  "sourceUnchanged": true,
+  "log": "/tmp/exhibit-zrjo-tags10-simplicity-e2e-final.log"
+}

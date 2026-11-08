@@ -1,0 +1,33 @@
+{
+  "scheme": "dark",
+  "cssViewport": {
+    "width": 390,
+    "height": 844
+  },
+  "scenario": "Simulated offline partial GET in an owned T3 tab; no persisted fixture writes. Actual GET retry then restored the panel, unlocked controls and cleared the local fetch shim.",
+  "views": [
+    {
+      "label": "before",
+      "commit": "907cb944",
+      "path": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw4arp84-a41bb0f2.png",
+      "url": "http://t3code:18280/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit?return_to=%2Fsearch",
+      "savedPath": "docs/screenshots/Exh-zrjo/code-simplification/refresh-before.png"
+    },
+    {
+      "label": "after",
+      "commit": "742301c5",
+      "path": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw4b2vda-48ce6a45.png",
+      "url": "http://t3code:18280/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit?return_to=%2Fsearch",
+      "savedPath": "docs/screenshots/Exh-zrjo/code-simplification/refresh-after.png"
+    }
+  ],
+  "finalComputed": {
+    "fontSize": "14px",
+    "color": "rgb(255, 150, 144)",
+    "gapBeforeRetry": 12,
+    "documentOverflow": 0,
+    "controlsLockedWhileFailed": true,
+    "unlockedAfterActualGET": true
+  },
+  "assetVersion": "72ef2efad788"
+}

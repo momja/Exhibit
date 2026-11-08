@@ -127,8 +127,8 @@ func TestGallerySpaceNavigationBrowser(t *testing.T) {
 				visit("/activity")
 				visit("/shared")
 			}
-			check(`document===original.document && document.querySelector('header')===original.header && document.querySelector('[data-clerk-target="mount"] button')===original.button && JSON.stringify(clerkCalls)==='{"load":1,"reload":1,"mount":1,"unmount":0}'`)
-			check(`document.title==='Shared · Exhibit' && document.querySelector('header h1').textContent==='Shared' && document.querySelector('.card-owner-name') && document.querySelector('[data-duplicate-dialog]')`)
+			check(`document===original.document && document.querySelector('header')===original.header && document.querySelector('[data-controller="clerk"]')===original.clerk && document.querySelector('[data-clerk-target="mount"] button')===original.button && JSON.stringify(clerkCalls)==='{"load":1,"reload":1,"mount":1,"unmount":0}'`)
+			check(`document.title==='Shared · Exhibit' && document.querySelector('main h1').textContent==='Shared' && document.querySelector('.card-owner-name') && document.querySelector('[data-duplicate-dialog]')`)
 			run(`document.querySelector('[data-gallery-query]').value='chart';document.querySelector('[data-gallery-query]').dispatchEvent(new Event('input',{bubbles:true}))`)
 			poll(`location.search==='?q=chart' && document.querySelectorAll('.card').length>=24`)
 			run(`document.querySelector('[data-gallery-page]')?.click()`)

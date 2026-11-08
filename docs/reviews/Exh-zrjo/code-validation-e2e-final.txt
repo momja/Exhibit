@@ -1,0 +1,23 @@
+
+> test
+> playwright test
+
+
+Running 27 tests using 1 worker
+
+(node:328841) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   1 [chromium] › specs/duplicate.spec.ts:23:1 › keyboard focus stays in the modal and every cancellation path restores the menu trigger (9.2s)
+  ✓   2 [chromium] › specs/duplicate.spec.ts:50:1 › save refreshes server-rendered cards and replacement components work across two cycles (3.6s)
+  ✓   3 [chromium] › specs/duplicate.spec.ts:87:1 › Escape, backdrop, and repeated submission cannot dismiss or duplicate an in-flight save (2.0s)
+  ✓   4 [chromium] › specs/duplicate.spec.ts:123:1 › a committed save with a lost response retries the same identity and creates only one copy (2.5s)
+  ✓   5 [chromium] › specs/duplicate.spec.ts:157:1 › a definite refusal leaves editable input and permits a corrected save (1.9s)
+  ✓   6 [chromium] › specs/editor-save-feedback.spec.ts:3:1 › sticky editor Save names its action and shows pending and persisted outcomes (16.8s)
+  ✓   7 [chromium] › specs/editor-save-feedback.spec.ts:64:1 › failed editor Save keeps its explanation visible and supports a successful retry (5.2s)
+  ✓   8 [chromium] › specs/editor-tools.spec.ts:3:1 › expanded editor tools keep descriptions with actions and consistent operable controls (14.7s)
+  ✓   9 [chromium] › specs/new-history.spec.ts:3:1 › Back from a completed import restores a usable creation page (3.4s)
+  ✓  10 [chromium] › specs/new-history.spec.ts:17:1 › persisted-page recovery resets a completed import and preserves unfinished approval (2.7s)
+  ✓  11 [chromium] › specs/posture-popover.spec.ts:3:1 › posture receipt stays within the viewport through keyboard, resize and server-rendered replacement (11.2s)
+  ✓  12 [chromium] › specs/share-opening.spec.ts:4:3 › Share opens at the beginning and waits for deliberate text entry (mouse) (12.8s)
+  ✓  13 [chromium] › specs/share-opening.spec.ts:4:3 › Share opens at the beginning and waits for deliberate text entry (touch) (10.5s)
+Terminated

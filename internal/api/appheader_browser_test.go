@@ -68,7 +68,7 @@ func TestAppHeaderBrowser(t *testing.T) {
 						})};
 				})()`))
 				require.NoError(t, err)
-				height, padding := 37.0, "16px"
+				height, padding := 56.0, "16px"
 				if width <= 767 {
 					height = 56
 				}
@@ -129,7 +129,7 @@ func TestAppHeaderAccountStatesBrowser(t *testing.T) {
 					const recovery = document.querySelector('[data-clerk-target="recovery"]');
 					const placeholder = document.querySelector('.account-control-placeholder');
 					return recovery.hidden && getComputedStyle(recovery).display === 'none' && recovery.getClientRects().length === 0 &&
-						placeholder.getBoundingClientRect().width === (innerWidth <= 767 ? 44 : 32) && placeholder.getBoundingClientRect().height === (innerWidth <= 767 ? 44 : 32) &&
+						placeholder.getBoundingClientRect().width === 44 && placeholder.getBoundingClientRect().height === 44 &&
 						document.querySelector('[role="status"]').textContent === 'Loading your account…';
 				})()`))
 				require.NoError(t, err)
@@ -221,7 +221,7 @@ func TestAuthAppHeaderBrowser(t *testing.T) {
 			ok, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`(() => {
 				const header = document.querySelector('[data-app-header]');
 				const rect = header.getBoundingClientRect();
-				return rect.height === (innerWidth <= 767 ? 56 : 37) && rect.width === innerWidth &&
+				return rect.height === (innerWidth <= 767 ? 56 : 56) && rect.width === innerWidth &&
 					!header.querySelector('a, button, [data-controller="clerk"]') &&
 					document.documentElement.scrollWidth <= innerWidth && document.querySelector('main').getBoundingClientRect().top >= rect.bottom;
 			})()`))

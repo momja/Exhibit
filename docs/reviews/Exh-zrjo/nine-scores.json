@@ -1,0 +1,632 @@
+{
+  "rubric": "nine-brief.md",
+  "categories": [
+    "Typography",
+    "Composition and spacing",
+    "Color harmony",
+    "Contrast and emphasis",
+    "Component visual consistency",
+    "Responsive visual polish"
+  ],
+  "threshold": 9,
+  "requiredJointConsecutivePasses": 2,
+  "jointPassingStreak": 2,
+  "completed": true,
+  "baselineApplicationCommit": "0110960247e5fdece7f88699c85afb865824f8e6",
+  "baselineEvidence": "visual-summary.md",
+  "rounds": [
+    {
+      "round": 17,
+      "kind": "baseline critique for target9",
+      "build": "01109602",
+      "reviewers": [
+        {
+          "reviewer": "sol",
+          "model": "gpt-6.1-sol",
+          "status": "completed",
+          "taskId": "node:delegated-task:command%3Amcp%3Ae85b66a1-80e4-4f18-b2f8-56ea71c8b568%3Adelegate-task%3AExh-zrjo-r17-sol-nine-baseline",
+          "report": "round-17-sol-visual.md",
+          "light": [
+            8.5,
+            8,
+            9,
+            8,
+            8,
+            8
+          ],
+          "dark": [
+            8.5,
+            8,
+            9,
+            8,
+            8,
+            8
+          ]
+        },
+        {
+          "reviewer": "opus",
+          "model": "claude-opus-5-5",
+          "status": "completed",
+          "taskId": "node:delegated-task:command%3Amcp%3Ae85b66a1-80e4-4f18-b2f8-56ea71c8b568%3Adelegate-task%3AExh-zrjo-r17-opus-nine-baseline",
+          "report": "round-17-opus-visual.md",
+          "light": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ],
+          "dark": [
+            8,
+            8,
+            8.5,
+            8,
+            8,
+            8
+          ]
+        }
+      ],
+      "jointPass": false
+    },
+    {
+      "round": 18,
+      "build": "234da736",
+      "assetVersion": "8309e86eb320",
+      "reviewers": [
+        {
+          "reviewer": "sol",
+          "model": "gpt-6.1-sol",
+          "taskId": "node:delegated-task:command%3Amcp%3Ae85b66a1-80e4-4f18-b2f8-56ea71c8b568%3Adelegate-task%3AExh-zrjo-r18-sol-visual-nine",
+          "status": "completed",
+          "report": "round-18-sol-visual.md",
+          "light": [
+            9,
+            7,
+            9,
+            8,
+            7,
+            7
+          ],
+          "dark": [
+            9,
+            7,
+            9,
+            8,
+            7,
+            7
+          ]
+        },
+        {
+          "reviewer": "opus",
+          "model": "claude-opus-5-5",
+          "taskId": "node:delegated-task:command%3Amcp%3Ae85b66a1-80e4-4f18-b2f8-56ea71c8b568%3Adelegate-task%3AExh-zrjo-r18-opus-visual-nine",
+          "status": "failed",
+          "report": "round-18-opus-visual.md",
+          "light": null,
+          "dark": null,
+          "error": "Claude API rate limit reached. Try again later.",
+          "resetAt": "2026-11-04T19:50:00Z",
+          "availabilityRecord": "round-18-opus-unavailable.md",
+          "attempts": [
+            {
+              "taskId": "node:delegated-task:command%3Amcp%3Ae85b66a1-80e4-4f18-b2f8-56ea71c8b568%3Adelegate-task%3AExh-zrjo-r18-opus-visual-nine",
+              "status": "failed",
+              "scoresProduced": false,
+              "error": "Claude API rate limit reached. Try again later.",
+              "resetAt": "2026-11-04T19:50:00Z"
+            }
+          ]
+        }
+      ],
+      "jointPass": false,
+      "qualifying": false,
+      "reason": "Sol below9; Opus unavailable without scores. Share fieldset scrolling confirmed broken."
+    },
+    {
+      "round": 19,
+      "build": "a65d7c6b",
+      "assetVersion": "b1ef638450cc",
+      "reviewers": [
+        {
+          "reviewer": "sol",
+          "model": "gpt-6.1-sol",
+          "taskId": "node:delegated-task:command%3Amcp%3Ae85b66a1-80e4-4f18-b2f8-56ea71c8b568%3Adelegate-task%3AExh-zrjo-r19-sol-visual-nine",
+          "status": "completed",
+          "report": "round-19-sol-visual.md",
+          "light": [
+            9,
+            8.5,
+            9,
+            9,
+            9,
+            9
+          ],
+          "dark": [
+            9,
+            8.5,
+            9,
+            9,
+            9,
+            9
+          ]
+        },
+        {
+          "reviewer": "opus",
+          "model": "claude-opus-5-5",
+          "taskId": null,
+          "status": "not_run_source_to_be_superseded",
+          "resetAt": "2026-11-04T19:50:00Z",
+          "report": "round-19-opus-visual.md",
+          "plannedClientRequestId": "Exh-zrjo-r19-opus-visual-nine-after-reset-2026-11-04",
+          "reason": "Sol found a material timestamp column issue before the known Claude reset; no obsolete-code review will be launched."
+        }
+      ],
+      "jointPass": false,
+      "qualifying": false,
+      "reason": "Sol composition8.5; Opus deferred without execution. Shared history columns required."
+    },
+    {
+      "round": 20,
+      "build": "8504bc51",
+      "assetVersion": "33556024040a",
+      "reviewers": [
+        {
+          "reviewer": "sol",
+          "model": "gpt-6.1-sol",
+          "status": "completed",
+          "report": "round-20-sol-visual.md",
+          "taskId": "node:delegated-task:command%3Amcp%3Ae85b66a1-80e4-4f18-b2f8-56ea71c8b568%3Adelegate-task%3AExh-zrjo-r20-sol-visual-nine",
+          "light": [
+            9,
+            9,
+            9,
+            9,
+            9,
+            9
+          ],
+          "dark": [
+            9,
+            9,
+            9,
+            9,
+            9,
+            9
+          ],
+          "individualPass": true
+        },
+        {
+          "reviewer": "opus",
+          "model": "claude-opus-5-5",
+          "status": "completed",
+          "taskId": "node:delegated-task:command%3Amcp%3A9913d16e-75eb-46de-9b1d-e9986db72056%3Adelegate-task%3AExh-zrjo-r20-opus-visual-nine-after-reset-2026-11-04",
+          "resetAt": "2026-11-04T19:50:00Z",
+          "report": "round-20-opus-visual.md",
+          "plannedClientRequestId": "Exh-zrjo-r20-opus-visual-nine-after-reset-2026-11-04",
+          "clientRequestId": "Exh-zrjo-r20-opus-visual-nine-after-reset-2026-11-04",
+          "attempts": [
+            {
+              "taskId": "node:delegated-task:command%3Amcp%3A9913d16e-75eb-46de-9b1d-e9986db72056%3Adelegate-task%3AExh-zrjo-r20-opus-visual-nine-after-reset-2026-11-04",
+              "status": "completed",
+              "clientRequestId": "Exh-zrjo-r20-opus-visual-nine-after-reset-2026-11-04"
+            }
+          ],
+          "light": [
+            8.5,
+            8.5,
+            9,
+            9,
+            8.5,
+            9
+          ],
+          "dark": [
+            8.5,
+            8.5,
+            9,
+            9,
+            8.5,
+            9
+          ],
+          "individualPass": false
+        }
+      ],
+      "jointPass": false,
+      "reason": "Opus typography/composition/component consistency8.5: posture popover, off-token helpers and color-row alignment."
+    },
+    {
+      "round": 21,
+      "build": "74544552",
+      "applicationCommit": "74544552a816a3ac3a6dd0c04f8d0713fe223cce",
+      "assetVersion": "a48067e4e6f5",
+      "reviewers": [
+        {
+          "reviewer": "sol",
+          "model": "gpt-6.1-sol",
+          "status": "completed",
+          "taskId": "node:delegated-task:command%3Amcp%3A9913d16e-75eb-46de-9b1d-e9986db72056%3Adelegate-task%3AExh-zrjo-r21-sol-visual-nine",
+          "clientRequestId": "Exh-zrjo-r21-sol-visual-nine",
+          "report": "round-21-sol-visual.md",
+          "light": [
+            8.5,
+            8.5,
+            9,
+            9,
+            8.5,
+            9
+          ],
+          "dark": [
+            8.5,
+            8.5,
+            9,
+            9,
+            8.5,
+            9
+          ],
+          "individualPass": false
+        },
+        {
+          "reviewer": "opus",
+          "model": "claude-opus-5-5",
+          "status": "completed",
+          "taskId": "node:delegated-task:command%3Amcp%3A9913d16e-75eb-46de-9b1d-e9986db72056%3Adelegate-task%3AExh-zrjo-r21-opus-visual-nine",
+          "clientRequestId": "Exh-zrjo-r21-opus-visual-nine",
+          "report": "round-21-opus-visual.md",
+          "light": [
+            9,
+            9,
+            9,
+            9,
+            9,
+            8.5
+          ],
+          "dark": [
+            9,
+            9,
+            9,
+            9,
+            9,
+            8.5
+          ],
+          "individualPass": false
+        }
+      ],
+      "jointPass": false,
+      "reason": "Sol helper typography/grouping8.5; Opus short-phone Share opening responsive8.5. Both reports terminal before round22 source edits."
+    },
+    {
+      "round": 22,
+      "build": "17baf930",
+      "applicationCommit": "17baf9306f455dbca4882a468e8ba2afe088436f",
+      "assetVersion": "f1b6e9fd582c",
+      "reviewers": [
+        {
+          "reviewer": "sol",
+          "model": "gpt-6.1-sol",
+          "status": "completed",
+          "taskId": "node:delegated-task:command%3Amcp%3A9913d16e-75eb-46de-9b1d-e9986db72056%3Adelegate-task%3AExh-zrjo-r22-sol-visual-nine",
+          "clientRequestId": "Exh-zrjo-r22-sol-visual-nine",
+          "report": "round-22-sol-visual.md",
+          "light": [
+            9,
+            8.5,
+            9,
+            8.5,
+            8.5,
+            9
+          ],
+          "dark": [
+            9,
+            8.5,
+            9,
+            8.5,
+            8.5,
+            9
+          ],
+          "individualPass": false
+        },
+        {
+          "reviewer": "opus",
+          "model": "claude-opus-5-5",
+          "status": "completed",
+          "taskId": "node:delegated-task:command%3Amcp%3A9913d16e-75eb-46de-9b1d-e9986db72056%3Adelegate-task%3AExh-zrjo-r22-opus-visual-nine",
+          "clientRequestId": "Exh-zrjo-r22-opus-visual-nine",
+          "report": "round-22-opus-visual.md",
+          "light": [
+            9,
+            8.5,
+            9,
+            9,
+            8.5,
+            8.5
+          ],
+          "dark": [
+            9,
+            8.5,
+            9,
+            9,
+            8.5,
+            8.5
+          ],
+          "individualPass": false
+        }
+      ],
+      "jointPass": false,
+      "reason": "Both reviewers identify remaining expanded editor action/helper grammar; below9. Both terminal before round23 edits."
+    },
+    {
+      "round": 23,
+      "build": "5f1021e3",
+      "applicationCommit": "5f1021e3495ad3639e0c5e51859124e44edc79f8",
+      "assetVersion": "c948e619826d",
+      "reviewers": [
+        {
+          "reviewer": "sol",
+          "model": "gpt-6.1-sol",
+          "status": "completed",
+          "taskId": "node:delegated-task:command%3Amcp%3A9913d16e-75eb-46de-9b1d-e9986db72056%3Adelegate-task%3AExh-zrjo-r23-sol-visual-nine",
+          "clientRequestId": "Exh-zrjo-r23-sol-visual-nine",
+          "report": "round-23-sol-visual.md",
+          "light": [
+            9,
+            9,
+            9,
+            9,
+            9,
+            9
+          ],
+          "dark": [
+            9,
+            9,
+            9,
+            9,
+            9,
+            9
+          ],
+          "individualPass": true
+        },
+        {
+          "reviewer": "opus",
+          "model": "claude-opus-5-5",
+          "status": "completed",
+          "taskId": "node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r23-opus-visual-nine-after-reset-2026-11-05",
+          "clientRequestId": "Exh-zrjo-r23-opus-visual-nine-after-reset-2026-11-05",
+          "report": "round-23-opus-visual.md",
+          "resetAt": "2026-11-05T00:50:00Z",
+          "failureRecord": "round-23-opus-unavailable.md",
+          "attempts": [
+            {
+              "taskId": "node:delegated-task:command%3Amcp%3A9913d16e-75eb-46de-9b1d-e9986db72056%3Adelegate-task%3AExh-zrjo-r23-opus-visual-nine",
+              "clientRequestId": "Exh-zrjo-r23-opus-visual-nine",
+              "status": "failed_without_scores",
+              "scoresProduced": false,
+              "error": "Claude API rate limit reached. Try again later.",
+              "resetAt": "2026-11-05T00:50:00Z"
+            },
+            {
+              "taskId": "node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r23-opus-visual-nine-after-reset-2026-11-05",
+              "clientRequestId": "Exh-zrjo-r23-opus-visual-nine-after-reset-2026-11-05",
+              "status": "completed",
+              "scoresProduced": true
+            }
+          ],
+          "light": [
+            9,
+            9,
+            9,
+            9,
+            8.5,
+            8.5
+          ],
+          "dark": [
+            9,
+            9,
+            9,
+            9,
+            8.5,
+            8.5
+          ],
+          "individualPass": false
+        }
+      ],
+      "reason": "Opus component consistency/responsive8.5 bothschemes:20px tag-chip actions,36px Add property beside44px fields, intrinsic phone tag primary. Numeric table authoritative:8 scores9/four8.5; prose count was incorrect.",
+      "deferredOpus": {
+        "resetAt": "2026-11-05T00:50:00Z",
+        "plannedClientRequestId": "Exh-zrjo-r23-opus-visual-nine-after-reset-2026-11-05",
+        "scheduledTaskId": "scheduled-task:command:mcp:9913d16e-75eb-46de-9b1d-e9986db72056:schedule-task:Exh-zrjo-nine-r23-opus-reset-2026-11-05",
+        "nextRunAt": "2026-11-05T00:51:00Z",
+        "boundedFreshExecutions": 1,
+        "scheduledTaskDeleted": true,
+        "status": "completed_below_target",
+        "freshTaskId": "node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r23-opus-visual-nine-after-reset-2026-11-05"
+      },
+      "jointPass": false
+    },
+    {
+      "round": 24,
+      "build": "329c50aa",
+      "applicationCommit": "329c50aa704256090eaa1354eac734d5f04a2339",
+      "assetVersion": "bc0938a74a48",
+      "reviewers": [
+        {
+          "reviewer": "sol",
+          "model": "gpt-6.1-sol",
+          "status": "completed",
+          "taskId": "node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r24-sol-visual-nine",
+          "clientRequestId": "Exh-zrjo-r24-sol-visual-nine",
+          "report": "round-24-sol-visual.md",
+          "light": [
+            9,
+            9,
+            9,
+            9,
+            9,
+            9
+          ],
+          "dark": [
+            9,
+            9,
+            9,
+            9,
+            9,
+            9
+          ],
+          "individualPass": true
+        },
+        {
+          "reviewer": "opus",
+          "model": "claude-opus-5-5",
+          "status": "completed",
+          "taskId": "node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r24-opus-visual-nine",
+          "clientRequestId": "Exh-zrjo-r24-opus-visual-nine",
+          "report": "round-24-opus-visual.md",
+          "light": [
+            8.5,
+            9,
+            9,
+            8.5,
+            8.5,
+            9
+          ],
+          "dark": [
+            8.5,
+            9,
+            9,
+            8.5,
+            8.5,
+            9
+          ],
+          "individualPass": false
+        }
+      ],
+      "jointPass": false,
+      "reason": "Sol all12=9, Opus typography/emphasis/component consistency8.5 both schemes for Network & permissions older heading/label/filled-local-Add grammar. New repair requires a fresh joint round."
+    },
+    {
+      "round": 25,
+      "build": "d30dbbe9",
+      "applicationCommit": "d30dbbe92f9f5535a33f59be25f7c9f9c4be4511",
+      "assetVersion": "e29fcce0e122",
+      "reviewers": [
+        {
+          "reviewer": "sol",
+          "model": "gpt-6.1-sol",
+          "status": "completed",
+          "taskId": "node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r25-sol-visual-nine",
+          "clientRequestId": "Exh-zrjo-r25-sol-visual-nine",
+          "report": "round-25-sol-visual.md",
+          "light": [
+            9,
+            9,
+            9,
+            9,
+            9,
+            9
+          ],
+          "dark": [
+            9,
+            9,
+            9,
+            9,
+            9,
+            9
+          ],
+          "individualPass": true
+        },
+        {
+          "reviewer": "opus",
+          "model": "claude-opus-5-5",
+          "status": "completed",
+          "taskId": "node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r25-opus-visual-nine",
+          "clientRequestId": "Exh-zrjo-r25-opus-visual-nine",
+          "report": "round-25-opus-visual.md",
+          "light": [
+            9,
+            9,
+            9,
+            9,
+            9,
+            9
+          ],
+          "dark": [
+            9,
+            9,
+            9,
+            9,
+            9,
+            9
+          ],
+          "individualPass": true
+        }
+      ],
+      "reason": "Both independent reviewers all12=9 on unchanged rendered applicationd30dbbe9/e29fcce0e122. First qualifying joint9 pass; fresh BOTH confirmation still required.",
+      "jointPass": true
+    },
+    {
+      "round": 26,
+      "build": "d30dbbe9",
+      "applicationCommit": "d30dbbe92f9f5535a33f59be25f7c9f9c4be4511",
+      "assetVersion": "e29fcce0e122",
+      "reviewers": [
+        {
+          "reviewer": "sol",
+          "model": "gpt-6.1-sol",
+          "status": "completed",
+          "taskId": "node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r26-sol-visual-nine",
+          "clientRequestId": "Exh-zrjo-r26-sol-visual-nine",
+          "report": "round-26-sol-visual.md",
+          "light": [
+            9,
+            9,
+            9,
+            9,
+            9,
+            9
+          ],
+          "dark": [
+            9,
+            9,
+            9,
+            9,
+            9,
+            9
+          ],
+          "individualPass": true
+        },
+        {
+          "reviewer": "opus",
+          "model": "claude-opus-5-5",
+          "status": "completed",
+          "taskId": "node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r26-opus-visual-nine",
+          "clientRequestId": "Exh-zrjo-r26-opus-visual-nine",
+          "report": "round-26-opus-visual.md",
+          "light": [
+            9,
+            9,
+            9,
+            9,
+            9,
+            9
+          ],
+          "dark": [
+            9,
+            9,
+            9,
+            9,
+            9,
+            9
+          ],
+          "individualPass": true
+        }
+      ],
+      "reason": "BOTH26 independently all12=9 on unchanged rendered applicationd30dbbe9/e29fcce0e122. Second consecutive joint9 pass after25. Historical-only aggregate exposure documented/audited; no current peer outcome disclosed.",
+      "jointPass": true,
+      "proceduralScopeAudit": "nine-round-26-scope-audit.json"
+    }
+  ],
+  "applicationCommit": "d30dbbe92f9f5535a33f59be25f7c9f9c4be4511",
+  "qualifyingRounds": [
+    25,
+    26
+  ],
+  "finalValidation": "nine-validation.md"
+}

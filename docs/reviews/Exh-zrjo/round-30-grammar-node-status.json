@@ -1,0 +1,13 @@
+{
+  "command": [
+    "npm",
+    "test",
+    "--prefix",
+    "web/gallery"
+  ],
+  "head": "5c293c145c02466545046dfb6aad9e40469a65f5",
+  "exitCode": 0,
+  "seconds": 16.73,
+  "runtimeAndValidationUnchanged": true,
+  "log": "/tmp/exhibit-zrjo-pr273-grammar-node.log"
+}

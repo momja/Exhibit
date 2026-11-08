@@ -1,0 +1,10 @@
+Full raw log retained at /tmp/exhibit-zrjo-tags10-simplicity-go-confirm.log
+Raw SHA256 6ede758e29d096f561c7e0ba02cb38b08b3151258a495167994795cc62944afa
+Failed run excerpt:
+--- FAIL: TestEditPageRendersTagsPanel (0.28s)
+        	Error Trace:	/home/maxomdal/.t3/worktrees/Exhibit/feature-Exh-zrjo-ui-council/internal/api/gallery_test.go:111
+Assertion diagnostic: does not contain "hx-trigger=\"exhibit:tags-changed from:body\""
+FAIL
+FAIL	github.com/momja/Exhibit/internal/api	437.861s
+FAIL
+The only failing assertion expected the former exact hx-trigger value. The corrected test preserves this event and asserts the additional GET-only trigger and native fieldset.

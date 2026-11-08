@@ -1,0 +1,47 @@
+{
+  "candidate": "742301c5a8270cfeb242db300d009f0829ee9ad0",
+  "pr273Base": "ab0135c902559d5912deec420947d6ab3cbdbcf6",
+  "assetVersion": "72ef2efad788",
+  "scope": [
+    "internal",
+    "web",
+    "e2e",
+    "cmd",
+    "scripts",
+    "Makefile",
+    "go.mod",
+    "go.sum"
+  ],
+  "scopeDiff": "",
+  "sourceFingerprint": "fc2a4d6792895a86adcc575cb8c0c713590982cb6e332368407778a67e784ebf",
+  "binarySha256": "6a4cb22277fad43e253d78a3ce2597e32b2a0c44d89dc57e38536dcdc4349729",
+  "main": {
+    "pid": 342470,
+    "executableSha256": "6a4cb22277fad43e253d78a3ce2597e32b2a0c44d89dc57e38536dcdc4349729"
+  },
+  "sample": {
+    "pid": 342478,
+    "sourceArgument": "742301c5",
+    "resolvedSourceCommit": "742301c5a8270cfeb242db300d009f0829ee9ad0",
+    "executableSha256": "6a4cb22277fad43e253d78a3ce2597e32b2a0c44d89dc57e38536dcdc4349729"
+  },
+  "fullGoBaseline": "907cb944a9a296cd0aae3dd59fb739fa1f22c365",
+  "fullGoToCurrentDeltaPaths": [
+    "internal/api/templates/edit.tmpl",
+    "web/gallery/edit.css"
+  ],
+  "fullGoToCurrentDelta": "diff --git a/internal/api/templates/edit.tmpl b/internal/api/templates/edit.tmpl\nindex 7afbfde3..e3221ea5 100644\n--- a/internal/api/templates/edit.tmpl\n+++ b/internal/api/templates/edit.tmpl\n@@ -44,7 +44,7 @@\n            hx-sync=\"this:replace\"\n            hx-swap=\"innerHTML\">{{template \"tagPanelBody\" .TagPanel}}</fieldset>\n       <div id=\"tag-refresh-notice\" hidden>\n-        <p class=\"field-error\" role=\"alert\">Tags could not refresh. Refresh the tags to continue.</p>\n+        <p class=\"form-help tag-error\" role=\"alert\">Tags could not refresh. Refresh the tags to continue.</p>\n         <button type=\"button\" class=\"btn btn-sec\" id=\"tag-refresh\">Refresh tags</button>\n       </div>\n       {{template \"editTagModal\" .Presets}}\ndiff --git a/web/gallery/edit.css b/web/gallery/edit.css\nindex 2ebf452f..bdf20aba 100644\n--- a/web/gallery/edit.css\n+++ b/web/gallery/edit.css\n@@ -198,7 +198,7 @@ input.state-input{max-width:340px}\n .tag-create h3,.security-col h3{font-size:.875rem;line-height:1.5;font-weight:600;color:var(--color-ink-soft)}\n .tag-create h3{margin:0 0 8px}\n .tag-create .btn{align-self:flex-start;margin-top:8px;min-width:min(200px,100%)}\n-.tag-error{color:var(--color-danger-hover);margin-top:8px}\n+.tag-error,.form-help.tag-error{color:var(--color-danger-hover);margin-top:8px}\n .tag-available-note{margin-top:8px}\n @media(max-width:767px){.tag-edit-list{grid-template-columns:minmax(0,1fr);max-width:none}.tag-add-row{max-width:none}}\n \n",
+  "fullBrowserAndNodeBaseline": "8a4c0fe1e07a43a7bd09b94de1d9ad3754262913",
+  "fullBrowserBaselineDeltaPaths": [
+    "internal/api/gallery_test.go",
+    "internal/api/templates/edit.tmpl",
+    "web/gallery/edit.css"
+  ],
+  "javascriptDeltaSince479NodePass": "",
+  "latestBuildReceipt": "code-validation-composed-build-status.json",
+  "latestFocusedChecks": [
+    "code-validation-composed-native-status.json",
+    "code-validation-composed-e2e-status.json"
+  ],
+  "note": "The full Go run passed on907; the subsequent two-file delta is error-feedback styling only. Full29browser/479Node passed on8a. All later actual diffs are retained transparently; no hidden exclusions or broad-suite result invented on the final style candidate. Current scope is compared to its declared742 baseline."
+}

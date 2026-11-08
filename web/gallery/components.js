@@ -25,6 +25,7 @@
     wrap.classList.toggle('is-open', open);
     var trigger = wrap.querySelector('[data-capability-trigger]');
     if (trigger) trigger.setAttribute('aria-expanded', String(open));
+    wrap.dispatchEvent(new CustomEvent('capability:changed'));
   }
 
   function closeAll(except) {

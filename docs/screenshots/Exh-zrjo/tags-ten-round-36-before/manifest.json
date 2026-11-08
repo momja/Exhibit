@@ -1,0 +1,471 @@
+{
+  "application": "235a5c9ecddd7494a20eaef32e55c0320994adad",
+  "asset": "b1f015b9d4bf",
+  "source": "Actual T3sample Add-row before photos/measurements, local selection restored; supplementary not full council matrix",
+  "entries": [
+    {
+      "width": 1280,
+      "height": 800,
+      "scheme": "light",
+      "state": "available-tag",
+      "proof": {
+        "width": 1280,
+        "height": 800,
+        "dark": false,
+        "list": {
+          "x": 234,
+          "y": 155.5,
+          "width": 320,
+          "height": 120.390625,
+          "right": 554,
+          "bottom": 275.890625
+        },
+        "create": {
+          "x": 234,
+          "y": 377.390625,
+          "width": 320,
+          "height": 467,
+          "right": 554,
+          "bottom": 844.390625
+        },
+        "row": {
+          "x": 234,
+          "y": 313.390625,
+          "width": 812,
+          "height": 44,
+          "right": 1046,
+          "bottom": 357.390625
+        },
+        "select": {
+          "x": 234,
+          "y": 313.390625,
+          "width": 320,
+          "height": 44,
+          "right": 554,
+          "bottom": 357.390625
+        },
+        "button": {
+          "x": 562,
+          "y": 313.390625,
+          "width": 73.109375,
+          "height": 44,
+          "right": 635.109375,
+          "bottom": 357.390625
+        },
+        "overhang": 81.109375,
+        "overflow": false,
+        "asset": "b1f015b9d4bf",
+        "tagApiRequests": 0
+      },
+      "url": "http://t3code:18580/artifacts/252b5594-bfb3-4df5-bb9e-3d91579a5be8/edit?return_to=%2Fsearch",
+      "screenshotPath": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw42mz9e-a65f529e.png",
+      "path": "docs/screenshots/Exh-zrjo/tags-ten-round-36-before/1280-light-available-tag.png"
+    },
+    {
+      "width": 1280,
+      "height": 800,
+      "scheme": "dark",
+      "state": "available-tag",
+      "proof": {
+        "width": 1280,
+        "height": 800,
+        "dark": true,
+        "list": {
+          "x": 234,
+          "y": 155.5,
+          "width": 320,
+          "height": 120.390625,
+          "right": 554,
+          "bottom": 275.890625
+        },
+        "create": {
+          "x": 234,
+          "y": 377.390625,
+          "width": 320,
+          "height": 467,
+          "right": 554,
+          "bottom": 844.390625
+        },
+        "row": {
+          "x": 234,
+          "y": 313.390625,
+          "width": 812,
+          "height": 44,
+          "right": 1046,
+          "bottom": 357.390625
+        },
+        "select": {
+          "x": 234,
+          "y": 313.390625,
+          "width": 320,
+          "height": 44,
+          "right": 554,
+          "bottom": 357.390625
+        },
+        "button": {
+          "x": 562,
+          "y": 313.390625,
+          "width": 73.109375,
+          "height": 44,
+          "right": 635.109375,
+          "bottom": 357.390625
+        },
+        "overhang": 81.109375,
+        "overflow": false,
+        "asset": "b1f015b9d4bf",
+        "tagApiRequests": 0
+      },
+      "url": "http://t3code:18580/artifacts/252b5594-bfb3-4df5-bb9e-3d91579a5be8/edit?return_to=%2Fsearch",
+      "screenshotPath": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw42mzj3-2765fedd.png",
+      "path": "docs/screenshots/Exh-zrjo/tags-ten-round-36-before/1280-dark-available-tag.png"
+    },
+    {
+      "width": 768,
+      "height": 900,
+      "scheme": "light",
+      "state": "available-tag",
+      "proof": {
+        "width": 768,
+        "height": 900,
+        "dark": false,
+        "list": {
+          "x": 44,
+          "y": 155.5,
+          "width": 320,
+          "height": 120.390625,
+          "right": 364,
+          "bottom": 275.890625
+        },
+        "create": {
+          "x": 44,
+          "y": 377.390625,
+          "width": 320,
+          "height": 467,
+          "right": 364,
+          "bottom": 844.390625
+        },
+        "row": {
+          "x": 44,
+          "y": 313.390625,
+          "width": 680,
+          "height": 44,
+          "right": 724,
+          "bottom": 357.390625
+        },
+        "select": {
+          "x": 44,
+          "y": 313.390625,
+          "width": 320,
+          "height": 44,
+          "right": 364,
+          "bottom": 357.390625
+        },
+        "button": {
+          "x": 372,
+          "y": 313.390625,
+          "width": 73.109375,
+          "height": 44,
+          "right": 445.109375,
+          "bottom": 357.390625
+        },
+        "overhang": 81.109375,
+        "overflow": false,
+        "asset": "b1f015b9d4bf",
+        "tagApiRequests": 0
+      },
+      "url": "http://t3code:18580/artifacts/252b5594-bfb3-4df5-bb9e-3d91579a5be8/edit?return_to=%2Fsearch",
+      "screenshotPath": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw42mzve-0d4a41f6.png",
+      "path": "docs/screenshots/Exh-zrjo/tags-ten-round-36-before/768-light-available-tag.png"
+    },
+    {
+      "width": 768,
+      "height": 900,
+      "scheme": "dark",
+      "state": "available-tag",
+      "proof": {
+        "width": 768,
+        "height": 900,
+        "dark": true,
+        "list": {
+          "x": 44,
+          "y": 155.5,
+          "width": 320,
+          "height": 120.390625,
+          "right": 364,
+          "bottom": 275.890625
+        },
+        "create": {
+          "x": 44,
+          "y": 377.390625,
+          "width": 320,
+          "height": 467,
+          "right": 364,
+          "bottom": 844.390625
+        },
+        "row": {
+          "x": 44,
+          "y": 313.390625,
+          "width": 680,
+          "height": 44,
+          "right": 724,
+          "bottom": 357.390625
+        },
+        "select": {
+          "x": 44,
+          "y": 313.390625,
+          "width": 320,
+          "height": 44,
+          "right": 364,
+          "bottom": 357.390625
+        },
+        "button": {
+          "x": 372,
+          "y": 313.390625,
+          "width": 73.109375,
+          "height": 44,
+          "right": 445.109375,
+          "bottom": 357.390625
+        },
+        "overhang": 81.109375,
+        "overflow": false,
+        "asset": "b1f015b9d4bf",
+        "tagApiRequests": 0
+      },
+      "url": "http://t3code:18580/artifacts/252b5594-bfb3-4df5-bb9e-3d91579a5be8/edit?return_to=%2Fsearch",
+      "screenshotPath": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw42n05z-1d0f9041.png",
+      "path": "docs/screenshots/Exh-zrjo/tags-ten-round-36-before/768-dark-available-tag.png"
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "state": "available-tag",
+      "proof": {
+        "width": 390,
+        "height": 844,
+        "dark": false,
+        "list": {
+          "x": 30,
+          "y": 157,
+          "width": 330,
+          "height": 144.390625,
+          "right": 360,
+          "bottom": 301.390625
+        },
+        "create": {
+          "x": 30,
+          "y": 404.390625,
+          "width": 330,
+          "height": 473,
+          "right": 360,
+          "bottom": 877.390625
+        },
+        "row": {
+          "x": 30,
+          "y": 340.390625,
+          "width": 330,
+          "height": 44,
+          "right": 360,
+          "bottom": 384.390625
+        },
+        "select": {
+          "x": 30,
+          "y": 340.390625,
+          "width": 248.890625,
+          "height": 44,
+          "right": 278.890625,
+          "bottom": 384.390625
+        },
+        "button": {
+          "x": 286.890625,
+          "y": 340.390625,
+          "width": 73.109375,
+          "height": 44,
+          "right": 360,
+          "bottom": 384.390625
+        },
+        "overhang": 0,
+        "overflow": false,
+        "asset": "b1f015b9d4bf",
+        "tagApiRequests": 0
+      },
+      "url": "http://t3code:18580/artifacts/252b5594-bfb3-4df5-bb9e-3d91579a5be8/edit?return_to=%2Fsearch",
+      "screenshotPath": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw42n0ho-c3cca22e.png",
+      "path": "docs/screenshots/Exh-zrjo/tags-ten-round-36-before/390-light-available-tag.png"
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "state": "available-tag",
+      "proof": {
+        "width": 390,
+        "height": 844,
+        "dark": true,
+        "list": {
+          "x": 30,
+          "y": 157,
+          "width": 330,
+          "height": 144.390625,
+          "right": 360,
+          "bottom": 301.390625
+        },
+        "create": {
+          "x": 30,
+          "y": 404.390625,
+          "width": 330,
+          "height": 473,
+          "right": 360,
+          "bottom": 877.390625
+        },
+        "row": {
+          "x": 30,
+          "y": 340.390625,
+          "width": 330,
+          "height": 44,
+          "right": 360,
+          "bottom": 384.390625
+        },
+        "select": {
+          "x": 30,
+          "y": 340.390625,
+          "width": 248.890625,
+          "height": 44,
+          "right": 278.890625,
+          "bottom": 384.390625
+        },
+        "button": {
+          "x": 286.890625,
+          "y": 340.390625,
+          "width": 73.109375,
+          "height": 44,
+          "right": 360,
+          "bottom": 384.390625
+        },
+        "overhang": 0,
+        "overflow": false,
+        "asset": "b1f015b9d4bf",
+        "tagApiRequests": 0
+      },
+      "url": "http://t3code:18580/artifacts/252b5594-bfb3-4df5-bb9e-3d91579a5be8/edit?return_to=%2Fsearch",
+      "screenshotPath": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw42n0r5-6aeccaea.png",
+      "path": "docs/screenshots/Exh-zrjo/tags-ten-round-36-before/390-dark-available-tag.png"
+    },
+    {
+      "width": 320,
+      "height": 740,
+      "scheme": "light",
+      "state": "available-tag",
+      "proof": {
+        "width": 320,
+        "height": 740,
+        "dark": false,
+        "list": {
+          "x": 26,
+          "y": 178,
+          "width": 268,
+          "height": 144.390625,
+          "right": 294,
+          "bottom": 322.390625
+        },
+        "create": {
+          "x": 26,
+          "y": 425.390625,
+          "width": 268,
+          "height": 473,
+          "right": 294,
+          "bottom": 898.390625
+        },
+        "row": {
+          "x": 26,
+          "y": 361.390625,
+          "width": 268,
+          "height": 44,
+          "right": 294,
+          "bottom": 405.390625
+        },
+        "select": {
+          "x": 26,
+          "y": 361.390625,
+          "width": 186.890625,
+          "height": 44,
+          "right": 212.890625,
+          "bottom": 405.390625
+        },
+        "button": {
+          "x": 220.890625,
+          "y": 361.390625,
+          "width": 73.109375,
+          "height": 44,
+          "right": 294,
+          "bottom": 405.390625
+        },
+        "overhang": 0,
+        "overflow": false,
+        "asset": "b1f015b9d4bf",
+        "tagApiRequests": 0
+      },
+      "url": "http://t3code:18580/artifacts/252b5594-bfb3-4df5-bb9e-3d91579a5be8/edit?return_to=%2Fsearch",
+      "screenshotPath": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw42n111-c5faeb8d.png",
+      "path": "docs/screenshots/Exh-zrjo/tags-ten-round-36-before/320-light-available-tag.png"
+    },
+    {
+      "width": 320,
+      "height": 740,
+      "scheme": "dark",
+      "state": "available-tag",
+      "proof": {
+        "width": 320,
+        "height": 740,
+        "dark": true,
+        "list": {
+          "x": 26,
+          "y": 178,
+          "width": 268,
+          "height": 144.390625,
+          "right": 294,
+          "bottom": 322.390625
+        },
+        "create": {
+          "x": 26,
+          "y": 425.390625,
+          "width": 268,
+          "height": 473,
+          "right": 294,
+          "bottom": 898.390625
+        },
+        "row": {
+          "x": 26,
+          "y": 361.390625,
+          "width": 268,
+          "height": 44,
+          "right": 294,
+          "bottom": 405.390625
+        },
+        "select": {
+          "x": 26,
+          "y": 361.390625,
+          "width": 186.890625,
+          "height": 44,
+          "right": 212.890625,
+          "bottom": 405.390625
+        },
+        "button": {
+          "x": 220.890625,
+          "y": 361.390625,
+          "width": 73.109375,
+          "height": 44,
+          "right": 294,
+          "bottom": 405.390625
+        },
+        "overhang": 0,
+        "overflow": false,
+        "asset": "b1f015b9d4bf",
+        "tagApiRequests": 0
+      },
+      "url": "http://t3code:18580/artifacts/252b5594-bfb3-4df5-bb9e-3d91579a5be8/edit?return_to=%2Fsearch",
+      "screenshotPath": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw42n19s-10f68917.png",
+      "path": "docs/screenshots/Exh-zrjo/tags-ten-round-36-before/320-dark-available-tag.png"
+    }
+  ]
+}

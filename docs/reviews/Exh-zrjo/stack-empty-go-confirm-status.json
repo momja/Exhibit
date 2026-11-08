@@ -1,0 +1,13 @@
+{
+  "command": [
+    "go",
+    "test",
+    "-short",
+    "./..."
+  ],
+  "head": "575559b5abaadc997a6faf62be3669e4881cfe27",
+  "exitCode": 0,
+  "seconds": 503.36,
+  "runtimeAndValidationUnchanged": true,
+  "log": "/tmp/exhibit-zrjo-pr273-empty-go-confirm.log"
+}

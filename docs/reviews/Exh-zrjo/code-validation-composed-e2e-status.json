@@ -1,0 +1,17 @@
+{
+  "command": [
+    "npm",
+    "test",
+    "--",
+    "--grep",
+    "a tag mutation stays locked|tag refresh honors|tag refresh renders|tag editing keeps color"
+  ],
+  "cwd": "/home/maxomdal/.t3/worktrees/Exhibit/feature-Exh-zrjo-ui-council/e2e",
+  "head": "742301c5a8270cfeb242db300d009f0829ee9ad0",
+  "startedAt": "2026-11-06T01:38:17.236355+00:00",
+  "seconds": 28.32,
+  "exitCode": 0,
+  "sourceFingerprint": "fc2a4d6792895a86adcc575cb8c0c713590982cb6e332368407778a67e784ebf",
+  "sourceUnchanged": true,
+  "log": "/tmp/exhibit-zrjo-tags10-simplicity-composed-e2e.log"
+}

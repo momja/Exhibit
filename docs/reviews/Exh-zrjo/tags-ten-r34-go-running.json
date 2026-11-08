@@ -1,0 +1,9 @@
+{
+  "pid": 285584,
+  "applicationCommit": "62328d495baa4dc3c049ffa818b0679980938221",
+  "scopeFingerprint": "240e924dd429ff3bc85da24b2778024d879ed12e1e130a657bc663972bfdac2f",
+  "command": "go test -short ./...",
+  "statusPath": "/tmp/exhibit-zrjo-tags10-r34-go-final-status.json",
+  "log": "/tmp/exhibit-zrjo-tags10-r34-go-final.log",
+  "state": "running, no exit claimed"
+}

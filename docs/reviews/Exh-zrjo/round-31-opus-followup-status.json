@@ -1,0 +1,19 @@
+{
+  "taskId": "node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r31-opus-confirmation-pr273",
+  "childThreadId": "thread:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r31-opus-confirmation-pr273",
+  "childRunId": "run:thread:thread%3Adelegated-task%3Acommand%253Amcp%253Abb622e97-24f4-48e5-90ab-d51f24f155e2%253Adelegate-task%253AExh-zrjo-r31-opus-confirmation-pr273:ordinal:1",
+  "childNodeId": "node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r31-opus-confirmation-pr273",
+  "status": "failed",
+  "workState": "result_available",
+  "hasPendingChildRuns": false,
+  "latestTerminalRunId": "run:thread:thread%3Adelegated-task%3Acommand%253Amcp%253Abb622e97-24f4-48e5-90ab-d51f24f155e2%253Adelegate-task%253AExh-zrjo-r31-opus-confirmation-pr273:ordinal:1",
+  "latestTerminalStatus": "failed",
+  "latestTerminalSummary": "Claude API rate limit reached. Try again later.",
+  "latestTerminalResultContextTransferId": "context-transfer:type:subagent_result:source-thread:thread%3Adelegated-task%3Acommand%253Amcp%253Abb622e97-24f4-48e5-90ab-d51f24f155e2%253Adelegate-task%253AExh-zrjo-r31-opus-confirmation-pr273:target-thread:096f4939-b5a7-46dd-a015-84f12c84336e:93ea6fe2-0824-412c-938c-17004b3fadbb",
+  "providerInstanceId": "claudeAgent",
+  "model": "claude-opus-5-5",
+  "summary": "Claude API rate limit reached. Try again later.",
+  "resultContextTransferId": "context-transfer:type:subagent_result:source-thread:thread%3Adelegated-task%3Acommand%253Amcp%253Abb622e97-24f4-48e5-90ab-d51f24f155e2%253Adelegate-task%253AExh-zrjo-r31-opus-confirmation-pr273:target-thread:096f4939-b5a7-46dd-a015-84f12c84336e:93ea6fe2-0824-412c-938c-17004b3fadbb",
+  "hasPendingQuestion": false,
+  "waitTimedOut": false
+}

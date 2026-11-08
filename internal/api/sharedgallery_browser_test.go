@@ -47,7 +47,7 @@ func TestSharedGalleryRecipientBrowser(t *testing.T) {
 	require.NoError(t, chromedp.Do(ctx,
 		chromedp.Navigate(app.URL+"/shared"),
 		chromedp.WaitVisible(chromedp.CSS(`.empty`)),
-		chromedp.Poll[chromedp.Void](`document.querySelectorAll('.card').length === 0 && document.body.textContent.includes('Shared artifacts will appear here.')`),
+		chromedp.Poll[chromedp.Void](`document.querySelectorAll('.card').length === 0 && document.body.textContent.includes('Nothing shared yet')`),
 		chromedp.Navigate(app.URL+"/artifacts/"+in.granted),
 		chromedp.WaitVisible(chromedp.CSS(`.exhibit-404`)),
 		chromedp.Poll[chromedp.Void](`!document.querySelector('iframe') && !document.body.textContent.includes('`+ownerOneTitle+`')`),

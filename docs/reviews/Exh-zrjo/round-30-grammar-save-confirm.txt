@@ -1,0 +1,13 @@
+
+> test
+> playwright test --grep editor Save
+
+
+Running 2 tests using 1 worker
+
+(node:220339) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium] › specs/editor-save-feedback.spec.ts:3:1 › sticky editor Save names its action and shows pending and persisted outcomes (13.3s)
+  ✓  2 [chromium] › specs/editor-save-feedback.spec.ts:64:1 › failed editor Save keeps its explanation visible and supports a successful retry (3.1s)
+
+  2 passed (18.9s)

@@ -1,0 +1,138 @@
+{
+  "applicationCommit": "f58de10bf88acff268b9339e0c7dae406a93c664",
+  "assetVersion": "4beedb277545",
+  "categories": [
+    "Typography",
+    "Composition and spacing",
+    "Color harmony",
+    "Contrast and emphasis",
+    "Component visual consistency",
+    "Responsive visual polish",
+    "Tag workflow clarity and feedback"
+  ],
+  "rounds": [
+    {
+      "round": 36,
+      "reviews": [
+        {
+          "reviewer": "sol",
+          "report": "docs/reviews/Exh-zrjo/round-36-sol-tags-ten.md",
+          "reportSha256": "c8ce443a571a001d1f3bf8b1575bac7b378b766fcca0de725d3c01ee593109c5",
+          "executionStatus": "completed",
+          "reviewStatus": "complete_report_verified",
+          "light": [
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0
+          ],
+          "dark": [
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0
+          ],
+          "requiredViewedCoverageComplete": true
+        },
+        {
+          "reviewer": "opus",
+          "report": "docs/reviews/Exh-zrjo/round-36-opus-tags-ten.md",
+          "reportSha256": "2b580a9de6fa16ee2345508967fed641da65ed7be76ebd74b90bae296578954e",
+          "executionStatus": "completed",
+          "reviewStatus": "complete_report_verified",
+          "light": [
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0
+          ],
+          "dark": [
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0
+          ],
+          "requiredViewedCoverageComplete": true
+        }
+      ]
+    },
+    {
+      "round": 37,
+      "reviews": [
+        {
+          "reviewer": "sol",
+          "report": "docs/reviews/Exh-zrjo/round-37-sol-tags-ten.md",
+          "reportSha256": "102c34a00fb5e7de8fb2a9281662995acbfab9af87020a14146b464384ac939d",
+          "executionStatus": "completed",
+          "reviewStatus": "complete_report_verified",
+          "light": [
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0
+          ],
+          "dark": [
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0
+          ],
+          "requiredViewedCoverageComplete": true
+        },
+        {
+          "reviewer": "opus",
+          "report": "docs/reviews/Exh-zrjo/round-37-opus-tags-ten.md",
+          "reportSha256": "3f5c69a07dabd1d561272eeaa408be60fb432e33fecdf1aa4689b229cd75380c",
+          "executionStatus": "failed",
+          "reviewStatus": "complete_report_delivered_before_provider_failure",
+          "light": [
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0
+          ],
+          "dark": [
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0
+          ],
+          "requiredViewedCoverageComplete": true
+        }
+      ]
+    }
+  ],
+  "actualNumericValuesVerified": 56,
+  "allExactly10": true,
+  "sameApplication": true,
+  "consecutiveQualifyingRounds": [
+    36,
+    37
+  ],
+  "jointPassingStreak": 2,
+  "opus37ExecutionCaveat": "Provider failure after verified complete report delivery; original failed status preserved."
+}

@@ -645,6 +645,7 @@ import { registerEditorSection, editorChanged } from './editor-session.js';
       if (!result) document.getElementById('status').textContent = statusEl.textContent;
       return result;
     },
-    discard: cancelEdits
+    discard: cancelEdits,
+    saveMessage: () => statusEl.textContent
   });
 })();

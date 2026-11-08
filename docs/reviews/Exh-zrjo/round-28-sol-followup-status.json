@@ -1,0 +1,19 @@
+{
+  "taskId": "node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r28-sol-followup-pr273",
+  "childThreadId": "thread:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r28-sol-followup-pr273",
+  "childRunId": "run:thread:thread%3Adelegated-task%3Acommand%253Amcp%253Abb622e97-24f4-48e5-90ab-d51f24f155e2%253Adelegate-task%253AExh-zrjo-r28-sol-followup-pr273:ordinal:1",
+  "childNodeId": "node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r28-sol-followup-pr273",
+  "status": "interrupted",
+  "workState": "result_available",
+  "hasPendingChildRuns": false,
+  "latestTerminalRunId": "run:thread:thread%3Adelegated-task%3Acommand%253Amcp%253Abb622e97-24f4-48e5-90ab-d51f24f155e2%253Adelegate-task%253AExh-zrjo-r28-sol-followup-pr273:ordinal:1",
+  "latestTerminalStatus": "interrupted",
+  "latestTerminalSummary": "At 768 and 320, the new destinations keep stable navigation, clear headings and no measured horizontal overflow. Narrow Search also keeps its form in the main content for blank, hit and miss states. I corrected a phone Shared locator that had repeated the Search view; those repeated frames are excluded from coverage.",
+  "latestTerminalResultContextTransferId": "context-transfer:type:subagent_result:source-thread:thread%3Adelegated-task%3Acommand%253Amcp%253Abb622e97-24f4-48e5-90ab-d51f24f155e2%253Adelegate-task%253AExh-zrjo-r28-sol-followup-pr273:target-thread:096f4939-b5a7-46dd-a015-84f12c84336e:3862d5e9-fa3e-4482-a33a-5d414b7d2400",
+  "providerInstanceId": "codex",
+  "model": "gpt-6.1-sol",
+  "summary": "At 768 and 320, the new destinations keep stable navigation, clear headings and no measured horizontal overflow. Narrow Search also keeps its form in the main content for blank, hit and miss states. I corrected a phone Shared locator that had repeated the Search view; those repeated frames are excluded from coverage.",
+  "resultContextTransferId": "context-transfer:type:subagent_result:source-thread:thread%3Adelegated-task%3Acommand%253Amcp%253Abb622e97-24f4-48e5-90ab-d51f24f155e2%253Adelegate-task%253AExh-zrjo-r28-sol-followup-pr273:target-thread:096f4939-b5a7-46dd-a015-84f12c84336e:3862d5e9-fa3e-4482-a33a-5d414b7d2400",
+  "hasPendingQuestion": false,
+  "waitTimedOut": false
+}

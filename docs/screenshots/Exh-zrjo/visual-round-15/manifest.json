@@ -1,0 +1,1216 @@
+{
+  "capturedAt": "2026-11-04T11:46:02.837Z",
+  "captures": [
+    {
+      "file": "gallery-1280-light.png",
+      "route": "/",
+      "width": 1280,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Exhibit"
+    },
+    {
+      "file": "search-1280-light.png",
+      "route": "/search",
+      "width": 1280,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Search · Exhibit"
+    },
+    {
+      "file": "search-results-1280-light.png",
+      "route": "/search?q=run",
+      "width": 1280,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Search · Exhibit"
+    },
+    {
+      "file": "global-search-empty-1280-light.png",
+      "route": "/search?q=not-in-this-library",
+      "width": 1280,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Search · Exhibit"
+    },
+    {
+      "file": "add-1280-light.png",
+      "route": "/new",
+      "width": 1280,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "settings-1280-light.png",
+      "route": "/settings",
+      "width": 1280,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Settings — Exhibit"
+    },
+    {
+      "file": "editor-1280-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 1280,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "viewer-1280-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 1280,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "shared-1280-light.png",
+      "route": "/shared",
+      "width": 1280,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Shared with me · Exhibit"
+    },
+    {
+      "file": "shared-by-me-1280-light.png",
+      "route": "/shared-by-me",
+      "width": 1280,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Shared by me · Exhibit"
+    },
+    {
+      "file": "search-empty-1280-light.png",
+      "route": "/?q=not-in-this-library",
+      "width": 1280,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Exhibit"
+    },
+    {
+      "file": "filters-1280-light.png",
+      "route": "/?tag=Health",
+      "width": 1280,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Exhibit"
+    },
+    {
+      "file": "filters-empty-1280-light.png",
+      "route": "/?tag=Health&tag=Reading",
+      "width": 1280,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Exhibit"
+    },
+    {
+      "file": "gallery-1280-dark.png",
+      "route": "/",
+      "width": 1280,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Exhibit"
+    },
+    {
+      "file": "search-1280-dark.png",
+      "route": "/search",
+      "width": 1280,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Search · Exhibit"
+    },
+    {
+      "file": "search-results-1280-dark.png",
+      "route": "/search?q=run",
+      "width": 1280,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Search · Exhibit"
+    },
+    {
+      "file": "global-search-empty-1280-dark.png",
+      "route": "/search?q=not-in-this-library",
+      "width": 1280,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Search · Exhibit"
+    },
+    {
+      "file": "add-1280-dark.png",
+      "route": "/new",
+      "width": 1280,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "settings-1280-dark.png",
+      "route": "/settings",
+      "width": 1280,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Settings — Exhibit"
+    },
+    {
+      "file": "editor-1280-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 1280,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "viewer-1280-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 1280,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "shared-1280-dark.png",
+      "route": "/shared",
+      "width": 1280,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Shared with me · Exhibit"
+    },
+    {
+      "file": "shared-by-me-1280-dark.png",
+      "route": "/shared-by-me",
+      "width": 1280,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Shared by me · Exhibit"
+    },
+    {
+      "file": "search-empty-1280-dark.png",
+      "route": "/?q=not-in-this-library",
+      "width": 1280,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Exhibit"
+    },
+    {
+      "file": "filters-1280-dark.png",
+      "route": "/?tag=Health",
+      "width": 1280,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Exhibit"
+    },
+    {
+      "file": "filters-empty-1280-dark.png",
+      "route": "/?tag=Health&tag=Reading",
+      "width": 1280,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Exhibit"
+    },
+    {
+      "file": "gallery-390-light.png",
+      "route": "/",
+      "width": 390,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Exhibit"
+    },
+    {
+      "file": "search-390-light.png",
+      "route": "/search",
+      "width": 390,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Search · Exhibit"
+    },
+    {
+      "file": "search-results-390-light.png",
+      "route": "/search?q=run",
+      "width": 390,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Search · Exhibit"
+    },
+    {
+      "file": "global-search-empty-390-light.png",
+      "route": "/search?q=not-in-this-library",
+      "width": 390,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Search · Exhibit"
+    },
+    {
+      "file": "add-390-light.png",
+      "route": "/new",
+      "width": 390,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "settings-390-light.png",
+      "route": "/settings",
+      "width": 390,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Settings — Exhibit"
+    },
+    {
+      "file": "editor-390-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 390,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "viewer-390-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 390,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "shared-390-light.png",
+      "route": "/shared",
+      "width": 390,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Shared with me · Exhibit"
+    },
+    {
+      "file": "shared-by-me-390-light.png",
+      "route": "/shared-by-me",
+      "width": 390,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Shared by me · Exhibit"
+    },
+    {
+      "file": "search-empty-390-light.png",
+      "route": "/?q=not-in-this-library",
+      "width": 390,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Exhibit"
+    },
+    {
+      "file": "filters-390-light.png",
+      "route": "/?tag=Health",
+      "width": 390,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Exhibit"
+    },
+    {
+      "file": "filters-empty-390-light.png",
+      "route": "/?tag=Health&tag=Reading",
+      "width": 390,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Exhibit"
+    },
+    {
+      "file": "gallery-390-dark.png",
+      "route": "/",
+      "width": 390,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Exhibit"
+    },
+    {
+      "file": "search-390-dark.png",
+      "route": "/search",
+      "width": 390,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Search · Exhibit"
+    },
+    {
+      "file": "search-results-390-dark.png",
+      "route": "/search?q=run",
+      "width": 390,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Search · Exhibit"
+    },
+    {
+      "file": "global-search-empty-390-dark.png",
+      "route": "/search?q=not-in-this-library",
+      "width": 390,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Search · Exhibit"
+    },
+    {
+      "file": "add-390-dark.png",
+      "route": "/new",
+      "width": 390,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "settings-390-dark.png",
+      "route": "/settings",
+      "width": 390,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Settings — Exhibit"
+    },
+    {
+      "file": "editor-390-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 390,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "viewer-390-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 390,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "shared-390-dark.png",
+      "route": "/shared",
+      "width": 390,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Shared with me · Exhibit"
+    },
+    {
+      "file": "shared-by-me-390-dark.png",
+      "route": "/shared-by-me",
+      "width": 390,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Shared by me · Exhibit"
+    },
+    {
+      "file": "search-empty-390-dark.png",
+      "route": "/?q=not-in-this-library",
+      "width": 390,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Exhibit"
+    },
+    {
+      "file": "filters-390-dark.png",
+      "route": "/?tag=Health",
+      "width": 390,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Exhibit"
+    },
+    {
+      "file": "filters-empty-390-dark.png",
+      "route": "/?tag=Health&tag=Reading",
+      "width": 390,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Exhibit"
+    },
+    {
+      "file": "gallery-768-light.png",
+      "route": "/",
+      "width": 768,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Exhibit"
+    },
+    {
+      "file": "shared-768-light.png",
+      "route": "/shared",
+      "width": 768,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Shared with me · Exhibit"
+    },
+    {
+      "file": "shared-by-me-768-light.png",
+      "route": "/shared-by-me",
+      "width": 768,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Shared by me · Exhibit"
+    },
+    {
+      "file": "gallery-768-dark.png",
+      "route": "/",
+      "width": 768,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Exhibit"
+    },
+    {
+      "file": "shared-768-dark.png",
+      "route": "/shared",
+      "width": 768,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Shared with me · Exhibit"
+    },
+    {
+      "file": "shared-by-me-768-dark.png",
+      "route": "/shared-by-me",
+      "width": 768,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Shared by me · Exhibit"
+    },
+    {
+      "file": "add-paste-390-light.png",
+      "route": "/new",
+      "width": 390,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "add-url-390-light.png",
+      "route": "/new",
+      "width": 390,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "duplicate-390-light.png",
+      "route": "/",
+      "width": 390,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Exhibit"
+    },
+    {
+      "file": "card-menu-1280-light.png",
+      "route": "/",
+      "width": 1280,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Exhibit"
+    },
+    {
+      "file": "share-390-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 390,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "history-320-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 320,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "add-error-320-light.png",
+      "route": "/new",
+      "width": 320,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "viewer-320-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 320,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "source-selection-1280-light.png",
+      "route": "/new",
+      "width": 1280,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-word-selection-1280-light.png",
+      "route": "/new",
+      "width": 1280,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-occurrences-1280-light.png",
+      "route": "/new",
+      "width": 1280,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-find-1280-light.png",
+      "route": "/new",
+      "width": 1280,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-go-line-1280-light.png",
+      "route": "/new",
+      "width": 1280,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-completion-1280-light.png",
+      "route": "/new",
+      "width": 1280,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-selection-390-light.png",
+      "route": "/new",
+      "width": 390,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-word-selection-390-light.png",
+      "route": "/new",
+      "width": 390,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-occurrences-390-light.png",
+      "route": "/new",
+      "width": 390,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-find-390-light.png",
+      "route": "/new",
+      "width": 390,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-go-line-390-light.png",
+      "route": "/new",
+      "width": 390,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-completion-390-light.png",
+      "route": "/new",
+      "width": 390,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-selection-320-light.png",
+      "route": "/new",
+      "width": 320,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-word-selection-320-light.png",
+      "route": "/new",
+      "width": 320,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-occurrences-320-light.png",
+      "route": "/new",
+      "width": 320,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-find-320-light.png",
+      "route": "/new",
+      "width": 320,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-go-line-320-light.png",
+      "route": "/new",
+      "width": 320,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-completion-320-light.png",
+      "route": "/new",
+      "width": 320,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "add-paste-390-dark.png",
+      "route": "/new",
+      "width": 390,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "add-url-390-dark.png",
+      "route": "/new",
+      "width": 390,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "duplicate-390-dark.png",
+      "route": "/",
+      "width": 390,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Exhibit"
+    },
+    {
+      "file": "card-menu-1280-dark.png",
+      "route": "/",
+      "width": 1280,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Exhibit"
+    },
+    {
+      "file": "share-390-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 390,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "history-320-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 320,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "add-error-320-dark.png",
+      "route": "/new",
+      "width": 320,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "viewer-320-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 320,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "source-selection-1280-dark.png",
+      "route": "/new",
+      "width": 1280,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-word-selection-1280-dark.png",
+      "route": "/new",
+      "width": 1280,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-occurrences-1280-dark.png",
+      "route": "/new",
+      "width": 1280,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-find-1280-dark.png",
+      "route": "/new",
+      "width": 1280,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-go-line-1280-dark.png",
+      "route": "/new",
+      "width": 1280,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-completion-1280-dark.png",
+      "route": "/new",
+      "width": 1280,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-selection-390-dark.png",
+      "route": "/new",
+      "width": 390,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-word-selection-390-dark.png",
+      "route": "/new",
+      "width": 390,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-occurrences-390-dark.png",
+      "route": "/new",
+      "width": 390,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-find-390-dark.png",
+      "route": "/new",
+      "width": 390,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-go-line-390-dark.png",
+      "route": "/new",
+      "width": 390,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-completion-390-dark.png",
+      "route": "/new",
+      "width": 390,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-selection-320-dark.png",
+      "route": "/new",
+      "width": 320,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-word-selection-320-dark.png",
+      "route": "/new",
+      "width": 320,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-occurrences-320-dark.png",
+      "route": "/new",
+      "width": 320,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-find-320-dark.png",
+      "route": "/new",
+      "width": 320,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-go-line-320-dark.png",
+      "route": "/new",
+      "width": 320,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-completion-320-dark.png",
+      "route": "/new",
+      "width": 320,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "title": "Add artifact — Exhibit"
+    }
+  ],
+  "errors": []
+}

@@ -1,0 +1,19 @@
+{
+  "command": [
+    "go",
+    "test",
+    "./internal/api",
+    "./internal/color",
+    "-run",
+    "Test(TagModalBrowser|ActionMenuBrowser|FloatingAppHeaderBrowser|NewPageChooserBrowser|NewPageModeSwitchBrowser|Normalize|Preset)",
+    "-count=1"
+  ],
+  "cwd": "/home/maxomdal/.t3/worktrees/Exhibit/feature-Exh-zrjo-ui-council",
+  "head": "26dae10df5ecba49d7944c07fdfb0167e62c62b1",
+  "startedAt": "2026-11-06T01:04:04.758738+00:00",
+  "seconds": 22.31,
+  "exitCode": 0,
+  "sourceFingerprint": "9aa39c67f7cb8d613d8b6d04af28a9e0c15c4e2bd0740fed021fce5051babeb9",
+  "sourceUnchanged": true,
+  "log": "/tmp/exhibit-zrjo-tags10-simplicity-native.log"
+}

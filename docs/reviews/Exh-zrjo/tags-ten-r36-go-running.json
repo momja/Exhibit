@@ -1,0 +1,8 @@
+{
+  "pid": 306396,
+  "applicationCommit": "f58de10bf88acff268b9339e0c7dae406a93c664",
+  "fingerprint": "1fc8899f65781b39212653be286d8064d2ea02bcfd772558ad9a2033ac71992a",
+  "statusPath": "/tmp/exhibit-zrjo-tags10-r36-go-final-status.json",
+  "log": "/tmp/exhibit-zrjo-tags10-r36-go-final.log",
+  "state": "running, no exit inferred"
+}

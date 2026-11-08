@@ -1,0 +1,12 @@
+{
+  "exposureAt": "2026-11-05T01:53:19.973Z",
+  "publicCommand": "$ /bin/bash -lc \"git diff d30dbbe92f9f5535a33f59be25f7c9f9c4be4511 HEAD --stat && git diff d30dbbe92f9f5535a33f59be25f7c9f9c4be4511 HEAD -- . ':(exclude)internal/api/gallery_test.go' && wc -l docs/reviews/Exh-zrjo/visual-brief.md docs/reviews/Exh-zrjo/nine-brief.md docs/reviews/Exh-zrjo/round-{5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25}-*-visual.md docs/reviews/Exh-zrjo/visual-round-*-changes.md docs/reviews/Exh-zrjo/nine-validation.md\"",
+  "historicalHead": "a787bd5e142dc67d9ac9e4ec98aaeaa9d06de1d4",
+  "opusRound26RequestedAt": "2026-11-05T01:53:17.174Z",
+  "opusRound26CompletedAt": "2026-11-05T02:02:41.976Z",
+  "solRound26StartedAt": "2026-11-05T01:53:05.140Z",
+  "solRound26CompletedAt": "2026-11-05T02:07:26.607Z",
+  "proceduralDeviation": "An initial Git diff unintentionally emitted historical aggregate/ticket documentation prohibited by the review brief. Subsequent comparisons were restricted to runtime paths.",
+  "assessment": "The comparison used tracked HEAD a787bd5e, committed before round26 tasks began; current-round reports and ratings did not exist in that commit. Exposed prior-round25 outcome was already supplied in the brief. Current same-round peer outcome was not disclosed. The report preserves the access-scope deviation.",
+  "verifiedNoRound26ResultsInComparedCommit": true
+}

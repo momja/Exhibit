@@ -19,12 +19,12 @@
 <body data-controller="unsaved-changes" data-editor-return-url="{{.Return.URL}}" data-action="click->unsaved-changes#navigate input->unsaved-changes#refresh change->unsaved-changes#refresh exhibit:editor-changed->unsaved-changes#refresh exhibit:editor-exit->unsaved-changes#allowExit pageshow@window->unsaved-changes#restore beforeunload@window->unsaved-changes#beforeUnload">
 {{template "appHeader" .Header}}
 <main>
-<div class="edit-heading"><div><h1 id="edit-title">{{.Title}}</h1></div><span class="text-sm muted" role="status" data-unsaved-changes-target="status">All changes saved</span></div>
+<div class="edit-heading"><div><h1 id="edit-title">{{.Title}}</h1></div></div>
 <div class="edit-card">
 
   {{/* The title is the one field that belongs to no section, so it stays
        above them rather than being buried in one. */}}
-  <label class="text-sm muted" for="title">Artifact title</label>
+  <label class="field-label" for="title">Artifact title</label>
   <input type="text" id="title" value="{{.Title}}">
 
   {{/* The page is peer sections — tags, security, state, artifact source,
@@ -37,18 +37,22 @@
   <details class="details-panel" id="tags-panel" data-artifact-id="{{.ID}}">
     <summary>{{template "panelCaret"}} Tags</summary>
     <div class="panel-body">
-      <div id="tags-body"
+      <p id="tag-status" class="form-help tag-status" role="status" aria-live="polite" aria-atomic="true">Adding or removing a tag saves immediately.</p>
+      <fieldset id="tags-body" class="tag-fields" aria-label="Tag controls"
            hx-get="/partials/tag-panel?artifact={{.ID}}"
-           hx-trigger="exhibit:tags-changed from:body"
-           hx-swap="innerHTML">{{template "tagPanelBody" .TagPanel}}</div>
-      {{/* Outside the swap so errors survive the re-render. */}}
-      <div id="tag-add-error" class="text-sm tag-error" hidden></div>
+           hx-trigger="exhibit:tags-changed from:body, click from:#tag-refresh"
+           hx-sync="this:replace"
+           hx-swap="innerHTML">{{template "tagPanelBody" .TagPanel}}</fieldset>
+      <div id="tag-refresh-notice" hidden>
+        <p class="form-help tag-error" role="alert">Tags could not refresh. Refresh the tags to continue.</p>
+        <button type="button" class="btn btn-sec" id="tag-refresh">Refresh tags</button>
+      </div>
       {{template "editTagModal" .Presets}}
     </div>
   </details>
 
   <details class="details-panel" id="security-panel">
-    <summary id="security-summary">{{template "panelCaret"}} Permissions <span class="text-sm muted" id="security-summary-text"></span></summary>
+    <summary id="security-summary">{{template "panelCaret"}} <span>Permissions <span class="security-summary-note" id="security-summary-text"></span></span></summary>
     <div class="panel-body security-body">
       <div class="security-col">
         <div id="origin-lists"
@@ -56,29 +60,32 @@
              hx-trigger="exhibit:origin-draft-changed from:body"
              hx-sync="this:replace"
              hx-swap="innerHTML">{{template "editOriginLists" .}}</div>
-        <div class="row" style="margin-top:8px">
-          <input type="text" id="al-add-input" class="field" aria-label="Site to allow (scheme, host, and optional port)" placeholder="https://example.com">
-          <button type="button" class="btn btn-sm" id="al-add-btn">Add</button>
+        <div class="origin-add">
+          <label class="field-label" for="al-add-input">Site to allow</label>
+          <div class="row">
+            <input type="text" id="al-add-input" class="field" placeholder="https://example.com">
+            <button type="button" class="btn btn-sm btn-sec" id="al-add-btn"><i class="ph ph-plus" aria-hidden="true"></i> Add</button>
+          </div>
         </div>
       </div>
       <div class="security-col">
-        <h3 class="text-sm muted">Features</h3>
+        <h3>Features</h3>
         <label class="row">
-          <span class="spacer">Downloads</span>
+          <span class="spacer field-label">Downloads</span>
           <select id="dl-select" class="select">
             <option value="false">Ask first</option>
             <option value="true">Always allow</option>
           </select>
         </label>
         <label class="row">
-          <span class="spacer">Clipboard</span>
+          <span class="spacer field-label">Clipboard</span>
           <select id="clip-select" class="select">
             <option value="false">Ask first</option>
             <option value="true">Always allow</option>
           </select>
         </label>
         <label class="row">
-          <span class="spacer">External links</span>
+          <span class="spacer field-label">External links</span>
           <select id="link-select" class="select">
             <option value="false">Ask first</option>
             <option value="true">Always allow</option>
@@ -92,14 +99,14 @@
              Permissions-Policy header — which is what makes the grant
              per-artifact rather than per-render-origin. */}}
         <label class="row">
-          <span class="spacer">Camera</span>
+          <span class="spacer field-label">Camera</span>
           <select id="cam-select" class="select">
             <option value="false">Ask first</option>
             <option value="true">Always allow</option>
           </select>
         </label>
         <label class="row">
-          <span class="spacer">Microphone</span>
+          <span class="spacer field-label">Microphone</span>
           <select id="mic-select" class="select">
             <option value="false">Ask first</option>
             <option value="true">Always allow</option>
@@ -108,7 +115,7 @@
         {{/* Location (av-f446) is enforced the same way as the two devices:
              the render document's Permissions-Policy header. */}}
         <label class="row">
-          <span class="spacer">Location</span>
+          <span class="spacer field-label">Location</span>
           <select id="geo-select" class="select">
             <option value="false">Ask first</option>
             <option value="true">Always allow</option>
@@ -124,7 +131,7 @@
   <details class="details-panel" id="state-panel">
     <summary id="state-summary">{{template "panelCaret"}} <span id="state-summary-text">Saved data</span></summary>
     <fieldset class="panel-body state-body" id="state-controls" aria-label="Saved data controls">
-      <p class="text-sm muted">
+      <p class="form-help">
         Data saved by this artifact syncs across your devices.
       </p>
       <div id="state-rows"></div>
@@ -137,27 +144,31 @@
           <option value="list">List</option>
           <option value="object">Object</option>
         </select>
-        <button type="button" class="btn btn-sm" id="state-add-btn"><i class="ph ph-plus"></i> Add key</button>
+        <button type="button" class="btn btn-sm btn-sec" id="state-add-btn"><i class="ph ph-plus"></i> Add key</button>
       </div>
       <div class="btn-row state-actions">
-        <button type="button" class="btn btn-sm" id="state-save"><i class="ph ph-check"></i> Save data</button>
+        <button type="button" class="btn btn-sm" id="state-save"><i class="ph ph-floppy-disk" aria-hidden="true"></i> Save data</button>
         <button type="button" class="btn btn-sm btn-sec" id="state-cancel"><i class="ph ph-x"></i> Discard data edits</button>
         <span id="state-status" class="text-sm muted"></span>
       </div>
-      <div class="storage-transfers">
+      <div class="panel-transfer">
+        <button type="button" class="btn btn-sm btn-sec" id="state-export" aria-describedby="state-export-help"><i class="ph ph-download-simple" aria-hidden="true"></i> Export data (JSON)</button>
         <div>
-          <button type="button" class="btn btn-sm btn-sec" id="state-export" aria-describedby="state-export-help"><i class="ph ph-download-simple" aria-hidden="true"></i> Export data (JSON)</button>
-          <p class="text-sm muted" id="state-export-help">Includes saved results from connected accounts, but no credentials or unsaved edits. Review the data before sharing the file.</p>
+          <p class="form-help" id="state-export-help">Includes saved results from connected accounts, but no credentials or unsaved edits. Review the data before sharing the file.</p>
           <span id="state-export-status" class="text-sm muted" role="status"></span>
         </div>
+      </div>
+      <div class="panel-transfer">
+        <button type="button" class="btn btn-sm btn-sec" id="state-import" aria-describedby="state-import-help"><i class="ph ph-upload-simple" aria-hidden="true"></i> Import data (JSON)</button>
+        <input type="file" id="state-import-file" accept=".json,application/json" aria-label="Import saved data JSON" hidden>
         <div>
-          <button type="button" class="btn btn-sm btn-sec" id="state-import" aria-describedby="state-import-help"><i class="ph ph-upload-simple" aria-hidden="true"></i> Import data (JSON)</button>
-          <input type="file" id="state-import-file" accept=".json,application/json" aria-label="Import saved data JSON" hidden>
-          <p class="text-sm muted" id="state-import-help">Replaces saved data with an exported JSON file and discards unsaved data edits.</p>
+          <p class="form-help" id="state-import-help">Replaces saved data with an exported JSON file and discards unsaved data edits.</p>
           <span id="state-import-status" class="text-sm muted" role="status"></span>
         </div>
       </div>
-      <button type="button" class="btn btn-sm btn-danger" id="state-erase"><i class="ph ph-warning"></i> Erase current data</button>
+      <div class="btn-row state-danger-actions">
+        <button type="button" class="btn btn-sm btn-sec btn-danger-outline" id="state-erase"><i class="ph ph-warning"></i> Erase current data</button>
+      </div>
     </fieldset>
   </details>
 
@@ -168,24 +179,26 @@
   <details class="details-panel" id="assets-panel">
     <summary id="assets-summary">{{template "panelCaret"}} <span id="assets-summary-text">Stored assets</span></summary>
     <div class="panel-body">
-      <p class="text-sm muted">
+      <p class="form-help">
         Files saved with this artifact so it can load them even if the original site changes.
       </p>
-      <p class="text-sm muted">
+      <p class="form-help">
         Deleting a file is permanent and may break the artifact. Check its URL in the source before deleting it.
       </p>
       <div id="assets-rows" hx-get="/partials/asset-panel?artifact={{.ID}}" hx-trigger="load, exhibit:assets-changed from:body" hx-swap="innerHTML">{{template "assetPanelRows" .AssetPanel}}</div>
       <span id="assets-status" class="text-sm muted"></span>
-      <div class="storage-transfers">
+      <div class="panel-transfer">
+        <button type="button" class="btn btn-sm btn-sec" id="assets-export" aria-describedby="assets-export-help"><i class="ph ph-download-simple" aria-hidden="true"></i> Export assets (ZIP)</button>
         <div>
-          <button type="button" class="btn btn-sm btn-sec" id="assets-export" aria-describedby="assets-export-help"><i class="ph ph-download-simple" aria-hidden="true"></i> Export assets (ZIP)</button>
-          <p class="text-sm muted" id="assets-export-help">Downloads all saved files and a manifest of their source URLs and content types.</p>
+          <p class="form-help" id="assets-export-help">Downloads all saved files and a manifest of their source URLs and content types.</p>
           <span id="assets-export-status" class="text-sm muted" role="status"></span>
         </div>
+      </div>
+      <div class="panel-transfer">
+        <button type="button" class="btn btn-sm btn-sec" id="assets-import" aria-describedby="assets-import-help"><i class="ph ph-upload-simple" aria-hidden="true"></i> Import assets (ZIP)</button>
+        <input type="file" id="assets-import-file" accept=".zip,application/zip" aria-label="Import stored assets ZIP" hidden>
         <div>
-          <button type="button" class="btn btn-sm btn-sec" id="assets-import" aria-describedby="assets-import-help"><i class="ph ph-upload-simple" aria-hidden="true"></i> Import assets (ZIP)</button>
-          <input type="file" id="assets-import-file" accept=".zip,application/zip" aria-label="Import stored assets ZIP" hidden>
-          <p class="text-sm muted" id="assets-import-help">Replaces saved files with a ZIP exported from this artifact.</p>
+          <p class="form-help" id="assets-import-help">Replaces saved files with a ZIP exported from this artifact.</p>
           <span id="assets-import-status" class="text-sm muted" role="status"></span>
         </div>
       </div>
@@ -200,7 +213,7 @@
       <div id="source-network-warnings" hx-get="/partials/network-warnings?artifact={{.ID}}"
            hx-trigger="exhibit:network-warnings-changed from:body"
            hx-swap="innerHTML">{{template "networkWarnings" .NetworkWarnings}}</div>
-      <textarea id="body" data-revision="{{.SourceRevision}}">{{.Src}}</textarea>
+      <textarea id="body" aria-label="Artifact source" data-revision="{{.SourceRevision}}">{{.Src}}</textarea>
       <div id="scan-result" hx-get="/partials/network-approval?artifact={{.ID}}&amp;mode=edit"
            hx-trigger="exhibit:network-approval-changed from:body"
            hx-swap="innerHTML" hx-sync="this:replace"></div>
@@ -224,12 +237,12 @@
              hx-get="/partials/card-widget?artifact={{.ID}}"
              hx-trigger="exhibit:widget-saved from:body"
              hx-swap="innerHTML">{{template "cardWidget" .Widget}}</div>
-        <p class="text-sm muted">A read-only preview on this artifact’s Gallery card. It can show saved data; clicking it opens the artifact.</p>
+        <p class="form-help">A read-only preview on this artifact’s Gallery card. It can show saved data; clicking it opens the artifact.</p>
       </div>
       <div class="widget-source">
-        <label class="text-sm muted" for="widget-src">Widget HTML</label>
+        <label class="field-label" for="widget-src">Widget HTML</label>
         <textarea id="widget-src" data-revision="{{.WidgetRevision}}" spellcheck="false" aria-describedby="widget-source-help">{{.WidgetSrc}}</textarea>
-        <p class="text-sm muted" id="widget-source-help">Enter a complete HTML document for the card widget. To use the default widget instead, choose Remove.</p>
+        <p class="form-help" id="widget-source-help">Enter a complete HTML document for the card widget. To use the default widget instead, choose Remove.</p>
         {{/* Generate takes no prompt: the button IS the request, and the whole
              instruction lives server-side (agent.GenerateWidgetPrompt, prompts/generate_widget.tmpl
              plus the session's WidgetOnly system prompt), so there is nothing
@@ -254,7 +267,7 @@
   <details class="details-panel" id="versions-panel">
     <summary>{{template "panelCaret"}} Versions</summary>
     <div class="panel-body">
-      <p class="text-sm muted">
+      <p class="form-help">
         Versions keep the source, widget, and saved data. Restoring adds a new version and keeps the current one in history.
       </p>
       {{/* Where a version being looked at appears (the versionViewer partial,
@@ -268,11 +281,11 @@
     </div>
   </details>
 
-  <div class="btn-row">
+  <div class="btn-row editor-footer">
     <a class="btn btn-sec" href="{{.Return.URL}}">Return to {{.Return.Label}}</a>
-    <span id="status" role="status"></span>
+    <span id="status"></span>
     <span class="spacer"></span>
-    <button class="btn btn-danger" type="button" data-delete-artifact><i class="ph ph-trash" aria-hidden="true"></i> Delete</button>
+    <button class="btn btn-sec editor-delete" type="button" data-delete-artifact><i class="ph ph-trash" aria-hidden="true"></i> Delete</button>
   </div>
 </div>
 </main>

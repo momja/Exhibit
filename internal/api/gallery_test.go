@@ -108,7 +108,9 @@ func TestEditPageRendersTagsPanel(t *testing.T) {
 
 	assert.Contains(t, page, `<details class="details-panel" id="tags-panel" data-artifact-id="`+id+`">`)
 	assert.Contains(t, page, `hx-get="/partials/tag-panel?artifact=`+id+`"`)
-	assert.Contains(t, page, `hx-trigger="exhibit:tags-changed from:body"`)
+	// Mutations and GET-only recovery refresh the same stable native fieldset.
+	assert.Contains(t, page, `<fieldset id="tags-body"`)
+	assert.Contains(t, page, `hx-trigger="exhibit:tags-changed from:body, click from:#tag-refresh"`)
 	assert.Contains(t, page, `data-action="edit-tag" data-tag-id="`+charts.ID+`" data-tag-name="charts" data-tag-color="#ffffff"`)
 	assert.Contains(t, page, `data-action="detach-tag" data-tag-id="`+charts.ID+`" aria-label="Remove tag charts from this artifact"`)
 	// The dropdown offers what is not yet attached.
@@ -121,7 +123,7 @@ func TestEditPageRendersTagsPanel(t *testing.T) {
 	assert.NotContains(t, page, `class="tag-create" hidden`)
 	assert.Contains(t, page, `id="tag-add-color-hex" class="field" value="#6b7280"`)
 	// The library-wide edit dialog, and the script that drives both.
-	assert.Contains(t, page, `<dialog id="tag-edit-modal" class="modal-dialog tag-edit-dialog"`)
+	assert.Contains(t, page, `<dialog id="tag-edit-modal" class="modal-dialog modal-sheet tag-edit-dialog"`)
 	assert.Contains(t, page, `data-color="#6B7280"`) // store.DefaultTagColor preset
 	assert.Contains(t, page, `id="tag-edit-delete"`)
 	assert.Contains(t, page, `<script type="module" src="`+assetURL("gallery/tags.js")+`"></script>`)
@@ -251,7 +253,7 @@ func TestGalleryCardHasNoRedundantDetailsLink(t *testing.T) {
 	assert.Contains(t, page, `<div class="card" data-href="/artifacts/`+id+`">`)
 
 	// The title link is the single named way into the artifact's detail page.
-	assert.Contains(t, page, `<a class="card-title" href="/artifacts/`+id+`">Openless</a>`)
+	assert.Contains(t, page, `<a class="card-title" title="Openless" href="/artifacts/`+id+`">Openless</a>`)
 
 	// The redundant 'Details' link is gone (it duplicated the title click).
 	assert.NotContains(t, page, `>View artifact</a>`)
@@ -263,7 +265,7 @@ func TestGalleryCardHasNoRedundantDetailsLink(t *testing.T) {
 	assert.NotContains(t, page, `class="card-edit"`)
 
 	// av-uvc6: one meta row under the tile, and no created date on it.
-	assert.Contains(t, page, `<div class="card-meta"><a class="card-title" href="/artifacts/`+id+`">Openless</a>`)
+	assert.Contains(t, page, `<div class="card-meta"><a class="card-title" title="Openless" href="/artifacts/`+id+`">Openless</a>`)
 	assert.NotContains(t, page, `card-footer`)
 	assert.NotContains(t, page, time.Now().Format("Jan 2, 2006"))
 
@@ -277,9 +279,9 @@ func TestGalleryCardHasNoRedundantDetailsLink(t *testing.T) {
 func TestGalleryCardActionsStayReachableWithoutHover(t *testing.T) {
 	r := newTestRouter(t)
 	css := galleryAsset(t, r, "/assets/gallery/index.css")
-	assert.Contains(t, css, `.card:hover .card-actions,.card:focus-within .card-actions,.card-actions.is-open{width:22px;`)
-	assert.Contains(t, css, `@media (hover:none),(pointer:coarse){.card-actions{width:22px;`)
-	assert.Contains(t, css, `.card-actions-trigger{opacity:1}`)
+	assert.Contains(t, css, `.card-actions{position:relative;flex:0 0 32px;`)
+	assert.NotContains(t, css, `cursor:pointer;opacity:0`, "card actions stay visible without hover")
+	assert.Contains(t, css, `.card-actions{flex-basis:44px}`)
 	shared := galleryAsset(t, r, "/assets/gallery/components.css")
 	assert.Contains(t, shared, `.action-menu a,.action-menu button{`)
 	assert.Contains(t, shared, `.action-menu[hidden]{display:none}`)
@@ -522,7 +524,9 @@ func TestEditPageShowsBlockedOriginsDistinctlyFromUndecided(t *testing.T) {
 		"only origins with no decision at all are 'referenced, not approved'")
 	assert.Contains(t, page, `let allowlist = [];`,
 		"a block decision must never widen the allowlist")
-	assert.Contains(t, page, `<h3 class="text-sm muted">Blocked</h3>`,
+	// Security groups use the editor's shared h3 role, without the old
+	// small/muted override that put their headings below the field captions.
+	assert.Contains(t, page, `<h3>Blocked</h3>`,
 		"blocked origins need their own labelled section, not a plain Allow row")
 }
 
@@ -630,7 +634,8 @@ func TestEditPageShowsLinksCapabilitySelect(t *testing.T) {
 	page, err := renderEditPage(a, nil, nil, "<p>src</p>", "", testPageCreds, testRenderURLs("https://render.test"), true, "", nil, editNavigation{})
 	require.NoError(t, err)
 
-	assert.Contains(t, page, `<span class="spacer">External links</span>`)
+	assert.Contains(t, page, `<span class="spacer field-label">External links</span>`,
+		"capability names share the editor's field-caption role")
 	assert.Contains(t, page, `id="link-select"`)
 	assert.Contains(t, page, "let linksApproved = true;")
 

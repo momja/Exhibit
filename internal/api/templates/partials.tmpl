@@ -33,28 +33,49 @@
      itself carries no modal-specific state. The swatch/dot backgrounds stay
      inline styles: they are per-tag dynamic values, which classes cannot
      express. Data: []string (hex colors). */}}
-{{define "colorSwatches"}}<div class="color-presets">{{range .}}<button type="button" class="color-swatch" data-color="{{.}}" style="background:{{.}}" aria-label="{{.}}"></button>{{end}}</div>{{end}}
+{{define "colorSwatches"}}<div class="color-presets" role="radiogroup" aria-label="Preset colors" data-action="keydown->color-picker#navigate">{{range .}}<button type="button" class="color-swatch" role="radio" data-color="{{.}}" data-color-name="{{tagColorName .}}" data-color-picker-target="swatch" data-action="color-picker#choose" style="--swatch-color:{{.}}" aria-label="{{tagColorName .}} ({{.}})" title="{{tagColorName .}}" aria-checked="false" tabindex="-1"><span aria-hidden="true"></span></button>{{end}}</div>{{end}}
+
+{{define "tagColorFields"}}<div class="tag-color-fields" id="{{.Prefix}}-color-controls" data-controller="color-picker" data-action="color-picker:refresh->color-picker#refresh">
+  <div class="tag-color-heading"><span class="field-label">Color</span><span class="color-selection" data-color-picker-target="selection">Gray</span></div>
+  {{template "colorSwatches" .Presets}}
+  <label class="field-label" for="{{.Prefix}}-color-hex">Custom color</label>
+  <div class="color-custom-row">
+    <span class="color-input-wrap"><input type="color" id="{{.Prefix}}-color-picker" value="{{.DefaultColor}}" aria-label="Choose a custom color" data-color-picker-target="picker" data-action="input->color-picker#input"><span class="color-empty" aria-hidden="true" data-color-picker-target="empty" hidden><i class="ph ph-minus"></i></span></span>
+    <input type="text" id="{{.Prefix}}-color-hex" class="field" value="{{.DefaultColor}}" placeholder="#rrggbb" maxlength="7" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="{{.Prefix}}-color-hint {{.Prefix}}-color-error" data-color-picker-target="hex" data-action="input->color-picker#input">
+  </div>
+  <div class="tag-field-feedback">
+    <div class="form-help" id="{{.Prefix}}-color-hint" data-color-picker-target="hint">Use the picker or a six-digit hex color.</div>
+    <div id="{{.Prefix}}-color-error" class="form-help tag-field-error" role="alert" data-color-picker-target="error" hidden></div>
+  </div>
+</div>{{end}}
 
 {{/* editTagModal renames, recolors or deletes a tag library-wide; opened
      from the Tags panel's pencils by tags.js. Data: []string (presets). */}}
-{{define "editTagModal"}}<dialog id="tag-edit-modal" class="modal-dialog tag-edit-dialog" aria-labelledby="tag-edit-title"
-  data-controller="modal">
-    <h2 id="tag-edit-title">Edit tag</h2>
-    <label for="tag-edit-name">Name</label>
-    <input type="text" id="tag-edit-name" maxlength="60" autofocus>
-    <label for="tag-edit-color-picker">Color</label>
-    {{template "colorSwatches" .}}
-    <div class="color-custom-row">
-      <input type="color" id="tag-edit-color-picker" aria-label="Custom color">
-      <input type="text" id="tag-edit-color-hex" placeholder="#rrggbb" maxlength="7" aria-label="Color hex code">
+{{define "editTagModal"}}<dialog id="tag-edit-modal" class="modal-dialog modal-sheet tag-edit-dialog" aria-labelledby="tag-edit-title" aria-describedby="tag-edit-scope" data-controller="modal">
+  <div class="modal-header"><h2 id="tag-edit-title">Edit tag</h2>{{template "modalClose"}}</div>
+  <div class="modal-body"><fieldset id="tag-edit-fields" class="modal-fields" aria-label="Tag details">
+    <p id="tag-edit-scope" class="form-help tag-scope-note">Changes apply to this tag on every artifact in your Gallery.</p>
+    <div class="tag-name-field">
+      <label for="tag-edit-name">Name</label>
+      <input type="text" id="tag-edit-name" maxlength="60" required aria-describedby="tag-edit-name-hint tag-edit-name-error" autofocus>
+      <div class="tag-field-feedback"><div class="form-help" id="tag-edit-name-hint">Up to 60 characters.</div><div id="tag-edit-name-error" class="form-help tag-field-error" role="alert" hidden></div></div>
     </div>
-    <div id="tag-edit-error" class="modal-error" hidden></div>
-    <div class="modal-actions">
-      <button type="button" class="btn btn-danger" id="tag-edit-delete"><i class="ph ph-trash"></i> Delete</button>
-      <span class="spacer"></span>
-      <button type="button" class="btn btn-sec" id="tag-edit-cancel" data-modal-dismiss>Cancel</button>
-      <button type="button" class="btn" id="tag-edit-save"><i class="ph ph-check"></i> Save</button>
-    </div>
+    {{template "tagColorFields" (tagColors "tag-edit" .)}}
+    <div id="tag-edit-error" class="modal-error" role="alert" hidden></div>
+    <div class="tag-delete-entry"><button type="button" class="btn btn-sec btn-danger-outline" id="tag-edit-delete"><i class="ph ph-trash" aria-hidden="true"></i> Delete tag…</button></div>
+  </fieldset>
+  <fieldset id="tag-delete-fields" class="modal-fields" aria-label="Confirm tag deletion" hidden>
+    <p>Delete <strong id="tag-delete-name"></strong> from your Gallery?</p>
+    <p id="tag-delete-help" class="form-help">It will be removed from every artifact. Your artifacts will be kept.</p>
+    <div id="tag-delete-error" class="modal-error" role="alert" hidden></div>
+  </fieldset></div>
+  <div class="modal-actions modal-footer tag-dialog-footer">
+    <button type="button" class="btn btn-sec" id="tag-edit-cancel" data-modal-dismiss>Cancel</button>
+    <button type="button" class="btn" id="tag-edit-save" disabled><i class="ph ph-floppy-disk" aria-hidden="true"></i> <span id="tag-edit-save-label">Save tag</span></button>
+    <button type="button" class="btn btn-sec" id="tag-delete-cancel" hidden>Keep tag</button>
+    <button type="button" class="btn btn-danger" id="tag-edit-confirm-delete" hidden><i class="ph ph-trash" aria-hidden="true"></i> <span id="tag-delete-label">Delete tag</span></button>
+  </div>
+  <span id="tag-edit-status" class="sr-only" role="status"></span>
 </dialog>{{end}}
 
 {{/* fragmentError is the user-facing 404 body every /partials/* route serves
@@ -131,34 +152,36 @@
      the page render and /partials/tag-panel. Data: tagPanelView (gallery.go). */}}
 {{define "tagPanelBody"}}<div class="tag-panel" data-artifact-id="{{.ArtifactID}}">
   {{if .Tags}}<ul class="tag-edit-list" id="tag-edit-list">
-    {{range .Tags}}<li class="tag-pill tag-pill-editable" data-tag-id="{{.ID}}">
-      <span class="tag-dot" style="background:{{.Color}}" aria-hidden="true"></span>
-      <span class="tag-pill-label">{{.Name}}</span>
+    {{range .Tags}}<li class="tag-edit-item" data-tag-id="{{.ID}}">
+      <span class="tag-pill"><span class="tag-dot" style="background:{{.Color}}" aria-hidden="true"></span><span class="tag-pill-label">{{.Name}}</span></span>
+      <span class="tag-edit-actions">
       <button type="button" class="tag-pill-btn" data-action="edit-tag" data-tag-id="{{.ID}}" data-tag-name="{{.Name}}" data-tag-color="{{.Color}}" aria-label="Edit tag {{.Name}}" title="Rename, recolor or delete this tag"><i class="ph ph-pencil-simple" aria-hidden="true"></i></button>
       <button type="button" class="tag-pill-btn" data-action="detach-tag" data-tag-id="{{.ID}}" aria-label="Remove tag {{.Name}} from this artifact" title="Remove from this artifact"><i class="ph ph-x" aria-hidden="true"></i></button>
+      </span>
     </li>{{end}}
   </ul>{{else}}<p class="text-sm muted">This artifact has no tags.</p>{{end}}
-  <label for="tag-add-select" class="text-sm muted">Add existing tag</label>
+  <div id="tag-list-error" class="text-sm tag-error" role="alert" hidden></div>
+  {{if .Available}}<label for="tag-add-select" class="field-label">Add existing tag</label>
   <div class="tag-add-row">
-    <select id="tag-add-select" class="select" aria-label="Tag to add">
-      <option value="">Choose an existing tag…</option>
+    <select id="tag-add-select" class="select" aria-label="Tag to add" aria-describedby="tag-add-error">
+      <option value="">Choose a tag…</option>
       {{range .Available}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
     </select>
-    <button type="button" class="btn btn-sm" id="tag-add-confirm"><i class="ph ph-plus" aria-hidden="true"></i> Add</button>
+    <button type="button" class="btn btn-sm btn-sec" id="tag-add-confirm" disabled><i class="ph ph-plus" aria-hidden="true"></i> Add</button>
   </div>
-  <div id="tag-add-create-fields" class="tag-create" role="group" aria-labelledby="tag-create-heading">
-    <h3 id="tag-create-heading" class="text-sm">Create new tag</h3>
-    <label for="tag-add-name" class="text-sm muted">Name</label>
-    <input type="text" id="tag-add-name" class="field" maxlength="60" aria-describedby="tag-create-error">
-    <span class="text-sm muted">Color</span>
-    {{template "colorSwatches" .Presets}}
-    <div class="color-custom-row">
-      <input type="color" id="tag-add-color-picker" value="{{.DefaultColor}}" aria-label="Custom color">
-      <input type="text" id="tag-add-color-hex" class="field" value="{{.DefaultColor}}" placeholder="#rrggbb" maxlength="7" aria-label="Color hex code">
+  {{else}}<p class="form-help tag-available-note">{{if .Tags}}All existing tags are already on this artifact.{{else}}Create your first tag below.{{end}}</p>{{end}}
+  <div id="tag-add-error" class="text-sm tag-error" role="alert" hidden></div>
+  <fieldset id="tag-add-create-fields" class="tag-create" aria-labelledby="tag-create-heading">
+    <h3 id="tag-create-heading" class="tag-section-heading">Create new tag</h3>
+    <div class="tag-name-field">
+      <label for="tag-add-name" class="field-label">Name</label>
+      <input type="text" id="tag-add-name" class="field" maxlength="60" required aria-describedby="tag-create-name-hint tag-create-name-error">
+      <div class="tag-field-feedback"><div class="form-help" id="tag-create-name-hint">Up to 60 characters.</div><div id="tag-create-name-error" class="form-help tag-field-error" role="alert" hidden></div></div>
     </div>
-    <button type="button" class="btn btn-sm" id="tag-create-confirm"><i class="ph ph-plus" aria-hidden="true"></i> Create and add tag</button>
+    {{template "tagColorFields" (tagColors "tag-add" .Presets)}}
+    <button type="button" class="btn" id="tag-create-confirm" disabled><i class="ph ph-plus" aria-hidden="true"></i> <span id="tag-create-label">Create and add tag</span></button>
     <div id="tag-create-error" class="text-sm tag-error" role="alert" hidden></div>
-  </div>
+  </fieldset>
 </div>{{end}}
 
 {{/* capabilityCluster renders the gallery card's / viewer toolbar's neutral
@@ -182,7 +205,7 @@
      hover/focus alone just apply a CSS affordance highlight
      (.capability-cluster:hover/:focus-visible) without opening anything.
      Data: capabilityView (gallery.go). */}}
-{{define "capabilityCluster"}}{{if .HasTrigger}}<div class="capability-wrap"><div class="capability-cluster{{if not .Sandboxed}} has-grants{{end}}" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-{{.ArtifactID}}" data-capability-trigger{{if .Compact}} aria-label="{{if .Share.Level}}Permissions and sharing{{else}}Permissions{{end}}"{{end}}>{{if .Sandboxed}}{{if not .Compact}}<span class="capability-glyph"><i class="ph ph-shield-check"></i></span> Sandboxed{{end}}{{else}}{{if .NetworkAllowlist}}<span class="capability-glyph"><i class="ph ph-globe"></i></span><span class="capability-count">{{len .NetworkAllowlist}}</span>{{end}}{{if .DownloadsApproved}}<span class="capability-glyph"><i class="ph ph-download-simple"></i></span>{{end}}{{if .ClipboardApproved}}<span class="capability-glyph"><i class="ph ph-clipboard"></i></span>{{end}}{{if .LinksApproved}}<span class="capability-glyph"><i class="ph ph-arrow-square-out"></i></span>{{end}}{{if .CameraApproved}}<span class="capability-glyph"><i class="ph ph-camera"></i></span>{{end}}{{if .MicrophoneApproved}}<span class="capability-glyph"><i class="ph ph-microphone"></i></span>{{end}}{{if .GeolocationApproved}}<span class="capability-glyph"><i class="ph ph-map-pin"></i></span>{{end}}{{end}}{{if .Share.Level}}<span class="capability-glyph capability-share capability-share-{{.Share.Level}}"><i class="ph {{.Share.Icon}}"></i></span>{{end}}</div>{{template "capabilityPopover" .}}</div>{{end}}{{end}}
+{{define "capabilityCluster"}}{{if .HasTrigger}}<div class="capability-wrap" data-controller="capability-popover" data-action="capability:changed->capability-popover#sync"><div class="capability-cluster{{if not .Sandboxed}} has-grants{{end}}" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-{{.ArtifactID}}" data-capability-trigger{{if .Compact}} aria-label="{{if .Share.Level}}Permissions and sharing{{else}}Permissions{{end}}"{{end}}>{{if .Sandboxed}}{{if not .Compact}}<span class="capability-glyph"><i class="ph ph-shield-check"></i></span> Sandboxed{{end}}{{else}}{{if .NetworkAllowlist}}<span class="capability-glyph"><i class="ph ph-globe"></i></span><span class="capability-count">{{len .NetworkAllowlist}}</span>{{end}}{{if .DownloadsApproved}}<span class="capability-glyph"><i class="ph ph-download-simple"></i></span>{{end}}{{if .ClipboardApproved}}<span class="capability-glyph"><i class="ph ph-clipboard"></i></span>{{end}}{{if .LinksApproved}}<span class="capability-glyph"><i class="ph ph-arrow-square-out"></i></span>{{end}}{{if .CameraApproved}}<span class="capability-glyph"><i class="ph ph-camera"></i></span>{{end}}{{if .MicrophoneApproved}}<span class="capability-glyph"><i class="ph ph-microphone"></i></span>{{end}}{{if .GeolocationApproved}}<span class="capability-glyph"><i class="ph ph-map-pin"></i></span>{{end}}{{end}}{{if .Share.Level}}<span class="capability-glyph capability-share capability-share-{{.Share.Level}}"><i class="ph {{.Share.Icon}}"></i></span>{{end}}</div>{{template "capabilityPopover" .}}</div>{{end}}{{end}}
 
 {{/* postureGlyph is the detail page's posture mark (Exh-ghuv): it sits in
      front of the artifact's title in the floating controls, and the title is
@@ -267,15 +290,15 @@
      htmx replaces the contents of #share-body underneath it, so a listener
      bound inside that region would be bound to a node that no longer exists
      after the first change. */}}
-{{define "sharePanel"}}<dialog id="share-panel" class="modal-dialog share-modal" aria-labelledby="share-title"
+{{define "sharePanel"}}<dialog id="share-panel" class="modal-dialog modal-sheet share-modal" aria-labelledby="share-title"
   data-controller="modal">
-    <h2 id="share-title"><i class="ph ph-share-network"></i> Share artifact</h2>
-    <fieldset id="share-body" aria-label="Sharing controls"
+    <div class="modal-header"><h2 id="share-title">Share artifact</h2>{{template "modalClose"}}</div>
+    <div class="modal-body"><fieldset id="share-body" class="modal-fields" aria-label="Sharing controls"
          hx-get="/partials/share-panel?artifact={{.ID}}"
          hx-trigger="exhibit:shares-changed from:body"
-         hx-swap="innerHTML">{{template "sharePanelBody" .Share}}</fieldset>
-    <div class="modal-actions">
-      <span id="share-status" class="text-sm muted" role="status" aria-live="polite"></span>
+         hx-swap="innerHTML">{{template "sharePanelBody" .Share}}</fieldset></div>
+    <div class="modal-actions modal-footer">
+      <span id="share-status" class="form-help" role="status" aria-live="polite"></span>
       <button type="button" class="btn btn-sec" id="share-close" data-modal-dismiss>Done</button>
     </div>
 </dialog>{{end}}
@@ -291,9 +314,9 @@
 
      Data: sharePanelView (gallery.go). */}}
 {{define "sharePanelBody"}}<div class="share-cols" data-artifact-id="{{.ArtifactID}}">
-  <p class="share-help">Sharing can expose saved results from connected accounts, but never grants account access.</p>
+  <p class="share-data-note" role="note"><i class="ph ph-info" aria-hidden="true"></i><span>Sharing can expose saved results from connected accounts, but never grants account access.</span></p>
   <section class="share-col">
-    <h3 class="text-sm muted">Public link</h3>
+    <h3>Public link</h3>
     {{/* A toggle, not a create button, because an artifact has exactly one
          anonymous link (a partial unique index, av-lrae): on mints the row and
          shows the URL, off deletes it and the URL dies. Nothing accumulates a
@@ -304,9 +327,8 @@
          to know about it. */}}
     <label class="modal-check">
       <input type="checkbox" id="share-link-toggle" aria-describedby="share-link-permissions"{{if .Shares.Link}} checked data-share-id="{{.Shares.Link.ID}}"{{end}}>
-      <span class="spacer">Anyone with the link can open this artifact</span>
+      <span class="spacer">Anyone with the link can open this artifact<small id="share-link-permissions">Visitors can view your saved data but cannot change it, in either data mode.</small></span>
     </label>
-    <p id="share-link-permissions">Visitors can view your saved data but cannot change it, in either data mode.</p>
     {{if .Shares.Link}}
     <div class="share-link-row">
       <input type="text" id="share-link-url" class="field" readonly value="{{.Shares.Link.URL}}" aria-label="Public link">
@@ -315,9 +337,9 @@
     {{/* Rotation earns its own control: a leaked link wants replacing, and
          toggling off then on gets there while leaving the user unsure it
          worked. One step, and it says outright what it costs. */}}
-    <div class="btn-row">
+    <div class="btn-row share-replace-row">
       <button type="button" class="btn btn-sm btn-sec" id="share-link-replace"><i class="ph ph-arrows-clockwise"></i> Replace link</button>
-      <span class="text-sm muted">The current link stops working.</span>
+      <span class="form-help">The current link stops working.</span>
     </div>
     {{/* The shared tile (av-ei5h): an iframe snippet for the link's widget,
          or its default tile when it has none (av-cp7j). The URL inside is
@@ -329,7 +351,7 @@
       <input type="text" id="share-widget-embed" class="field" readonly value="{{.WidgetEmbed}}" aria-label="Shared widget embed code">
       <button type="button" class="btn btn-sm btn-sec" id="share-widget-copy"><i class="ph ph-copy"></i> Copy</button>
     </div>
-    <p class="text-sm muted">A read-only card widget showing this artifact’s saved data.</p>
+    <p class="form-help">A read-only card widget showing this artifact’s saved data.</p>
     </details>
     {{end}}
     {{end}}
@@ -337,7 +359,7 @@
   </section>
 
   <section class="share-col">
-    <h3 class="text-sm muted">People</h3>
+    <h3>People</h3>
     {{/* One field taking several names and one submit: "gave friends access,
          dropped the link in the group chat" is one gesture, not three. The
          field confirms existence deliberately — answering "added" for a name
@@ -347,7 +369,7 @@
     <label for="share-add-input" class="text-sm">Add people</label>
     <p class="share-help" id="share-add-help">Enter existing Exhibit usernames or emails, separated by commas.</p>
     <form class="share-add" id="share-add-form" method="post" action="/api/shares">
-      <input type="text" id="share-add-input" autofocus name="recipients" class="field" aria-describedby="share-add-help" placeholder="Username or email" autocomplete="off" data-1p-ignore data-bwignore="true" data-lpignore="true" data-protonpass-ignore="true" enterkeyhint="done" aria-label="Usernames or emails, separated by commas">
+      <input type="text" id="share-add-input" name="recipients" class="field" aria-describedby="share-add-help" placeholder="Username or email" autocomplete="off" data-1p-ignore data-bwignore="true" data-lpignore="true" data-protonpass-ignore="true" enterkeyhint="done" aria-label="Usernames or emails, separated by commas">
       <button type="submit" class="btn btn-sm">Give access</button>
     </form>
     <div class="share-people-list" tabindex="0" role="region" aria-label="People with access">
@@ -367,7 +389,7 @@
   </section>
 
   <section class="share-col state-sharing" aria-labelledby="state-sharing-title">
-    <h3 id="state-sharing-title" class="text-sm muted">Saved data for people you add</h3>
+    <h3 id="state-sharing-title">Saved data for people you add</h3>
     <fieldset id="share-state-mode" data-saved-mode="{{if .StateModeShared}}shared{{else}}own{{end}}">
       <legend class="sr-only">Saved data for people you add</legend>
       <div class="state-choices">
@@ -389,7 +411,7 @@
         </label>
       </div>
     </fieldset>
-    <p class="share-help">Review your saved data before sharing.</p>
+    <p class="share-help form-help">Review your saved data before sharing.</p>
     <details class="state-how-it-works" id="state-how-it-works">
       <summary><i class="ph ph-caret-right state-how-closed" aria-hidden="true"></i><i class="ph ph-caret-down state-how-open" aria-hidden="true"></i> What happens when I switch?</summary>
       <p><strong>Switch to separate data:</strong> you keep using your saved data. Each person returns to their own previously saved data, or starts empty if they have none. Your shared data is not copied to them.</p>
@@ -440,18 +462,18 @@
 {{define "assetPanelRows"}}
 <div data-artifact-id="{{.ArtifactID}}">
   {{if not .Loaded}}
-    <p class="text-sm muted">Loading assets…</p>
+    <p class="form-help">Loading assets…</p>
   {{else if .Assets}}
-    <p class="text-sm muted">{{len .Assets}} {{if eq (len .Assets) 1}}asset{{else}}assets{{end}} · {{.TotalBytes}} bytes</p>
+    <p class="form-help">{{len .Assets}} {{if eq (len .Assets) 1}}asset{{else}}assets{{end}} · {{.TotalBytes}} bytes</p>
     {{range .Assets}}
       <div class="asset-row">
         <code class="asset-url">{{.SourceURL}}</code>
         <span class="text-sm muted asset-meta">{{.SizeBytes}} B · {{.ContentType}}</span>
-        <button type="button" class="btn btn-sm btn-danger" data-delete-asset="{{.ID}}" data-source-url="{{.SourceURL}}" title="Delete this asset" aria-label="Delete {{.SourceURL}}"><i class="ph ph-trash" aria-hidden="true"></i></button>
+        <button type="button" class="btn btn-sm btn-sec btn-danger-outline" data-delete-asset="{{.ID}}" data-source-url="{{.SourceURL}}" title="Delete this asset" aria-label="Delete {{.SourceURL}}"><i class="ph ph-trash" aria-hidden="true"></i></button>
       </div>
     {{end}}
   {{else}}
-    <p class="text-sm muted">This artifact stores no assets of its own.</p>
+    <p class="form-help">This artifact stores no assets of its own.</p>
   {{end}}
 </div>
 {{end}}

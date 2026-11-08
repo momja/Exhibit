@@ -6,17 +6,35 @@ import (
 	"github.com/momja/Exhibit/internal/store"
 )
 
-// Presets is the preset swatch palette offered in the tag edit/add modals,
-// alongside a custom hex input. A small, distinct, colorblind-friendlyish
-// spread rather than an exhaustive picker.
-var Presets = []string{
-	"#6B7280", // gray (store.DefaultTagColor)
-	"#EF4444", // red
-	"#F59E0B", // amber
-	"#10B981", // green
-	"#3B82F6", // blue
-	"#8B5CF6", // purple
-	"#EC4899", // pink
+var tagPalette = []struct{ hex, name string }{
+	{"#6B7280", "Gray"}, // store.DefaultTagColor
+	{"#B86562", "Red"},
+	{"#AB7B3E", "Amber"},
+	{"#377A64", "Green"},
+	{"#42838C", "Teal"},
+	{"#527CB0", "Blue"},
+	{"#8470AC", "Violet"},
+	{"#AC6F92", "Pink"},
+}
+
+// Presets is the ordered swatch palette offered alongside a custom hex input.
+var Presets = func() []string {
+	hexes := make([]string, len(tagPalette))
+	for i, preset := range tagPalette {
+		hexes[i] = preset.hex
+	}
+	return hexes
+}()
+
+// PresetName names the palette for people choosing a color, while the hex value
+// remains available for precise custom colors.
+func PresetName(hex string) string {
+	for _, preset := range tagPalette {
+		if strings.EqualFold(hex, preset.hex) {
+			return preset.name
+		}
+	}
+	return "Custom"
 }
 
 // Normalize validates a tag color for safe use inside an HTML style

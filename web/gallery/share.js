@@ -67,7 +67,9 @@ function initializeSharePanel() {
     if (input) input.value = '';
   });
   document.getElementById('share-open').addEventListener('click', event => {
-    dialog.show(event.currentTarget);
+    if (dialog.show(event.currentTarget)) {
+      panel.querySelector('.modal-body')?.scrollTo({ top: 0 });
+    }
     if (needsRefresh) refresh();
     else status('');
   });

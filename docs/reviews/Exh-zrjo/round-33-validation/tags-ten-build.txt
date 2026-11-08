@@ -1,0 +1,1 @@
+Copied gallery page assets -> internal/api/assets/gallery

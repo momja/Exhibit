@@ -1,0 +1,20 @@
+
+> test
+> playwright test
+
+
+Running 9 tests using 1 worker
+
+(node:4090867) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium] › specs/duplicate.spec.ts:23:1 › keyboard focus stays in the modal and every cancellation path restores the menu trigger (4.2s)
+  ✓  2 [chromium] › specs/duplicate.spec.ts:49:1 › save refreshes server-rendered cards and replacement components work across two cycles (1.8s)
+  ✓  3 [chromium] › specs/duplicate.spec.ts:86:1 › Escape, backdrop, and repeated submission cannot dismiss or duplicate an in-flight save (1.2s)
+  ✓  4 [chromium] › specs/duplicate.spec.ts:121:1 › a committed save with a lost response retries the same identity and creates only one copy (1.2s)
+  ✓  5 [chromium] › specs/duplicate.spec.ts:155:1 › a definite refusal leaves editable input and permits a corrected save (1.0s)
+  ✓  6 [chromium] › specs/state.spec.ts:7:1 › localStorage survives reload and a fresh owner browser context through server state (1.9s)
+  ✓  7 [chromium] › specs/ui-feedback.spec.ts:3:1 › creation validation names and focuses the field for each method (1.4s)
+  ✓  8 [chromium] › specs/ui-feedback.spec.ts:41:1 › pending creation submits once, preserves input, and recovers from a refusal (1.1s)
+  ✓  9 [chromium] › specs/ui-feedback.spec.ts:73:1 › history and viewer controls fit a narrow phone and enlarged text (2.5s)
+
+  9 passed (18.9s)
