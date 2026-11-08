@@ -77,6 +77,8 @@ var accountTables = map[string]accountTable{
 		"SELECT COUNT(*) FROM collections WHERE owner_id = ?1"},
 	"agent_grants": {reachExplicit, "owner-issued library credentials, removed explicitly because no users FK exists on no-login instances",
 		"SELECT COUNT(*) FROM agent_grants WHERE owner_id = ?1"},
+	"owner_settings": {reachExplicit, "account-wide preferences, removed explicitly because no users FK exists on no-login instances",
+		"SELECT COUNT(*) FROM owner_settings WHERE owner_id = ?1"},
 	"agent_keys": {reachExplicit, "the sealed BYO provider key, owner-scoped and reached by no cascade",
 		"SELECT COUNT(*) FROM agent_keys WHERE owner_id = ?1"},
 	"connections": {reachExplicit, "encrypted external account credentials belong to their viewer, independently of artifacts",
@@ -277,6 +279,7 @@ func seedEverything(t *testing.T, s *SQLiteStore) accountFixture {
 
 	_, err = s.CreateAgentGrant(ctx, member.ID, "External agent", "", "member-token-digest")
 	require.NoError(t, err)
+	require.NoError(t, s.SetAgentStateAccessDefault(ctx, member.ID, true))
 
 	tag := &Tag{ID: "member-tag", OwnerID: member.ID, Name: "fitness"}
 	require.NoError(t, s.CreateTag(ctx, tag))

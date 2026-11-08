@@ -134,6 +134,7 @@
       <p class="form-help">
         Data saved by this artifact syncs across your devices.
       </p>
+      {{template "agentStateAccessControl" .}}
       <div id="state-rows"></div>
       <div class="state-add" id="state-add">
         <input type="text" id="state-add-key" class="field" placeholder="New key">
@@ -336,3 +337,27 @@ let geolocationApproved = {{if .GeolocationApproved}}true{{else}}false{{end}};
 <script type="module" src="{{asset "gallery/tags.js"}}"></script>
 </body>
 </html>{{end}}
+
+
+{{/* Whether agents may read and change this artifact's saved data (Exh-dabd).
+     Applied the moment it changes, like the share panel, rather than through
+     the page's Save: it is a privacy decision, and one left pending behind an
+     unsaved editor would be one the person believes they made and did not.
+     The "inherit" label says what the account default currently is, so the
+     choice is never a guess. Data: editPageData. */}}
+{{define "agentStateAccessControl"}}<div class="state-agent-access" id="agent-state-access"
+     data-controller="agent-state-access"
+     data-agent-state-access-url-value="/api/artifacts/{{.ID}}"
+     data-agent-state-access-method-value="PATCH"
+     data-agent-state-access-field-value="agent_state_access">
+  <label class="row" for="agent-state-select">
+    <span class="spacer text-sm"><i class="ph ph-robot" aria-hidden="true"></i> Agents can read and change this data</span>
+    <select id="agent-state-select" class="select" data-agent-state-access-target="input" data-action="change->agent-state-access#save">
+      <option value="inherit"{{if eq .AgentState.Access "inherit"}} selected{{end}}>Use account default ({{if .AgentState.AccountDefault}}allowed{{else}}not allowed{{end}})</option>
+      <option value="allow"{{if eq .AgentState.Access "allow"}} selected{{end}}>Allow</option>
+      <option value="deny"{{if eq .AgentState.Access "deny"}} selected{{end}}>Don't allow</option>
+    </select>
+  </label>
+  <p class="text-sm muted">An agent sends what it reads to the AI provider that runs it. When this is not allowed, agents still see the artifact's code and anything you select or paste into the chat. Change the default for every artifact in <a href="/settings#agent-state-access">Settings</a>.</p>
+  <span class="text-sm muted" data-agent-state-access-target="status" role="status" aria-live="polite"></span>
+</div>{{end}}

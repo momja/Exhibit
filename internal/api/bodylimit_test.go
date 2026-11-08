@@ -126,6 +126,7 @@ var writeRoutes = []struct {
 	{"POST", "/api/admin/users/", true},
 	{"PATCH", "/api/admin/users/{userID}", true},
 	{"DELETE", "/api/account", false},
+	{"PUT", "/api/settings/agent-state-access", true},
 	{"POST", "/api/agent-grants", true},
 	{"DELETE", "/api/agent-grants/{grantID}", false},
 	{"POST", "/api/shares/", true},

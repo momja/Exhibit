@@ -16,10 +16,10 @@ Built-in and connected agents should reach for decide() when a tool needs a judg
 
 ## Design
 
-- internal/agentguidance: describe only the kinds the instance has configured. Rules: use decide() for anything that drives logic (route, gate, classify, score), keep thresholds in the artifact's code and treat unsure as a real outcome; use complete() for prose; check window.exhibit.ai.available() and handle unavailable (shared via public link, opened directly, exported); never put saved data in a prompt without the person's knowledge.
+- internal/agentguidance: describe only the kinds the instance has configured. Rules: use decide() for anything that drives logic (route, gate, classify, score), keep thresholds in the artifact's code and treat low confidence as a real outcome; use complete() for prose; check window.exhibit.ai.available() and handle unavailable (shared via public link, opened directly, exported); never put saved data in a prompt without the person's knowledge.
 - With inference disabled, the guidance says nothing about it, so the agent doesn't write calls that cannot work.
 - An example artifact under examples/ that uses decide() to triage items and complete() to summarise them, with a widget that reads the saved result, and that still works with either kind missing.
-- docs/inference.md covering configuration of both provider families, the payer rule, limits and the approval flow; PRD and architecture entries per the docs convention.
+- docs/inference.md covering configuration of both models (INFERENCE_MODEL and INFERENCE_DECISION_MODEL), the payer rule, limits and the approval flow; PRD and architecture entries per the docs convention.
 
 ## Acceptance Criteria
 

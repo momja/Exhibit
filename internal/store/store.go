@@ -126,6 +126,12 @@ type Artifact struct {
 	// The owner's share panel writes it through PATCH (av-6xjd); what the
 	// value *means* at render time is av-v991's.
 	ShareStateMode string `json:"share_state_mode"`
+	// AgentStateAccess is the owner's per-artifact answer to "may an agent read
+	// and change this tool's saved data?" (Exh-dabd): AgentStateInherit, the
+	// default, follows the owner's account setting; AgentStateAllow and
+	// AgentStateDeny override it. AgentStateAllowed is the only place it is
+	// read, and only the owner writes it — never an agent principal.
+	AgentStateAccess string `json:"agent_state_access"`
 	// ShareGrantCount and SharePublicLink are the artifact's sharing state as
 	// the gallery card reads it (av-6xjd) — how many accounts hold a grant,
 	// and whether its one anonymous link exists.
@@ -198,6 +204,40 @@ func (a *Artifact) StatePrincipal(viewer ViewerID) ViewerID {
 // ApprovalColumns makes for the capability flags.
 func ValidShareStateMode(v string) bool {
 	return v == ShareStateOwn || v == ShareStateShared
+}
+
+// AgentStateInherit is Artifact.AgentStateAccess's default: the artifact
+// follows its owner's account-wide setting. AgentStateAllow and AgentStateDeny
+// are the owner's explicit answer for this one artifact.
+const (
+	AgentStateInherit = "inherit"
+	AgentStateAllow   = "allow"
+	AgentStateDeny    = "deny"
+)
+
+// ValidAgentStateAccess reports whether v is a value the column may hold. The
+// API handler (a 400) and UpdateArtifact (a refused write) both ask it, so the
+// two cannot disagree about what is storable.
+func ValidAgentStateAccess(v string) bool {
+	return v == AgentStateInherit || v == AgentStateAllow || v == AgentStateDeny
+}
+
+// AgentStateAllowed answers whether an agent may read and change this
+// artifact's saved data, given the owner's account-wide default (Exh-dabd).
+//
+// It is the single resolution point. Anything that is not an explicit
+// AgentStateAllow falls back to the account default only when it is
+// AgentStateInherit; every other value — AgentStateDeny, or a zero-valued
+// Artifact — refuses, so an unset field fails towards keeping data private.
+func (a *Artifact) AgentStateAllowed(accountDefault bool) bool {
+	switch a.AgentStateAccess {
+	case AgentStateAllow:
+		return true
+	case AgentStateInherit:
+		return accountDefault
+	default:
+		return false
+	}
 }
 
 // DefaultTagColor is applied to a tag when no color is supplied.
@@ -669,6 +709,12 @@ type Store interface {
 	// provider key; GetAgentKey returns nil when none is set.
 	SetAgentKey(ctx context.Context, k *AgentKey) error
 	GetAgentKey(ctx context.Context, ownerID int64) (*AgentKey, error)
+	// AgentStateAccessDefault is the owner's account-wide answer to whether
+	// agents may read and change saved data (Exh-dabd); false when the owner
+	// never set it. Artifact.AgentStateAllowed combines it with an artifact's
+	// own override. SetAgentStateAccessDefault upserts it.
+	AgentStateAccessDefault(ctx context.Context, ownerID int64) (bool, error)
+	SetAgentStateAccessDefault(ctx context.Context, ownerID int64, allowed bool) error
 	DeleteAgentKey(ctx context.Context, ownerID int64) error
 	// Agent conversations kept with an artifact (av-y7td), one per session.
 	// SaveTranscript upserts one, stamping it with the artifact's head

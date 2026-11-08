@@ -1540,7 +1540,8 @@ manage grants, so it cannot extend its own connection's lifetime.
 
 **One credential, one owner's own artifacts.** `agentScopeAllows` admits
 listing/searching and creating artifacts, reading and PATCHing them, read-only
-state and asset metadata, and widget reads/writes. Owner-scoped queries exclude
+state (where the owner allows agents to use saved data, §5.6) and asset
+metadata, and widget reads/writes. Owner-scoped queries exclude
 other owners and artifacts shared with this owner alike (`404`). Routes outside
 that allowlist are refused, including shares, artifact deletion, versions and
 restore, account/admin operations, and pages. The MCP tools are narrower still
@@ -1613,6 +1614,43 @@ no new connections, grants or OAuth endpoints; existing grants remain listable
 and revocable. Taking the endpoint offline also requires stopping the satellite.
 The core never serves `/mcp`. See `deployment.md` for the optional service and
 proxy routing.
+
+### 5.6 Saved data stays away from agents unless the owner allows it
+
+An agent runs on an inference provider: Pi sends its tool results to whichever
+provider the BYO key or platform key names, and a connected agent sends them to
+the provider behind the user's own client. A state tool is therefore a way for
+what a person typed into their tools — a journal, a budget, health numbers — to
+leave the instance. Whether it may is the owner's decision, and the default is
+no, in keeping with §5's deny-by-default stance (Exh-dabd).
+
+- **Two answers, one resolver.** `owner_settings.agent_state_access` is the
+  account-wide default (off; a missing row reads as off), and
+  `artifacts.agent_state_access` is a per-artifact override: `inherit`, `allow`
+  or `deny`. `Artifact.AgentStateAllowed(default)` is the only place they are
+  combined, and every value other than `allow`, or `inherit` with the default on,
+  refuses — a zero-valued artifact fails towards keeping data private.
+- **Enforced on the state routes, for both kinds of agent.** Every state
+  operation an agent principal can reach goes through `artifactExists`
+  (`internal/api/state.go`), which answers `403` with no data when access is
+  off. Pi leaving `get_state`/`set_state`/`delete_state` unregistered, and its
+  prompt saying saved data is unavailable, only keeps the model from asking.
+- **An agent cannot widen it.** PATCH `agent_state_access` from an agent
+  principal is refused (as `share_state_mode` is), and
+  `/api/settings/agent-state-access` is outside `agentScopeAllows` and refuses
+  agent principals in its handler too. A prompt-injected session that controls
+  the PATCH body still cannot grant itself the data.
+- **Not versioned, and kept by a copy.** Like the capability approvals it is not
+  part of version history; duplicating an artifact copies the override, so a
+  copy of a `deny` artifact cannot fall back to a permissive account default.
+
+**What it does not cover.** The setting governs the state routes. An agent still
+reads the artifact's source, which may embed sample or default data, and
+anything the person selects in the preview (`get_selection` carries rendered
+markup, which can show saved values) or types or pastes into the chat. A
+connector's response stored as saved data is saved data like any other. Data an
+agent read while access was allowed is already with the provider; turning access
+off stops the next request, not earlier ones.
 
 ## 6. Residual risk
 

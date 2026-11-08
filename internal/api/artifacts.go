@@ -590,6 +590,23 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Nor may it decide that it can read the person's saved data (Exh-dabd):
+	// a session that could set this would grant itself the access the setting
+	// exists to withhold. Refused on presence, for the reason above.
+	if _, ok := updates["agent_state_access"]; ok && principalFromCtx(r.Context()).Kind == PrincipalAgentGrant {
+		writeError(w, http.StatusForbidden,
+			"agent_state_access is set by the artifact's owner, not by an agent")
+		return
+	}
+	if v, ok := updates["agent_state_access"]; ok {
+		access, isString := v.(string)
+		if !isString || !store.ValidAgentStateAccess(access) {
+			writeError(w, http.StatusBadRequest,
+				`agent_state_access must be "`+store.AgentStateInherit+`", "`+store.AgentStateAllow+`" or "`+store.AgentStateDeny+`"`)
+			return
+		}
+	}
+
 	// The capability-bridge approval flags are strict booleans; reject anything
 	// else up front so a bad PATCH is a 400, not a stored value that later
 	// fails to scan. The list is store.ApprovalColumns rather than a literal
