@@ -220,9 +220,12 @@ func TestEnlargedComposerNoticesBrowser(t *testing.T) {
 				checkControls()
 				// Native focus must reveal both account actions without moving the
 				// input or Send out of view. The warning and request text stay present.
+				// Notices scroll in their own capped region, so enlarged text can make
+				// an item taller than that region. A focused item must then fill all of
+				// it, unobstructed, and the rest is reached by scrolling.
 				for _, selector := range []string{"#agent-network-warnings strong", "#agent-network-warnings li:last-child", "#agent-connection-requests a:first-of-type", "#agent-connection-requests a:last-of-type"} {
 					b.eval(fmt.Sprintf(`{const item=document.querySelector(%q);item.focus();item.scrollIntoView({block:'nearest'})}`, selector))
-					b.check(fmt.Sprintf(`(() => {const item=document.querySelector(%q),box=item.getBoundingClientRect();return box.top>=0 && box.bottom<=innerHeight && [box.top+1,box.y+box.height/2,box.bottom-1].every(y=>item.contains(document.elementFromPoint(box.x+box.width/2,y)))})()`, selector))
+					b.check(fmt.Sprintf(`(() => {const item=document.querySelector(%q),box=item.getBoundingClientRect(),region=item.closest('.composer-notices')?.getBoundingClientRect()??{top:0,bottom:innerHeight,height:innerHeight};const top=Math.max(box.top,region.top,0),bottom=Math.min(box.bottom,region.bottom,innerHeight);return bottom-top>=Math.min(box.height,region.height)-1 && [top+1,(top+bottom)/2,bottom-1].every(y=>item.contains(document.elementFromPoint(box.x+box.width/2,y)))})()`, selector))
 					checkControls()
 				}
 				b.check(`document.querySelector('.connection-request-notice').textContent.includes('Show my saved reading list') && document.querySelector('[data-network-warning="no_cors"]').textContent.includes('opaque, unreadable')`)

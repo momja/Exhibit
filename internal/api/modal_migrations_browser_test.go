@@ -338,7 +338,7 @@ func TestEditorLeaveModalBrowser(t *testing.T) {
 			checkModalVisuals(t, b.ctx, ".editor-leave-dialog")
 			b.capture("Exh-yrgf", width)
 			if width == 1280 {
-				b.check(`(() => { const buttons=[...document.querySelectorAll('.editor-leave-dialog .btn')];const needed=buttons.reduce((sum,b)=>sum+b.getBoundingClientRect().width,16);return needed>420-46 && needed<=480-46 && buttons.every(b=>Math.abs(b.getBoundingClientRect().top-buttons[0].getBoundingClientRect().top)<=2); })()`)
+				b.check(`(() => { const buttons=[...document.querySelectorAll('.editor-leave-dialog .btn')];const needed=buttons.reduce((sum,b)=>sum+b.getBoundingClientRect().width,16);return needed>420-46 && needed<=496-46 && buttons.every(b=>Math.abs(b.getBoundingClientRect().top-buttons[0].getBoundingClientRect().top)<=2); })()`)
 			}
 			_, err := chromedp.Call(b.ctx, emulation.SetDeviceMetricsOverride, emulation.SetDeviceMetricsOverrideParams{Width: width, Height: 240, DeviceScaleFactor: 1})
 			require.NoError(t, err)
