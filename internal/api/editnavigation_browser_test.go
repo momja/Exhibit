@@ -86,7 +86,7 @@ func TestEditNavigationBrowser(t *testing.T) {
 			check(`Math.abs(scrollY - Number(sessionStorage.getItem('navigation-test-scroll'))) < 20 && new URLSearchParams(location.search).get('q') === 'Navigation'`, "return restores results, search, and scroll")
 			navigate(fmt.Sprintf(`document.querySelector('.card[data-href="/artifacts/%s"] .card-title').click()`, id))
 			wait(`document.getElementById('pip-more')`)
-			check(`document.querySelector('#pip a[aria-label="Starred"] .ph-star') && document.querySelector('#pip a[aria-label="Starred"]').textContent.trim() === ''`, "Library is an icon-only destination")
+			check(`document.querySelector('#pip a[aria-label="Starred"] .ph-star') && document.querySelector('#pip a[aria-label="Starred"]').textContent.trim() === ''`, "Starred is an icon-only destination")
 			navigate(`document.querySelector('#pip-menu a[href$="/edit"]').click()`)
 			wait(`document.querySelector('.cm-editor') && document.querySelector('.app-header-back').textContent.includes('Navigation renamed')`)
 			check(`new URLSearchParams(location.search).get('return_to') === location.pathname.replace('/edit','')`, "artifact return is recorded explicitly")
