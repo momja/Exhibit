@@ -55,6 +55,8 @@ type pageRoute struct {
 var appOriginGETRoutePaths = []pageRoute{
 	{route: "/.well-known/oauth-authorization-server", path: "/.well-known/oauth-authorization-server"},
 	{route: "/oauth/authorize", path: "/oauth/authorize"},
+	{route: "/search", path: "/search?q=owner"},
+	{route: "/partials/gallery-grid/search", path: "/partials/gallery-grid/search?q=owner"},
 	{route: "/shared", path: "/shared"},
 	{route: "/shared-by-me", path: "/shared-by-me"},
 	{route: "/partials/gallery-grid/shared", path: "/partials/gallery-grid/shared"},

@@ -76,6 +76,8 @@ var appOriginGETRoutes = []getRoute{
 	{route: "/.well-known/oauth-authorization-server"},
 	// Consent GET only displays authority; approval is a protected POST.
 	{route: "/oauth/authorize"},
+	{route: "/search"},
+	{route: "/partials/gallery-grid/search"},
 	{route: "/shared"},
 	{route: "/shared-by-me"},
 	{route: "/partials/gallery-grid/shared"},

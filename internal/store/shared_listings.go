@@ -40,6 +40,10 @@ func listArtifactsSharedWithQuery(viewer ViewerID, opts SharedListOptions) (stri
 
 func (s *SQLiteStore) ListArtifactsSharedWith(ctx context.Context, viewer ViewerID, opts SharedListOptions) ([]*SharedArtifact, error) {
 	query, args := listArtifactsSharedWithQuery(viewer, opts)
+	return s.listArtifactsWithOwner(ctx, query, args)
+}
+
+func (s *SQLiteStore) listArtifactsWithOwner(ctx context.Context, query string, args []any) ([]*SharedArtifact, error) {
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err

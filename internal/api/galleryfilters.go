@@ -33,6 +33,11 @@ type galleryFilters struct {
 // Filter choices always come from the principal's complete library, independent
 // of search and the selected space. Incoming shares expose their owners instead.
 func (ro *Router) loadGalleryFilters(r *http.Request, gallery galleryDefinition, grid *galleryGridData) error {
+	// Global search deliberately has no provenance or owner-only filters.
+	if gallery.SearchPage {
+		grid.Parameters = url.Values{}
+		return nil
+	}
 	owner := ownerIDFromCtx(r.Context())
 	var sections []galleryFilterSection
 	if gallery.ReadOnly {

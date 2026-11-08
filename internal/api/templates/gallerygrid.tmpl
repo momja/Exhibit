@@ -1,6 +1,7 @@
 {{/* Shared gallery components. Data: galleryGridData. A gallery supplies its
      own ID and endpoint; these partials know nothing about its selection rule. */}}
-{{define "gallerySearch"}}<form class="search-row" role="search" id="{{.ID}}-search" data-gallery-search
+{{define "gallerySearch"}}<form class="search-row" role="search" id="{{.ID}}-search" data-gallery-search data-gallery-preserve-query="{{.SearchPage}}"
+      action="{{.PagePath}}" method="get"
       hx-get="{{.FragmentPath}}" hx-trigger="submit, exhibit:gallery-search"
       hx-target="#{{.ID}}-results" hx-swap="innerHTML" hx-sync="#{{.ID}}:replace">
   {{if .Filters.Sections}}{{template "gallerySearchParameters" .}}{{end}}<i class="ph ph-magnifying-glass search-icon" aria-hidden="true"></i>

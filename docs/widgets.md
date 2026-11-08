@@ -236,8 +236,10 @@ markup, so the tile starts from a sane floor and can override anything.
 - Always render a calm **empty state** — never `NaN`, `undefined`, or a blank
   box.
 - Never draw a button, input, link, or anything that looks tappable.
-- One file, everything inline, no external references, inline SVG for charts
-  and glyphs.
+- Inline SVG for charts and glyphs. A widget may load a library only from an
+  origin the artifact already has approved: it inherits the artifact's
+  allowlist and nobody is asked about a widget's own origins, so anything
+  else is blocked (Exh-l0wi).
 - Read on both a light and a dark card: the gallery follows the system color
   scheme (av-xie4). Declare `color-scheme: light dark`, keep the background
   transparent, and put colors in custom properties with dark values under

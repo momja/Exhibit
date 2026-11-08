@@ -546,7 +546,9 @@ and [phone](screenshots/Exh-xw54/02-space-switch-phone.png).
 
 **Spaces and filters** (Exh-2c2e, Exh-gx18): one `gallerySpaces` partial
 lays out Library, Shared with me, and Shared by me as a 208px desktop rail
-at widths of at least 768px, and bottom-sticky tabs on phones. Per-viewer counts
+at widths of at least 768px, and tabs fixed to the viewport bottom on phones
+(Exh-t9bv; `ui-components.md`). On phones the header and tabs slide away
+while scrolling down and return on the way up (Exh-se4n). Per-viewer counts
 come from `SpaceCounts`, independently of search. All three destinations remain
 available even when both sharing counts are zero. Empty sharing spaces explain
 what belongs there. Phones use the same full labels, wrapping as needed. Tags
@@ -597,7 +599,9 @@ tests: [ui-components.md](ui-components.md).
 sharing `.action-menu` styles with the detail pill. The `actionMenu` Go partial
 gets its items from `galleryCardActions`; `action-menu-controller.js` handles each
 instance, including cards inserted or replaced by htmx.
-Outside clicks, focus leaving and Escape close it; Escape restores trigger focus.
+Outside presses, focus leaving and Escape close it; Escape restores trigger focus.
+An outside press only dismisses, never activating the card or control under it
+(Exh-bb37, `outside-press.js`, shared with the Clerk account menu).
 Keyboard and touch expose the trigger without hover. Links navigate normally;
 event items dispatch their named feature event with data and the visible trigger.
 Duplication listens for `exhibit:duplicate`, then dispatches

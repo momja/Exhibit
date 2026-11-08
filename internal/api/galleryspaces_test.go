@@ -22,7 +22,7 @@ func TestGallerySpacesCountsAndActivePage(t *testing.T) {
 		with   string
 		by     string
 	}{{in.cookieOne, "0", "1"}, {in.cookieTwo, "1", "0"}} {
-		for _, path := range []string{"/", "/shared", "/shared-by-me"} {
+		for _, path := range []string{"/", "/search", "/shared", "/shared-by-me"} {
 			body := in.get(t, path+"?q=absent", viewer.cookie).Body.String()
 			assert.Equal(t, 1, strings.Count(body, `aria-label="Library spaces"`))
 			assert.Contains(t, body, `href="`+path+`" aria-current="page"`)
@@ -92,7 +92,7 @@ func TestGallerySpacesRequireSession(t *testing.T) {
 	in := newTwoOwnerInstance(t)
 	// Public mode does not make personal gallery routes anonymous.
 	in.ro.cfg.Public = PublicMode{Enabled: true, OwnerID: in.ownerOne}
-	for _, path := range []string{"/", "/shared", "/shared-by-me"} {
+	for _, path := range []string{"/", "/search", "/shared", "/shared-by-me"} {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		w := httptest.NewRecorder()
 		in.ro.ServeHTTP(w, req)
@@ -111,7 +111,7 @@ func (s unavailableSpaceCountsStore) SpaceCounts(context.Context, store.ViewerID
 func TestGallerySpaceCountsFailure(t *testing.T) {
 	in := newGrantedInstance(t)
 	in.ro.cfg.Store = unavailableSpaceCountsStore{in.ro.cfg.Store}
-	for _, path := range []string{"/", "/shared", "/shared-by-me"} {
+	for _, path := range []string{"/", "/search", "/shared", "/shared-by-me"} {
 		page := in.get(t, path, in.cookieTwo)
 		assert.Equal(t, http.StatusInternalServerError, page.Code)
 		assert.NotContains(t, page.Body.String(), `Library spaces`)

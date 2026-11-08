@@ -45,8 +45,9 @@ status. An optional `TitleIcon` decorates the page title.
 visually hidden at 600px and below. Accessible names and tooltips remain.
 `Primary` selects the primary button style. The editor's `SaveEditor` flag
 retains its existing `data-save-editor` binding and unsaved-changes workflow.
-Gallery search and filter markup stays in `galleryHeaderSearch`; its existing
-Stimulus and htmx behavior remains attached to the stable gallery root.
+Desktop gallery search and the mobile filter trigger live in
+`galleryHeaderSearch`. Mobile search lives on the dedicated `/search` page,
+using the same `gallerySearch` partial and gallery controller.
 
 `.app-header` and its child classes in `components.css` own the layout, including
 when the bar is nested inside a gallery controller. The baseline is the
@@ -54,7 +55,7 @@ rendered gallery: 37px tall with 36px icon controls on desktop; 56px tall with
 44px controls at 767px and below, plus any phone top safe-area inset. Horizontal
 padding is 16px (8px at 360px and below), with 12px gaps. The gallery filter
 layout tightens gaps on narrow screens. On phones the filter label is visually
-hidden, search clearing occupies a separate 44px box, and the Accounts shortcut
+hidden, Search-page clearing occupies a separate 44px box, and the Accounts shortcut
 moves to Settings (the desktop header retains it). Back links and the hosted
 account trigger also have a 44px minimum hit area. Card metadata grows to fit
 44px title, posture and overflow targets without overlapping their neighbors.
@@ -151,7 +152,16 @@ root.addEventListener('exhibit:rename-collection', event => {
 
 The controller handles toggling, dismissal, one open menu per document, arrow
 keys, Home/End, typeahead, Tab exit, and Escape focus restoration. Features own
-API calls and refresh events. Gallery duplication listens for
+API calls and refresh events.
+
+A press outside an open menu only dismisses it (Exh-bb37): it does not follow
+the link or run the control it landed on, as with native menus. That rule
+lives in `web/gallery/outside-press.js`, which decides at `pointerdown` while
+the menu is still open and consumes the click that follows; a touch that
+becomes a scroll consumes nothing. Any popup with the same need registers
+`consumeOutsidePress({ isOpen, contains, dismiss })` on connect and calls the
+returned release on disconnect. The Clerk account menu is registered this way
+by `clerk-controller.js`; Clerk closes its own popover on that same press. Gallery duplication listens for
 `exhibit:duplicate`; its form still uses `apiFetch` and requests its htmx refresh
 with `exhibit:artifacts-changed`.
 
@@ -271,11 +281,21 @@ dialogs retain their own behavior.
 The stable `#gallery-shell` uses the registered `gallery` controller. It owns
 space request generations, history restoration and the current search
 connection. Its `space` target is `#gallery-content`, which gets replaced when
-switching Library, Shared with me or Shared by me. These destinations remain
+switching Library, Search, Shared with me or Shared by me. Search is the second
+phone tab; desktop retains its current per-space header search. These destinations remain
 available with zero sharing counts; phones show the same full labels, wrapping
 within each tab. The server sends the
 `gallerySpaceContent` partial plus an out-of-band `gallerySearchRegion` update.
 Keep the header and Clerk controller outside both regions.
+
+`/search` and `/partials/gallery-grid/search` share one selection and card
+partial. The search covers owned artifacts and incoming account grants, using
+the existing title, visible source and tag index with one stable paginated order.
+Shared cards retain recipient-scoped widget URLs and omit owner actions. A blank
+query shows a prompt. Search does not inherit the source space’s filters.
+Owned cards carry `/search?q=…` as their editor return destination. Tab clicks
+and the `/` shortcut focus the Search field after the successful htmx swap;
+history restoration keeps its existing focus behavior.
 
 Each content root uses `gallery-space`. Its connection initializes widget
 visibility, duplication and edit-return behavior; disconnect releases their
@@ -293,8 +313,8 @@ Run the actual navigation and lifecycle checks with:
 
 ```sh
 make assets
-go test ./internal/api -run 'TestGallerySpace(Navigation.*Browser|Fragments|FragmentExpiredSession)$' -count=1
-go test -tags screenshot ./internal/api -run '^TestCaptureGallerySpaceNavigation$' -count=1
+go test ./internal/api -run 'Test(SearchTabBrowser|SearchGallery.*|GallerySpace(Navigation.*Browser|Fragments|FragmentExpiredSession))$' -count=1
+go test -tags screenshot ./internal/api -run '^TestCapture(GallerySpaceNavigation|SearchTab)$' -count=1
 ```
 
 Empty sharing destinations retain navigation, including after the last share is
@@ -311,16 +331,41 @@ load/reload/mount counts, history, permissions, duplication, widget remounts,
 request races, failures, modified clicks and no-JS links. Screenshot capture
 uses `shot-scraper` and verifies header identity after a real space click.
 
-On phones, the library rail becomes bottom-sticky tabs in a column layout.
-It keeps its rendered height in document flow, so wrapped labels, enlarged
-text and the bottom safe-area inset reserve their own clearance above the
-last card or Load more. At normal text size the bar is about 55px before the inset
+On phones, the library rail becomes tabs fixed to the bottom of the viewport
+([Exh-t9bv](../.tickets/Exh-t9bv.md)). They are not sticky: a sticky bar
+cannot leave its container, so when iOS rubber-bands past the end of the page
+it rides up with the content and leaves an empty band beneath it. The
+registered `space-tabs` controller observes the bar's border box and publishes
+`--space-tabs-height` on the layout, which reserves that much clearance above
+the last card or Load more. Wrapped labels, enlarged text and the bottom
+safe-area inset (padding, hence the border box) are therefore all measured,
+not estimated; the compact bar plus inset is the fallback until the first
+measurement. At normal text size the bar is about 55px before the inset
 when labels fit one line, with at least 44px link targets. Full labels can wrap
-on a 320px screen; the bar grows to fit them. Desktop retains
-the 208px side rail. No observer or duplicate height token is needed.
-`TestGalleryMobileTabsBrowser` checks 320/375/390/430px in light and dark,
-200% tab text with full labels, a simulated 34px inset, pagination, and short
-pages. `TestGallerySpacesBrowser` retains keyboard, focus and desktop checks.
+on a 320px screen; the bar grows to fit them. Desktop retains the 208px side
+rail. `TestGalleryMobileTabsBrowser` checks 320/375/390/430px in light and
+dark, 200% tab text with full labels, a simulated 34px inset, pagination, short
+pages, and a screen extending past the end of the content. `TestGallerySpacesBrowser` retains keyboard, focus and desktop checks.
+
+While a phone user scrolls down, the header and these tabs slide off screen
+and return on the way back up ([Exh-se4n](../.tickets/Exh-se4n.md)). The
+registered `scroll-chrome` controller on `#gallery-shell` only sets
+`data-chrome-hidden`; `index.css` applies it inside the phone breakpoint as a
+transform, so layout and the tabs' reserved clearance never move, and the
+shown state carries no transform that would capture fixed popups in the header.
+The attribute sits on the shell, which outlives space switches, so swapped-in
+tabs inherit it. The direction rules are the pure `scroll-chrome.js`: a 12px
+tolerance measured from the furthest point reached, the bars always shown
+within a header's height of the top and at the end of the list, and positions
+clamped to the scrollable range so iOS rubber-banding reads as no movement.
+Focus entering a hidden bar reveals it, and restores the scroll position the
+browser already changed to bring the sticky header's field into view. A
+`:focus-visible` control in a bar (a search field being typed in) keeps them
+shown. Reduced motion drops the slide. `scroll-chrome.test.mjs` covers the
+rules; `TestGalleryPhoneChromeBrowser` covers positions, focus, a space switch
+and desktop. Set `GALLERY_CHROME_SCREENSHOT_DIR` to refresh
+[scrolling down](screenshots/Exh-se4n/01-scrolling-down-390.png) and
+[scrolling back up](screenshots/Exh-se4n/02-scrolling-up-390.png) at 390px.
 
 [Before at 390px](screenshots/Exh-0n90/before-390.png) ·
 [Compact tabs at 390px](screenshots/Exh-0n90/after-390.png) ·
@@ -363,7 +408,8 @@ go test ./internal/api -run 'Test(AppHeaderBrowser|ActionMenuBrowser|GalleryActi
 
 The helper finds a locally installed Playwright Chromium headless shell, or
 uses `CHROMIUM_TEST_BINARY`. It skips browser tests when neither is available.
-Cases cover two different menus, escaped payloads, keyboard/focus, actual htmx
+Cases cover two different menus, escaped payloads, keyboard/focus, presses
+outside that dismiss without activating what they land on, actual htmx
 replacements and appends, disconnect/reconnect, and the existing duplication
 dialog, including modal removal/reconnection. The full application journeys in
 `e2e/` cover persisted state and Duplicate's save/htmx replacement, cancellation,

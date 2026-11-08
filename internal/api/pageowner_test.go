@@ -86,6 +86,8 @@ var appOriginGETOwnerScope = []pageOwnerRoute{
 	{route: "/api/agent/credential", why: "Describes only the authenticated agent credential, covered by agentgrants_test.go"},
 	// These selections need grants/links, unlike the ordinary owner library.
 	// Their dedicated tests cover both session and single-user principals.
+	{route: "/search", scopedByHandler: true, coveredBy: "searchgallery_test.go", why: "Viewer-scoped owned and granted selection; TestSearchGalleryAccessibleCards"},
+	{route: "/partials/gallery-grid/search", scopedByHandler: true, coveredBy: "searchgallery_test.go", why: "Same viewer-scoped search as /search"},
 	{route: "/shared", scopedByHandler: true, coveredBy: "sharedgallery_test.go", why: "Viewer selection; TestSharedGalleryRoutesResolveSingleUserOwner and TestSharedGalleryRecipientCardsAndRevocation"},
 	{route: "/shared-by-me", scopedByHandler: true, coveredBy: "sharedgallery_test.go", why: "Owner shared-only selection; TestSharedGalleryRoutesResolveSingleUserOwner and TestSharedByGallerySelection"},
 	{route: "/partials/gallery-grid/shared", scopedByHandler: true, coveredBy: "sharedgallery_test.go", why: "Same viewer selection as /shared"},

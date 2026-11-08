@@ -185,18 +185,37 @@ main{padding:10px 12px}
 .space-label{min-width:0;overflow-wrap:anywhere;line-height:1.333333}
 .space-count{flex:0 0 auto;margin-left:auto;font-size:12px;font-variant-numeric:tabular-nums}
 
-/* The bottom-sticky rail keeps its actual height in document flow, including
- * wrapped/enlarged labels and the safe area. This reserves clearance for
- * the last card and paging control as the tabs grow. */
+/* Phone tabs are fixed, not sticky: a sticky bar is held inside the layout and
+ * rides up with the content when iOS overscrolls past the end of the page.
+ * space-tabs-controller.js publishes the bar's rendered height, including
+ * wrapped/enlarged labels and the safe area, so the last card and paging
+ * control keep their clearance as the tabs grow. The fallback is the compact
+ * bar, for the frame before the controller measures. */
 @media (max-width:767px){
   .gallery-layout{display:flex;flex-direction:column}
-  .gallery-layout main{flex:1;padding-bottom:12px;padding-left:max(12px,env(safe-area-inset-left,0px));padding-right:max(12px,env(safe-area-inset-right,0px))}
-  .gallery-rail{position:sticky;bottom:0;order:1;flex-shrink:0;z-index:30;border-right:0;border-top:1px solid var(--color-hairline-strong);padding:4px max(8px,env(safe-area-inset-right,0px)) calc(4px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px))}
+  .gallery-layout main{flex:1;padding-bottom:calc(12px + var(--space-tabs-height,calc(53px + env(safe-area-inset-bottom,0px))));padding-left:max(12px,env(safe-area-inset-left,0px));padding-right:max(12px,env(safe-area-inset-right,0px))}
+  .gallery-rail{position:fixed;left:0;right:0;bottom:0;z-index:30;border-right:0;border-top:1px solid var(--color-hairline-strong);padding:4px max(8px,env(safe-area-inset-right,0px)) calc(4px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px))}
   .gallery-spaces ul{flex-direction:row;gap:8px}
   .gallery-spaces li{display:flex;flex:1;min-width:0}
   .gallery-spaces a{flex:1;min-width:0;flex-direction:column;justify-content:center;gap:2px;min-height:44px;padding:4px 2px;font-size:.75rem;line-height:1.25;text-align:center;overflow-wrap:anywhere}
   .space-count{display:none}
   .space-label{max-width:100%;text-align:center}
+}
+
+/* While a phone user scrolls down, the header and space tabs slide off screen
+ * to give the cards the whole height (scroll-chrome-controller.js sets the
+ * attribute). Transform only: neither bar moves in layout, so the page never
+ * jumps and the tabs' clearance below the last card stays reserved. The header
+ * stops at the top safe-area inset, keeping its background behind the status
+ * bar. The shown state carries no transform at all, because a transformed
+ * header would become the containing block of any fixed popup inside it. */
+@media (max-width:767px){
+  #gallery-shell>.app-header,#gallery-shell .gallery-rail{transition:transform .2s ease,box-shadow .2s ease}
+  #gallery-shell[data-chrome-hidden]>.app-header{transform:translateY(calc(-100% + env(safe-area-inset-top,0px)));box-shadow:none}
+  #gallery-shell[data-chrome-hidden] .gallery-rail{transform:translateY(100%)}
+}
+@media (max-width:767px) and (prefers-reduced-motion:reduce){
+  #gallery-shell>.app-header,#gallery-shell .gallery-rail{transition:none}
 }
 
 /* Filters share server markup in the rail and native phone dialog. */
@@ -244,4 +263,15 @@ main{padding:10px 12px}
   .card-owner-name{white-space:normal;overflow-wrap:anywhere}
   .gallery-filter-section h3,.gallery-filter-section a,.gallery-filter-chips a{font-size:var(--text-secondary);line-height:1.5}
   .gallery-filter-chips a{max-width:100%;overflow-wrap:anywhere}
+}
+
+/* Search is a dedicated phone destination. Its form lives in the swapped page
+ * so the header/account island stays stable; desktop keeps its current search. */
+.gallery-page-search{margin-bottom:16px;max-width:640px}
+.gallery-page-search .search-row{width:100%}
+.gallery-spaces .space-mobile-only{display:none}
+@media (max-width:767px){
+  #gallery-search-region .search-row{display:none}
+  .app-header:has(.search-row)>.spacer{display:block}
+  .gallery-spaces .space-mobile-only{display:flex}
 }

@@ -159,7 +159,7 @@ func TestAppHeaderAccountStatesBrowser(t *testing.T) {
 					const recovery = document.querySelector('[data-clerk-target="recovery"]').getBoundingClientRect();
 					const search = document.querySelector('[data-gallery-query]');
 					return status.top >= header.bottom && status.left >= 0 && status.right <= innerWidth &&
-						(!search || search.getBoundingClientRect().width >= 80) &&
+						(!search || !search.getClientRects().length || search.getBoundingClientRect().width >= 80) &&
 						recovery.width > 0 && recovery.top >= status.bottom && recovery.right <= innerWidth &&
 						JSON.stringify(header.toJSON()) === JSON.stringify(headerBeforeFailure) &&
 						document.querySelector('main').getBoundingClientRect().top >= header.bottom &&
