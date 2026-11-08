@@ -1,0 +1,16 @@
+{
+  "preview": [
+    {
+      "width": 728,
+      "contentHeight": 432,
+      "consoleMessages": []
+    },
+    {
+      "width": 360,
+      "contentHeight": 757,
+      "consoleMessages": []
+    }
+  ],
+  "renderAttachmentId": "096f4939-b5a7-46dd-a015-84f12c84336e-15131142-493d-44d6-bdc7-fbccbd6d89e9-html",
+  "note": "Published version auto-inlines the same raw screenshot files; the saved HTML uses portable relative image paths."
+}

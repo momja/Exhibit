@@ -31,7 +31,9 @@ page title without signed-in navigation or account controls; local sign-in
 remains scriptless.
 
 For a title and return to the gallery, populate the page's `Header` with
-`subpageHeader("Page title")`. For a different destination, supply
+`subpageHeader("Page title")`. It keeps the Library back label visible, with
+the page title in the accessible header and the visible page heading below.
+For a different destination, supply
 `Back: &appHeaderBack{URL: destination, Label: destinationName}`. Set
 `CollapseLabel` when the return label should become visually hidden on phones;
 otherwise long labels truncate. `HideTitle` keeps a gallery heading available
@@ -44,17 +46,23 @@ status. An optional `TitleIcon` decorates the page title.
 `IconOnly` hides the visible label at every width; other action labels become
 visually hidden at 600px and below. Accessible names and tooltips remain.
 `Primary` selects the primary button style. The editor's `SaveEditor` flag
-retains its existing `data-save-editor` binding and unsaved-changes workflow.
-Desktop gallery search and the mobile filter trigger live in
-`galleryHeaderSearch`. Mobile search lives on the dedicated `/search` page,
-using the same `gallerySearch` partial and gallery controller.
+keeps the visible Save label at every width and delegates `data-save-editor`
+to the unsaved-changes controller. Its Saved/Unsaved/Saving status stays in the
+56px header, with Save disabled while clean or pending. A section-provided save
+issue appears in a persistent in-view explanation, and successful Save stays in
+the editor; View artifact is the separate navigation action. The shared editor
+session still owns in-flight deduplication and per-section persistence.
+Search lives on `/search` at every width, using the shared `gallerySearch`
+partial and gallery controller. The filter trigger lives in `galleryHeaderSearch`.
+Starred has no visible search or filters; Activity owns its context feed.
+The four destinations are Starred, Search, Shared, and Activity. The registered
+`artifact-stars` controller handles personal Star/Unstar menu events, then asks
+htmx to refresh the server-rendered cards through `exhibit:artifacts-changed`.
 
 `.app-header` and its child classes in `components.css` own the layout, including
 when the bar is nested inside a gallery controller. The baseline is the
-rendered gallery: 37px tall with 36px icon controls on desktop; 56px tall with
-44px controls at 767px and below, plus any phone top safe-area inset. Horizontal
-padding is 16px (8px at 360px and below), with 12px gaps. The gallery filter
-layout tightens gaps on narrow screens. On phones the filter label is visually
+rendered gallery: 56px tall with 44px controls at every width, plus any phone top safe-area inset. Horizontal
+padding is 16px (8px at 360px and below), with 12px desktop gaps and 8px phone gaps. On phones the filter label is visually
 hidden, Search-page clearing occupies a separate 44px box, and the Accounts shortcut
 moves to Settings (the desktop header retains it). Back links and the hosted
 account trigger also have a 44px minimum hit area. Card metadata grows to fit
@@ -192,7 +200,7 @@ outside any htmx region whose refresh must preserve its working copy. Feature
 Go partials own native fields and labels; `.modal-dialog` supplies visual defaults,
 including associated `label[for]` captions (also inside native forms and
 fieldsets), `.modal-error`, and `.modal-actions` footers.
-Migrated dialogs use the component defaults for the frame, 16px heading,
+Migrated dialogs use the component defaults for the frame, 18px heading,
 13px body copy, field captions/controls/focus ring, and wrapping action footer
 with an 8px gap and 18px top spacing. Do not copy these into page styles.
 Use `label[for]` for captions and `.modal-check` for a wrapping checkbox label;
@@ -201,10 +209,65 @@ not share caption styling. Read-only fields and disabled controls have shared
 states. Footer buttons and checkbox rows have a 44px minimum height on phones.
 Errors use `.modal-error`; a progress status uses ordinary body typography.
 
-`checkModalVisuals` compares rendered native dialogs with a plain shared
-reference under the same page styles at desktop and phone sizes. It checks
-heading/body/caption/field/checkbox/footer/error styles and horizontal overflow,
-without assuming that every dialog has the same content geometry.
+`modal-sheet` adds fixed `.modal-header` and `.modal-footer` regions around one
+scrolling `.modal-body` regular block, with a `modal-fields` fieldset inside
+when settings must lock. Do not make the fieldset itself the flex scroll
+container: native fieldset layout can report overflow while refusing to scroll.
+The regular block clips positioned controls with their labels and cards.
+Duplicate, Edit tag and Share use this shell. `modalClose` supplies the same
+44px close control and existing modal dismissal behavior. Desktop actions trail
+the content; `.modal-primary` is rightmost, `.modal-secondary` precedes it and
+`.modal-destructive` sits at the far left in a quiet outline. At400px and below,
+actions stack full width in primary/secondary/destructive order. The phone sheet
+uses the bottom safe area. Long Share content never scrolls Done away.
+
+Field captions use `--text-label`, sentence case,600 weight and `--color-label`.
+Descriptions use `--text-helper` / `--line-helper`; `.form-help` distinguishes
+secondary explanations from body copy. `modal-check` option titles lead their
+helpers. App-owned explanations inside details panels use `p.form-help`; the
+shared panel supplies a12px paragraph gap, including nested partials and
+export/import notes. `panel-transfer` pairs a transfer action with its described
+help: a shared desktop action column and an8px phone gap. Task Save leads local
+Add and transfer actions; resting editor destructive entries use the shared
+quiet outline. Inspector utility icons are36px squares,44px at phone widths,
+and every phone editor-panel action keeps the44px minimum. Buttons attached to
+fields (including Add key/property) match the44px field height. Boolean value
+labels retain a44px target. Editable tags keep a compact dot/label capsule and place Edit/Remove controls
+beside it in32px desktop/44px phone slots, without stretching the capsule around
+those hit areas. Long names wrap without squeezing controls; phone Create and
+add tag fills its field column. Native-semantic checkboxes share an18px box and the self-hosted Phosphor
+check glyph. Placeholders stay upright. Standard controls are44px; compact
+secondary row controls are36px on desktop,44px in phone workflows.
+
+Network & permissions uses the editor's14px group headings and shared field
+captions. Local Add/Allow actions remain secondary to page Save. The origin
+field has a persistent caption and a short example; the server-rendered origin
+partial explains an empty allowlist and replaces that note as draft rows change.
+On phones, an origin occupies its own line above the decision actions. Wrapped
+security summaries keep the disclosure chevron aligned with the first line.
+
+`checkModalVisuals` compares rendered dialogs with the matching shared shell
+under the same page styles. It checks heading/body/helper/caption/field/checkbox/
+footer/error roles and horizontal containment without equating content geometry.
+
+The `color-picker` controller owns local preset/picker/hex synchronization and
+hex validation. The shared `tagColorFields` partial supplies the `picker`, `hex`,
+`swatch`, `selection` and `error` targets. Presets are named radios with one
+tab stop, `aria-checked` selection and arrow/Home/End navigation. Four columns of
+56px cells keep a complete22px sample clear of its inset check even at320px.
+The selected color name (or Custom) is a caption, not another focus outline.
+`input->color-picker#input` updates both inputs and announces invalid hex near
+the field. `color-picker:change` reports working-copy validity to the tag feature.
+Send `color-picker:refresh` to the controller after filling a working copy.
+Tag saving remains in `tags.js`; htmx owns replacement and Stimulus reconnection.
+The Tags panel explains immediate persistence. Its label/action rows align to
+the form column, with quiet32px desktop/44px phone utilities. Attach/removal
+errors live beside their controls; the feature retains their text across swaps.
+Edit tag explains library-wide scope and enables Save tag only for a valid,
+changed working copy. Its two-action footer keeps DOM and visual order aligned;
+the body has a separate Delete entry and an in-sheet Keep/Delete confirmation.
+`TestTagModalBrowser` covers preset/custom synchronization, isolation from the
+creation fields behind the modal, and use after a real server-rendered swap.
 
 [Duplicate desktop](screenshots/Exh-p3ah/duplicate/1280.png) ·
 [Duplicate phone](screenshots/Exh-p3ah/duplicate/390.png)
@@ -342,10 +405,13 @@ safe-area inset (padding, hence the border box) are therefore all measured,
 not estimated; the compact bar plus inset is the fallback until the first
 measurement. At normal text size the bar is about 55px before the inset
 when labels fit one line, with at least 44px link targets. Full labels can wrap
-on a 320px screen; the bar grows to fit them. Desktop retains the 208px side
-rail. `TestGalleryMobileTabsBrowser` checks 320/375/390/430px in light and
+on a 320px screen; the bar grows to fit them. Desktop uses a 240px side rail,
+leaving room for the bold active destination and counts without shifting rows.
+`TestGalleryMobileTabsBrowser` checks 320/375/390/430px in light and
 dark, 200% tab text with full labels, a simulated 34px inset, pagination, short
-pages, and a screen extending past the end of the content. `TestGallerySpacesBrowser` retains keyboard, focus and desktop checks.
+pages, and a screen extending past the end of the content. `TestGallerySpacesBrowser`
+retains keyboard/focus checks and verifies single-line desktop labels and stable
+row positions through space changes at 768px and 1280px, including two-digit counts.
 
 While a phone user scrolls down, the header and these tabs slide off screen
 and return on the way back up ([Exh-se4n](../.tickets/Exh-se4n.md)). The
@@ -494,6 +560,14 @@ the tag mutation in `run`. A successful result closes the dialog and emits the
 existing refresh event. After the server-rendered body swaps, the feature
 focuses the replacement pencil or the existing-tag selector after deletion.
 Fields are resolved inside the owning panel rather than globally.
+
+The stable `#tags-body` fieldset locks its controls during a mutation and the
+following htmx refresh. A failed refresh exposes the template's Refresh tags
+button, which retries only the partial GET. A transport failure keeps stale
+controls locked; a server failure first swaps in its server-rendered error
+notice. Session-recovery headers and missing-artifact fragments use htmx's
+normal behavior. The feature handles its own swap/error events; it does not wrap
+htmx in a Promise or restore references to controls that a swap has replaced.
 
 Run `go test ./internal/api -run 'Test(ModalInterfaceBrowser|TagModalBrowser)$' -count=1` for native
 focus/Tab, Escape/backdrop, validation, save/htmx, and disconnect/reconnect
@@ -718,3 +792,76 @@ Network, download, and clipboard likewise keep cancellation live and retain
 request-specific write guards. Use shared `pending` for non-dismissible work
 (tags, Duplicate, sharing, keys, entitlements, editor saves, and link approval);
 do not apply it to cancellable permission transactions.
+
+## UI council refinements
+
+The library owns a visible page heading and introduction inside its swapped
+content region. Gallery card menus remain visible with stable 32px desktop
+and 44px phone targets; hovering never shifts the title. Empty states span the
+grid, describe the next step and use ordinary/htmx navigation for recovery.
+The stable polite results status is refreshed out of band by the same server
+partial as filters. Styling and wording are shared across library spaces.
+
+The add page is a native ES module. Its feature-owned validation marks and
+focuses the actual field, including the CodeMirror contenteditable, and locks
+creation while an API request is pending. The editor island transfers each
+textarea's accessible name and description to CodeMirror. Source and widget
+editors have distinct names. Field errors are associated inline; progress and
+server errors use the page's live status region.
+
+`ArtifactEditor.mount(textarea)` returns a small handle with `focus`,
+`setInvalid`, `setValue`, and `setReadOnly`. Page code uses this handle rather
+than changing CodeMirror's DOM or dispatching editor transactions itself.
+Read-only mode configures both CodeMirror's state and content editability, so
+commands such as Replace all respect a pending import. A completed import
+restored by a persisted `pageshow` reloads the creation page; unfinished network
+approval retains its working state.
+
+The floating viewer keeps its positioning lifecycle, with 36px desktop and
+44px phone/coarse controls and restore target. Its menu supports arrows,
+Home/End, Tab, Escape and focus-exit dismissal. A visible tool name supplies
+context; editing is directly available on desktop and in the menu on phones.
+
+Review evidence and capture instructions are in
+[the UI council brief](reviews/Exh-zrjo/brief.md).
+
+
+Visual controls share the app font family, with 36px default and 32px compact
+heights; fields retain 44px phone targets. Secondary boundaries use the quiet
+`--color-border`, while editable fields use `--color-field-border` (at least
+3:1 on the adjacent panel) and a recessed `--color-field` in dark mode. Editor
+surfaces, active lines, selections, placeholders and subdued syntax use shared
+palette tokens. The CodeMirror theme compartment still follows live media
+changes without replacing the draft. Keep active-line fills translucent:
+CodeMirror paints its selection layer behind the line content. Verify an actual
+word selection on the active line, including the composited background, rather
+than checking each color separately. Mobile share choices stack; fixed phone
+tabs reserve a two-line label area so their icons align.
+
+The source editor's native find/replace and line-navigation panels use the same
+field, border, radius and focus tokens. They use compact 32px desktop controls
+and 44px phone controls; the search-open editor keeps a visible source viewport.
+Completion menus, folding markers and match hints share that palette too.
+Secondary occurrences stay quieter than the actual selection/current find
+result. Retain the library's keyboard behavior and verify these states in both
+color schemes when changing the editor theme.
+
+
+## Posture receipt placement
+
+The server-owned `capabilityPopover` receipt shares helper typography and
+sentence-case section headers on cards and inside the floating viewer's About
+surface. The existing explicit activation behavior publishes `capability:changed`.
+The registered `capability-popover` Stimulus controller fits the card receipt
+inside the visual viewport, flips it above the anchor when needed, and limits
+its height with internal scrolling. It adds resize/scroll hooks only while open
+and releases them on close/removal. Shared outside-press handling dismisses
+without activating a card underneath. Viewer placement remains owned by its
+existing floating-header popup, with the same receipt content and type roles.
+The browser journey covers keyboard activation, viewport collision/no document
+growth, resizing, server-rendered replacement, Safari null-relatedTarget and
+Manage navigation. No client-side markup is generated.
+
+Selected color presets inset their check badge3px inside the1px cell border.
+Its4px radius shares the8px outer corner centre, so badge and cell contours do
+not collide or leave a fringe. The color-picker working-copy behavior is unchanged.

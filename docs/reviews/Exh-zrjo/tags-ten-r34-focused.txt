@@ -1,0 +1,10 @@
+
+Running 3 tests using 1 worker
+
+(node:283379) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium] › specs/tags.spec.ts:3:1 › tag editing keeps color samples intact, controls aligned and validation local in both schemes (19.9s)
+  ✓  2 [chromium] › specs/tags.spec.ts:132:1 › partial tag creation retains nearby attach error and retries the same tag (2.3s)
+  ✓  3 [chromium] › specs/tags.spec.ts:173:1 › tag changes persist with clear pending, local failure and retry feedback without page Save (7.3s)
+
+  3 passed (31.7s)

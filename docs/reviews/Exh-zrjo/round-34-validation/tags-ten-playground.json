@@ -1,0 +1,42 @@
+{
+  "appOrigin": "http://t3code:18580",
+  "renderOrigin": "http://t3code:18581",
+  "pid": 284106,
+  "artifactID": "252b5594-bfb3-4df5-bb9e-3d91579a5be8",
+  "editURL": "http://t3code:18580/artifacts/252b5594-bfb3-4df5-bb9e-3d91579a5be8/edit",
+  "tags": [
+    {
+      "id": "f1cf32a7-0290-418b-bf94-20bbc41b2e4d",
+      "owner_id": 1,
+      "name": "Health",
+      "color": "#377a64",
+      "attached": true
+    },
+    {
+      "id": "fc590d15-00ab-4ede-85aa-0abb98631479",
+      "owner_id": 1,
+      "name": "Reading",
+      "color": "#8a5db0",
+      "attached": true
+    },
+    {
+      "id": "8339442a-3a55-48ae-9ec6-79f1eeff03f5",
+      "owner_id": 1,
+      "name": "Neighborhood walks and favorite routes",
+      "color": "#527cb0",
+      "attached": true
+    },
+    {
+      "id": "5acc87ce-ffd9-48f5-839e-3bdba424f5de",
+      "owner_id": 1,
+      "name": "Utilities",
+      "color": "#23559e",
+      "attached": false
+    }
+  ],
+  "binarySha256": "37a01fee1647cfbc6657e45ab0cf03d513ba48b0b4b7daf3544a8b82abf1ae22",
+  "sourceCommit": "62328d495baa4dc3c049ffa818b0679980938221",
+  "dataDir": "/tmp/exhibit-zrjo-tags-playground-data",
+  "purpose": "Isolated tag-only read-only review fixture with long attached name and an available tag; no Main library changes",
+  "browserProfile": "incognito"
+}

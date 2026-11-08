@@ -86,7 +86,7 @@ func TestProfileNamesTheSignedInAccount(t *testing.T) {
 	assert.Contains(t, page, `href="/admin/users"`, "administration remains reachable through Settings on phones")
 	assert.Contains(t, page, "Identity provider",
 		"an account with no password here signs in through the provider, and the page says which")
-	assert.NotContains(t, page, "subject identifier",
+	assert.NotContains(t, page, "account ID",
 		"the fallback note belongs only to a name that actually came from external_id")
 }
 
@@ -125,7 +125,7 @@ func TestProfileFallsBackToTheProviderSubjectWhenThereIsNoEmail(t *testing.T) {
 
 	assert.Contains(t, page, "sub-no-email-9f3c",
 		"with no email the page must still name the account — this section IS the name")
-	assert.Contains(t, page, "subject identifier",
+	assert.Contains(t, page, "account ID",
 		"an opaque identifier offered as 'you' reads as a bug; the same one labelled reads as an answer")
 }
 
@@ -285,8 +285,11 @@ func TestGalleryHeaderCarriesBothIconControls(t *testing.T) {
 	// The desktop shortcut keeps its visible and accessible label.
 	assert.Contains(t, page, `<span class="header-link-label">Accounts</span></a>`)
 
-	// Sized as peers: one class, applied to both, so they cannot drift apart.
-	assert.Equal(t, 2, strings.Count(page, "icon-btn"),
-		"both controls wear the same size class, so they cannot drift apart")
+	// Only Settings is icon-only in the standard gallery header. Dialog Close
+	// buttons elsewhere on the page do not change the header's action grammar.
+	headerStart, headerEnd := strings.Index(page, "<header"), strings.Index(page, "</header>")
+	require.True(t, headerStart >= 0 && headerEnd > headerStart)
+	assert.Equal(t, 1, strings.Count(page[headerStart:headerEnd], "icon-btn"),
+		"Settings stays compact while Add artifact has a visible primary label")
 	assert.Contains(t, galleryAsset(t, newTestRouter(t), "/assets/gallery/components.css"), ".icon-btn{")
 }

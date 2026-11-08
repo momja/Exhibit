@@ -1,187 +1,362 @@
-/* Edit page Tags panel (edit.tmpl). Independent existing-tag and new-tag actions.
- * Every change goes through the tag API, then fires exhibit:tags-changed so
- * htmx re-renders #tags-body. Listeners are delegated from #tags-panel, which
- * survives the swap.
+/* Tag APIs persist independently of page Save. Templates own all markup;
+ * htmx refreshes the list/forms, while these handlers retain local feedback.
  */
 import { apiFetch } from './api-module.js';
 import { modalFor } from './modal.js';
 
-(function() {
-  const panel = document.getElementById('tags-panel');
-  if (!panel) return;
+const panel = document.getElementById('tags-panel');
+if (panel) connectTags(panel);
 
+function connectTags(panel) {
   const artifactID = panel.dataset.artifactId;
-  const byId = (id) => panel.querySelector('#' + id);
+  const byId = id => panel.querySelector('#' + id);
+  const modal = byId('tag-edit-modal');
+  const editor = modalFor(modal);
+  const fields = byId('tags-body');
+  const refreshNotice = byId('tag-refresh-notice');
+  const retainedErrors = new Map();
+  let panelPending = false;
+  let needsRefresh = false;
+  let editingTagID = null;
+  let originalName = '';
+  let originalColor = '';
+  let focusTagID = null;
 
-  function changed() {
-    document.body.dispatchEvent(new CustomEvent('exhibit:tags-changed'));
+  function status(message = 'Adding or removing a tag saves immediately.') {
+    byId('tag-status').textContent = message;
   }
 
   function setError(id, message) {
-    const el = byId(id);
-    if (!el) return;
-    el.textContent = message;
-    el.hidden = !message;
-  }
-
-  async function errorOf(r, fallback) {
-    if (!r) return fallback;
-    const data = await r.json().catch(function() { return {}; });
-    return data.error || fallback;
-  }
-
-  // Keeps swatches, picker and hex field in sync. `scope` holds the swatches.
-  function setColor(prefix, scope, hex) {
-    const hexField = byId(prefix + '-color-hex');
-    const picker = byId(prefix + '-color-picker');
-    if (hexField) hexField.value = hex;
-    if (picker) picker.value = hex;
-    if (!scope) return;
-    scope.querySelectorAll('.color-swatch').forEach(function(sw) {
-      sw.classList.toggle('selected', sw.dataset.color.toLowerCase() === hex.toLowerCase());
-    });
-  }
-
-  function onColorInput(prefix, scope, target) {
-    if (target.id === prefix + '-color-picker') setColor(prefix, scope, target.value);
-    else if (target.id === prefix + '-color-hex' && /^#[0-9a-fA-F]{6}$/.test(target.value)) setColor(prefix, scope, target.value);
-  }
-
-  // --- this artifact's tags ----------------------------------------------
-
-  async function detach(tagID) {
-    setError('tag-add-error', '');
-    const r = await apiFetch('/api/tags/' + encodeURIComponent(tagID) + '/artifacts/' + encodeURIComponent(artifactID), {
-      method: 'DELETE'
-    }).catch(function() { return null; });
-    if (!r || !r.ok) setError('tag-add-error', await errorOf(r, 'Could not remove the tag.'));
-    changed();
-  }
-
-  async function attach(tagID, errorID) {
-    const attached = await apiFetch('/api/tags/' + encodeURIComponent(tagID) + '/artifacts/' + encodeURIComponent(artifactID), {
-      method: 'POST'
-    }).catch(function() { return null; });
-    if (!attached || !attached.ok) setError(errorID, await errorOf(attached, 'Could not add the tag.'));
-    // Re-render even on failure: a just-created tag belongs in the dropdown.
-    changed();
-  }
-
-  async function addExisting() {
-    setError('tag-add-error', '');
-    const tagID = byId('tag-add-select').value;
-    if (!tagID) { setError('tag-add-error', 'Choose an existing tag to add.'); return; }
-    await attach(tagID, 'tag-add-error');
-  }
-
-  async function createAndAdd() {
-    const button = byId('tag-create-confirm');
-    if (button.disabled) return;
-    setError('tag-create-error', '');
-    const name = byId('tag-add-name').value.trim();
-    if (!name) { setError('tag-create-error', 'Name is required.'); byId('tag-add-name').focus(); return; }
-    button.disabled = true;
-    try {
-      const created = await apiFetch('/api/tags', {
-        method: 'POST',
-        body: JSON.stringify({ name: name, color: byId('tag-add-color-hex').value.trim() })
-      }).catch(function() { return null; });
-      if (!created || !created.ok) { setError('tag-create-error', await errorOf(created, 'Could not create the tag.')); return; }
-      const data = await created.json();
-      // Attachment errors must survive the htmx refresh of the creation fields.
-      setError('tag-add-error', '');
-      await attach(data.id, 'tag-add-error');
-    } finally {
-      button.disabled = false;
+    if (id === 'tag-add-error' || id === 'tag-list-error') {
+      if (message) retainedErrors.set(id, message);
+      else retainedErrors.delete(id);
     }
+    const element = byId(id);
+    if (!element) return;
+    element.textContent = message;
+    element.hidden = !message;
   }
 
-  panel.addEventListener('click', function(e) {
-    const target = e.target;
-    const action = target.closest ? target.closest('[data-action]') : null;
-    if (action && action.dataset.action === 'detach-tag') return detach(action.dataset.tagId);
-    if (action && action.dataset.action === 'edit-tag') {
-      return openEditModal(action.dataset.tagId, action.dataset.tagName, action.dataset.tagColor, action);
+  function clearPanelErrors() {
+    for (const id of ['tag-add-error', 'tag-list-error', 'tag-create-error']) setError(id, '');
+  }
+
+  function refresh(tagID) {
+    focusTagID = tagID;
+    needsRefresh = true;
+    setPanelPending(true);
+    document.body.dispatchEvent(new CustomEvent('exhibit:tags-changed'));
+  }
+
+  function setPanelPending(pending) {
+    panelPending = pending;
+    fields.disabled = pending || needsRefresh;
+    byId('tag-refresh').disabled = pending;
+    if (pending) panel.setAttribute('aria-busy', 'true');
+    else panel.removeAttribute('aria-busy');
+    syncAdd();
+    syncCreate();
+  }
+
+  panel.addEventListener('htmx:before:request', event => {
+    if (event.target !== fields) return;
+    needsRefresh = true;
+    setPanelPending(true);
+  });
+  function refreshFailed() {
+    needsRefresh = true;
+    setPanelPending(false);
+    refreshNotice.hidden = false;
+    byId('tag-refresh').focus();
+  }
+  panel.addEventListener('htmx:error', event => {
+    if (event.target === fields) refreshFailed();
+  });
+  panel.addEventListener('htmx:after:swap', event => {
+    if (event.target !== fields) return;
+    // Let htmx honor session-recovery headers and render server error fragments.
+    // A server failure offers a GET retry after its notice has replaced the body.
+    if (event.detail.ctx.response.status >= 500) { refreshFailed(); return; }
+    needsRefresh = false;
+    setPanelPending(false);
+    const retried = !refreshNotice.hidden;
+    refreshNotice.hidden = true;
+    if (!byId('tag-add-name')) {
+      retainedErrors.clear();
+      focusTagID = null;
+      status('');
+      return;
     }
-    const swatch = target.closest ? target.closest('.color-swatch') : null;
-    if (swatch) return setColor('tag-add', byId('tag-add-create-fields'), swatch.dataset.color);
-    if (target.closest && target.closest('#tag-add-confirm')) return addExisting();
-    if (target.closest && target.closest('#tag-create-confirm')) return createAndAdd();
-    return undefined;
-  });
-
-  panel.addEventListener('input', function(e) {
-    onColorInput('tag-add', byId('tag-add-create-fields'), e.target);
-  });
-
-  panel.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter' && e.target && (e.target.id === 'tag-add-name' || e.target.id === 'tag-add-color-hex')) {
-      e.preventDefault();
-      return createAndAdd();
-    }
-  });
-
-  // --- edit-tag modal: library-wide rename, recolor, delete ---
-
-  const modal = byId('tag-edit-modal');
-  let editingTagID = null;
-  const editor = modalFor(modal);
-  let focusTagID = null;
-  panel.addEventListener('htmx:after:swap', () => {
+    if (retried) status('Tags refreshed.');
+    for (const [id, message] of retainedErrors) setError(id, message);
     if (!focusTagID || modal.open) return;
-    const pencil = [...panel.querySelectorAll('[data-action="edit-tag"]')].find(button => button.dataset.tagId === focusTagID);
-    (pencil || byId('tag-add-select')).focus();
+    const pencil = [...panel.querySelectorAll('[data-action="edit-tag"]')]
+      .find(button => button.dataset.tagId === focusTagID);
+    const select = byId('tag-add-select');
+    if (!pencil && [...(select?.options || [])].some(option => option.value === focusTagID)) select.value = focusTagID;
+    syncAdd();
+    (pencil || select || byId('tag-add-name'))?.focus();
     focusTagID = null;
   });
 
-  async function mutateTag(method, body, failure) {
-    if (!modal.open) return;
-    const tagID = editingTagID;
-    const saved = await editor.run(async () => {
-      const response = await apiFetch('/api/tags/' + encodeURIComponent(tagID), {
-        method, ...(body ? { body: JSON.stringify(body) } : {})
-      }).catch(() => null);
-      if (!response?.ok) { setError('tag-edit-error', await errorOf(response, failure)); return false; }
-      return true;
-    });
-    if (saved) {
-      focusTagID = tagID;
-      editor.close();
-      changed();
-    }
+  async function errorOf(response, fallback) {
+    const data = await response?.json().catch(() => ({}));
+    return data?.error || fallback;
   }
 
-  function openEditModal(tagID, name, hex, trigger) {
-    if (modal.open) return;
+  async function request(path, method, body) {
+    return apiFetch(path, {
+      method, ...(body ? { body: JSON.stringify(body) } : {})
+    }).catch(() => null);
+  }
+
+  function validColor(value) { return /^#[0-9a-f]{6}$/i.test(value.trim()); }
+
+  function nameError(inputID, errorID, message) {
+    byId(inputID).setAttribute('aria-invalid', String(!!message));
+    setError(errorID, message);
+    const hint = byId(errorID.replace(/-error$/, '-hint'));
+    if (hint) hint.hidden = !!message;
+  }
+
+  function readDetails(kind) {
+    const editing = kind === 'edit';
+    const nameID = editing ? 'tag-edit-name' : 'tag-add-name';
+    const errorID = editing ? 'tag-edit-name-error' : 'tag-create-name-error';
+    const prefix = editing ? 'tag-edit' : 'tag-add';
+    const name = byId(nameID).value.trim();
+    const color = byId(prefix + '-color-hex').value.trim();
+    nameError(nameID, errorID, name ? '' : 'Name is required.');
+    if (!name) { byId(nameID).focus(); return null; }
+    if (!validColor(color)) {
+      byId(prefix + '-color-controls').dispatchEvent(new CustomEvent('color-picker:refresh'));
+      byId(prefix + '-color-hex').focus();
+      return null;
+    }
+    return { name, color: color.toLowerCase() };
+  }
+
+  function syncAdd() {
+    const button = byId('tag-add-confirm');
+    if (button) button.disabled = panelPending || !byId('tag-add-select')?.value;
+  }
+
+  function syncCreate() {
+    const name = byId('tag-add-name');
+    if (!name) return; // A missing-artifact/error fragment has no creation form.
+    byId('tag-create-confirm').disabled = panelPending || !name.value.trim() || !validColor(byId('tag-add-color-hex').value) || name.getAttribute('aria-invalid') === 'true';
+  }
+
+  async function runPanel(message, operation) {
+    if (panelPending || needsRefresh || editor.pending) return;
+    clearPanelErrors();
+    setPanelPending(true);
+    status(message);
+    try { await operation(); }
+    finally { if (!needsRefresh) setPanelPending(false); }
+  }
+
+  async function detach(tagID) {
+    await runPanel('Removing tag…', async () => {
+      const response = await request('/api/tags/' + encodeURIComponent(tagID) + '/artifacts/' + encodeURIComponent(artifactID), 'DELETE');
+      if (!response?.ok) {
+        setError('tag-list-error', await errorOf(response, 'Could not remove the tag. Try again.'));
+        status();
+        return;
+      }
+      status('Tag removed from this artifact.');
+      refresh(tagID);
+    });
+  }
+
+  async function attach(tagID) {
+    return request('/api/tags/' + encodeURIComponent(tagID) + '/artifacts/' + encodeURIComponent(artifactID), 'POST');
+  }
+
+  async function addExisting() {
+    if (panelPending) return;
+    const tagID = byId('tag-add-select')?.value;
+    if (!tagID) {
+      setError('tag-add-error', 'Choose an existing tag to add.');
+      byId('tag-add-select')?.focus();
+      return;
+    }
+    await runPanel('Adding tag…', async () => {
+      const response = await attach(tagID);
+      if (!response?.ok) {
+        setError('tag-add-error', await errorOf(response, 'Could not add the tag. Try again.'));
+        status();
+        return;
+      }
+      status('Tag added.');
+      refresh(tagID);
+    });
+  }
+
+  async function createAndAdd() {
+    if (panelPending) return;
+    const name = byId('tag-add-name');
+    if (name.value.trim() && name.getAttribute('aria-invalid') === 'true') { name.focus(); return; }
+    setError('tag-create-error', '');
+    const details = readDetails('create');
+    if (!details) return;
+    let focusName = false;
+    await runPanel('Creating tag…', async () => {
+      byId('tag-create-label').textContent = 'Creating…';
+      try {
+        const response = await request('/api/tags', 'POST', details);
+        if (!response?.ok) {
+          if (response?.status === 409) {
+            nameError('tag-add-name', 'tag-create-name-error', await errorOf(response, 'A tag with this name already exists.'));
+            focusName = true;
+          } else setError('tag-create-error', await errorOf(response, 'Could not create the tag. Try again.'));
+          status();
+          return;
+        }
+        const created = await response.json();
+        byId('tag-add-name').value = '';
+        const attached = await attach(created.id);
+        if (!attached?.ok) {
+          setError('tag-add-error', 'Tag created, but not added. ' + await errorOf(attached, 'Choose it above to try again.'));
+          status('Tag created. Choose it above to add it.');
+          // The new tag must become available, and the nearby error must survive.
+          refresh(created.id);
+          return;
+        }
+        status('Tag created and added.');
+        refresh(created.id);
+      } finally { byId('tag-create-label').textContent = 'Create and add tag'; }
+    });
+    if (focusName) byId('tag-add-name').focus();
+  }
+
+  function syncSave() {
+    const name = byId('tag-edit-name').value.trim();
+    const color = byId('tag-edit-color-hex').value.trim().toLowerCase();
+    const dirty = name !== originalName || color !== originalColor;
+    byId('tag-edit-save').disabled = editor.pending || !dirty || !name || !validColor(color) || byId('tag-edit-name').getAttribute('aria-invalid') === 'true';
+  }
+
+  function deleteView(deleting, focus = true) {
+    if (deleting) setError('tag-delete-error', '');
+    byId('tag-edit-fields').hidden = deleting;
+    byId('tag-delete-fields').hidden = !deleting;
+    byId('tag-edit-cancel').hidden = deleting;
+    byId('tag-edit-save').hidden = deleting;
+    byId('tag-delete-cancel').hidden = !deleting;
+    byId('tag-edit-confirm-delete').hidden = !deleting;
+    byId('tag-edit-title').textContent = deleting ? 'Delete tag?' : 'Edit tag';
+    modal.setAttribute('aria-describedby', deleting ? 'tag-delete-help' : 'tag-edit-scope');
+    if (focus) byId(deleting ? 'tag-delete-cancel' : 'tag-edit-delete').focus();
+  }
+
+  function openEditModal(tagID, name, color, trigger) {
+    if (modal.open || panelPending || needsRefresh) return;
     editingTagID = tagID;
+    originalName = name;
+    originalColor = color.toLowerCase();
     byId('tag-edit-name').value = name;
-    setColor('tag-edit', modal, hex);
+    byId('tag-edit-color-hex').value = color;
+    byId('tag-edit-color-picker').value = color;
+    byId('tag-delete-name').textContent = name;
+    deleteView(false, false);
+    nameError('tag-edit-name', 'tag-edit-name-error', '');
     setError('tag-edit-error', '');
+    setError('tag-delete-error', '');
+    byId('tag-edit-status').textContent = '';
+    modal.querySelector('[data-controller~=color-picker]').dispatchEvent(new CustomEvent('color-picker:refresh'));
+    syncSave();
     editor.show(trigger);
   }
 
-  async function saveTag() {
-    const name = byId('tag-edit-name').value.trim();
-    if (!name) { setError('tag-edit-error', 'Name is required.'); return; }
-    return mutateTag('PATCH', { name, color: byId('tag-edit-color-hex').value.trim() }, 'Failed to save tag.');
+  async function mutateTag(method, details) {
+    if (!modal.open || editor.pending) return;
+    const deleting = method === 'DELETE';
+    const labelID = deleting ? 'tag-delete-label' : 'tag-edit-save-label';
+    const errorID = deleting ? 'tag-delete-error' : 'tag-edit-error';
+    setError(errorID, '');
+    byId(labelID).textContent = deleting ? 'Deleting…' : 'Saving…';
+    byId('tag-edit-status').textContent = deleting ? 'Deleting tag…' : 'Saving tag…';
+    modal.setAttribute('aria-busy', 'true');
+    let focusName = false;
+    try {
+      const saved = await editor.run(async () => {
+        const response = await request('/api/tags/' + encodeURIComponent(editingTagID), method, details);
+        if (!response?.ok) {
+          const message = await errorOf(response, deleting ? 'Could not delete the tag. Try again.' : 'Could not save the tag. Try again.');
+          if (!deleting && response?.status === 409) {
+            nameError('tag-edit-name', 'tag-edit-name-error', message);
+            focusName = true;
+          } else setError(errorID, message);
+          byId('tag-edit-status').textContent = '';
+          return false;
+        }
+        return true;
+      });
+      if (saved) {
+        status(deleting ? 'Tag deleted from your Gallery.' : 'Tag saved across your Gallery.');
+        editor.close();
+        refresh(editingTagID);
+      } else if (focusName) byId('tag-edit-name').focus();
+    } finally {
+      modal.removeAttribute('aria-busy');
+      byId(labelID).textContent = deleting ? 'Delete tag' : 'Save tag';
+      syncSave();
+    }
   }
 
-  async function deleteTag() {
+  function saveTag() {
     if (editor.pending) return;
-    const name = byId('tag-edit-name').value;
-    if (!confirm('Delete tag "' + name + '"? It will be removed from every artifact. This cannot be undone.')) return;
-    return mutateTag('DELETE', null, 'Failed to delete tag.');
+    const name = byId('tag-edit-name');
+    if (name.value.trim() && name.getAttribute('aria-invalid') === 'true') { name.focus(); return; }
+    const details = readDetails('edit');
+    if (!details || details.name === originalName && details.color === originalColor) return;
+    return mutateTag('PATCH', details);
   }
 
-  if (modal) {
-    modal.addEventListener('click', function(e) {
-      const target = e.target;
-      const swatch = target.closest ? target.closest('.color-swatch') : null;
-      if (swatch) return setColor('tag-edit', modal, swatch.dataset.color);
-      if (target.closest && target.closest('#tag-edit-save')) return saveTag();
-      if (target.closest && target.closest('#tag-edit-delete')) return deleteTag();
-      return undefined;
-    });
-    modal.addEventListener('input', function(e) { onColorInput('tag-edit', modal, e.target); });
-  }
-})();
+  panel.addEventListener('click', event => {
+    const action = event.target.closest?.('[data-action]');
+    if (action?.dataset.action === 'detach-tag') return detach(action.dataset.tagId);
+    if (action?.dataset.action === 'edit-tag') return openEditModal(action.dataset.tagId, action.dataset.tagName, action.dataset.tagColor, action);
+    if (event.target.closest?.('#tag-add-confirm')) return addExisting();
+    if (event.target.closest?.('#tag-create-confirm')) return createAndAdd();
+  });
+
+  panel.addEventListener('change', event => {
+    if (event.target.id === 'tag-add-select') { setError('tag-add-error', ''); syncAdd(); }
+  });
+  panel.addEventListener('input', event => {
+    if (event.target.id === 'tag-add-name') {
+      nameError('tag-add-name', 'tag-create-name-error', event.target.value.trim() ? '' : 'Name is required.');
+      setError('tag-create-error', '');
+      syncCreate();
+    }
+    if (event.target.id === 'tag-edit-name') {
+      nameError('tag-edit-name', 'tag-edit-name-error', event.target.value.trim() ? '' : 'Name is required.');
+      setError('tag-edit-error', '');
+      syncSave();
+    }
+  });
+  panel.addEventListener('color-picker:change', event => {
+    if (modal.contains(event.target)) { setError('tag-edit-error', ''); syncSave(); }
+    else syncCreate();
+  });
+  panel.addEventListener('keydown', event => {
+    if (event.key === 'Enter' && ['tag-add-name', 'tag-add-color-hex'].includes(event.target.id)) {
+      event.preventDefault();
+      return createAndAdd();
+    }
+    if (event.key === 'Enter' && ['tag-edit-name', 'tag-edit-color-hex'].includes(event.target.id)) {
+      event.preventDefault();
+      return saveTag();
+    }
+  });
+  modal.addEventListener('click', event => {
+    if (event.target.closest?.('#tag-edit-save')) return saveTag();
+    if (event.target.closest?.('#tag-edit-delete') && !editor.pending) return deleteView(true);
+    if (event.target.closest?.('#tag-delete-cancel') && !editor.pending) return deleteView(false);
+    if (event.target.closest?.('#tag-edit-confirm-delete')) return mutateTag('DELETE');
+  });
+  syncAdd();
+  syncCreate();
+}

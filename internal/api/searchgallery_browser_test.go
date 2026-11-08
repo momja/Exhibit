@@ -44,23 +44,20 @@ func TestSearchTabBrowser(t *testing.T) {
 			require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(app.URL+"/")))
 			poll(`window.clerkCalls?.mount === 1`)
 			run(`window.originalDocument=document;window.originalHeader=document.querySelector('header');window.originalAccount=document.querySelector('[data-clerk-target="mount"] button')`)
-			if width < 768 {
-				check(`!document.querySelector('header [data-gallery-query]').getClientRects().length && document.querySelector('.gallery-spaces li:nth-child(2) a').getAttribute('href') === '/search' && document.querySelector('.gallery-spaces a[href="/search"]').getClientRects().length > 0`)
-			} else {
-				check(`document.querySelector('header [data-gallery-query]').getClientRects().length > 0 && !document.querySelector('.gallery-spaces a[href="/search"]').getClientRects().length`)
-			}
+			check(`!document.querySelector('header [data-gallery-query]') && document.querySelector('.gallery-spaces li:nth-child(2) a').getAttribute('href') === '/search' && document.querySelector('.gallery-spaces a[href="/search"]').getClientRects().length > 0`)
+
 			if width == 390 {
 				run(`document.body.dispatchEvent(new KeyboardEvent('keydown',{key:'/',bubbles:true}))`)
 			} else {
 				run(`document.querySelector('.gallery-spaces a[href="/search"]').click()`)
 			}
 			poll(`location.pathname === '/search' && document.querySelector('.gallery-page-search [data-gallery-query]')`)
-			check(`document === originalDocument && document.querySelector('header') === originalHeader && !document.querySelector('header [data-gallery-query]') && document.querySelector('.gallery-spaces [aria-current]').getAttribute('href') === '/search' && !document.querySelector('.card') && document.activeElement.matches('[data-gallery-query]')`)
+			check(`document === originalDocument && document.querySelector('header') === originalHeader && !document.querySelector('header [data-gallery-query]') && document.querySelector('.gallery-spaces [aria-current]').getAttribute('href') === '/search' && document.querySelector('.card') && document.activeElement.matches('[data-gallery-query]')`)
 			run(`document.querySelector('[data-gallery-query]').value='chart';document.querySelector('[data-gallery-query]').dispatchEvent(new Event('input',{bubbles:true}))`)
 			poll(`location.search === '?q=chart' && document.querySelectorAll('.card').length >= 24`)
 			run(`document.querySelector('[data-gallery-page]')?.click()`)
 			poll(`document.querySelectorAll('.card').length === 31`)
-			check(`document.querySelector('[data-href="/artifacts/owned-tool"] .card-actions') && document.querySelector('.card-by') && !document.querySelector('.card-by').closest('.card').querySelector('.card-actions, .capability-cluster') && document.documentElement.scrollWidth <= innerWidth`)
+			check(`document.querySelector('[data-href="/artifacts/owned-tool"] .card-actions') && document.querySelector('.card-by') && !document.querySelector('.card-by').closest('.card').querySelector('.capability-cluster, a[href*="/edit"]') && document.documentElement.scrollWidth <= innerWidth`)
 			// Navigate away/back through htmx; the query and correct selection return.
 			run(`document.querySelector('.gallery-spaces a[href="/shared"]').click()`)
 			poll(`location.pathname === '/shared' && document.querySelector('#shared-gallery')`)
@@ -68,7 +65,7 @@ func TestSearchTabBrowser(t *testing.T) {
 			poll(`location.pathname === '/search' && document.querySelector('[data-gallery-query]')?.value === 'chart' && document.querySelector('[data-href="/artifacts/owned-tool"]')`)
 			check(`document.querySelectorAll('[data-gallery-search]').length === 1 && document.querySelector('[data-gallery-clear]').hidden === false`)
 			run(`document.querySelector('[data-gallery-clear]').click()`)
-			poll(`location.search === '' && !document.querySelector('.card') && document.querySelector('.empty')?.textContent === 'Search your library and artifacts shared with you.'`)
+			poll(`location.search === '' && document.querySelectorAll('.card').length >= 24`)
 			check(`document.activeElement.matches('[data-gallery-query]')`)
 			run(`document.querySelector('[data-gallery-query]').value='missing';document.querySelector('[data-gallery-query]').dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('[data-gallery-search]').requestSubmit()`)
 			// Submit also works without waiting for the typing debounce.

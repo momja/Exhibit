@@ -1,0 +1,8 @@
+{
+  "command": "node e2e/capture-ui.mjs docs/screenshots/Exh-zrjo/nine-round-23-confirm",
+  "application": "5f1021e3495ad3639e0c5e51859124e44edc79f8",
+  "exitCode": 0,
+  "seconds": 276.1,
+  "log": "/tmp/exhibit-zrjo-nine-r23-capture-confirm.log",
+  "applicationUnchanged": true
+}

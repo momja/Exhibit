@@ -1,17 +1,18 @@
-{{/* One native modal per gallery. Native dialog provides focus containment,
-     Escape, and an inert background while a duplication is in progress. */}}
-{{define "duplicateDialog"}}<dialog class="modal-dialog duplicate-dialog" data-duplicate-dialog aria-labelledby="{{.ID}}-duplicate-title"
-  data-controller="modal">
+{{/* Native dialog and the shared modal controller retain focus, cancellation
+     and in-flight locking. Only the body scrolls; actions stay available. */}}
+{{define "duplicateDialog"}}<dialog class="modal-dialog modal-sheet duplicate-dialog" data-duplicate-dialog aria-labelledby="{{.ID}}-duplicate-title" data-controller="modal">
   <form>
-    <h2 id="{{.ID}}-duplicate-title">Duplicate artifact</h2>
-    <label for="{{.ID}}-duplicate-name">Title</label>
-    <input id="{{.ID}}-duplicate-name" name="title" type="text" required autocomplete="off" autofocus>
-    <label class="modal-check"><input name="copy_share_settings" type="checkbox"><span>Copy share settings<small>Give the same people access and create a new public link if enabled.</small></span></label>
-    <label class="modal-check"><input name="copy_data" type="checkbox"><span>Copy data<small>Include your saved artifact data.</small></span></label>
-    <p data-duplicate-status role="status" aria-live="polite"></p>
-    <div class="modal-actions">
-      <button class="btn btn-sec" type="button" data-duplicate-cancel data-modal-dismiss>Cancel</button>
-      <button class="btn" type="submit">Duplicate artifact</button>
+    <div class="modal-header"><h2 id="{{.ID}}-duplicate-title">Duplicate artifact</h2>{{template "modalClose"}}</div>
+    <div class="modal-body"><fieldset class="modal-fields" aria-label="Copy options">
+      <label for="{{.ID}}-duplicate-name">Title</label>
+      <input id="{{.ID}}-duplicate-name" name="title" type="text" required autocomplete="off" autofocus>
+      <label class="modal-check"><input name="copy_share_settings" type="checkbox"><span>Copy sharing settings<small>Give the same people access. If a public link exists, create a new one for the copy.</small></span></label>
+      <label class="modal-check"><input name="copy_data" type="checkbox"><span>Copy saved data<small>Includes saved results from connected accounts. Review the data before copying sharing settings.</small></span></label>
+      <p data-duplicate-status role="status" aria-live="polite"></p>
+    </fieldset></div>
+    <div class="modal-actions modal-footer">
+      <button class="btn modal-primary" type="submit">Duplicate artifact</button>
+      <button class="btn btn-sec modal-secondary" type="button" data-duplicate-cancel data-modal-dismiss>Cancel</button>
     </div>
   </form>
 </dialog>{{end}}

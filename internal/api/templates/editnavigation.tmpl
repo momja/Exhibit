@@ -1,6 +1,6 @@
 {{define "editorLeaveDialog"}}<dialog class="modal-dialog modal-wide editor-leave-dialog" data-unsaved-changes-target="dialog" data-controller="modal" data-action="modal:before-close->unsaved-changes#beforeClose modal:closed->unsaved-changes#closed" aria-labelledby="editor-leave-title">
   <h2 id="editor-leave-title">Save changes before leaving?</h2>
-  <p>Your unsaved edits will be discarded if you leave without saving. Changes already saved stay saved.</p>
+  <p>Your unsaved edits will be discarded if you leave without saving.</p>
   <div class="modal-actions">
     <button type="button" class="btn btn-sec" data-keep-editing autofocus data-modal-dismiss>Keep editing</button>
     <button type="button" class="btn btn-sec" data-action="unsaved-changes#discard">Discard changes</button>
@@ -9,11 +9,11 @@
 </dialog>{{end}}
 
 {{define "editVersionRows"}}
-<p class="text-sm muted">{{len .Versions}} saved version{{if ne (len .Versions) 1}}s{{end}}</p>
+<p class="version-help">{{len .Versions}} saved version{{if ne (len .Versions) 1}}s{{end}}</p>
 {{range .Versions}}<div class="version-row" data-seq="{{.Seq}}">
   <span class="version-seq">v{{.Seq}}</span>
   <span class="version-what"><strong>{{.Label}}</strong>{{if .Message}} <span class="muted">— {{.Message}}</span>{{end}}</span>
   <time class="text-sm muted version-when" datetime="{{.WhenISO}}">{{.When}}</time>
-  {{if .Current}}<span class="text-sm muted">current</span>{{else}}<button type="button" class="btn btn-sm btn-sec" data-action="view" data-seq="{{.Seq}}" hx-get="/partials/version-viewer?artifact={{$.ID | urlquery}}&amp;seq={{.Seq}}&amp;restorable=1" hx-target="#version-viewer-slot" hx-swap="innerHTML"><i class="ph ph-eye" aria-hidden="true"></i> View</button> <button type="button" class="btn btn-sm btn-sec" data-action="restore" data-seq="{{.Seq}}"><i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i> Restore</button>{{end}}
+  <span class="version-actions">{{if .Current}}<span class="badge version-current">Current</span>{{else}}<button type="button" class="btn btn-sm btn-sec" data-action="view" data-seq="{{.Seq}}" hx-get="/partials/version-viewer?artifact={{$.ID | urlquery}}&amp;seq={{.Seq}}&amp;restorable=1" hx-target="#version-viewer-slot" hx-swap="innerHTML"><i class="ph ph-eye" aria-hidden="true"></i> View</button> <button type="button" class="btn btn-sm btn-sec" data-action="restore" data-seq="{{.Seq}}"><i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i> Restore</button>{{end}}</span>
 </div>{{end}}
 {{end}}

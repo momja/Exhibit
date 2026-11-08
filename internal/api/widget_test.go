@@ -160,7 +160,7 @@ func TestGalleryCardRendersWidgetOrDefaultTile(t *testing.T) {
 	plain := createTestArtifact(t, r, "Mortgage Calculator")
 	require.Equal(t, http.StatusOK, putWidgetReq(t, r, withWidget, "<b>42 km</b>").Code)
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest("GET", "/search", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
@@ -251,7 +251,7 @@ func TestEditPageSectionsAreSymmetricPanels(t *testing.T) {
 	assert.Equal(t, 7, strings.Count(page, `class="ph ph-caret-right details-caret details-caret-closed"`))
 	// Both source fields are real textareas the editor island mounts over, so
 	// the widget source is not a second-class field.
-	assert.Contains(t, page, `<textarea id="body" data-revision="`)
+	assert.Contains(t, page, `<textarea id="body" aria-label="Artifact source" data-revision="`)
 	assert.Contains(t, page, `<textarea id="widget-src"`)
 	assert.Contains(t, page, `id="save-button" data-save-editor`)
 	assert.NotContains(t, page, `id="widget-save"`)
@@ -350,7 +350,7 @@ func TestEditPageGenerateButtonDisabledWithReason(t *testing.T) {
 	page := w.Body.String()
 
 	assert.Contains(t, page, `id="widget-generate"`)
-	assert.Contains(t, page, `disabled title="Agent support is off on this server`)
+	assert.Contains(t, page, `disabled title="The agent is unavailable.`)
 	// No widget yet, so the button offers to make one rather than replace one.
 	assert.Contains(t, page, `<span id="widget-generate-label">Generate widget</span>`)
 }

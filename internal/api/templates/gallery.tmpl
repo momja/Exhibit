@@ -16,7 +16,7 @@
 <body>
 <div id="gallery-shell" data-gallery data-controller="gallery filter-sheet scroll-chrome">
 {{template "appHeader" .Header}}
-<p class="gallery-error" data-gallery-navigation-error role="alert" hidden>Couldn’t switch spaces. Try again.</p>
+<p class="gallery-error" data-gallery-navigation-error role="alert" hidden>Couldn’t open that page. Try again.</p>
 {{template "gallerySpaceContent" .}}
 </div>
 
@@ -48,18 +48,21 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
      history restoration. The header and its Clerk controller never swap. */}}
 {{define "gallerySearchRegion"}}<div id="gallery-search-region">{{template "gallerySearchControls" .}}</div>{{end}}
 {{define "gallerySearchControls"}}
-  <h1 class="app-header-title sr-only">{{if .Title}}{{.Title}}{{else}}Gallery{{end}}</h1>
   {{template "galleryHeaderSearch" .}}
 {{end}}
 
-{{define "gallerySpaceContent"}}<div id="gallery-content" hx-history-elt data-gallery-target="space" data-gallery-read-only="{{if .ReadOnly}}true{{else}}false{{end}}" data-controller="gallery-space">
+{{define "gallerySpaceContent"}}<div id="gallery-content" hx-history-elt data-gallery-target="space" data-gallery-read-only="{{if .ReadOnly}}true{{else}}false{{end}}" data-controller="gallery-space artifact-stars">
 <div id="{{.Grid.ID}}">
 {{if or .Spaces .Grid.Filters.Sections}}<div class="gallery-layout{{if not .Spaces}} gallery-layout-solo{{end}}">{{template "gallerySpaces" .}}{{end -}}
-<main>{{if .Grid.Title}}<h2 class="gallery-title">{{.Grid.Title}}</h2>{{end}}
+<main id="main-content" tabindex="-1">
+<div class="gallery-overview"><h1 class="gallery-title">{{.Grid.Title}}</h1>{{if .Grid.Description}}<p class="gallery-description">{{.Grid.Description}}</p>{{end}}</div>
+{{if .Grid.HideSearch}}{{if not .Grid.Activity}}<div hidden>{{template "gallerySearch" .Grid}}</div>{{end}}{{end}}
 {{if .Grid.SearchPage}}<div class="gallery-page-search">{{template "gallerySearch" .Grid}}</div>{{end}}
 {{/* Cards share their tile, title, status marks, and action menu with every
      gallery fragment. Card clicks open the viewer; menu actions have their
      own controls and are handled through delegation after htmx swaps. */}}
+<p class="gallery-error" data-gallery-action-error role="alert" hidden>Couldn’t update your starred artifacts. Please try again.</p>
+{{if .Grid.Activity}}{{template "activityOverview" .Grid}}{{end}}
 {{template "galleryResults" .Grid}}
 </main>
 {{- if or .Spaces .Grid.Filters.Sections}}</div>{{end}}{{if .Grid.Filters.Sections}}
@@ -74,16 +77,9 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
 {{end}}
 
 {{define "galleryHeaderSearch"}}
-  {{/* Search sits in the app bar beside the logo (av-uvc6) rather than in a
-       row of its own above the grid: the library opens on the control you
-       use to find things in it, and the grid gets the height back.
-
-       `/` focuses it from anywhere on the page (av-6mdw, gallery.js). The key cap
-       after the input is how a sighted user learns that; aria-keyshortcuts is
-       how a screen reader does, so the cap itself is aria-hidden. It must stay
-       the input's later sibling: index.css hides it with `input:focus ~` and
-       `input:not(:placeholder-shown) ~`, so it disappears once the box is in
-       use with no script involved. */}}
-  {{if not .SearchPage}}{{template "gallerySearch" .}}{{end}}{{if .Filters.Sections}}
+  {{/* Search owns a page-level form at every width. Other searchable
+       destinations may reuse the compact header form. Starred and Activity
+       expose neither a search field nor filters. */}}
+  {{if and (not .SearchPage) (not .HideSearch)}}{{template "gallerySearch" .}}{{end}}{{if .Filters.Sections}}
   <button class="btn btn-sec gallery-filter-trigger" type="button" data-filter-sheet-target="trigger" data-action="filter-sheet#open" aria-controls="{{.ID}}-filter-sheet" aria-haspopup="dialog"><i class="ph ph-sliders" aria-hidden="true"></i><span>Filter</span></button>{{end}}
 {{end}}

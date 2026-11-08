@@ -63,7 +63,7 @@ func TestAgentKeyLifecycle(t *testing.T) {
 // The agent page's header back link must mirror the two ways it's reached
 // rather than always pointing at the gallery: the add-artifact page's "Build
 // with agent" tile links to bare /agent, so back must return to /new; the
-// detail page's "Modify with agent" link carries ?artifact=<id>, so back
+// detail page's "Edit with agent" link carries ?artifact=<id>, so back
 // must return to that artifact's detail page. A hardcoded "/" back link
 // strands a visitor who went add-artifact -> agent -> back on the gallery
 // instead of where they came from.

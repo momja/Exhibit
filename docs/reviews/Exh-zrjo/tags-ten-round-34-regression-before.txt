@@ -1,0 +1,85 @@
+
+Running 2 tests using 1 worker
+
+(node:281640) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  1 [chromium] › specs/tags.spec.ts:3:1 › tag editing keeps color samples intact, controls aligned and validation local in both schemes (2.6s)
+(node:281725) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  2 [chromium] › specs/tags.spec.ts:132:1 › partial tag creation retains nearby attach error and retries the same tag (11.5s)
+
+
+  1) [chromium] › specs/tags.spec.ts:3:1 › tag editing keeps color samples intact, controls aligned and validation local in both schemes
+
+    Error: invalid hex uses the same danger border as invalid Name
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "rgb(180, 35, 24)"
+    Received: "rgb(135, 146, 162)"
+
+      61 |           return { border: getComputedStyle(element).borderColor, danger, gap: error.top - field.bottom };
+      62 |         });
+    > 63 |         expect(invalidPaint.border, 'invalid hex uses the same danger border as invalid Name').toBe(invalidPaint.danger);
+         |                                                                                                ^
+      64 |         expect(invalidPaint.gap).toBeGreaterThanOrEqual(4);
+      65 |         expect(invalidPaint.gap).toBeLessThanOrEqual(8);
+      66 |         await expect(modal.locator('#tag-edit-color-hint')).toBeHidden();
+        at /home/maxomdal/.t3/worktrees/Exhibit/feature-Exh-zrjo-ui-council/e2e/specs/tags.spec.ts:63:96
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/tags-tag-editing-keeps-col-056a0-ation-local-in-both-schemes-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/tags-tag-editing-keeps-col-056a0-ation-local-in-both-schemes-chromium/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/tags-tag-editing-keeps-col-056a0-ation-local-in-both-schemes-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/tags-tag-editing-keeps-col-056a0-ation-local-in-both-schemes-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [chromium] › specs/tags.spec.ts:132:1 › partial tag creation retains nearby attach error and retries the same tag
+
+    Error: expect(locator).toHaveValue(expected) failed
+
+    Locator:  locator('#tag-add-select')
+    Expected: "8123c30a-5c02-4377-bf37-55c145d67be4"
+    Received: ""
+    Timeout:  10000ms
+
+    Call log:
+      - Expect "toHaveValue" locator('#tag-add-select') with timeout 10000ms
+      - waiting for locator('#tag-add-select')
+        23 × locator resolved to <select class="select" id="tag-add-select" aria-label="Tag to add" aria-describedby="tag-add-error">…</select>
+           - unexpected value ""
+
+
+      150 |       const created = await (await response).json(); remaining.add(created.id);
+      151 |       const select = page.locator('#tag-add-select');
+    > 152 |       await expect(select).toHaveValue(created.id);
+          |                            ^
+      153 |       await expect(select).toBeFocused();
+      154 |       await expect(page.locator('#tag-add-confirm')).toBeEnabled();
+      155 |       await expect(page.locator('#tag-add-error')).toHaveText('Tag created, but not added. Temporary attach failure. Try again.');
+        at /home/maxomdal/.t3/worktrees/Exhibit/feature-Exh-zrjo-ui-council/e2e/specs/tags.spec.ts:152:28
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/tags-partial-tag-creation--1e28d-or-and-retries-the-same-tag-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/tags-partial-tag-creation--1e28d-or-and-retries-the-same-tag-chromium/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/tags-partial-tag-creation--1e28d-or-and-retries-the-same-tag-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/tags-partial-tag-creation--1e28d-or-and-retries-the-same-tag-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    [chromium] › specs/tags.spec.ts:3:1 › tag editing keeps color samples intact, controls aligned and validation local in both schemes
+    [chromium] › specs/tags.spec.ts:132:1 › partial tag creation retains nearby attach error and retries the same tag

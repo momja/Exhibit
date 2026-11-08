@@ -1,0 +1,11 @@
+Pinned candidate: `907cb944a9a296cd0aae3dd59fb739fa1f22c365`.
+
+**Remaining actionable findings: 1.**
+
+- **P3 — Reuse the Tags error class for refresh recovery.** `internal/api/templates/edit.tmpl:47` gives the retry explanation `class="field-error"`, but that class is defined only in `web/gallery/new.css:113`. The edit page loads `tokens.css`, `components.css`, and `edit.css` (`edit.tmpl:12`), so the recovery explanation receives ordinary paragraph styling. Use the existing `class="text-sm tag-error"`, as the other Tags errors do: `components.css:389` supplies the text size and `edit.css:201` supplies error color/spacing. This removes a dead cross-page styling dependency without adding CSS. It is a concrete component-hygiene/reuse suggestion, not a hard architecture violation or a new visual rating.
+
+The later validation patch preserves the previous assertions, adds the native-fieldset assertion, and updates the exact trigger expectation to match the mutation plus declarative GET retry (`internal/api/gallery_test.go:111`). The Retry button correctly uses the existing shared `btn-sec` (`edit.tmpl:48`; `components.css:17`). Auditing every markup/class addition in the complete cleanup found no other missing stylesheet or partial owner.
+
+The earlier functional and reuse findings are source-resolved: the stable native fieldset spans mutation and htmx refresh; normal session-recovery headers and error-fragment swaps remain intact, with absent controls guarded. CodeMirror owns read-only state through its narrow handle. Native picker input feeds the single synchronization/presentation path. Menu movement and palette definitions are shared without coupling unrelated lifecycles; redundant modal typography is removed. Completed-import recovery preserves unfinished approval.
+
+Limits: read-only source and regression-test inspection against the pinned cleanup and relevant originating context, with all permitted prior reports/responses and pertinent standards/specifications read. No builds, tests, servers, browser actions, source edits, or current-phase peer reports. Supplied validation is context only; actual BFCache restoration and live rendering/focus/error behavior were not independently exercised.

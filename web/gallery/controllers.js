@@ -1,8 +1,11 @@
+import ArtifactStarsController from './artifact-stars-controller.js';
 // One application per document. ES modules run once, including when multiple
 // page scripts import this entry point. Register new shared controllers here.
 import { Application } from '../stimulus/stimulus.js';
 import ActionMenuController from './action-menu-controller.js';
 import ModalController from './modal-controller.js';
+import ColorPickerController from './color-picker-controller.js';
+import CapabilityPopoverController from './capability-popover-controller.js';
 import RelayHostController from './relay-host-controller.js';
 import ConnectionsController from './connections-controller.js';
 import UnsavedChangesController from './unsaved-changes-controller.js';
@@ -14,6 +17,8 @@ import AgentStateAccessController from './agent-state-access-controller.js';
 export const application = Application.start();
 application.register('action-menu', ActionMenuController);
 application.register('modal', ModalController);
+application.register('color-picker', ColorPickerController);
+application.register('capability-popover', CapabilityPopoverController);
 application.register('unsaved-changes', UnsavedChangesController);
 
 application.register('clerk', ClerkController);
@@ -37,3 +42,5 @@ import ScrollChromeController from './scroll-chrome-controller.js';
 application.register('scroll-chrome', ScrollChromeController);
 application.register('relay-host', RelayHostController);
 application.register('connections', ConnectionsController);
+
+application.register('artifact-stars', ArtifactStarsController);

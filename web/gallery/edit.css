@@ -4,24 +4,24 @@
  * edit-page-specific rules live here. */
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(--color-ink);min-height:100vh}
-main{padding:24px;max-width:900px;margin:0 auto}
+main{padding:var(--page-top) var(--page-gutter);max-width:900px;margin:0 auto}
 .edit-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px}
-.edit-heading h1{font-size:24px;line-height:1.25;overflow-wrap:anywhere}
+.edit-heading h1{font-size:var(--page-title-size);font-weight:650;letter-spacing:-.025em;line-height:1.25;overflow-wrap:anywhere}
 .edit-heading p{margin-bottom:4px}
 .edit-card>label{display:block;margin-bottom:6px}
-@media(max-width:600px){main{padding:20px 16px}.edit-heading{align-items:flex-start;flex-direction:column;gap:8px}.edit-heading h1{font-size:21px}.edit-card{padding:16px}.edit-card>.btn-row{flex-wrap:wrap}}
+@media(max-width:600px){main{padding:var(--page-top) var(--page-gutter)}.edit-heading{align-items:flex-start;flex-direction:column;gap:8px}.edit-heading h1{font-size:var(--page-title-size)}.edit-card{padding:16px}.edit-card>.btn-row{flex-wrap:wrap}}
 .edit-card{background:var(--color-panel);border-radius:10px;padding:20px;box-shadow:var(--shadow-card)}
-.edit-card>h2{font-size:15px;font-weight:600;margin-bottom:12px;color:var(--color-ink-soft)}
-.edit-card>input[type=text]{width:100%;padding:8px 10px;border:1px solid var(--color-border);border-radius:6px;font-size:var(--field-font-size);margin-bottom:10px;outline:none}
+.edit-card>h2{font-size:0.9375rem;font-weight:600;margin-bottom:12px;color:var(--color-ink-soft)}
+.edit-card>input[type=text]{width:100%;min-height:var(--control-height);line-height:1.4;padding:7px 10px;border:1px solid var(--color-field-border);border-radius:6px;font-size:var(--field-font-size);margin-bottom:10px;outline:none}
 .edit-card>input[type=text]:focus{border-color:var(--brand-blue)}
-.edit-card textarea{width:100%;height:400px;font-family:monospace;font-size:var(--field-code-font-size);border:1px solid var(--color-border);border-radius:6px;padding:10px;resize:vertical;outline:none}
+.edit-card textarea{width:100%;height:400px;font-family:monospace;font-size:var(--field-code-font-size);border:1px solid var(--color-field-border);border-radius:6px;padding:10px;resize:vertical;outline:none}
 .edit-card textarea:focus{border-color:var(--brand-blue)}
-.edit-card .cm-editor{height:400px;font-size:var(--field-code-font-size);border:1px solid var(--color-border);border-radius:6px;overflow:hidden}
+.edit-card .cm-editor{height:400px;font-size:var(--field-code-font-size);border:1px solid var(--color-field-border);border-radius:6px;overflow:hidden}
 .edit-card .cm-editor.cm-focused{outline:none;border-color:var(--brand-blue)}
 .edit-card .cm-scroller{overflow:auto}
 .btn-row{display:flex;gap:8px;margin-top:12px;align-items:center}
-#status{font-size:13px;color:var(--color-ink-mid)}
-#scan-result{margin-top:12px;background:var(--color-subtle);border:1px solid var(--color-hairline);border-radius:6px;padding:12px;font-size:13px;display:none}
+#status{font-size:0.8125rem;color:var(--color-ink-mid)}
+#scan-result{margin-top:12px;background:var(--color-subtle);border:1px solid var(--color-hairline);border-radius:6px;padding:12px;font-size:0.8125rem;display:none}
 #scan-result code{background:var(--color-ground);padding:1px 5px;border-radius:3px}
 
 /* --- the panels: security, state, artifact source, gallery widget --------
@@ -32,15 +32,21 @@ main{padding:24px;max-width:900px;margin:0 auto}
 .security-body{display:flex;gap:24px}
 .security-col{flex:1;min-width:0}
 .security-col+.security-col{border-left:1px solid var(--color-hairline);padding-left:24px}
-.security-col h3{margin:10px 0 6px}
+.security-col h3{margin:16px 0 8px}
 .security-col h3:first-child{margin-top:0}
-#allowlist-rows,#unapproved-rows{max-height:180px;overflow-y:auto}
+#allowlist-rows,#unapproved-rows,#blocked-rows{max-height:180px;overflow-y:auto}
+.security-col .allowlist-empty{margin:0}
+.origin-add{margin-top:12px}
 .allowlist-row code{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* Remove/Allow/Add sit in the same visual column across three different
  * rows/labels, so they read as one consistent action width rather than
  * shrink-to-fit text. */
 .allowlist-row .btn,#al-add-btn{min-width:76px;justify-content:center;flex-shrink:0}
-.security-col label.row{margin-bottom:10px}
+.security-col label.row{margin-bottom:12px}
+.security-col label.row:last-child{margin-bottom:0}
+.security-col label.row>.field-label{margin:0}
+#security-summary{align-items:flex-start;line-height:1.5}
+#security-summary .details-caret{margin-top:3.5px}
 
 /* --- state inspector (av-hg5f): typed form editing of artifact state ---- */
 .state-body{border:0;min-width:0}
@@ -55,26 +61,27 @@ main{padding:24px;max-width:900px;margin:0 auto}
 .state-row:first-child{border-top:none}
 .state-row.is-deleted .state-key{text-decoration:line-through;opacity:.6}
 .state-row-head{display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-3)}
-.state-key{font-size:13px;font-weight:600;max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.state-type{font-size:11px;color:var(--color-muted);flex-shrink:0}
+.state-key{font-size:0.8125rem;font-weight:600;max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.state-type{font-size:0.6875rem;color:var(--color-muted);flex-shrink:0}
 .state-input{font-size:var(--field-font-size);padding:5px var(--space-3)}
 input.state-input{max-width:340px}
-.state-toggle{display:inline-flex;align-items:center;gap:var(--space-2);font-size:13px}
+.state-toggle{display:inline-flex;align-items:center;gap:var(--space-2);min-height:var(--control-height);font-size:0.8125rem}
 /* Container controls: one indent rule per level of the value's own nesting. */
 .state-list,.state-records,.state-object{display:flex;flex-direction:column;gap:var(--space-2);padding-left:var(--space-5);border-left:2px solid var(--color-hairline)}
 .state-list-row{display:flex;align-items:center;gap:var(--space-2)}
 .state-list-row .state-input{flex:1;min-width:0}
 .state-field{display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap}
-.state-field-label{font-size:12px;color:var(--color-muted);min-width:110px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.state-field-label{font-size:0.75rem;color:var(--color-muted);min-width:110px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* A field holding a nested container wraps it onto its own line, which would
  * strand the property's remove button on a third line below it. Ordering pulls
  * the button up beside the label it belongs to; a field holding a primitive is
  * unaffected, since its control still precedes the button. */
-.state-field>button{order:1}
+.state-field>button{order:1;margin-left:auto}
 .state-field>.state-list,.state-field>.state-records,.state-field>.state-object{order:2;flex:1 1 100%;min-width:0}
 .state-record{border:1px solid var(--color-hairline);border-radius:var(--radius-md);padding:var(--space-3);display:flex;flex-direction:column;gap:var(--space-2)}
 .state-record-head{display:flex;align-items:center;gap:var(--space-2)}
 .state-move{padding:3px var(--space-2)}
+:is(.state-row-head,.state-field,.state-list-row,.state-record-head,.asset-row)>.btn{flex:0 0 36px;width:36px;min-width:36px;height:36px;min-height:36px;padding:0}
 .state-inline-add{align-self:flex-start}
 .state-adder{display:flex;align-items:center;gap:var(--space-2);flex-wrap:wrap}
 .state-adder .state-input{max-width:180px}
@@ -82,15 +89,18 @@ input.state-input{max-width:340px}
 /* Read-only: a value with no matching control is shown as stored, never as an
  * editable blob — a hand-typed JSON blob is the corruption this panel undoes. */
 .state-readonly{background:var(--color-ground);border-radius:var(--radius-md);padding:var(--space-3)}
-.state-readonly pre{margin-top:var(--space-2);font-family:monospace;font-size:12px;white-space:pre-wrap;word-break:break-word;max-height:220px;overflow:auto}
-.state-empty{display:flex;align-items:center;gap:var(--space-3);padding:16px 0;color:var(--color-muted);font-size:13px}
-.state-empty i{font-size:18px;color:var(--color-faint)}
+.state-readonly pre{margin-top:var(--space-2);font-family:monospace;font-size:0.75rem;white-space:pre-wrap;word-break:break-word;max-height:220px;overflow:auto}
+.state-empty{display:flex;align-items:center;gap:var(--space-3);padding:16px 0;color:var(--color-muted);font-size:0.8125rem}
+.state-empty i{font-size:1.125rem;color:var(--color-faint)}
 .state-agent-access{margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--color-hairline)}
 .state-agent-access .row{flex-wrap:wrap}
 .state-agent-access .spacer{min-width:14rem}
 .state-agent-access p{margin-top:var(--space-2)}
 .state-add{display:flex;align-items:center;gap:var(--space-2);margin-top:12px;padding-top:12px;border-top:1px solid var(--color-hairline);flex-wrap:wrap}
 .state-add .field{max-width:220px}
+.state-actions #state-status:empty{display:none}
+.state-danger-actions{margin-top:20px;padding-top:16px;border-top:1px solid var(--color-hairline)}
+.state-readonly>.text-sm,.state-empty{font-size:var(--text-helper);line-height:var(--line-helper)}
 
 /* --- gallery widget panel (av-fafu) -------------------------------------- */
 .widget-body{display:flex;gap:24px}
@@ -100,7 +110,7 @@ input.state-input{max-width:340px}
  * here to pull back out of. */
 .widget-preview{flex:0 0 272px}
 .widget-preview .card-widget{margin:0;border:1px solid var(--color-hairline);border-radius:var(--radius-lg)}
-.widget-preview p{margin-top:10px;line-height:1.45}
+.widget-preview p{margin-top:12px}
 .widget-source{flex:1;min-width:0;display:flex;flex-direction:column}
 /* Shorter than the artifact's own editor: a widget is a small document, and
  * the artifact source stays the page's main event. Both the textarea and the
@@ -111,10 +121,13 @@ input.state-input{max-width:340px}
 
 /* --- responsive: single column, stacked security body, full-width actions */
 @media (max-width:640px){
-  main{padding:12px}
+  main{padding:var(--page-top) var(--page-gutter)}
   .edit-card{padding:14px}
   .security-body{flex-direction:column;gap:16px}
   .security-col+.security-col{border-left:none;padding-left:0;border-top:1px solid var(--color-hairline);padding-top:16px}
+  .security-col .allowlist-row{flex-wrap:wrap;justify-content:flex-end}
+  .security-col .allowlist-row code{flex-basis:100%}
+  .security-col .allowlist-row>.muted{margin-right:auto}
   /* Narrow enough that a label, its control and its remove button can't share
    * a line: keep the label paired with the button it applies to, and drop the
    * control to its own full-width line beneath them. */
@@ -152,29 +165,73 @@ input.state-input{max-width:340px}
 
 /* --- versions panel ------------------------------------------------------ */
 #version-viewer-slot:not(:empty) { margin-bottom: var(--space-6); }
-.version-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 0;
-  border-bottom: 1px solid var(--border);
+.version-row{display:grid;grid-template-columns:2.5rem minmax(0,1fr) max-content max-content;align-items:center;gap:8px;padding:12px 0;border-bottom:1px solid var(--color-hairline)}
+.version-row:last-child{border-bottom:0}
+.version-seq{font-variant-numeric:tabular-nums;color:var(--color-muted)}
+.version-what{min-width:0;overflow-wrap:anywhere}
+.version-when{white-space:nowrap}
+.version-actions{display:flex;flex-wrap:nowrap;justify-content:flex-end;align-items:center;gap:8px;min-width:0}
+#versions-rows>p{margin:12px 0}
+/* Rows share the widest intrinsic date/action tracks. Current and an action
+ * pair must not move adjacent timestamps, or force a fixed-width button wrap. */
+@supports(grid-template-columns:subgrid){
+  @media(min-width:641px){
+    #versions-rows{display:grid;grid-template-columns:2.5rem minmax(0,1fr) max-content max-content;column-gap:8px}
+    #versions-rows>p{grid-column:1/-1}
+    .version-row{grid-column:1/-1;grid-template-columns:subgrid}
+  }
 }
-.version-row:last-child { border-bottom: 0; }
-.version-seq { flex: 0 0 auto; font-variant-numeric: tabular-nums; color: var(--color-muted); min-width: 2.5em; }
-.version-what { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
-.version-when { flex: 0 0 auto; white-space: nowrap; }
 
 /* --- tags panel: controls always visible (no hover on touch) ----------- */
-.tag-edit-list{display:flex;flex-wrap:wrap;gap:8px;list-style:none;margin-bottom:12px}
-.tag-pill-editable{height:26px;padding:0 3px 0 9px;font-size:12px}
-.tag-pill-btn{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;padding:0;border:none;border-radius:50%;background:transparent;color:inherit;cursor:pointer}
-.tag-pill-btn:hover,.tag-pill-btn:focus-visible{background:var(--color-press-fill)}
-.tag-pill-btn i{font-size:12px;line-height:1}
+.tag-status{margin:0 0 12px}
+.tag-fields{border:0;padding:0;margin:0;min-width:0}
+.tag-edit-list{display:grid;grid-template-columns:minmax(0,1fr);gap:4px;max-width:320px;list-style:none;margin-bottom:12px}
+.tag-edit-item{display:flex;align-items:center;gap:8px;max-width:100%;min-width:0;min-height:32px;border-bottom:1px solid var(--color-hairline)}
+.tag-edit-item:last-child{border-bottom:0}
+.tag-edit-item>.tag-pill{height:auto;min-height:28px;padding:5px 9px;min-width:0;font-size:.8125rem;color:var(--color-ink-soft);margin-right:auto}
+.tag-edit-item .tag-dot{box-shadow:0 0 0 1px var(--color-tag-ring)}
+.tag-edit-item .tag-pill-label{min-width:0;line-height:1.4}
+.tag-edit-actions{display:flex;flex:0 0 auto}
+.tag-pill-btn{display:inline-flex;align-items:center;justify-content:center;flex:0 0 32px;min-width:32px;width:32px;height:32px;padding:0;border:none;border-radius:50%;background:transparent;color:var(--color-muted);cursor:pointer}
+.tag-pill-btn:hover,.tag-pill-btn:focus-visible{background:var(--color-press-fill);color:var(--color-ink)}
+.tag-pill-btn i{font-size:1rem;line-height:1}
 .tag-panel>p{margin-bottom:12px}
-.tag-add-row{display:flex;gap:8px;align-items:center}
-.tag-add-row .select{flex:1;min-width:0;max-width:320px}
-.tag-create{display:flex;flex-direction:column;gap:4px;margin-top:20px;max-width:320px}
+.tag-add-row{display:flex;gap:8px;align-items:center;max-width:320px}
+.tag-add-row .select{flex:1;min-width:0}
+.tag-create{display:flex;flex-direction:column;gap:4px;margin-top:20px;max-width:320px;min-width:0;padding:0;border:0}
+.tag-create h3,.security-col h3{font-size:.875rem;line-height:1.5;font-weight:600;color:var(--color-ink-soft)}
 .tag-create h3{margin:0 0 8px}
-.tag-create .btn{align-self:flex-start;margin-top:8px}
-.tag-error{color:var(--color-danger-hover);margin-top:8px}
+.tag-create .btn{align-self:flex-start;margin-top:8px;min-width:min(200px,100%)}
+.tag-error,.form-help.tag-error{color:var(--color-danger-hover);margin-top:8px}
+.tag-available-note{margin-top:8px}
+@media(max-width:767px){.tag-edit-list{grid-template-columns:minmax(0,1fr);max-width:none}.tag-add-row{max-width:none}}
 
+
+/* History is a list of facts and actions, so every row can wrap independently. */
+.security-summary-note{font-weight:400;color:var(--color-muted)}
+.editor-footer{padding-top:20px;margin-top:24px;border-top:1px solid var(--color-hairline);flex-wrap:wrap}
+.editor-footer .editor-delete{color:var(--color-danger);margin-left:16px}
+.editor-delete:hover{color:var(--color-danger-hover);border-color:var(--color-danger);background:var(--color-danger-tint)}
+@media(max-width:640px){
+  .version-row{grid-template-columns:2.5rem minmax(0,1fr)}
+  .version-when{grid-column:2;white-space:normal;overflow-wrap:anywhere}
+  .version-actions{grid-column:2;justify-content:flex-start;flex-wrap:wrap}
+  .version-row .btn{min-height:44px}
+  .editor-footer .editor-delete{width:100%;align-self:stretch;margin-left:0;margin-top:8px}
+}
+
+@media(max-width:767px){.edit-card>input[type=text]{min-height:44px}}
+
+.tag-add-row>.btn,#al-add-btn,.state-add>.btn,.state-adder>.btn{min-height:var(--control-height)}
+
+@media(max-width:767px){.tag-add-row>.btn,.tag-create>.btn,#al-add-btn,.state-add>.btn{min-height:44px}}
+
+@media(max-width:767px){.tag-create{width:100%;max-width:none}.editor-footer .btn{min-height:44px}}
+@media(max-width:767px){
+  .edit-card .panel-body .btn{min-height:44px}
+  :is(.state-row-head,.state-field,.state-list-row,.state-record-head,.asset-row)>.btn{flex-basis:44px;width:44px;min-width:44px;height:44px}
+  .tag-pill-btn{flex-basis:44px;width:44px;min-width:44px;height:44px}
+  .tag-create>.btn{align-self:stretch;width:100%}
+}
+
+.version-current{padding:4px 9px;border-radius:var(--radius-pill);background:var(--color-accent-tint);color:var(--color-accent);font-size:.8125rem;font-weight:600;line-height:1.5}

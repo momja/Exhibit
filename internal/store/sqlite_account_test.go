@@ -59,6 +59,7 @@ const (
 )
 
 var accountTables = map[string]accountTable{
+	"artifact_preferences": {reachTrigger, "the user-delete trigger erases viewer preferences, including on received files; preferences for a deleted artifact also cascade from artifacts(id)", "SELECT COUNT(*) FROM artifact_preferences WHERE viewer_id = ?1 OR artifact_id = '" + deletedArtifact + "'"},
 	"pending_vendor_connections": {reachRetained,
 		"durable remote revocation work survives unexpected erasure; API deletion drains it first, and maintenance retries without retaining library payloads", ""},
 	"hosted_account_deletions": {reachRetained,
@@ -272,6 +273,9 @@ func seedEverything(t *testing.T, s *SQLiteStore) accountFixture {
 		ID: deletedArtifact, OwnerID: member.ID, Title: "membersearchtoken tracker",
 		SourceBlobID: "member-body", WidgetBlobID: "member-widget", Tier: Tier1,
 	}))
+
+	require.NoError(t, s.SetArtifactStarred(ctx, ViewerID(member.ID), deletedArtifact, true))
+	require.NoError(t, s.RecordArtifactOpened(ctx, ViewerID(member.ID), deletedArtifact))
 
 	_, err = s.CreateAgentGrant(ctx, member.ID, "External agent", "", "member-token-digest")
 	require.NoError(t, err)

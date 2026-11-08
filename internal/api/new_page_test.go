@@ -29,11 +29,11 @@ func TestNewPageOffersThreeRoutes(t *testing.T) {
 	page := getPage(t, r, "/new")
 
 	assert.Contains(t, page, "<title>Add artifact — Exhibit</title>")
-	assert.Contains(t, page, `<h2>Three ways in.</h2>`)
+	assert.Contains(t, page, `<h2>Add to Gallery</h2>`)
 
-	assert.Contains(t, page, `<button type="button" class="route is-selected" data-mode="agent" aria-pressed="true" onclick="setMode('agent')">`)
-	assert.Contains(t, page, `<button type="button" class="route" data-mode="paste" aria-pressed="false" onclick="setMode('paste')">`)
-	assert.Contains(t, page, `<button type="button" class="route" data-mode="url" aria-pressed="false" onclick="setMode('url')">`)
+	assert.Contains(t, page, `<button type="button" class="route is-selected" data-mode="agent" aria-pressed="true">`)
+	assert.Contains(t, page, `<button type="button" class="route" data-mode="paste" aria-pressed="false">`)
+	assert.Contains(t, page, `<button type="button" class="route" data-mode="url" aria-pressed="false">`)
 	assert.Contains(t, page, `role="group" aria-label="Creation method"`)
 	assert.Contains(t, page, `<span class="route-label-compact">Agent</span>`)
 	assert.Contains(t, page, `id="route-description" aria-live="polite"`)
@@ -43,8 +43,8 @@ func TestNewPageOffersThreeRoutes(t *testing.T) {
 	assert.NotContains(t, page, `<a class="route" href="/agent">`)
 
 	// The shared app header retains the gallery return and page title.
-	assert.Contains(t, page, `class="app-header-back app-header-back-collapse" href="/" title="Gallery"`)
-	assert.Contains(t, page, `<h1 class="app-header-title">Add artifact</h1>`)
+	assert.Contains(t, page, `class="app-header-back" href="/" title="Library"`)
+	assert.Contains(t, page, `<h1 class="app-header-title sr-only">Add artifact</h1>`)
 }
 
 // Order is the ticket (nw-d1dd): agent, then paste, then url.
@@ -69,14 +69,14 @@ func TestNewPageCarriesTheAgentBriefForm(t *testing.T) {
 	r := newTestRouter(t)
 	page := getPage(t, r, "/new")
 
-	assert.Contains(t, page, `<form class="card ingest-panel" id="agent-panel" onsubmit="startAgent(event)">`)
+	assert.Contains(t, page, `<form class="card ingest-panel" id="agent-panel" novalidate>`)
 	assert.Contains(t, page, `<input class="field" type="text" id="agent-title" name="title"`)
 	assert.Contains(t, page, `<textarea id="agent-description" name="description" required`)
-	assert.Contains(t, page, `<button class="btn" type="submit"><i class="ph ph-robot"></i> Start building</button>`)
+	assert.Contains(t, page, `<button class="btn" type="submit"><i class="ph ph-robot" aria-hidden="true"></i> Start building</button>`)
 
 	// The ingest form is the other panel, and it starts hidden: the page opens
 	// on the brief.
-	assert.Contains(t, page, `<div class="card ingest-panel" id="ingest-panel" hidden>`)
+	assert.Contains(t, page, `<form class="card ingest-panel" id="ingest-panel" novalidate hidden>`)
 }
 
 // The brief crosses to /agent in sessionStorage, never a query string: it is
@@ -119,13 +119,13 @@ func TestNewPageCarriesTheIngestPanel(t *testing.T) {
 
 	assert.Contains(t, page, `<input class="field" type="text" id="title"`)
 	assert.Contains(t, page, `<textarea id="body" placeholder=`)
-	assert.Contains(t, page, `<input class="field" type="text" id="url-input"`)
+	assert.Contains(t, page, `<input class="field" type="url" id="url-input"`)
 	assert.Contains(t, page, `<input type="checkbox" id="snapshot-toggle" checked>`)
 	assert.Contains(t, page, `<div id="scan-result">`)
 	assert.Contains(t, page, `id="network-approval" hx-get="/partials/network-approval"`)
-	assert.Contains(t, page, `<div id="status"></div>`)
-	assert.Contains(t, page, `onclick="ingest()"`)
-	assert.Contains(t, page, `Add to library`)
+	assert.Contains(t, page, `<div id="status" role="status" aria-live="polite" aria-atomic="true"></div>`)
+	assert.Contains(t, page, `id="ingest-panel" novalidate hidden`)
+	assert.Contains(t, page, `Add to Gallery`)
 	// Cancel goes back to the library, which is also where a finished ingest
 	// leaves from.
 	assert.Contains(t, page, `<a class="btn btn-sec" href="/">Cancel</a>`)
@@ -175,7 +175,7 @@ func TestNewPageKeepsApproveThenPatchFlow(t *testing.T) {
 // called, not what it looks like.)
 func TestGalleryIndexHasNoIngestMarkup(t *testing.T) {
 	r := newTestRouter(t)
-	page := getPage(t, r, "/")
+	page := getPage(t, r, "/search")
 
 	for _, id := range []string{`id="upload"`, `id="body"`, `id="url-input"`, `id="snapshot-row"`, `id="scan-result"`, `id="status"`} {
 		assert.NotContains(t, page, id, "ingest markup must not survive on the library index")
@@ -204,11 +204,11 @@ func TestGalleryIndexHasNoIngestMarkup(t *testing.T) {
 // longer above it.
 func TestGalleryEmptyStateLinksToNewPage(t *testing.T) {
 	r := newTestRouter(t)
-	page := getPage(t, r, "/")
+	page := getPage(t, r, "/search")
 
 	assert.Contains(t, page, `Welcome to Exhibit`)
 	assert.Contains(t, page, `href="/new"><i class="ph ph-palette" aria-hidden="true"></i>Create your first artifact`)
-	assert.Contains(t, getPage(t, r, "/partials/gallery-grid"), `Welcome to Exhibit`)
+	assert.Contains(t, getPage(t, r, "/partials/gallery-grid/search"), `Welcome to Exhibit`)
 }
 
 // The 404 page's second action used to point at a /#upload fragment on the
@@ -222,7 +222,7 @@ func TestNotFoundAddArtifactButtonTargetsNewPage(t *testing.T) {
 	page := w.Body.String()
 
 	assert.NotContains(t, page, `href="/#upload"`)
-	assert.Contains(t, page, `<a class="btn btn-sec" href="/new">`)
+	assert.Contains(t, page, `href="/new" aria-label="Add artifact"`)
 
 	req := httptest.NewRequest("GET", "/new", nil)
 	w2 := httptest.NewRecorder()

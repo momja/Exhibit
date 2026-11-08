@@ -4,11 +4,16 @@ import { eventScope } from './event-scope.js';
 
 export function initializeGallery(root) {
   const events = eventScope();
+  events.on(root, 'click', (event) => {
+    if (event.target.closest('a, button, .card-actions, [data-capability-trigger], .capability-popover')) return;
+    const card = event.target.closest('.card');
+    if (card?.dataset.href) window.location.href = card.dataset.href;
+  });
   const form = root.querySelector('[data-gallery-search]');
   const input = root.querySelector('[data-gallery-query]');
   const clear = root.querySelector('[data-gallery-clear]');
   const searchError = root.querySelector('[data-gallery-search-error]');
-  let query = input.value.trim();
+  let query = input?.value.trim() || '';
   let revision = 0;
   let timer;
   const requests = new WeakMap();
@@ -22,33 +27,35 @@ export function initializeGallery(root) {
     clear.hidden = input.value.length === 0;
   }
 
-  events.on(input, 'input', () => {
-    syncClear();
-    if (query === input.value.trim()) return;
-    query = input.value.trim();
-    revision++;
-    clearTimeout(timer);
-    timer = setTimeout(search, 220);
-  });
-  events.on(form, 'submit', () => clearTimeout(timer));
-  events.on(clear, 'click', () => {
-    input.value = '';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    input.focus();
-    search();
-  });
-  syncClear();
-  events.on(root, 'exhibit:artifacts-changed', () => {
-    // Ordinary galleries clear the query to reveal a renamed copy. The
-    // dedicated Search page keeps its query: clearing it shows only a prompt.
-    if (form.dataset.galleryPreserveQuery !== 'true') {
+  if (form) {
+    events.on(input, 'input', () => {
+      syncClear();
+      if (query === input.value.trim()) return;
+      query = input.value.trim();
+      revision++;
+      clearTimeout(timer);
+      timer = setTimeout(search, 220);
+    });
+    events.on(form, 'submit', () => clearTimeout(timer));
+    events.on(clear, 'click', () => {
       input.value = '';
-      query = '';
-    }
-    revision++;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.focus();
+      search();
+    });
     syncClear();
-    search();
-  });
+    events.on(root, 'exhibit:artifacts-changed', () => {
+      // Keep a dedicated Search query when artifacts change. Other galleries
+      // clear their query to reveal a renamed copy.
+      if (form.dataset.galleryPreserveQuery !== 'true') {
+        input.value = '';
+        query = '';
+      }
+      revision++;
+      syncClear();
+      search();
+    });
+  }
 
   // Capture runs before the link's htmx handler records this request's revision.
   events.on(root, 'click', (event) => {
@@ -70,7 +77,7 @@ export function initializeGallery(root) {
       return;
     }
     requests.set(ctx, revision);
-    searchError.hidden = true;
+    if (searchError) searchError.hidden = true;
     const error = ctx.sourceElement.closest('.gallery-more')?.querySelector('[data-gallery-load-error]');
     if (error) error.hidden = true;
   });
@@ -84,14 +91,10 @@ export function initializeGallery(root) {
     const { ctx } = event.detail;
     if (!requests.has(ctx) || requests.get(ctx) !== revision || ctx.request.signal.aborted) return;
     const error = ctx.sourceElement.closest('.gallery-more')?.querySelector('[data-gallery-load-error]');
-    (error || searchError).hidden = false;
+    const notice = error || searchError;
+    if (notice) notice.hidden = false;
   });
 
-  events.on(root, 'click', (event) => {
-    if (event.target.closest('a, button, .card-actions, [data-capability-trigger], .capability-popover')) return;
-    const card = event.target.closest('.card');
-    if (card?.dataset.href) window.location.href = card.dataset.href;
-  });
   return {
     suspend() { clearTimeout(timer); revision++; },
     disconnect() { clearTimeout(timer); revision++; events.disconnect(); },
@@ -108,7 +111,7 @@ export function initializeGalleryShortcut() {
     if (!gallery) return;
     event.preventDefault();
     const input = gallery.querySelector('[data-gallery-query]');
-    if (input.getClientRects && !input.getClientRects().length) {
+    if (!input || (input.getClientRects && !input.getClientRects().length)) {
       gallery.querySelector('[data-gallery-space-link][href="/search"]')?.click();
       return;
     }

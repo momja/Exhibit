@@ -92,9 +92,9 @@ func (ro *Router) connectionPageView(r *http.Request) (connectionPageView, error
 		v.WorkspaceURL += "&advanced=1"
 	}
 	if r.URL.Query().Get("connected") != "" {
-		v.Notice = "Account connected. Existing tool permissions are unchanged."
+		v.Notice = "Account connected. Existing artifact permissions are unchanged."
 		if r.URL.Query().Get("artifact") != "" {
-			v.Notice += " Review access for this tool below."
+			v.Notice += " Review access for this artifact below."
 		}
 	}
 	if r.URL.Query().Get("connection_error") != "" {
@@ -161,7 +161,7 @@ func (ro *Router) connectionPageView(r *http.Request) (connectionPageView, error
 		if v.Artifact == nil {
 			return v, store.ErrNotFound
 		}
-		v.Header.Back = &appHeaderBack{URL: "/artifacts/" + v.Artifact.ID, Label: "Return to tool", CollapseLabel: true}
+		v.Header.Back = &appHeaderBack{URL: "/artifacts/" + v.Artifact.ID, Label: "Return to artifact", CollapseLabel: true}
 		v.IsOwner = v.Artifact.OwnerID == viewer
 		v.CanClearData = v.IsOwner || v.Artifact.ShareStateMode != store.ShareStateShared
 		// Optional saved-data cleanup remains available with the engines off.
@@ -221,7 +221,7 @@ func (v connectionPageView) requestView(request store.ArtifactConnectionRequest)
 	for _, c := range v.Connections {
 		if c.Provider == request.Provider || (request.Provider == "vendor" && c.Kind == "vendor") {
 			if c.Status == "active" {
-				result.Action = "Allow this tool"
+				result.Action = "Allow this artifact"
 				result.URL = v.BaseURL + "&connection=" + url.QueryEscape(c.ID) + "#connection-access"
 			} else {
 				result.Action = "Reconnect account"

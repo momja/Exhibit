@@ -1,0 +1,9 @@
+{
+  "actualDeleteResult": {
+    "scheduledTaskId": "scheduled-task:command:mcp:e394a58e-fb38-4e0c-b7c7-0df413da8a7e:schedule-task:Exh-zrjo-tags-ten-opus-reset-2026-11-05",
+    "deleted": true
+  },
+  "verifiedScheduledTasks": [],
+  "recordedAt": "2026-11-05T21:33:32.069369+00:00",
+  "meaning": "Temporary daily continuation permanently deleted FIRST; list_scheduled_tasks confirmed empty."
+}

@@ -39,7 +39,7 @@ func TestGalleryIndexRendersTagDots(t *testing.T) {
 	}
 
 	untaggedID := createTestArtifact(t, r, "Untagged")
-	page := getPage(t, r, "/")
+	page := getPage(t, r, "/search")
 
 	// av-uvc6: a tag on a card is its color alone. The name is not drawn,
 	// but it is the dot's tooltip and the screen reader's text, so the
@@ -73,7 +73,7 @@ func TestGalleryTagsAreStatic(t *testing.T) {
 	w := doJSON(t, r, "POST", "/api/tags/"+tag.ID+"/artifacts/"+id, nil)
 	require.Equal(t, http.StatusNoContent, w.Code)
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest("GET", "/search", nil)
 	w2 := httptest.NewRecorder()
 	r.ServeHTTP(w2, req)
 	require.Equal(t, http.StatusOK, w2.Code)
@@ -108,7 +108,9 @@ func TestEditPageRendersTagsPanel(t *testing.T) {
 
 	assert.Contains(t, page, `<details class="details-panel" id="tags-panel" data-artifact-id="`+id+`">`)
 	assert.Contains(t, page, `hx-get="/partials/tag-panel?artifact=`+id+`"`)
-	assert.Contains(t, page, `hx-trigger="exhibit:tags-changed from:body"`)
+	// Mutations and GET-only recovery refresh the same stable native fieldset.
+	assert.Contains(t, page, `<fieldset id="tags-body"`)
+	assert.Contains(t, page, `hx-trigger="exhibit:tags-changed from:body, click from:#tag-refresh"`)
 	assert.Contains(t, page, `data-action="edit-tag" data-tag-id="`+charts.ID+`" data-tag-name="charts" data-tag-color="#ffffff"`)
 	assert.Contains(t, page, `data-action="detach-tag" data-tag-id="`+charts.ID+`" aria-label="Remove tag charts from this artifact"`)
 	// The dropdown offers what is not yet attached.
@@ -121,7 +123,7 @@ func TestEditPageRendersTagsPanel(t *testing.T) {
 	assert.NotContains(t, page, `class="tag-create" hidden`)
 	assert.Contains(t, page, `id="tag-add-color-hex" class="field" value="#6b7280"`)
 	// The library-wide edit dialog, and the script that drives both.
-	assert.Contains(t, page, `<dialog id="tag-edit-modal" class="modal-dialog tag-edit-dialog"`)
+	assert.Contains(t, page, `<dialog id="tag-edit-modal" class="modal-dialog modal-sheet tag-edit-dialog"`)
 	assert.Contains(t, page, `data-color="#6B7280"`) // store.DefaultTagColor preset
 	assert.Contains(t, page, `id="tag-edit-delete"`)
 	assert.Contains(t, page, `<script type="module" src="`+assetURL("gallery/tags.js")+`"></script>`)
@@ -179,7 +181,7 @@ func TestGallerySearchIsEagerInput(t *testing.T) {
 	r := newTestRouter(t)
 	createTestArtifact(t, r, "Findable")
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest("GET", "/search", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
@@ -187,8 +189,8 @@ func TestGallerySearchIsEagerInput(t *testing.T) {
 
 	assert.Contains(t, page, `<input type="text" name="q" data-gallery-query`)
 	assert.Contains(t, page, `placeholder="Search"`)
-	assert.Contains(t, page, `hx-get="/partials/gallery-grid"`)
-	assert.Contains(t, page, `hx-target="#library-gallery-results"`)
+	assert.Contains(t, page, `hx-get="/partials/gallery-grid/search"`)
+	assert.Contains(t, page, `hx-target="#search-gallery-results"`)
 	assert.Contains(t, page, `<script type="module" src="`+assetURL("gallery/index.js")+`"></script>`)
 	assert.NotContains(t, page, `>Search</button>`)
 }
@@ -200,7 +202,7 @@ func TestGallerySearchIsEagerInput(t *testing.T) {
 // before the input would stay on screen over the query.
 func TestGallerySearchAdvertisesSlashShortcut(t *testing.T) {
 	r := newTestRouter(t)
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest("GET", "/search", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
@@ -240,7 +242,7 @@ func TestGalleryCardHasNoRedundantDetailsLink(t *testing.T) {
 	r := newTestRouter(t)
 	id := createTestArtifact(t, r, "Openless")
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest("GET", "/search", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	require.Equal(t, http.StatusOK, w.Code)
@@ -251,19 +253,19 @@ func TestGalleryCardHasNoRedundantDetailsLink(t *testing.T) {
 	assert.Contains(t, page, `<div class="card" data-href="/artifacts/`+id+`">`)
 
 	// The title link is the single named way into the artifact's detail page.
-	assert.Contains(t, page, `<a class="card-title" href="/artifacts/`+id+`">Openless</a>`)
+	assert.Contains(t, page, `<a class="card-title" title="Openless" href="/artifacts/`+id+`">Openless</a>`)
 
 	// The redundant 'Details' link is gone (it duplicated the title click).
-	assert.NotContains(t, page, `>Details</a>`)
+	assert.NotContains(t, page, `>View artifact</a>`)
 	assert.Contains(t, page, `class="action-menu-container card-actions" data-controller="action-menu"`)
 	assert.Contains(t, page, `aria-label="Actions for Openless" title="Actions" aria-haspopup="menu" aria-expanded="false" aria-controls="card-actions-`+id+`"`)
 	assert.Contains(t, page, `id="card-actions-`+id+`" role="menu" aria-labelledby="card-actions-`+id+`-trigger"`)
-	assert.Contains(t, page, `<a href="/artifacts/`+id+`/edit?return_to=%2F" role="menuitem"`)
+	assert.Contains(t, page, `<a href="/artifacts/`+id+`/edit?return_to=%2Fsearch" role="menuitem"`)
 	assert.Contains(t, page, `<script type="module" src="`+assetURL("gallery/controllers.js")+`"></script>`)
 	assert.NotContains(t, page, `class="card-edit"`)
 
 	// av-uvc6: one meta row under the tile, and no created date on it.
-	assert.Contains(t, page, `<div class="card-meta"><a class="card-title" href="/artifacts/`+id+`">Openless</a>`)
+	assert.Contains(t, page, `<div class="card-meta"><a class="card-title" title="Openless" href="/artifacts/`+id+`">Openless</a>`)
 	assert.NotContains(t, page, `card-footer`)
 	assert.NotContains(t, page, time.Now().Format("Jan 2, 2006"))
 
@@ -277,9 +279,9 @@ func TestGalleryCardHasNoRedundantDetailsLink(t *testing.T) {
 func TestGalleryCardActionsStayReachableWithoutHover(t *testing.T) {
 	r := newTestRouter(t)
 	css := galleryAsset(t, r, "/assets/gallery/index.css")
-	assert.Contains(t, css, `.card:hover .card-actions,.card:focus-within .card-actions,.card-actions.is-open{width:22px;`)
-	assert.Contains(t, css, `@media (hover:none),(pointer:coarse){.card-actions{width:22px;`)
-	assert.Contains(t, css, `.card-actions-trigger{opacity:1}`)
+	assert.Contains(t, css, `.card-actions{position:relative;flex:0 0 32px;`)
+	assert.NotContains(t, css, `cursor:pointer;opacity:0`, "card actions stay visible without hover")
+	assert.Contains(t, css, `.card-actions{flex-basis:44px}`)
 	shared := galleryAsset(t, r, "/assets/gallery/components.css")
 	assert.Contains(t, shared, `.action-menu a,.action-menu button{`)
 	assert.Contains(t, shared, `.action-menu[hidden]{display:none}`)
@@ -293,7 +295,7 @@ func TestGalleryCardActionsStayReachableWithoutHover(t *testing.T) {
 func TestGalleryCardShowsNoMarksWhenSandboxedAndPrivate(t *testing.T) {
 	r := newTestRouter(t)
 	createTestArtifact(t, r, "Plain")
-	page := getPage(t, r, "/")
+	page := getPage(t, r, "/search")
 
 	assert.NotContains(t, page, "capability-cluster")
 	assert.NotContains(t, page, "capability-popover")
@@ -316,14 +318,14 @@ func TestGalleryCardShowsNetworkCount(t *testing.T) {
 	})
 	require.Equal(t, http.StatusOK, w.Code)
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest("GET", "/search", nil)
 	w2 := httptest.NewRecorder()
 	r.ServeHTTP(w2, req)
 	require.Equal(t, http.StatusOK, w2.Code)
 	page := w2.Body.String()
 
 	// Glyphs alone name nothing, so the compact card trigger names itself.
-	assert.Contains(t, page, `<div class="capability-cluster has-grants" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-`+id+`" data-capability-trigger aria-label="Sandbox posture">`)
+	assert.Contains(t, page, `<div class="capability-cluster has-grants" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-`+id+`" data-capability-trigger aria-label="Permissions">`)
 	assert.Contains(t, page, `<span class="capability-glyph"><i class="ph ph-globe"></i></span><span class="capability-count">2</span>`)
 	assert.NotContains(t, page, "Sandboxed")
 }
@@ -338,13 +340,13 @@ func TestGalleryCardShowsCapabilityGlyphsPerFlag(t *testing.T) {
 	})
 	require.Equal(t, http.StatusOK, w.Code)
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest("GET", "/search", nil)
 	w2 := httptest.NewRecorder()
 	r.ServeHTTP(w2, req)
 	require.Equal(t, http.StatusOK, w2.Code)
 	page := w2.Body.String()
 
-	assert.Contains(t, page, `<div class="capability-cluster has-grants" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-`+id+`" data-capability-trigger aria-label="Sandbox posture">`)
+	assert.Contains(t, page, `<div class="capability-cluster has-grants" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" aria-describedby="capability-popover-`+id+`" data-capability-trigger aria-label="Permissions">`)
 	assert.Contains(t, page, `<span class="capability-glyph"><i class="ph ph-download-simple"></i></span>`)
 	assert.NotContains(t, page, "ph-clipboard")
 	assert.NotContains(t, page, "ph-globe")
@@ -354,7 +356,7 @@ func TestGalleryCardShowsCapabilityGlyphsPerFlag(t *testing.T) {
 	})
 	require.Equal(t, http.StatusOK, w3.Code)
 
-	req2 := httptest.NewRequest("GET", "/", nil)
+	req2 := httptest.NewRequest("GET", "/search", nil)
 	w4 := httptest.NewRecorder()
 	r.ServeHTTP(w4, req2)
 	require.Equal(t, http.StatusOK, w4.Code)
@@ -522,7 +524,9 @@ func TestEditPageShowsBlockedOriginsDistinctlyFromUndecided(t *testing.T) {
 		"only origins with no decision at all are 'referenced, not approved'")
 	assert.Contains(t, page, `let allowlist = [];`,
 		"a block decision must never widen the allowlist")
-	assert.Contains(t, page, `<h3 class="text-sm muted">Blocked</h3>`,
+	// Security groups use the editor's shared h3 role, without the old
+	// small/muted override that put their headings below the field captions.
+	assert.Contains(t, page, `<h3>Blocked</h3>`,
 		"blocked origins need their own labelled section, not a plain Allow row")
 }
 
@@ -630,7 +634,8 @@ func TestEditPageShowsLinksCapabilitySelect(t *testing.T) {
 	page, err := renderEditPage(a, nil, nil, "<p>src</p>", "", testPageCreds, testRenderURLs("https://render.test"), true, "", nil, editNavigation{}, false)
 	require.NoError(t, err)
 
-	assert.Contains(t, page, `<span class="spacer">External links</span>`)
+	assert.Contains(t, page, `<span class="spacer field-label">External links</span>`,
+		"capability names share the editor's field-caption role")
 	assert.Contains(t, page, `id="link-select"`)
 	assert.Contains(t, page, "let linksApproved = true;")
 

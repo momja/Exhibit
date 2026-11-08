@@ -1,0 +1,6 @@
+
+> test
+> playwright test
+
+Error: http://127.0.0.1:18080/auth/login is already used, make sure that nothing is running on the port/url or set reuseExistingServer:true in config.webServer.
+

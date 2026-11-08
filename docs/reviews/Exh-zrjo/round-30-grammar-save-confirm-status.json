@@ -1,0 +1,16 @@
+{
+  "command": [
+    "npm",
+    "test",
+    "--prefix",
+    "e2e",
+    "--",
+    "--grep",
+    "editor Save"
+  ],
+  "head": "5c293c145c02466545046dfb6aad9e40469a65f5",
+  "exitCode": 0,
+  "seconds": 20.56,
+  "runtimeAndValidationUnchanged": true,
+  "log": "/tmp/exhibit-zrjo-pr273-grammar-save-confirm.log"
+}

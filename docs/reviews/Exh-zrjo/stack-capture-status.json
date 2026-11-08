@@ -1,0 +1,12 @@
+{
+  "command": [
+    "node",
+    "e2e/capture-ui.mjs",
+    "docs/screenshots/Exh-zrjo/followup-round-28"
+  ],
+  "head": "68655f3a78724ee0ed90f6fa820dd1b12a169432",
+  "exitCode": 0,
+  "seconds": 355.81,
+  "runtimeAndValidationUnchanged": true,
+  "log": "/tmp/exhibit-zrjo-pr273-capture.log"
+}

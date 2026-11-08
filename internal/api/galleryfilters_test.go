@@ -49,13 +49,13 @@ func TestGalleryFiltersValidationAndPaging(t *testing.T) {
 		{"tag": {"Work", "Read later"}},
 		{"collection": {fmt.Sprintf("collection-%d-0", in.ownerOne), fmt.Sprintf("collection-%d-1", in.ownerOne)}},
 	} {
-		page := in.get(t, "/?"+filters.Encode(), in.cookieOne)
+		page := in.get(t, "/search?"+filters.Encode(), in.cookieOne)
 		require.Equal(t, http.StatusOK, page.Code)
 		ids, _ := galleryCardsAndNext(page.Body.String())
 		assert.NotContains(t, ids, in.granted)
 	}
 	params := url.Values{"tag": {"Work", "Read later"}, "collection": {fmt.Sprintf("collection-%d-0", in.ownerOne), fmt.Sprintf("collection-%d-1", in.ownerOne)}, "q": {"chart"}}
-	for _, space := range []struct{ page, fragment string }{{"/", "/partials/gallery-grid"}, {"/shared-by-me", "/partials/gallery-grid/shared-by-me"}} {
+	for _, space := range []struct{ page, fragment string }{{"/search", "/partials/gallery-grid/search"}} {
 		path := space.page + "?" + params.Encode()
 		var all []string
 		for n := 0; path != ""; n++ {
@@ -85,37 +85,37 @@ func TestGalleryFiltersValidationAndPaging(t *testing.T) {
 		assert.Equal(t, space.page+"?"+params.Encode(), page.Header().Get("HX-Replace-Url"))
 	}
 	for _, query := range []string{"tag=missing", "tag=", "collection=", "collection=Reading", "tag=Work&tag=missing", fmt.Sprintf("collection=collection-%d-0", in.ownerTwo)} {
-		for _, path := range []string{"/", "/shared-by-me", "/partials/gallery-grid", "/partials/gallery-grid/shared-by-me"} {
+		for _, path := range []string{"/search", "/partials/gallery-grid/search"} {
 			assert.Equal(t, http.StatusBadRequest, in.get(t, path+"?"+query, in.cookieOne).Code, path+"?"+query)
 		}
 	}
 	// Incoming shares expose owners rather than either party's private organization.
 	incoming := in.get(t, fmt.Sprintf("/shared?owner=%d&tag=Work&collection=foreign", in.ownerOne), in.cookieTwo)
 	assert.Equal(t, http.StatusOK, incoming.Code)
-	assert.Contains(t, incoming.Body.String(), ">Owners</h3>")
+	assert.NotContains(t, incoming.Body.String(), ">Owners</h3>")
 	assert.NotContains(t, incoming.Body.String(), ">Tags</h3>")
 	assert.NotContains(t, incoming.Body.String(), ">Collections</h3>")
-	assert.Contains(t, incoming.Body.String(), `aria-label="Active filters"`)
+	assert.NotContains(t, incoming.Body.String(), `aria-label="Active filters"`)
 }
 
 func TestGalleryFiltersAndEmptyLibrary(t *testing.T) {
 	ro := newTestRouter(t)
-	original := getPage(t, ro, "/")
+	original := getPage(t, ro, "/search")
 	assert.Contains(t, original, `class="gallery-layout"`)
 	assert.NotContains(t, original, "gallery-filter-sheet")
 	assert.NotContains(t, original, "data-gallery-filter")
 	seedGalleryFilters(t, ro, defaultOwnerID)
-	page := getPage(t, ro, "/")
+	page := getPage(t, ro, "/search")
 	assert.Contains(t, page, `class="gallery-layout"`)
 	assert.Contains(t, page, `class="gallery-rail"`)
-	assert.Contains(t, page, `aria-label="Library spaces"`)
+	assert.Contains(t, page, `aria-label="Gallery spaces"`)
 	assert.Contains(t, page, "gallery-filter-sheet")
 	assert.Contains(t, page, "--tag-color:#2563eb")
 	// A collection ID cannot match another collection with the same name.
 	seedGalleryArtifacts(t, ro, 2)
 	require.NoError(t, ro.cfg.Store.AddArtifactToCollection(context.Background(), defaultOwnerID, "gallery-000", "collection-1-0"))
 	require.NoError(t, ro.cfg.Store.AddArtifactToCollection(context.Background(), defaultOwnerID, "gallery-001", "collection-1-1"))
-	ids, _ := galleryCardsAndNext(getPage(t, ro, "/?collection=collection-1-0"))
+	ids, _ := galleryCardsAndNext(getPage(t, ro, "/search?collection=collection-1-0"))
 	assert.Equal(t, []string{"gallery-000"}, ids)
 }
 
@@ -123,7 +123,7 @@ func TestGalleryFilterRetryAndHTMXControls(t *testing.T) {
 	ro := newTestRouter(t)
 	seedGalleryFilters(t, ro, defaultOwnerID)
 	ro.cfg.Store = unavailableGalleryStore{ro.cfg.Store}
-	for _, fragment := range []string{"/partials/gallery-grid", "/partials/gallery-grid/shared-by-me"} {
+	for _, fragment := range []string{"/partials/gallery-grid/search"} {
 		path := fragment + "?collection=collection-1-0&offset=24&q=chart&tag=Work"
 		req := httptest.NewRequest("GET", path, nil)
 		page := httptest.NewRecorder()
@@ -133,13 +133,13 @@ func TestGalleryFilterRetryAndHTMXControls(t *testing.T) {
 		assert.Equal(t, path, retry)
 	}
 	ro.cfg.Store = ro.cfg.Store.(unavailableGalleryStore).Store
-	req := httptest.NewRequest("GET", "/partials/gallery-grid?tag=Work", nil)
+	req := httptest.NewRequest("GET", "/partials/gallery-grid/search?tag=Work", nil)
 	req.Header.Set("HX-Request", "true")
 	page := httptest.NewRecorder()
 	ro.ServeHTTP(page, req)
 	require.Equal(t, http.StatusOK, page.Code)
 	for _, target := range []string{"search-parameters", "rail-filters", "sheet-filters"} {
-		assert.Contains(t, page.Body.String(), `hx-swap-oob="innerHTML:#library-gallery-`+target+`"`)
+		assert.Contains(t, page.Body.String(), `hx-swap-oob="innerHTML:#search-gallery-`+target+`"`)
 	}
 	assert.Equal(t, 1, strings.Count(page.Body.String(), `aria-label="Active filters"`))
 }

@@ -104,8 +104,8 @@ func TestTheVersionViewerHasAHiddenWarningForAToolThatTriesToSave(t *testing.T) 
 	// Restore sits beside the view, the chat's rollback is its History card's.
 	assert.Contains(t, edit, "Restore v2 to make it the active version.")
 	assert.NotContains(t, edit, "Roll back to v2")
-	assert.Contains(t, chat, "Roll back to v2 to make it the active version.")
-	assert.NotContains(t, chat, "Restore v2 to make")
+	assert.Contains(t, chat, "Restore v2 to make it the active version.")
+	assert.NotContains(t, chat, "Roll back to v2")
 
 	// The warning sits between the bar and the frame, so it reads as part of what
 	// the person is looking at and not as a banner for the whole page.
@@ -218,12 +218,12 @@ func TestTheCardOffersToViewTheVersionItWouldRollBackTo(t *testing.T) {
 	view := `hx-get="/partials/version-viewer?artifact=` + id + `&amp;seq=1" hx-target="#pane-preview" hx-swap="innerHTML"`
 	assert.Contains(t, frag, view)
 	assert.Contains(t, frag, `onclick="showPane('preview')"`, "on a phone the preview is another screen")
-	assert.Contains(t, frag, "View v1 in the preview first")
+	assert.Contains(t, frag, "Preview v1")
 
 	// It is offered before the decision it informs, and it is not a way to make
 	// that decision: the card's own buttons remain the only things that change
 	// the artifact.
-	assert.Less(t, strings.Index(frag, "View v1 in the preview first"), strings.Index(frag, "Roll back to v1 and continue"))
+	assert.Less(t, strings.Index(frag, "Preview v1"), strings.Index(frag, "Restore v1 and continue"))
 	viewButton := frag[strings.Index(frag, `class="resume-view"`):]
 	viewButton = viewButton[:strings.Index(viewButton, "</button>")]
 	assert.NotContains(t, viewButton, "data-resume", "looking is not continuing")

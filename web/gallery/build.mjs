@@ -25,8 +25,8 @@ const files = [
   // api.js joins them (av-5imk): it is the one credentialed API client every
   // page script calls instead of building an Authorization header itself.
   "tokens.css", "components.css", "components.js", "api.js", "api-module.js",
-  "controllers.js", "floating-header-controller.js", "clerk.js", "clerk-controller.js", "clerk-client.js", "clerk-appearance.js", "clerk-menu.js", "account-deletion-controller.js", "agent-state-access-controller.js", "action-menu-controller.js", "outside-press.js", "modal-controller.js", "modal.js", "filter-sheet-controller.js", "unsaved-changes-controller.js", "editor-session.js",
-  "event-scope.js", "gallery-controller.js", "gallery-space-controller.js", "space-tabs-controller.js",
+  "artifact-opened.js", "artifact-stars-controller.js", "controllers.js", "floating-header-controller.js", "clerk.js", "clerk-controller.js", "clerk-client.js", "clerk-appearance.js", "clerk-menu.js", "account-deletion-controller.js", "agent-state-access-controller.js", "action-menu-controller.js", "outside-press.js", "modal-controller.js", "modal.js", "filter-sheet-controller.js", "unsaved-changes-controller.js", "editor-session.js",
+  "event-scope.js", "menu-focus.js", "gallery-controller.js", "gallery-space-controller.js", "space-tabs-controller.js",
   "scroll-chrome.js", "scroll-chrome-controller.js",
   "relay-host-controller.js", "relay-request.js", "connections-controller.js", "connections.css",
   "index.css", "index.js", "gallery.js", "gallery-return.js", "gallery-widgets.js", "duplicate.js",
@@ -41,7 +41,7 @@ const files = [
   // each installs it at load.
   "network-prompt.js",
   "edit.css", "edit.js", "state.js", "state-operations.js", "state-export.js", "assets.js", "assets-export.js", "storage-import.js", "download.js", "versions.js",
-  "tags.js",
+  "tags.js", "color-picker-controller.js", "capability-popover-controller.js",
   "notfound.css", "notfound.js",
   // The account-settings surfaces: av-utap's /admin/users and av-qo05's
   // /profile. settings.css is named for the surface rather than for either

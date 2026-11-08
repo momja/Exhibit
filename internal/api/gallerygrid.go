@@ -18,6 +18,10 @@ const galleryPageSize = 24
 // supply their own selection without teaching paging or the browser about
 // ownership or other selection rules. Filters is the default owner selection.
 type galleryDefinition struct {
+	Description  string
+	NoFilters    bool
+	HideSearch   bool
+	Activity     bool
 	SearchPage   bool
 	ReadOnly     bool
 	Title        string
@@ -29,26 +33,28 @@ type galleryDefinition struct {
 	Empty        galleryEmptyState
 }
 
-var libraryGallery = galleryDefinition{
-	ID: "library-gallery", PagePath: "/", FragmentPath: "/partials/gallery-grid",
-	Empty: galleryEmptyState{Welcome: true, Message: "Welcome to Exhibit", ActionURL: "/new", ActionLabel: "Create your first artifact"},
-}
-
 // Selection returns cards and validated URL parameters even when listing fails,
 // so retry links keep the same selection. limit includes the shared lookahead.
 type gallerySelection func(*Router, *http.Request, int, int, string) ([]galleryCard, url.Values, error)
 
 type galleryEmptyState struct {
 	Welcome     bool
+	Icon        string
 	Message     string
+	Hint        string
 	ActionURL   string
 	ActionLabel string
+	ResetAction bool
 }
 
 type galleryGridData struct {
+	Description  string
+	HideSearch   bool
+	Activity     *activityFeed
 	PagePath     string
 	SearchPage   bool
 	Title        string
+	ResetURL     string
 	Filters      galleryFilters
 	Parameters   url.Values
 	ID           string
@@ -61,11 +67,34 @@ type galleryGridData struct {
 	Empty        galleryEmptyState
 }
 
+// Resolve a miss without duplicating the presentation or losing a destination's
+// own onboarding action. Reset links keep the normal gallery htmx boundary.
+func (grid galleryGridData) EmptyState() galleryEmptyState {
+	if grid.Query != "" {
+		label := "Clear search"
+		if len(grid.Filters.Chips) > 0 {
+			label = "Clear search and filters"
+		}
+		return galleryEmptyState{Icon: "ph-magnifying-glass", Message: "No artifacts match your search.", Hint: "Try another title, keyword, or tag.", ActionURL: grid.ResetURL, ActionLabel: label, ResetAction: true}
+	}
+	if len(grid.Filters.Chips) > 0 {
+		return galleryEmptyState{Icon: "ph-sliders", Message: "No artifacts match your filters.", Hint: "Remove a filter to see more of your library.", ActionURL: grid.ResetURL, ActionLabel: "Clear filters", ResetAction: true}
+	}
+	return grid.Empty
+}
+
 func (ro *Router) loadGalleryGrid(r *http.Request, gallery galleryDefinition, offset int) (galleryGridData, error) {
 	grid := galleryGridData{
+		Description: gallery.Description, HideSearch: gallery.HideSearch, ResetURL: gallery.PagePath,
 		PagePath: gallery.PagePath, SearchPage: gallery.SearchPage, Title: gallery.Title, ID: gallery.ID, FragmentPath: gallery.FragmentPath,
 		Query: strings.TrimSpace(r.URL.Query().Get("q")), Offset: offset,
 		Empty: gallery.Empty,
+	}
+	if gallery.HideSearch {
+		grid.Query = ""
+	}
+	if gallery.Activity {
+		return ro.loadActivity(r, grid, offset)
 	}
 	if grid.Empty.Message == "" {
 		grid.Empty.Message = "No artifacts in this gallery."
@@ -117,6 +146,29 @@ func (ro *Router) loadGalleryGrid(r *http.Request, gallery galleryDefinition, of
 			}
 		}
 	}
+	if !publicVisitor(r.Context()) {
+		ids := make([]string, len(cards))
+		for i := range cards {
+			ids[i] = cards[i].ArtifactID
+		}
+		preferences, err := ro.cfg.Store.ArtifactPreferences(r.Context(), store.ViewerID(ownerIDFromCtx(r.Context())), ids)
+		if err != nil {
+			return grid, err
+		}
+		for i := range cards {
+			card := &cards[i]
+			card.Starred = preferences[card.ArtifactID].Starred
+			if card.Actions.ID == "" {
+				card.Actions = galleryCardActions(card.ArtifactID, card.Title)
+				card.Actions.Items = nil
+			}
+			label, icon, value := "Star", "ph-star", "true"
+			if card.Starred {
+				label, icon, value = "Unstar", "ph-star", "false"
+			}
+			card.Actions.Items = append([]actionMenuItem{menuEvent(label, icon, "exhibit:star", map[string]string{"artifactID": card.ArtifactID, "starred": value})}, card.Actions.Items...)
+		}
+	}
 	grid.Cards = cards
 	return grid, nil
 }
@@ -161,7 +213,7 @@ func (grid galleryGridData) url(path string, offset int) string {
 // page. A new gallery's fragment handler calls serveGalleryGrid with its own
 // definition, keeping next-page URLs inside that gallery.
 func (ro *Router) galleryGridPartial(w http.ResponseWriter, r *http.Request) {
-	ro.serveGalleryGrid(w, r, libraryGallery)
+	ro.serveGalleryGrid(w, r, starredGallery)
 }
 
 func (ro *Router) serveGalleryGrid(w http.ResponseWriter, r *http.Request, gallery galleryDefinition) {
@@ -175,7 +227,7 @@ func (ro *Router) serveGalleryGrid(w http.ResponseWriter, r *http.Request, galle
 		}
 	}
 	grid, err := ro.loadGalleryGrid(r, gallery, offset)
-	if errors.Is(err, errGalleryOwner) || errors.Is(err, errGalleryFilter) {
+	if errors.Is(err, errGalleryFilter) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -186,7 +238,7 @@ func (ro *Router) serveGalleryGrid(w http.ResponseWriter, r *http.Request, galle
 		status = http.StatusInternalServerError
 	}
 	partial := "galleryGrid"
-	if offset == 0 && !gallery.SearchPage && r.Header.Get("HX-Request") != "" && status == http.StatusOK {
+	if offset == 0 && !gallery.NoFilters && r.Header.Get("HX-Request") != "" && status == http.StatusOK {
 		partial = "galleryFilterUpdate"
 	}
 	fragment, err := renderPage(partial, grid)

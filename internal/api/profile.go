@@ -177,7 +177,7 @@ func (ro *Router) profilePage(w http.ResponseWriter, r *http.Request) {
 		// action lives whichever shape the instance has — with the control
 		// off and the reason attached, exactly as the last-admin case does.
 		acct.DeleteBlocked = "This instance has no login configured, so there is no account to delete. " +
-			"Its library belongs to whoever can reach the origin; removing it is the operator's to do on the host."
+			"Its Gallery belongs to whoever can reach the origin; removing it is the operator's to do on the host."
 	}
 
 	agentGrants, err := ro.agentGrantsPanel(r)
@@ -320,7 +320,7 @@ func (ro *Router) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := ro.revokeAccountConnections(ctx, ownerID); err != nil {
 		slog.WarnContext(ctx, "account deletion waiting for connection revocation", slog.Int64("owner_id", ownerID), slog.String("error", err.Error()))
-		writeError(w, 503, "External account connections could not all be revoked. Your account and library remain. Some connections may already have been disconnected. Re-enable any disabled connector phase, check the provider, and retry deletion.")
+		writeError(w, 503, "External account connections could not all be revoked. Your account and Gallery remain. Some connections may already have been disconnected. Re-enable any disabled connector phase, check the provider, and retry deletion.")
 		return
 	}
 	var queued []string
@@ -385,7 +385,7 @@ func (ro *Router) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if identityErr != nil {
-		writeJSON(w, http.StatusAccepted, map[string]string{"message": "Your Exhibit account and library have been deleted. Your sign-in account is still being deleted; Exhibit will retry automatically. You can sign out now."})
+		writeJSON(w, http.StatusAccepted, map[string]string{"message": "Your Exhibit account and Gallery have been deleted. Your sign-in account is still being deleted; Exhibit will retry automatically. You can sign out now."})
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

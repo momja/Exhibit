@@ -1,0 +1,15 @@
+{
+  "command": [
+    "go",
+    "test",
+    "./internal/api",
+    "-run",
+    "^Test(GalleryPersonalStarAPI|GalleryEmptyStateLinksToNewPage)$",
+    "-count=1"
+  ],
+  "head": "287d95f78f143b7e08dfd54cfd2ffa9cd07ae9f9",
+  "exitCode": 1,
+  "seconds": 13.37,
+  "runtimeAndValidationUnchanged": true,
+  "log": "/tmp/exhibit-zrjo-pr273-empty-before.log"
+}

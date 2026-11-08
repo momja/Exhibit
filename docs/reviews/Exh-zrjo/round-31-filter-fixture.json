@@ -1,0 +1,13 @@
+{
+  "fixture": "EMPTY18380 only",
+  "setupBy": "parent after both30terminal, before31",
+  "tag": {
+    "id": "7bf9b460-faf2-462e-80ef-fd5e1de8304b",
+    "owner_id": 1,
+    "name": "Review empty",
+    "color": "#6b7280"
+  },
+  "artifactCount": 0,
+  "filterURL": "http://t3code:18380/search?tag=Review%20empty",
+  "purpose": "valid unassigned tag supplies live filter-only miss; no reviewer writes needed"
+}

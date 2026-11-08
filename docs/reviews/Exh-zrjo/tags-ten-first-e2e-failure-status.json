@@ -1,0 +1,16 @@
+{
+  "command": [
+    "npx",
+    "--no-install",
+    "playwright",
+    "test",
+    "specs/tags.spec.ts",
+    "specs/editor-tools.spec.ts"
+  ],
+  "startedAt": "2026-11-05T17:10:12.991107+00:00",
+  "seconds": 30.79,
+  "exitCode": 1,
+  "sourceFingerprint": "e33e221318c1a96caa501e678169af01d74c11dd2f20e6aa06068b14887a9bda",
+  "sourceUnchanged": true,
+  "log": "/tmp/exhibit-zrjo-tags10-e2e-focused.log"
+}

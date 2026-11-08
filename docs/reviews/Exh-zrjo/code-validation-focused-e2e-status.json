@@ -1,0 +1,17 @@
+{
+  "command": [
+    "npm",
+    "test",
+    "--",
+    "--grep",
+    "a tag mutation stays locked|pending creation submits once|Back from a completed import|persisted-page recovery"
+  ],
+  "cwd": "/home/maxomdal/.t3/worktrees/Exhibit/feature-Exh-zrjo-ui-council/e2e",
+  "head": "26dae10df5ecba49d7944c07fdfb0167e62c62b1",
+  "startedAt": "2026-11-06T01:03:21.705896+00:00",
+  "seconds": 11.4,
+  "exitCode": 0,
+  "sourceFingerprint": "9aa39c67f7cb8d613d8b6d04af28a9e0c15c4e2bd0740fed021fce5051babeb9",
+  "sourceUnchanged": true,
+  "log": "/tmp/exhibit-zrjo-tags10-simplicity-focused-e2e.log"
+}

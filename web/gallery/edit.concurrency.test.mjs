@@ -51,9 +51,9 @@ test('the page Save persists both documents and stays in the editor', async()=>{
  finishWidget(widgetSaved);
  await saving;
  assert.equal(refreshed,1);
- assert.equal(p.byId('status').textContent,'✓ Saved');
+ assert.equal(p.byId('status').textContent,'Saved');
  assert.equal(p.byId('widget-src').dataset.revision,'widget-v2');
- assert.equal(p.byId('widget-summary-text').textContent,'custom tile');
+ assert.equal(p.byId('widget-summary-text').textContent,'custom');
  assert.equal(p.timers.length,0);
  assert.equal(p.window.location.href,undefined);
 });
@@ -62,7 +62,7 @@ test('an empty default widget is left absent', async()=>{
  const p=await load([sourceSaved],' \n ');
  await p.context.save();
  assert.equal(p.api.calls.length,1);
- assert.equal(p.byId('status').textContent,'✓ Saved');
+ assert.equal(p.byId('status').textContent,'Saved');
  assert.equal(p.timers.length,0);
 });
 
@@ -73,7 +73,7 @@ test('Save and leave accepts whitespace typed into an empty default widget', asy
  assert.equal(await p.context.saveEditorChanges(),true);
  assert.equal(p.context.artifactDirty(),false);
  assert.deepEqual(p.api.calls.map(call=>call.method),['PATCH']);
- assert.equal(p.byId('status').textContent,'✓ Saved');
+ assert.equal(p.byId('status').textContent,'Saved');
 });
 
 test('the page Save creates a newly written widget', async()=>{
@@ -173,7 +173,7 @@ test('clearing an existing widget requires explicit removal', async()=>{
  p.byId('widget-src').value='';
  await p.context.save();
  assert.equal(p.api.calls.length,1);
- assert.match(p.byId('status').textContent,/Use Remove/);
+ assert.match(p.byId('status').textContent,/Choose Remove/);
  assert.equal(p.timers.length,0);
 });
 
@@ -182,8 +182,8 @@ test('Save after removing a widget keeps the default tile', async()=>{
  await p.byId('widget-remove').click();
  await p.context.save();
  assert.deepEqual(p.api.calls.map(call=>call.method),['DELETE','PATCH']);
- assert.equal(p.byId('widget-summary-text').textContent,'default tile');
- assert.equal(p.byId('status').textContent,'✓ Saved');
+ assert.equal(p.byId('widget-summary-text').textContent,'default');
+ assert.equal(p.byId('status').textContent,'Saved');
 });
 
 test('a conflicting widget removal leaves the editor intact', async()=>{

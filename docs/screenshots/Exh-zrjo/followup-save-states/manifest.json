@@ -1,0 +1,21 @@
+{
+  "application": "947758e0ed4fee4f3590aa2837981218118520d0",
+  "assetVersion": "b2069bfa62d2",
+  "source": "Final20-case Playwright journeys against a disposable E2E server; fixtures cleaned.503 deliberately simulated.",
+  "files": [
+    "saving-320-dark.png",
+    "saving-320-light.png",
+    "saving-390-light.png",
+    "saving-390-dark.png",
+    "saving-1280-dark.png",
+    "saving-1280-light.png",
+    "saved-390-light.png",
+    "saved-390-dark.png",
+    "saved-1280-light.png",
+    "saved-320-dark.png",
+    "saved-320-light.png",
+    "saved-1280-dark.png",
+    "save-error-320-dark.png",
+    "save-error-320-light.png"
+  ]
+}

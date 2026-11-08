@@ -255,7 +255,7 @@ func (ro *Router) generateWidget(w http.ResponseWriter, r *http.Request) {
 // diagnose than a disabled one that says what it needs.
 func (ro *Router) widgetGenerateAvailability(r *http.Request) (bool, string) {
 	if ro.cfg.Agent == nil {
-		return false, "Agent support is off on this server (no pi binary), so widgets must be written by hand."
+		return false, "The agent is unavailable. You can still enter Widget HTML manually."
 	}
 	// Platform mode supplies the credential, so there is no key to be missing
 	// — and, more to the point, no way to add one: the reason below would

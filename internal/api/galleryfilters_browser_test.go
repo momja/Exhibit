@@ -42,7 +42,7 @@ func TestGalleryFilterBrowser(t *testing.T) {
 			}
 			_, err = chromedp.Call(ctx, emulation.SetDeviceMetricsOverride, emulation.SetDeviceMetricsOverrideParams{Width: width, Height: 844, DeviceScaleFactor: 1, Mobile: phone})
 			require.NoError(t, err)
-			require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(app.URL), chromedp.WaitVisible(chromedp.CSS(`main`))))
+			require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(app.URL+"/search"), chromedp.WaitVisible(chromedp.CSS(`main`))))
 			check := func(script string) {
 				t.Helper()
 				ok, err := chromedp.Run(ctx, chromedp.Evaluate[bool](script))
@@ -60,7 +60,7 @@ func TestGalleryFilterBrowser(t *testing.T) {
 			}
 			scope := ".gallery-rail-filters"
 			if phone {
-				scope = "#library-gallery-sheet-filters"
+				scope = "#search-gallery-sheet-filters"
 				require.NoError(t, chromedp.Do(ctx, chromedp.Click(chromedp.CSS(`.gallery-filter-trigger`)), chromedp.WaitVisible(chromedp.CSS(`dialog[open]`))))
 				check(`document.querySelector('dialog[open]').contains(document.activeElement)`)
 				require.NoError(t, chromedp.Do(ctx, chromedp.KeyEvent(kb.Escape)))
@@ -71,12 +71,12 @@ func TestGalleryFilterBrowser(t *testing.T) {
 				require.NoError(t, chromedp.Do(ctx, chromedp.Click(chromedp.CSS(`.gallery-filter-trigger`))))
 				check(`getComputedStyle(document.querySelector('.gallery-spaces')).display !== 'none' && document.documentElement.scrollWidth <= innerWidth`)
 			} else {
-				check(`document.querySelector('.gallery-rail').getBoundingClientRect().width === 208 && getComputedStyle(document.querySelector('.gallery-filter-trigger')).display === 'none'`)
+				check(`document.querySelector('.gallery-rail').getBoundingClientRect().right <= document.querySelector('main').getBoundingClientRect().left && getComputedStyle(document.querySelector('.gallery-filter-trigger')).display === 'none'`)
 			}
-			require.NoError(t, chromedp.Do(ctx, chromedp.Click(chromedp.CSS(scope+` a[href="/?tag=Work"]`))))
+			require.NoError(t, chromedp.Do(ctx, chromedp.Click(chromedp.CSS(scope+` a[href="/search?tag=Work"]`))))
 			poll(`location.search === '?tag=Work' && document.querySelectorAll('.card').length === 1 && document.querySelector('.gallery-filter-chips')`)
 			check(`document.querySelector('[data-gallery-search] input[name=tag]').value === 'Work' && document.querySelectorAll('a[data-active=true]').length === 2`)
-			require.NoError(t, chromedp.Do(ctx, chromedp.Click(chromedp.CSS(scope+` a[href="/?collection=collection-1-0&tag=Work"]`))))
+			require.NoError(t, chromedp.Do(ctx, chromedp.Click(chromedp.CSS(scope+` a[href="/search?collection=collection-1-0&tag=Work"]`))))
 			poll(`new URL(location.href).searchParams.get('collection') === 'collection-1-0' && document.querySelector('.gallery-filter-clear')`)
 			if !phone {
 				require.NoError(t, chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](`document.querySelector('.gallery-filter-trigger').click()`)))

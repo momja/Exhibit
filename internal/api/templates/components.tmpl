@@ -1,6 +1,8 @@
 {{/* Include once on an app page using shared controllers. The native module
      imports only app-origin assets, starts one application, and registers
      controllers explicitly. htmx fragments contain markup only. */}}
+{{define "modalClose"}}<button type="button" class="btn btn-sec icon-btn modal-close" data-modal-dismiss aria-label="Close"><i class="ph ph-x" aria-hidden="true"></i></button>{{end}}
+
 {{define "componentScripts"}}<script type="module" src="{{asset "gallery/controllers.js"}}"></script>{{end}}
 
 {{/* Data: actionMenuView. A link navigates normally; an event item dispatches
@@ -36,7 +38,7 @@
 </header>{{end}}{{end}}
 
 {{define "appHeaderAction"}}{{if .Href}}<a class="btn{{if not .Primary}} btn-sec{{end}}{{if .IconOnly}} icon-btn{{end}}{{if .DesktopOnly}} app-header-desktop-action{{end}}" href="{{.Href}}" aria-label="{{.Label}}" title="{{.Label}}">{{template "appHeaderActionContent" .}}</a>
-{{else}}<button type="button" class="btn{{if not .Primary}} btn-sec{{end}}{{if .IconOnly}} icon-btn{{end}}"{{if .ID}} id="{{.ID}}"{{end}}{{if .SaveEditor}} data-save-editor{{end}} aria-label="{{.Label}}" title="{{.Label}}">{{template "appHeaderActionContent" .}}</button>{{end}}{{end}}
+{{else}}{{if .SaveEditor}}<div class="editor-save-controls"><span class="editor-save-status" id="editor-save-status" role="status" aria-live="polite" aria-atomic="true" data-unsaved-changes-target="status">Saved</span>{{end}}<button type="button" class="btn{{if or (not .Primary) .SaveEditor}} btn-sec{{end}}{{if .IconOnly}} icon-btn{{end}}"{{if .ID}} id="{{.ID}}"{{end}}{{if .SaveEditor}} data-save-editor data-unsaved-changes-target="saveButton" data-action="unsaved-changes#save" disabled aria-busy="false" aria-describedby="editor-save-status"{{end}} aria-label="{{.Label}}" title="{{.Label}}">{{template "appHeaderActionContent" .}}</button>{{if .SaveEditor}}<p class="editor-save-message" role="alert" data-unsaved-changes-target="saveMessage" hidden><i class="ph ph-warning" aria-hidden="true"></i><span data-unsaved-changes-target="saveMessageText"></span></p></div>{{end}}{{end}}{{end}}
 
 {{define "appHeaderActionContent"}}{{if .Icon}}<i class="ph {{.Icon}}" aria-hidden="true"></i>{{end}}{{if not .IconOnly}}<span class="header-link-label"{{if .LabelID}} id="{{.LabelID}}"{{end}}>{{.Label}}</span>{{end}}{{end}}
 
@@ -44,9 +46,9 @@
      its popups and restore tab stay outside the transformed pill. */}}
 {{define "floatingAppHeader"}}<header class="app-header-floating" data-app-header data-controller="floating-header">
 <div class="pip" id="pip" role="toolbar" aria-label="Artifact controls">
-  <a class="pip-btn" href="/" aria-label="My library" title="My library"><i class="ph ph-squares-four" aria-hidden="true"></i></a>
+  <a class="pip-btn" href="/" aria-label="Starred" title="Starred"><i class="ph ph-star" aria-hidden="true"></i></a>
   <span class="pip-sep"></span>
-  <button type="button" class="pip-grip" id="pip-grip" title="Drag to move" aria-label="Move controls. Drag them, or use the arrow keys. Past the left or right edge puts them away."></button>
+  <button type="button" class="pip-grip" id="pip-grip" title="Drag to move" aria-label="Move controls by dragging or using the arrow keys. Move past either side to hide them."></button>
   {{/* The posture button opens the info card and summarizes the cluster (Exh-ghuv). The mark is an htmx
        target (av-mf1x): after a runtime origin approval the prompt fires
        exhibit:capabilities-changed on <body>, and the mark and the receipt in
@@ -59,12 +61,14 @@
           hx-trigger="exhibit:capabilities-changed from:body"
           hx-select=".pip-posture"
           hx-swap="innerHTML">{{template "postureGlyph" .Capability}}</span>
+    <span class="pip-name" aria-hidden="true">{{.Title}}</span>
     <i class="ph ph-caret-down pip-caret" aria-hidden="true"></i>
   </button>
   <span class="pip-sep"></span>
   {{/* Opens the share modal (av-esa1). .Share gates it on the same value that
        decides whether the modal is rendered at all, so the control and its
        target cannot disagree about who is an owner. */}}
+  {{if not .ReadOnly}}<a class="pip-btn pip-edit" href="/artifacts/{{.ID}}/edit" aria-label="Edit artifact" title="Edit artifact"><i class="ph ph-pencil-simple" aria-hidden="true"></i></a>{{end}}
   {{if .CanShare}}<button type="button" class="pip-btn" id="share-open" aria-label="Share" title="Share"><i class="ph ph-share-network" aria-hidden="true"></i></button>{{end}}
   <button type="button" class="pip-btn" id="pip-more" aria-label="More actions" title="More" aria-expanded="false" aria-controls="pip-menu"><i class="ph ph-dots-three-vertical" aria-hidden="true"></i></button>
 </div>
@@ -106,12 +110,12 @@
        drift apart. */}}
   {{if not .ReadOnly}}
   <a href="/artifacts/{{.ID}}/edit"><i class="ph ph-pencil-simple" aria-hidden="true"></i> Edit</a>
-  <a href="/agent?artifact={{.ID}}"><i class="ph ph-robot" aria-hidden="true"></i> Modify with agent</a>
+  <a href="/agent?artifact={{.ID}}"><i class="ph ph-robot" aria-hidden="true"></i> Edit with agent</a>
   {{/* The portable copy (av-vnkt): one file with every stored payload folded
        back in, depending on no origin and no running instance. A plain link,
        because the response is an attachment — no JS, and it works from the
        page a visitor is already on. */}}
-  <a href="/api/artifacts/{{.ID}}/export" download title="Downloads this tool and its assets, without its saved data or connected accounts"><i class="ph ph-download-simple" aria-hidden="true"></i> Download file</a>
+  <a href="/api/artifacts/{{.ID}}/export" download title="Downloads this artifact and its assets, without saved data or connected accounts"><i class="ph ph-download-simple" aria-hidden="true"></i> <span>Download HTML<small class="action-menu-help">Includes assets. No saved data or account access.</small></span></a>
   {{if .SourceURL}}<button type="button" onclick="refetchSource()"><i class="ph ph-arrow-clockwise" aria-hidden="true"></i> Update from source</button>{{end}}
   {{end}}
   <hr>

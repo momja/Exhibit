@@ -2,7 +2,7 @@ import { Controller } from '../stimulus/stimulus.js';
 import { initializeGallery } from './gallery.js';
 import { eventScope } from './event-scope.js';
 
-const spacePaths = new Set(['/', '/search', '/shared', '/shared-by-me']);
+const spacePaths = new Set(['/', '/search', '/shared', '/shared-by-me', '/activity']);
 
 // The controller, header and account island live for the whole document.
 // htmx owns requests, history and markup; this boundary invalidates work that

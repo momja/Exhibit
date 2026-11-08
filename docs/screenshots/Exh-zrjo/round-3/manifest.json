@@ -1,0 +1,258 @@
+{
+  "capturedAt": "2026-11-04T07:16:35.540Z",
+  "captures": [
+    {
+      "file": "gallery-1280-light.png",
+      "route": "/",
+      "width": 1280,
+      "scheme": "light",
+      "title": "Exhibit"
+    },
+    {
+      "file": "add-1280-light.png",
+      "route": "/new",
+      "width": 1280,
+      "scheme": "light",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "settings-1280-light.png",
+      "route": "/settings",
+      "width": 1280,
+      "scheme": "light",
+      "title": "Settings — Exhibit"
+    },
+    {
+      "file": "editor-1280-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 1280,
+      "scheme": "light",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "viewer-1280-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 1280,
+      "scheme": "light",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "shared-1280-light.png",
+      "route": "/shared",
+      "width": 1280,
+      "scheme": "light",
+      "title": "Shared with me · Exhibit"
+    },
+    {
+      "file": "shared-by-me-1280-light.png",
+      "route": "/shared-by-me",
+      "width": 1280,
+      "scheme": "light",
+      "title": "Shared by me · Exhibit"
+    },
+    {
+      "file": "search-empty-1280-light.png",
+      "route": "/?q=not-in-this-library",
+      "width": 1280,
+      "scheme": "light",
+      "title": "Exhibit"
+    },
+    {
+      "file": "filters-1280-light.png",
+      "route": "/?tag=Health",
+      "width": 1280,
+      "scheme": "light",
+      "title": "Exhibit"
+    },
+    {
+      "file": "filters-empty-1280-light.png",
+      "route": "/?tag=Health&tag=Reading",
+      "width": 1280,
+      "scheme": "light",
+      "title": "Exhibit"
+    },
+    {
+      "file": "gallery-390-light.png",
+      "route": "/",
+      "width": 390,
+      "scheme": "light",
+      "title": "Exhibit"
+    },
+    {
+      "file": "add-390-light.png",
+      "route": "/new",
+      "width": 390,
+      "scheme": "light",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "settings-390-light.png",
+      "route": "/settings",
+      "width": 390,
+      "scheme": "light",
+      "title": "Settings — Exhibit"
+    },
+    {
+      "file": "editor-390-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 390,
+      "scheme": "light",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "viewer-390-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 390,
+      "scheme": "light",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "shared-390-light.png",
+      "route": "/shared",
+      "width": 390,
+      "scheme": "light",
+      "title": "Shared with me · Exhibit"
+    },
+    {
+      "file": "shared-by-me-390-light.png",
+      "route": "/shared-by-me",
+      "width": 390,
+      "scheme": "light",
+      "title": "Shared by me · Exhibit"
+    },
+    {
+      "file": "search-empty-390-light.png",
+      "route": "/?q=not-in-this-library",
+      "width": 390,
+      "scheme": "light",
+      "title": "Exhibit"
+    },
+    {
+      "file": "filters-390-light.png",
+      "route": "/?tag=Health",
+      "width": 390,
+      "scheme": "light",
+      "title": "Exhibit"
+    },
+    {
+      "file": "filters-empty-390-light.png",
+      "route": "/?tag=Health&tag=Reading",
+      "width": 390,
+      "scheme": "light",
+      "title": "Exhibit"
+    },
+    {
+      "file": "gallery-390-dark.png",
+      "route": "/",
+      "width": 390,
+      "scheme": "dark",
+      "title": "Exhibit"
+    },
+    {
+      "file": "add-390-dark.png",
+      "route": "/new",
+      "width": 390,
+      "scheme": "dark",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "settings-390-dark.png",
+      "route": "/settings",
+      "width": 390,
+      "scheme": "dark",
+      "title": "Settings — Exhibit"
+    },
+    {
+      "file": "editor-390-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 390,
+      "scheme": "dark",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "viewer-390-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 390,
+      "scheme": "dark",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "shared-390-dark.png",
+      "route": "/shared",
+      "width": 390,
+      "scheme": "dark",
+      "title": "Shared with me · Exhibit"
+    },
+    {
+      "file": "shared-by-me-390-dark.png",
+      "route": "/shared-by-me",
+      "width": 390,
+      "scheme": "dark",
+      "title": "Shared by me · Exhibit"
+    },
+    {
+      "file": "search-empty-390-dark.png",
+      "route": "/?q=not-in-this-library",
+      "width": 390,
+      "scheme": "dark",
+      "title": "Exhibit"
+    },
+    {
+      "file": "filters-390-dark.png",
+      "route": "/?tag=Health",
+      "width": 390,
+      "scheme": "dark",
+      "title": "Exhibit"
+    },
+    {
+      "file": "filters-empty-390-dark.png",
+      "route": "/?tag=Health&tag=Reading",
+      "width": 390,
+      "scheme": "dark",
+      "title": "Exhibit"
+    },
+    {
+      "file": "history-320-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 320,
+      "scheme": "light",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "add-error-320-light.png",
+      "route": "/new",
+      "width": 320,
+      "scheme": "light",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "viewer-320-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 320,
+      "scheme": "light",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "history-320-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 320,
+      "scheme": "dark",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "add-error-320-dark.png",
+      "route": "/new",
+      "width": 320,
+      "scheme": "dark",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "viewer-320-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 320,
+      "scheme": "dark",
+      "title": "Run Log — Exhibit"
+    }
+  ],
+  "errors": []
+}

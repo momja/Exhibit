@@ -1,0 +1,34 @@
+{
+  "taskId": "node:delegated-task:command%3Amcp%3Acfaf7639-87c2-4c24-af58-fe176ad56b8c%3Adelegate-task%3AExh-zrjo-r37-opus-tags-ten-confirmation",
+  "actualExecutionStatus": "failed",
+  "error": "Claude API rate limit reached. Try again later.",
+  "publicNotices": [
+    {
+      "position": 160,
+      "type": "system_notice",
+      "status": "completed",
+      "itemId": "turn-item:provider:claudeAgent:native-item:usage-limit%3Aprovider-turn%3Aprovider%3AclaudeAgent%3Anative-turn%3Aturn%253Arun-attempt%253Arun%253Arun%25253Athread%25253Athread%2525253Adelegated-task%2525253Acommand%252525253Amcp%252525253Acfaf7639-87c2-4c24-af58-fe176ad56b8c%252525253Adelegate-task%252525253AExh-zrjo-r37-opus-tags-ten-confirmation%25253Aordinal%25253A1%253Aattempt%253A1%3Afive_hour%3A1793932200",
+      "updatedAt": "2026-11-05T22:06:58.063Z",
+      "text": "Claude usage limit reached. This turn is paused until the 5-hour limit resets in 4h 24m."
+    },
+    {
+      "position": 161,
+      "type": "assistant_message",
+      "status": "completed",
+      "itemId": "turn-item:provider:claudeAgent:native-item:8aa7c045-d39c-44e0-8241-251c2c4202e4",
+      "updatedAt": "2026-11-05T22:06:58.080Z",
+      "text": "You've hit your 5-hour limit \u00b7 resets 2:30am (UTC)"
+    },
+    {
+      "position": 162,
+      "type": "error",
+      "status": "failed",
+      "itemId": "turn-item:provider:claudeAgent:native-item:terminal-failure%3Aprovider-turn%3Aprovider%3AclaudeAgent%3Anative-turn%3Aturn%253Arun-attempt%253Arun%253Arun%25253Athread%25253Athread%2525253Adelegated-task%2525253Acommand%252525253Amcp%252525253Acfaf7639-87c2-4c24-af58-fe176ad56b8c%252525253Adelegate-task%252525253AExh-zrjo-r37-opus-tags-ten-confirmation%25253Aordinal%25253A1%253Aattempt%253A1",
+      "updatedAt": "2026-11-05T22:06:58.133Z",
+      "text": "Claude API rate limit reached. Try again later."
+    }
+  ],
+  "reportDeliveredBeforeFailure": true,
+  "reportSha256": "3f5c69a07dabd1d561272eeaa408be60fb432e33fecdf1aa4689b229cd75380c",
+  "auditRecord": "round-37-opus-tags-ten-delivery-audit.json"
+}

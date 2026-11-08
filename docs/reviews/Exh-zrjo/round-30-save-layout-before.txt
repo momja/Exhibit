@@ -1,0 +1,51 @@
+
+> test
+> playwright test --grep sticky editor Save names
+
+
+Running 1 test using 1 worker
+
+(node:218805) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  1 [chromium] › specs/editor-save-feedback.spec.ts:3:1 › sticky editor Save names its action and shows pending and persisted outcomes (11.6s)
+
+
+  1) [chromium] › specs/editor-save-feedback.spec.ts:3:1 › sticky editor Save names its action and shows pending and persisted outcomes 
+
+    Error: changing Save status keeps the header controls stationary
+
+    changing Save status keeps the header controls stationary
+
+    expect(received).toBeLessThan(expected)
+
+    Expected: < 0.5
+    Received:   15.03125
+
+    Call Log:
+    - Timeout 10000ms exceeded while waiting on the predicate
+
+      26 |         const dirtyBounds = await bounds();
+      27 |         return Math.max(...dirtyBounds.flatMap((rect, i) => rect.map((value, j) => Math.abs(value - savedBounds[i][j]))));
+    > 28 |       }, { message: 'changing Save status keeps the header controls stationary' }).toBeLessThan(0.5);
+         |                                                                                    ^
+      29 |       await page.locator('#tags-panel > summary').click();
+      30 |       await page.locator('#versions-panel > summary').click();
+      31 |       await page.locator('#versions-panel').evaluate(element => { element.scrollIntoView({ block: 'start' }); window.scrollBy(0, -72); });
+        at /home/maxomdal/.t3/worktrees/Exhibit/feature-Exh-zrjo-ui-council/e2e/specs/editor-save-feedback.spec.ts:28:84
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/editor-save-feedback-stick-fdfb1-ding-and-persisted-outcomes-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/editor-save-feedback-stick-fdfb1-ding-and-persisted-outcomes-chromium/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/editor-save-feedback-stick-fdfb1-ding-and-persisted-outcomes-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/editor-save-feedback-stick-fdfb1-ding-and-persisted-outcomes-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [chromium] › specs/editor-save-feedback.spec.ts:3:1 › sticky editor Save names its action and shows pending and persisted outcomes 

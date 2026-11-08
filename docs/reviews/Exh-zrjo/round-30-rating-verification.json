@@ -1,0 +1,71 @@
+{
+  "round": 30,
+  "applicationCommit": "42c94eb1cb12a74108885cc1cbb7aaf7d11f5721",
+  "assetVersion": "aa7a00afd7a2",
+  "verifiedActualScoreCount": 28,
+  "reviewers": [
+    {
+      "reviewer": "sol",
+      "providerInstanceId": "codex",
+      "model": "gpt-6.1-sol",
+      "clientRequestId": "Exh-zrjo-r30-sol-followup-pr273",
+      "taskId": "node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r30-sol-followup-pr273",
+      "status": "completed",
+      "report": "round-30-sol-followup.md",
+      "launchRecord": "round-30-sol-followup-launch.json",
+      "light": [
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0
+      ],
+      "dark": [
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0
+      ],
+      "individualPass": true,
+      "statusRecord": "round-30-sol-followup-status.json"
+    },
+    {
+      "reviewer": "opus",
+      "providerInstanceId": "claudeAgent",
+      "model": "claude-opus-5-5",
+      "clientRequestId": "Exh-zrjo-r30-opus-followup-pr273",
+      "taskId": "node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r30-opus-followup-pr273",
+      "status": "completed",
+      "report": "round-30-opus-followup.md",
+      "launchRecord": "round-30-opus-followup-launch.json",
+      "light": [
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0
+      ],
+      "dark": [
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0
+      ],
+      "individualPass": true,
+      "statusRecord": "round-30-opus-followup-status.json"
+    }
+  ],
+  "jointPass": true,
+  "jointPassingStreak": 1,
+  "completed": false
+}

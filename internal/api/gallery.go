@@ -193,12 +193,17 @@ func cacheBust(url string) string {
 }
 
 func (ro *Router) galleryIndex(w http.ResponseWriter, r *http.Request) {
-	ro.serveGalleryPage(w, r, libraryGallery)
+	// Existing library bookmarks retain their search/filter selection.
+	if r.URL.Query().Has("q") || r.URL.Query().Has("tag") || r.URL.Query().Has("collection") {
+		http.Redirect(w, r, "/search?"+r.URL.RawQuery, http.StatusFound)
+		return
+	}
+	ro.serveGalleryPage(w, r, starredGallery)
 }
 
 func (ro *Router) serveGalleryPage(w http.ResponseWriter, r *http.Request, gallery galleryDefinition) {
 	grid, err := ro.loadGalleryGrid(r, gallery, 0)
-	if errors.Is(err, errGalleryOwner) || errors.Is(err, errGalleryFilter) {
+	if errors.Is(err, errGalleryFilter) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -719,11 +724,23 @@ func tagViews(tags []*store.Tag) []tagView {
 // tagPanelView feeds tagPanelBody. Available is the owner's tags not yet on
 // the artifact.
 type tagPanelView struct {
-	ArtifactID   string
-	Tags         []tagView
-	Available    []tagView
+	ArtifactID string
+	Tags       []tagView
+	Available  []tagView
+	Presets    []string
+}
+
+// The inline creator and edit sheet share one local color working copy UI.
+type tagColorPickerView struct {
+	Prefix       string
 	Presets      []string
 	DefaultColor string
+}
+
+func newTagColorPickerView(prefix string, presets []string) tagColorPickerView {
+	return tagColorPickerView{
+		Prefix: prefix, Presets: presets, DefaultColor: color.Normalize(store.DefaultTagColor),
+	}
 }
 
 func newTagPanelView(a *store.Artifact, library []*store.Tag) tagPanelView {
@@ -738,11 +755,10 @@ func newTagPanelView(a *store.Artifact, library []*store.Tag) tagPanelView {
 		}
 	}
 	return tagPanelView{
-		ArtifactID:   a.ID,
-		Tags:         tagViews(a.Tags),
-		Available:    tagViews(available),
-		Presets:      color.Presets,
-		DefaultColor: color.Normalize(store.DefaultTagColor),
+		ArtifactID: a.ID,
+		Tags:       tagViews(a.Tags),
+		Available:  tagViews(available),
+		Presets:    color.Presets,
 	}
 }
 
@@ -923,13 +939,13 @@ func newShareBadgeView(a *store.Artifact) shareBadgeView {
 	detail := []string{}
 	if grants > 0 {
 		if a.ShareStateMode == store.ShareStateShared {
-			detail = append(detail, people+" can open this artifact, and everyone using it reads and writes one shared copy of its data.")
+			detail = append(detail, people+" can open this artifact and view and update the owner’s saved data.")
 		} else {
 			detail = append(detail, people+" can open this artifact. Each keeps their own data.")
 		}
 	}
 	if link {
-		detail = append(detail, "Anyone with its public link can open it and read the owner's saved data.")
+		detail = append(detail, "Anyone with its public link can open it and read the owner’s saved data, but cannot save changes.")
 	}
 
 	badge := shareBadgeView{Detail: strings.Join(detail, " ")}
@@ -956,6 +972,7 @@ func newShareBadgeView(a *store.Artifact) shareBadgeView {
 // av-41se, av-uvc6), and nothing at all for a sandboxed, private artifact;
 // Widget renders the card's tile (av-fafu).
 type galleryCard struct {
+	Starred      bool
 	ReadOnly     bool
 	OwnerName    string
 	OwnerInitial string
@@ -1249,7 +1266,7 @@ func newVersionViews(versions []store.Version) []versionView {
 
 func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, library []*store.Tag, src, widgetSrc string, creds pageCredentials, urls renderURLs, canGenerate bool, generateHint string, versions []store.Version, navigation editNavigation, agentStateDefault bool) (string, error) {
 	if navigation.URL == "" {
-		navigation = editNavigation{URL: "/", Label: "My library"}
+		navigation = editNavigation{URL: "/search", Label: "Search"}
 	}
 	// Only origins with no decision at all are "referenced, not approved" —
 	// a blocked origin is a decision already made and belongs in Blocked.

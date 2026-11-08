@@ -26,7 +26,7 @@
 </head>
 <body>
 {{template "appHeader" .Header}}
-{{if not .AgentEnabled}}<div class="banner-err">Agent support is disabled: the <code>pi</code> binary was not found on this server.</div>{{end}}
+{{if not .AgentEnabled}}<div class="banner-err">The agent is unavailable on this server.</div>{{end}}
 <div class="pane-switch">
   <div class="pane-tabs" role="tablist" aria-label="Chat or preview">
     <button type="button" class="pane-tab" id="tab-chat" role="tab" aria-selected="true" aria-controls="pane-chat" tabindex="0" onclick="showPane('chat')"><i class="ph ph-chat-circle" aria-hidden="true"></i> <span>Chat</span></button>
@@ -34,7 +34,7 @@
   </div>
 </div>
 <div class="layout" id="agent-layout">
-  <div class="chat" id="pane-chat" role="region" aria-label="Chat" tabindex="-1">
+  <div class="chat{{if .Conversation}} history-open{{end}}" id="pane-chat" role="region" aria-label="Chat" tabindex="-1" data-agent-live-session="{{.LiveSession}}"{{if .Conversation}} data-agent-conversation="true"{{end}}>
     {{/* The chat's own controls. History lists the conversations kept with this
          artifact (av-y7td) in a pane that takes the place of the messages and
          the composer while it is open — a conversation you are only reading
@@ -48,7 +48,7 @@
     </div>
     <template id="agent-message-template">{{template "agentMessage" ""}}</template>
     <div id="messages"></div>
-    <div id="history"></div>
+    <div id="history">{{if .Conversation}}{{template "agentTranscript" .Conversation}}{{end}}</div>
     <div class="composer">
       <div class="composer-notices">
         <div id="agent-network-warnings" hx-get="/partials/network-warnings"
@@ -59,14 +59,14 @@
              hx-vals='js:{artifact: previewArtifactId()}' hx-swap="innerHTML" hx-sync="this:replace"></div>
       </div>
       <div id="question-load-error" role="status" hidden>Could not load the questions. <button type="button" id="question-retry">Try again</button></div>
-      <button type="button" class="pv-nudge" id="pv-nudge" hidden onclick="showPane('preview')"><i class="ph ph-check-circle"></i> Preview updated — tap Preview to view</button>
+      <button type="button" class="pv-nudge" id="pv-nudge" hidden onclick="showPane('preview')"><i class="ph ph-check-circle"></i> View updated preview</button>
       <div id="snippet-chips"></div>
       <div class="compose-row">
-        <textarea id="input" rows="1" aria-label="Message the agent" placeholder="Ask Exhibit..."></textarea>
+        <textarea id="input" rows="1" aria-label="Message the agent" placeholder="Describe what you want to build or change…"></textarea>
         <button type="button" class="btn" id="send-btn" onclick="send()" aria-label="Send message" title="Send message" disabled><i class="ph ph-paper-plane-right" aria-hidden="true"></i></button>
         <button type="button" class="btn btn-stop" id="stop-btn" onclick="stopAgent()" aria-label="Stop agent" title="Stop agent" style="display:none"><i class="ph ph-stop" aria-hidden="true"></i></button>
       </div>
-      <div id="hint">Enter to send · Shift+Enter for a new line · Ctrl+Shift+S to snippet an element from the preview</div>
+      <div id="hint">Enter to send · Shift+Enter for a new line</div>
     </div>
   </div>
   <div class="pane-resizer" id="agent-pane-resizer" role="separator" tabindex="0"
@@ -94,7 +94,7 @@
   data-controller="modal">
     <fieldset class="modal-fields">
     <h2 id="key-title">Agent API key</h2>
-    <p>Bring your own key. It is sent to your Exhibit server once, encrypted there at rest, and used only by the server-side agent — this page never sees it again.</p>
+    <p>Your key is encrypted on the Exhibit server, used only by the agent, and never shown again.</p>
     <div class="current-key" id="current-key" hidden></div>
     <label for="key-provider">Provider</label>
     <select id="key-provider">
@@ -124,10 +124,10 @@
     <input type="password" id="key-secret" autofocus placeholder="sk-…" autocomplete="off">
     <div id="key-error" class="modal-error" hidden></div>
     <div class="modal-actions">
-      <button type="button" class="btn btn-danger" id="key-delete" hidden><i class="ph ph-trash"></i></button>
+      <button type="button" class="btn btn-danger" id="key-delete" aria-label="Remove API key" title="Remove API key" hidden><i class="ph ph-trash" aria-hidden="true"></i> Remove API key</button>
       <span class="spacer"></span>
       <button type="button" class="btn btn-sec" id="key-cancel" data-modal-dismiss>Cancel</button>
-      <button type="button" class="btn" id="key-save"><i class="ph ph-check"></i> Save</button>
+      <button type="button" class="btn" id="key-save"><i class="ph ph-floppy-disk" aria-hidden="true"></i> Save</button>
     </div>
     </fieldset>
 </dialog>
@@ -181,19 +181,19 @@ let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
 {{define "agentPreview"}}<div class="preview-bar">
       <span class="title" id="pv-title">{{if .HasArtifact}}{{.Title}}{{else}}Preview{{end}}</span>
       {{if .HasArtifact}}<button type="button" id="pv-open" class="preview-open" data-direct-open-artifact="{{.ID}}" data-direct-open-url="{{.OpenURL}}" aria-label="Open in new tab" title="{{if .ConnectionProtected}}Connected data is available in the isolated Exhibit preview.{{else}}Open in new tab{{end}}"{{if .ConnectionProtected}} disabled{{end}}><span class="lbl">{{if .ConnectionProtected}}Preview only{{else}}Open{{end}} </span><i class="ph ph-arrow-square-out" aria-hidden="true"></i></button>
-      <a id="pv-detail" href="{{.DetailURL}}">Details</a>{{end}}
+      <a id="pv-detail" href="{{.DetailURL}}">View artifact</a>{{end}}
       <span class="spacer"></span>
-      <button class="snip-btn" id="snip-btn"{{if not .HasArtifact}} disabled hidden{{end}} onclick="toggleSnippet()"><i class="ph ph-scissors"></i> Snippet<span class="snip-more">an element</span> <span class="kbd">Ctrl+Shift+S</span></button>
+      <button class="snip-btn" id="snip-btn"{{if not .HasArtifact}} disabled hidden{{end}} onclick="toggleSnippet()"><i class="ph ph-scissors"></i> Select<span class="snip-more"> an element</span> <span class="kbd">Ctrl+Shift+S</span></button>
     </div>
     {{/* The artifact's gallery tile (av-fafu), rendered by the same cardWidget
          partial the library uses so what the agent sees here is what the
          library will show. Before any set_widget call this is the default
          tile — which is exactly the "no widget yet" state, so it needs no
          empty case of its own. */}}
-    {{if .HasArtifact}}<div class="pv-widget">{{template "cardWidget" .Widget}}<span class="pv-widget-label">Gallery widget</span></div>{{end}}
+    {{if .HasArtifact}}<div class="pv-widget">{{template "cardWidget" .Widget}}<span class="pv-widget-label">Card widget</span></div>{{end}}
     <div id="frame-wrap"{{if .FramePolicyEnabled}} data-controller="relay-host" data-relay-host-artifact-id-value="{{.ID}}" data-relay-host-frame-selector-value="#pv-frame" data-relay-host-policy-value="{{.RelayPolicy}}"{{end}}>
       {{if .FramePolicyEnabled}}<template data-relay-host-target="framePolicy"><meta http-equiv="Content-Security-Policy" content="{{.RelayFramePolicy}}"></template>{{end}}
-      {{if .HasArtifact}}<iframe id="pv-frame" {{if .FramePolicyEnabled}}data-relay-src{{else}}src{{end}}="{{.FrameURL}}" sandbox="allow-scripts allow-forms" allow="clipboard-read; clipboard-write"></iframe>{{else}}<div id="empty-preview"><i class="ph ph-frame-corners"></i><span>Your tool will appear here.</span></div>{{end}}
+      {{if .HasArtifact}}<iframe id="pv-frame" {{if .FramePolicyEnabled}}data-relay-src{{else}}src{{end}}="{{.FrameURL}}" sandbox="allow-scripts allow-forms" allow="clipboard-read; clipboard-write"></iframe>{{else}}<div id="empty-preview"><i class="ph ph-frame-corners"></i><span>Your artifact will appear here.</span></div>{{end}}
       {{if .RelayEnabled}}{{template "relayConsent" .}}{{end}}
     </div>{{end}}
 
@@ -213,7 +213,7 @@ let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
     <span class="history-item-title">{{.Title}}</span>
     <span class="history-item-meta">{{template "conversationMeta" .}}</span>
   </button></li>{{end}}
-</ul>{{else}}<p class="history-empty">No earlier conversations about this artifact yet. Each one you have with the agent is kept here.</p>{{end}}{{end}}
+</ul>{{else}}<p class="history-empty">No earlier conversations about this artifact.</p>{{end}}{{end}}
 
 {{/* agentTranscript is one stored conversation, read-only: the same bubbles and
      tool chips the live chat draws, from the projection of what was said
@@ -227,7 +227,7 @@ let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
   <p class="history-meta">{{template "conversationMeta" .}}</p>
 </div>
 <div class="history-messages" id="history-messages">
-  {{range .Messages}}{{if eq .Role "questions"}}{{template "agentQuestionHistory" .Questions}}{{else if eq .Role "tool"}}<div class="tool-chip {{if .Failed}}fail{{else}}done{{end}}"><i class="ph {{if .Failed}}ph-x-circle{{else}}ph-check-circle{{end}}"></i> {{.Text}}</div>{{else if eq .Role "assistant"}}{{template "agentMessage" .Text}}{{else}}<div class="msg {{.Role}}">{{.Text}}{{if .Images}}<span class="history-images">{{.Images}} image{{if ne .Images 1}}s{{end}} attached</span>{{end}}</div>{{end}}{{else}}<p class="history-empty">Nothing was said in this conversation.</p>{{end}}
+  {{range .Messages}}{{if eq .Role "questions"}}{{template "agentQuestionHistory" .Questions}}{{else if eq .Role "tool"}}<div class="tool-chip {{if .Failed}}fail{{else}}done{{end}}"><i class="ph {{if .Failed}}ph-x-circle{{else}}ph-check-circle{{end}}"></i> {{.Text}}</div>{{else if eq .Role "assistant"}}{{template "agentMessage" .Text}}{{else}}<div class="msg {{.Role}}">{{.Text}}{{if .Images}}<span class="history-images">{{.Images}} image{{if ne .Images 1}}s{{end}} attached</span>{{end}}</div>{{end}}{{else}}<p class="history-empty">No messages in this conversation.</p>{{end}}
 </div>
 {{template "agentResume" .}}{{end}}
 
@@ -253,20 +253,20 @@ let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
      Everything else is a note, not a missing button: a conversation kept before
      they could be continued says so, and so does an instance with no agent.
      Data: agentTranscriptData; agent.js (resumeConversation) does the rest. */}}
-{{define "agentResume"}}{{if not .Resumable}}<p class="resume-note">This conversation was kept before conversations could be continued, so it can only be read.</p>
-{{else if not .AgentEnabled}}<p class="resume-note">Agent support is off on this server, so conversations can only be read.</p>
+{{define "agentResume"}}{{if not .Resumable}}<p class="resume-note">This older conversation can be read but not continued.</p>
+{{else if not .AgentEnabled}}<p class="resume-note">The agent is unavailable. You can still read past conversations.</p>
 {{else if or .Current (eq .VersionSeq 0)}}<div class="resume-card" id="resume-card">
   <button type="button" class="btn" data-resume="{{.SessionID}}" data-rollback="0"><i class="ph ph-chat-circle"></i> Continue this conversation</button>
   <p class="resume-status" id="resume-status" role="status" aria-live="polite"></p>
 </div>
 {{else}}<div class="resume-card" id="resume-card">
-  <p class="resume-lede">This conversation was last working against <strong>v{{.VersionSeq}}</strong>. The artifact is now at <strong>v{{.HeadSeq}}</strong>.</p>
+  <p class="resume-lede">This conversation last used <strong>v{{.VersionSeq}}</strong>. The artifact is now at <strong>v{{.HeadSeq}}</strong>.</p>
   <button type="button" class="resume-view"
           hx-get="/partials/version-viewer?artifact={{.ArtifactID | urlquery}}&amp;seq={{.VersionSeq}}" hx-target="#pane-preview" hx-swap="innerHTML"
-          onclick="showPane('preview')"><i class="ph ph-eye"></i> View v{{.VersionSeq}} in the preview first</button>
-  <button type="button" class="btn" data-resume="{{.SessionID}}" data-rollback="{{.VersionSeq}}"><i class="ph ph-arrow-counter-clockwise"></i> Roll back to v{{.VersionSeq}} and continue</button>
+          onclick="showPane('preview')"><i class="ph ph-eye"></i> Preview v{{.VersionSeq}}</button>
+  <button type="button" class="btn" data-resume="{{.SessionID}}" data-rollback="{{.VersionSeq}}"><i class="ph ph-arrow-counter-clockwise"></i> Restore v{{.VersionSeq}} and continue</button>
   <p class="resume-explain">Puts the artifact’s code and saved data back as v{{.VersionSeq}} left them. It is recorded as a new version, so nothing is lost, and you can undo it from the Versions list.</p>
-  <button type="button" class="btn btn-sec" data-resume="{{.SessionID}}" data-rollback="0">Continue without rolling back</button>
+  <button type="button" class="btn btn-sec" data-resume="{{.SessionID}}" data-rollback="0">Continue with current version</button>
   <p class="resume-explain">Leaves the artifact as it is now. The agent is told it may have changed, and reads it again before changing anything.</p>
   <button type="button" class="resume-cancel"
           hx-get="/partials/agent-history?artifact={{.ArtifactID | urlquery}}" hx-target="#history" hx-swap="innerHTML">Cancel</button>

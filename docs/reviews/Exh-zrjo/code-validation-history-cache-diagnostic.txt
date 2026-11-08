@@ -1,0 +1,45 @@
+
+> test
+> playwright test --grep Back from a completed import
+
+
+Running 1 test using 1 worker
+
+(node:324851) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+history-cache diagnostics {"src":null,"id":null,"url":"http://127.0.0.1:18080/new","name":null,"reasons":[{"reason":"masked"}],"children":[]}
+  ✘  1 [chromium] › specs/new-history.spec.ts:6:1 › Back from a completed import restores a usable creation page (1.7s)
+
+
+  1) [chromium] › specs/new-history.spec.ts:6:1 › Back from a completed import restores a usable creation page 
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: "/new"
+    Received: null
+
+      19 |   await expect(page).toHaveURL(/\/new$/);
+      20 |   console.log('history-cache diagnostics', await page.evaluate(() => JSON.stringify((performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming & { notRestoredReasons?: unknown }).notRestoredReasons)));
+    > 21 |   expect(await page.evaluate(() => sessionStorage.getItem('e2e:restored-ingest'))).toBe('/new');
+         |                                                                                    ^
+      22 |   await expect(page.locator('[data-mode=paste]')).toBeEnabled();
+      23 |   await page.locator('[data-mode=paste]').click();
+      24 |   await expect(page.getByRole('button', { name: 'Add to library', exact: true })).toBeEnabled();
+        at /home/maxomdal/.t3/worktrees/Exhibit/feature-Exh-zrjo-ui-council/e2e/specs/new-history.spec.ts:21:84
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/new-history-Back-from-a-co-3b79d-ores-a-usable-creation-page-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/new-history-Back-from-a-co-3b79d-ores-a-usable-creation-page-chromium/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/new-history-Back-from-a-co-3b79d-ores-a-usable-creation-page-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/new-history-Back-from-a-co-3b79d-ores-a-usable-creation-page-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [chromium] › specs/new-history.spec.ts:6:1 › Back from a completed import restores a usable creation page 

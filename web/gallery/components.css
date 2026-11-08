@@ -8,10 +8,12 @@
  * The .btn family, .card surface, and .spacer moved here from the three page
  * stylesheets, where they were triplicated verbatim; values are unchanged. */
 
+:where(button,input,select,textarea){font-family:inherit}
+
 /* --- buttons ---------------------------------------------------------- */
-.btn{display:inline-flex;align-items:center;gap:var(--space-2);padding:var(--space-3) 18px;background:var(--brand-blue);color:var(--color-on-accent);border:none;border-radius:var(--radius-md);font-size:14px;cursor:pointer;font-weight:500}
+.btn{box-sizing:border-box;min-height:var(--control-height);text-decoration:none;line-height:1.35;display:inline-flex;align-items:center;justify-content:center;gap:var(--space-2);padding:7px 18px;background:var(--brand-blue);color:var(--color-on-accent);border:none;border-radius:var(--radius-md);font-size:0.875rem;cursor:pointer;font-weight:500}
 .btn:hover{background:var(--brand-blue-hover)}
-.btn-sm{padding:5px var(--space-5);font-size:13px}
+.btn-sm{min-height:var(--control-height-sm);padding:5px var(--space-5);font-size:0.875rem}
 .btn-sec{background:var(--color-panel);color:var(--color-ink-soft);border:1px solid var(--color-border)}
 .btn-sec:hover{border-color:var(--brand-blue);color:var(--brand-blue);background:var(--color-panel)}
 .btn-danger{background:var(--color-danger);color:var(--color-on-danger);border:none}
@@ -25,14 +27,14 @@
  * of one beside it rather than a smaller afterthought, and a comfortable tap
  * target on a phone. The glyph runs a little larger than body text because it
  * is now carrying the whole meaning; the words live in aria-label/title. */
-.icon-btn{width:36px;height:36px;padding:0;justify-content:center;flex:0 0 auto;font-size:17px}
+.icon-btn{width:var(--control-height);height:var(--control-height);padding:0;justify-content:center;flex:0 0 auto;font-size:1.0625rem}
 .icon-btn i{line-height:1}
 /* A swapped-in fragment error (av-3cdp): a /partials/* lookup for an artifact
  * that is gone answers 404 with the fragmentError partial, and htmx 4 swaps
  * 4xx responses — so the pane shows this notice instead of keeping a stale
  * view with no explanation. Lives here because every gallery page loads this
  * sheet while each of the four panes sits under a different page sheet. */
-.frag-error{display:flex;align-items:center;gap:var(--space-2);padding:var(--space-4) var(--space-5);background:var(--color-danger-tint);border:1px solid var(--color-danger-tint-border);border-radius:var(--radius-md);color:var(--color-danger-ink);font-size:13px}
+.frag-error{display:flex;align-items:center;gap:var(--space-2);padding:var(--space-4) var(--space-5);background:var(--color-danger-tint);border:1px solid var(--color-danger-tint-border);border-radius:var(--radius-md);color:var(--color-danger-ink);font-size:0.8125rem}
 .frag-error i{line-height:1}
 /* A control that is present but cannot act — /profile's delete button until
  * av-4wyq lands. It stays legible rather than ghosted, because the reason
@@ -46,38 +48,52 @@
 .btn-danger:disabled:hover{background:var(--color-danger)}
 
 /* --- app bar ---------------------------------------------------------- */
-/* The gallery's dimensions are the baseline: 36px icon controls plus the
- * 1px bottom border on desktop; 44px controls in a 56px band on phones. Class-based sizing
+/* Every standard header shares a 56px band and 44px controls. Class-based sizing
  * works both directly under body and inside a gallery controller root. */
 .app-header{box-sizing:border-box;position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:12px;min-height:var(--header-height);flex-shrink:0;padding:0 16px;background:var(--color-panel);border-bottom:1px solid var(--color-hairline-strong);box-shadow:var(--shadow-header)}
 .app-header .logo{height:24px;width:auto;display:block;flex:0 0 auto}
 .app-header a[hidden]{display:none}
-.app-header a{color:var(--brand-blue);text-decoration:none;font-size:14px;display:inline-flex;align-items:center;gap:5px}
-.app-header-title{font-size:18px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.app-header a{color:var(--brand-blue);text-decoration:none;font-size:0.875rem;display:inline-flex;align-items:center;gap:5px}
+.app-header-title{font-size:1.125rem;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .app-header-back{min-width:0;flex:0 1 auto}
 .app-header-back-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .app-header-actions{display:flex;align-items:center;gap:12px;flex:0 0 auto}
 .app-header .btn{white-space:nowrap}
 .app-header .header-link-label{max-width:40vw;overflow:hidden;text-overflow:ellipsis}
-.app-header .btn.icon-btn{width:36px;height:36px}
+.app-header .btn{min-height:var(--header-control-size)}
+.app-header .btn.icon-btn{width:var(--header-control-size);height:var(--header-control-size)}
 @media (max-width:767px){
+  .app-header,.app-header-actions{gap:8px}
   .app-header{padding-top:env(safe-area-inset-top,0px);min-height:calc(var(--header-height) + env(safe-area-inset-top,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
   .app-header .btn{height:var(--header-control-size);min-height:var(--header-control-size);padding-top:0;padding-bottom:0}
   .app-header .btn.icon-btn{width:var(--header-control-size);height:var(--header-control-size)}
   .app-header-back{min-width:var(--header-control-size);min-height:var(--header-control-size)}
   .app-header .app-header-desktop-action{display:none}
   .account-admin-link{min-height:44px}
-  .app-header .account-control [data-clerk-target="mount"] button,
-  .app-header .account-control [data-clerk-target="recovery"]{min-width:var(--header-control-size);min-height:var(--header-control-size);justify-content:center}
-  /* Offset from the bar's centre so feedback clears the taller phone header. */
-  .app-header .account-control-feedback{top:calc(50% + var(--header-height)/2 + var(--space-2))}
 }
+/* Every width uses the same control size. The account control and its recovery
+ * link match the other header targets. Feedback is offset from the bar's centre so
+ * it clears the header whatever height the control is. */
+.app-header .account-control [data-clerk-target="mount"] button,
+.app-header .account-control [data-clerk-target="recovery"]{min-width:var(--header-control-size);min-height:var(--header-control-size);justify-content:center}
+.app-header .account-control-feedback{top:calc(50% + var(--header-height)/2 + var(--space-2))}
 @media (max-width:600px){
-  .app-header-actions .btn:not(.icon-btn){width:var(--header-control-size);padding:0;justify-content:center;font-size:17px}
+  .app-header-actions .btn:not(.icon-btn){width:var(--header-control-size);padding:0;justify-content:center;font-size:1.0625rem}
   .app-header .header-link-label,.app-header-back-collapse .app-header-back-label{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
   .app-header-back-collapse{flex:0 0 var(--header-control-size);height:var(--header-control-size);justify-content:center}
 }
 @media (max-width:360px){.app-header{padding-left:max(8px,env(safe-area-inset-left,0px));padding-right:max(8px,env(safe-area-inset-right,0px))}}
+
+/* Save stays named at every width, with its outcome beside the action while
+ * the editor scrolls and an in-view explanation when a save needs attention. */
+.editor-save-controls{position:relative;display:flex;align-items:center;gap:8px}
+.editor-save-status{min-width:4.5em;text-align:right;font-size:.75rem;line-height:1.4;color:var(--color-muted);white-space:nowrap}
+.editor-save-status[data-state=attention]{color:var(--color-warn-ink-soft)}
+.app-header [data-save-editor]{width:auto;min-width:82px;padding:0 12px;font-size:.875rem}
+.app-header [data-save-editor] .header-link-label{position:static;width:auto;height:auto;margin:0;padding:0;overflow:visible;clip:auto;white-space:nowrap}
+.editor-save-message{display:grid;grid-template-columns:16px minmax(0,1fr);gap:8px;position:absolute;right:0;top:calc(100% + 6px);width:360px;max-width:calc(100vw - 32px);padding:12px;border:1px solid var(--color-border);border-left:3px solid var(--color-warn-strong);border-radius:8px;background:var(--color-panel);color:var(--color-ink-soft);box-shadow:var(--shadow-card);font-size:.8125rem;line-height:1.5;overflow-wrap:anywhere}
+.editor-save-message>.ph{font-size:16px;line-height:1.25;color:var(--color-warn-ink-soft)}
+.editor-save-message[hidden]{display:none}
 
 /* --- floating app header --------------------------------------------- */
 /* While the controls are dragged the frame would swallow pointermove. */
@@ -90,19 +106,19 @@ body.pip-dragging{cursor:grabbing;user-select:none;-webkit-user-select:none}
  * outer radius - (border + padding). The control size grows on a touch screen
  * so each target is a comfortable tap. */
 .pip{
-  --pip-control:30px;
+  --pip-control:36px;
   --pip-pad:4px;
   --pip-h:calc(var(--pip-control) + 2 * var(--pip-pad) + 2px);
   --pip-inset:12px;
   position:fixed;left:0;top:0;z-index:30;display:flex;align-items:center;gap:2px;max-width:calc(100vw - 2 * var(--pip-inset));
   height:var(--pip-h);padding:var(--pip-pad);border:1px solid var(--color-hairline-strong);border-radius:calc(var(--pip-h) / 2);
   background:color-mix(in srgb,var(--color-panel) 88%,transparent);backdrop-filter:blur(14px) saturate(1.5);-webkit-backdrop-filter:blur(14px) saturate(1.5);
-  box-shadow:0 4px 18px rgba(0,0,0,.16),0 0 0 .5px rgba(0,0,0,.04);font-size:13px;
+  box-shadow:0 4px 18px rgba(0,0,0,.16),0 0 0 .5px rgba(0,0,0,.04);font-size:0.8125rem;
   /* Bottom-left before pip.js has measured anything, so the first paint is
      already where the default placement puts it. */
   translate:var(--pip-inset) calc(100dvh - 100% - var(--pip-inset));
   transition:scale .16s ease,box-shadow .16s ease,opacity .12s ease}
-@media (pointer:coarse){ .pip{--pip-control:36px} }
+@media (pointer:coarse),(max-width:767px){ .pip{--pip-control:44px} }
 .pip[hidden]{display:none}
 .pip.pip-snapping{transition:translate .42s cubic-bezier(.22,1.28,.36,1),scale .16s ease,box-shadow .16s ease}
 /* LEAVE_MS in pip.js matches this duration. */
@@ -111,7 +127,7 @@ body.pip-dragging{cursor:grabbing;user-select:none;-webkit-user-select:none}
 .pip.pip-will-stash{opacity:.55}
 .pip-btn{width:var(--pip-control);height:var(--pip-control);flex:0 0 auto;border:0;border-radius:50%;background:none;color:var(--color-ink-soft);
   display:inline-flex;align-items:center;justify-content:center;cursor:pointer;text-decoration:none}
-.pip-btn .ph{font-size:17px}
+.pip-btn .ph{font-size:1.0625rem}
 .pip-btn:hover,.pip-btn:focus-visible,.pip-btn[aria-expanded=true]{background:var(--color-hover-fill)}
 .pip-sep{width:1px;height:18px;flex:0 0 auto;margin:0 3px;background:var(--color-hairline-strong)}
 /* Mid-pill, so its hover shape is an even rounded rect. The back button at the
@@ -126,9 +142,9 @@ body.pip-dragging .pip-grip{cursor:grabbing}
 .pip-title:hover,.pip-title:focus-visible,.pip-title[aria-expanded=true]{background:var(--color-hover-fill)}
 /* The posture mark: neutral like the cluster it summarizes, never a verdict. */
 #pip-posture,.pip-posture{display:inline-flex;align-items:center;gap:3px;flex:0 0 auto;color:var(--color-muted)}
-.pip-posture .ph{font-size:15px}
-.pip-posture .capability-count{font-size:11.5px;font-weight:650;margin-right:2px}
-.pip-caret{font-size:12px;color:var(--color-muted);flex:0 0 auto}
+.pip-posture .ph{font-size:0.9375rem}
+.pip-posture .capability-count{font-size:0.71875rem;font-weight:650;margin-right:2px}
+.pip-caret{font-size:0.75rem;color:var(--color-muted);flex:0 0 auto}
 @media (max-width:480px){ .pip-sep{display:none} }
 
 /* The info card and the ⋮ menu. pip.js sets the side, width and max height. */
@@ -136,14 +152,14 @@ body.pip-dragging .pip-grip{cursor:grabbing}
   box-shadow:var(--shadow-modal);overflow-y:auto;overscroll-behavior:contain;transform-origin:var(--pip-popup-origin,bottom left);animation:pip-pop .14s ease;outline:none}
 .pip-popup[hidden]{display:none}
 @keyframes pip-pop{from{opacity:0;scale:.96}}
-.pip-menu{min-width:236px;font-size:13px}
-.pip-info-title{margin:0;padding:6px 10px 0;font-size:15px;font-weight:600;line-height:1.4;overflow-wrap:anywhere}
-.pip-info-meta{padding:6px 10px 0;color:var(--color-muted);font-size:11.5px}
+.pip-menu{min-width:236px;font-size:0.8125rem}
+.pip-info-title{margin:0;padding:6px 10px 0;font-size:0.9375rem;font-weight:600;line-height:1.4;overflow-wrap:anywhere}
+.pip-info-meta{padding:6px 10px 0;color:var(--color-muted);font-size:var(--text-helper);line-height:var(--line-helper)}
 /* The receipt is the shared capabilityPopover partial, which is a hidden
    hover popover elsewhere; here it is the card's body, always shown. */
 .pip-info .capability-popover{position:static;width:auto;max-width:none;margin:0;visibility:visible;opacity:1;pointer-events:auto;
-  border:0;border-radius:0;box-shadow:none;background:none;padding:8px 10px 6px}
-.pip-info .capability-popover-header{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--color-muted)}
+  border:0;border-radius:0;box-shadow:none;background:none;padding:8px 10px 6px;max-height:none;overflow:visible}
+
 
 /* The tab left on a side edge when the controls are put away: always visible,
    and it slides out a little more under the pointer. */
@@ -154,7 +170,7 @@ body.pip-dragging .pip-grip{cursor:grabbing}
 .pip-tab[hidden]{display:none}
 .pip-tab[data-edge=left]{left:0;border-left:0;border-radius:0 14px 14px 0}
 .pip-tab[data-edge=right]{right:0;border-right:0;border-radius:14px 0 0 14px}
-.pip-tab .ph{font-size:13px;transition:transform .18s ease}
+.pip-tab .ph{font-size:0.8125rem;transition:transform .18s ease}
 .pip-tab[data-edge=right] .ph{transform:scaleX(-1)}
 .pip-tab.pip-tab-entering[data-edge=left]{transform:translateX(-100%)}
 .pip-tab.pip-tab-entering[data-edge=right]{transform:translateX(100%)}
@@ -162,7 +178,7 @@ body.pip-dragging .pip-grip{cursor:grabbing}
 .pip-tab[data-edge=left]:hover .ph,.pip-tab[data-edge=left]:focus-visible .ph{transform:translateX(2px)}
 .pip-tab[data-edge=right]:hover .ph,.pip-tab[data-edge=right]:focus-visible .ph{transform:scaleX(-1) translateX(2px)}
 .pip-tab-label{position:absolute;top:50%;translate:0 -50%;white-space:nowrap;pointer-events:none;max-width:60vw;overflow:hidden;text-overflow:ellipsis;
-  background:var(--color-slate-ink);color:var(--color-panel);font-size:12px;font-weight:600;padding:5px 9px;border-radius:6px;opacity:0;transition:opacity .15s ease}
+  background:var(--color-slate-ink);color:var(--color-panel);font-size:0.75rem;font-weight:600;padding:5px 9px;border-radius:6px;opacity:0;transition:opacity .15s ease}
 .pip-tab[data-edge=left] .pip-tab-label{left:calc(100% + 8px)}
 .pip-tab[data-edge=right] .pip-tab-label{right:calc(100% + 8px)}
 .pip-tab:hover .pip-tab-label,.pip-tab:focus-visible .pip-tab-label{opacity:1}
@@ -209,7 +225,7 @@ body.pip-dragging .pip-grip{cursor:grabbing}
 .card-widget.has-frame .card-widget-default{display:none}
 .card-widget.has-frame.widget-failed .card-widget-default{display:flex}
 .card-widget.has-frame.widget-failed .card-widget-frame{display:none}
-.card-widget-monogram{display:flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:16px;background:hsl(var(--tile-hue) var(--tile-mono-fill));box-shadow:0 1px 4px hsl(var(--tile-hue) var(--tile-mono-shadow));color:hsl(var(--tile-hue) var(--tile-mono-ink));font-size:22px;font-weight:600;letter-spacing:.5px}
+.card-widget-monogram{display:flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:16px;background:hsl(var(--tile-hue) var(--tile-mono-fill));box-shadow:0 1px 4px hsl(var(--tile-hue) var(--tile-mono-shadow));color:hsl(var(--tile-hue) var(--tile-mono-ink));font-size:1.375rem;font-weight:600;letter-spacing:.5px}
 
 /* Collapsible section (<details>/<summary>) with a muted summary line — the
  * edit page's security section (av-p0a1) was the first user; the artifact
@@ -224,8 +240,8 @@ body.pip-dragging .pip-grip{cursor:grabbing}
  * place: Phosphor's caret-right glyph isn't centered in its em-box, so a
  * transform:rotate(90deg) pivots around the box's geometric center instead of
  * the visible mark's, swinging it off to a corner at an angle. */
-.details-panel{background:var(--color-panel);border:1px solid var(--color-hairline);border-radius:var(--radius-md);padding:var(--space-3) var(--space-5)}
-.details-panel>summary{cursor:pointer;font-size:13px;color:var(--color-muted);list-style:none;display:flex;align-items:center;gap:var(--space-2)}
+.details-panel{background:var(--color-panel);border:0;border-top:1px solid var(--color-hairline);border-radius:0;padding:0}
+.details-panel>summary{min-height:44px;padding:10px 0;cursor:pointer;font-size:.875rem;font-weight:600;color:var(--color-ink-soft);list-style:none;display:flex;align-items:center;gap:var(--space-2)}
 .details-panel>summary::-webkit-details-marker{display:none}
 .details-caret{flex-shrink:0}
 .details-caret-open{display:none}
@@ -233,7 +249,11 @@ body.pip-dragging .pip-grip{cursor:grabbing}
 .details-panel[open]>summary .details-caret-open{display:inline}
 /* The body of an open panel, separated from its summary by a hairline. Shared
  * by all three panels so they open the same way. */
-.details-panel>.panel-body{margin-top:var(--space-5);padding-top:var(--space-5);border-top:1px solid var(--color-hairline)}
+.details-panel>.panel-body{margin-top:0;padding:4px 0 16px;border-top:0}
+:where(.details-panel .panel-body) p.form-help{margin:0 0 12px}
+.panel-transfer{display:grid;grid-template-columns:11.25rem minmax(0,1fr);gap:12px;align-items:start;margin-top:16px}
+.panel-transfer p.form-help{margin:0}
+@media(max-width:640px){.panel-transfer{grid-template-columns:minmax(0,1fr);gap:8px}}
 
 /* --- controls --------------------------------------------------------- */
 /* Floor for controls no rule below names: an unstyled input inherits the UA's
@@ -243,11 +263,11 @@ input,select,textarea{font-size:var(--field-font-size)}
  * own dark field gray, which sits apart from every panel it is drawn on.
  * :where() keeps this at zero specificity so any rule naming a field wins. */
 ::placeholder{color:var(--color-placeholder);opacity:1}
-:where(input:not([type=checkbox],[type=radio],[type=color],[type=range],[type=file]),select,textarea){background-color:var(--color-panel);color:var(--color-ink)}
+:where(input:not([type=checkbox],[type=radio],[type=color],[type=range],[type=file]),select,textarea){background-color:var(--color-field);color:var(--color-ink)}
 
-.field{width:100%;padding:var(--space-3) var(--space-4);border:1px solid var(--color-border);border-radius:var(--radius-md);font-size:var(--field-font-size);outline:none;background:var(--color-panel);color:var(--color-ink)}
+.field{min-height:var(--control-height);box-sizing:border-box;line-height:1.4;width:100%;padding:7px var(--space-4);border:1px solid var(--color-field-border);border-radius:var(--radius-md);font-size:var(--field-font-size);outline:none;background:var(--color-field);color:var(--color-ink)}
 .field:focus{border-color:var(--brand-blue)}
-.select{padding:7px var(--space-4);border:1px solid var(--color-border);border-radius:var(--radius-md);font-size:var(--field-font-size);outline:none;background:var(--color-panel);color:var(--color-ink)}
+.select{min-height:var(--control-height);box-sizing:border-box;line-height:1.4;padding:7px var(--space-4);border:1px solid var(--color-field-border);border-radius:var(--radius-md);font-size:var(--field-font-size);outline:none;background:var(--color-field);color:var(--color-ink)}
 .select:focus{border-color:var(--brand-blue)}
 
 /* --- security-posture primitives -------------------------------------- */
@@ -255,7 +275,7 @@ input,select,textarea{font-size:var(--field-font-size)}
 .badge{display:inline-block;background:var(--color-ground);padding:1px var(--space-2);border-radius:var(--radius-sm);margin-right:var(--space-1)}
 
 /* One allowlist entry: origin chip plus its remove/allow affordance. */
-.allowlist-row{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-2) 0;font-size:13px}
+.allowlist-row{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-2) 0;font-size:0.8125rem}
 .allowlist-row code{background:var(--color-ground);padding:1px var(--space-2);border-radius:var(--radius-sm)}
 
 /* Small inline posture indicator (icon + optional label) — the gallery card
@@ -266,7 +286,7 @@ input,select,textarea{font-size:var(--field-font-size)}
  * present information rather than a warning. */
 /* Hover paints a gray pill behind the glyphs (av-uvc6), the cue that they
  * open something on click; it stays while the popover is open. */
-.capability-cluster{display:inline-flex;align-items:center;gap:var(--space-3);font-size:12px;color:var(--color-muted);cursor:pointer;border-radius:var(--radius-pill);padding:2px var(--space-2);margin:-2px calc(var(--space-2) * -1);transition:background-color .1s ease,color .1s ease}
+.capability-cluster{display:inline-flex;align-items:center;gap:var(--space-3);font-size:0.75rem;color:var(--color-muted);cursor:pointer;border-radius:var(--radius-pill);padding:2px var(--space-2);margin:-2px calc(var(--space-2) * -1);transition:background-color .1s ease,color .1s ease}
 .capability-cluster.has-grants{color:var(--color-ink-soft)}
 .capability-cluster:hover,.capability-cluster:focus-visible,.capability-wrap.is-open .capability-cluster{background-color:var(--color-hover-fill);color:var(--color-ink-soft)}
 /* The sharing glyph (av-uvc6, formerly the card's share badge, av-6xjd).
@@ -274,39 +294,38 @@ input,select,textarea{font-size:var(--field-font-size)}
  * deliberate share is not a fault. */
 .capability-cluster .capability-share-granted{color:var(--color-ink-soft)}
 .capability-cluster .capability-share-public,.capability-cluster .capability-share-shared-data{color:var(--color-ink)}
-.capability-cluster .capability-glyph{display:inline-flex;align-items:center;font-size:14px;line-height:1}
+.capability-cluster .capability-glyph{display:inline-flex;align-items:center;font-size:0.875rem;line-height:1}
 .capability-cluster .capability-count{color:var(--color-ink);font-weight:600}
 
 /* capability-wrap positions the popover (av-41se) relative to its trigger.
  * The popover opens only on explicit activation — click/tap, or Enter/Space
- * while the trigger has focus — handled by components.js; it does NOT open
+ * while the trigger has focus — handled by components.js; the capability-popover controller positions it. It does NOT open
  * on hover or on mere keyboard focus (:focus-within intentionally left out
  * of the visibility rule below). Hovering/focusing the trigger instead shows
  * a plain affordance highlight (background/color change above) signalling
  * it's clickable, without popping content open unasked. The popover stays a
- * plain div (not display:none) so it's always in the a11y/tab tree —
- * visibility is purely visual, gated on .is-open. */
+ * plain server-rendered div; visibility is gated on .is-open. */
 .capability-wrap{position:relative;display:inline-flex}
-.capability-popover{position:absolute;top:100%;right:0;margin-top:var(--space-3);z-index:30;width:260px;max-width:80vw;background:var(--color-panel);border:1px solid var(--color-hairline);border-radius:var(--radius-lg);box-shadow:var(--shadow-modal);padding:var(--space-5);font-size:12px;color:var(--color-ink-soft);text-align:left;visibility:hidden;opacity:0;pointer-events:none;transition:opacity .12s ease}
+.capability-popover{box-sizing:border-box;position:fixed;top:0;left:0;margin:0;z-index:40;width:320px;max-width:calc(100vw - 32px);max-height:calc(100dvh - 32px);overflow-y:auto;overscroll-behavior:contain;background:var(--color-panel);border:1px solid var(--color-hairline);border-radius:var(--radius-lg);box-shadow:var(--shadow-modal);padding:16px;font-size:var(--text-helper);line-height:var(--line-helper);color:var(--color-ink-soft);text-align:left;visibility:hidden;opacity:0;pointer-events:none;transition:opacity .12s ease}
 .capability-wrap.is-open .capability-popover{visibility:visible;opacity:1;pointer-events:auto}
 /* Shared by the artifact pill and gallery card action menus. */
 .action-menu-container{position:relative;display:inline-flex}
 .action-menu-panel{position:absolute;right:0;top:calc(100% + 6px);min-width:180px;z-index:40}
-.action-menu{padding:6px;background:var(--color-panel);border:1px solid var(--color-hairline-strong);border-radius:var(--radius-lg);box-shadow:var(--shadow-modal);font-size:13px;cursor:default}
+.action-menu{padding:6px;background:var(--color-panel);border:1px solid var(--color-hairline-strong);border-radius:var(--radius-lg);box-shadow:var(--shadow-modal);font-size:0.8125rem;cursor:default}
 .action-menu[hidden]{display:none}
 .action-menu a,.action-menu button{display:flex;width:100%;align-items:center;gap:10px;padding:7px 10px;border:0;border-radius:calc(var(--radius-lg) - 7px);background:none;color:var(--color-ink);font:inherit;text-align:left;text-decoration:none;cursor:pointer}
-.action-menu .ph{font-size:16px;width:18px;color:var(--color-muted)}
+.action-menu .ph{font-size:1rem;width:18px;color:var(--color-muted)}
 .action-menu a:hover,.action-menu a:focus-visible,.action-menu button:hover,.action-menu button:focus-visible{background:var(--color-accent-tint);color:var(--brand-blue);outline:none}
 .action-menu a:hover .ph,.action-menu a:focus-visible .ph,.action-menu button:hover .ph,.action-menu button:focus-visible .ph{color:var(--brand-blue)}
 .action-menu hr{border:0;border-top:1px solid var(--color-hairline);margin:5px 4px}
 
-.capability-popover-header{font-weight:600;color:var(--color-ink);margin-bottom:var(--space-4)}
+.capability-popover-header{font-size:.875rem;line-height:1.5;font-weight:600;color:var(--color-ink);margin-bottom:var(--space-4)}
 .capability-popover-row{display:flex;align-items:flex-start;gap:var(--space-3);margin-bottom:var(--space-4)}
 .capability-popover-row:last-child{margin-bottom:0}
 .capability-popover-label{color:var(--color-ink);font-weight:600;margin-bottom:var(--space-1)}
 .capability-popover-origins code{display:block;background:var(--color-ground);padding:1px var(--space-2);border-radius:var(--radius-sm);margin-top:var(--space-1);font-family:monospace;word-break:break-all}
 .capability-popover-section{padding-top:var(--space-4);border-top:1px solid var(--color-hairline)}
-.capability-popover-manage{display:block;margin-top:var(--space-4);padding-top:var(--space-4);border-top:1px solid var(--color-hairline);color:var(--brand-blue);text-decoration:none}
+.capability-popover-manage{display:flex;align-items:center;min-height:var(--control-height-sm);margin-top:var(--space-4);padding-top:var(--space-4);border-top:1px solid var(--color-hairline);color:var(--brand-blue);text-decoration:none}
 .capability-popover-manage:hover{text-decoration:underline}
 
 /* --- banners ----------------------------------------------------------------
@@ -316,23 +335,24 @@ input,select,textarea{font-size:var(--field-font-size)}
  * and redirect explanations, av-v991's resync notice) and are shared now that the
  * version viewer (av-vw7r) tells a person on two other pages that nothing they
  * do in a preview is saved. Non-blocking, in the amber of the .allowlist notice. */
-.banner{display:flex;align-items:flex-start;gap:8px;padding:8px 20px;font-size:13px;flex-shrink:0;border-bottom:1px solid var(--color-warn-tint-border);background:var(--color-warn-tint);color:var(--color-warn-ink)}
+.banner{display:flex;align-items:flex-start;gap:8px;padding:8px 20px;font-size:0.8125rem;flex-shrink:0;border-bottom:1px solid var(--color-warn-tint-border);background:var(--color-warn-tint);color:var(--color-warn-ink)}
 .banner[hidden]{display:none}
-.banner-warn i.ph-warning{color:var(--color-warn-strong);font-size:16px;flex-shrink:0;line-height:1.4}
+.banner-warn i.ph-warning{color:var(--color-warn-strong);font-size:1rem;flex-shrink:0;line-height:1.4}
 .banner-body{flex:1;display:flex;flex-direction:column;gap:4px;min-width:0}
-.banner-details{font-size:12px}
+.banner-details{font-size:0.75rem}
 .banner-details>summary{cursor:pointer;color:var(--color-warn-ink-soft);width:fit-content;user-select:none}
 .banner-details>summary:hover{color:var(--color-warn-ink)}
 .banner-details>p{margin:6px 0 0;line-height:1.5}
 .banner-detail-url{margin-top:6px;word-break:break-all}
-.banner-detail-url code{background:var(--color-code-on-tint);padding:1px 5px;border-radius:3px;font-size:11px}
+.banner-detail-url code{background:var(--color-code-on-tint);padding:1px 5px;border-radius:3px;font-size:0.6875rem}
 .banner-action{color:var(--brand-blue);text-decoration:none;font-weight:600;white-space:nowrap;display:inline-flex;align-items:center;gap:4px;flex-shrink:0;line-height:1.4}
+.banner-action[hidden]{display:none}
 .banner-action:hover{text-decoration:underline}
 /* The resync notice (av-v991) reports a fact rather than a problem, so it does
    not borrow the warning banner's yellow — a page that shouts about somebody
    else saving something trains people to dismiss it. */
 .banner-info{border-bottom-color:var(--color-info-tint-border);background:var(--color-info-tint);color:var(--color-info-ink)}
-.banner-info i.ph{color:var(--brand-blue);font-size:16px;flex-shrink:0;line-height:1.4}
+.banner-info i.ph{color:var(--brand-blue);font-size:1rem;flex-shrink:0;line-height:1.4}
 /* .banner-action is otherwise an anchor; the reload is a button because it acts
    on this page rather than navigating away. */
 button.banner-action{background:none;border:0;padding:0;font:inherit;cursor:pointer}
@@ -344,8 +364,8 @@ button.banner-action{background:none;border:0;padding:0;font:inherit;cursor:poin
  * amber on purpose: it is the one thing that says this is not the artifact as it
  * is, and a person deciding whether to return to it has to be able to tell. */
 .version-viewer{display:flex;flex-direction:column;min-height:0;border:1px solid var(--color-warn-tint-border);border-radius:var(--radius-lg);overflow:hidden;background:var(--color-panel)}
-.version-viewer-bar{display:flex;align-items:center;gap:var(--space-5);padding:var(--space-3) var(--space-6);background:var(--color-warn-tint);border-bottom:1px solid var(--color-warn-tint-border);font-size:13px;color:var(--color-ink-soft)}
-.version-viewer-bar .ph-eye{flex:0 0 auto;font-size:18px;color:var(--color-warn-summary)}
+.version-viewer-bar{display:flex;align-items:center;gap:var(--space-5);padding:var(--space-3) var(--space-6);background:var(--color-warn-tint);border-bottom:1px solid var(--color-warn-tint-border);font-size:0.8125rem;color:var(--color-ink-soft)}
+.version-viewer-bar .ph-eye{flex:0 0 auto;font-size:1.125rem;color:var(--color-warn-summary)}
 /* The unsaved-changes notice (a .banner, above) sits flush under the bar, so it
  * takes the bar's inset rather than the page-wide strip's, and its icon lines up
  * with the eye's. */
@@ -355,7 +375,7 @@ button.banner-action{background:none;border:0;padding:0;font:inherit;cursor:poin
 .version-viewer-text{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:2px}
 .version-viewer-what{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .version-viewer-meta{color:var(--color-warn-ink)}
-.version-viewer-note{font-size:12px;color:var(--color-warn-ink)}
+.version-viewer-note{font-size:0.75rem;color:var(--color-warn-ink)}
 .version-viewer-actions{flex:0 0 auto;display:flex;gap:var(--space-3)}
 @media (max-width:640px){
 	.version-viewer-bar{flex-wrap:wrap}
@@ -369,21 +389,39 @@ button.banner-action{background:none;border:0;padding:0;font:inherit;cursor:poin
 .spacer{flex:1}
 .muted{color:var(--color-muted)}
 .faint{color:var(--color-faint)}
-.text-sm{font-size:12px}
+.text-sm{font-size:0.75rem}
 /* Present for a screen reader, not drawn. */
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 
 /* --- tags: a neutral pill led by a dot in the tag's color --------------- */
-.tag-pill{position:relative;display:inline-flex;align-items:center;justify-content:center;max-width:100%;height:22px;gap:5px;padding:0 7px;border-radius:999px;font-size:11px;font-weight:500;line-height:1;background:var(--color-ground);color:var(--color-ink-mid)}
+.tag-pill{position:relative;display:inline-flex;align-items:center;justify-content:center;max-width:100%;height:22px;gap:5px;padding:0 7px;border-radius:999px;font-size:0.6875rem;font-weight:500;line-height:1;background:var(--color-ground);color:var(--color-ink-mid)}
 .tag-dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:var(--color-muted);transition:opacity .12s ease}
 .tag-pill-label{overflow-wrap:anywhere}
 /* Tag color picker: presets + custom. */
-.color-presets{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
-.color-swatch{width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0}
-.color-swatch.selected{border-color:var(--color-ink-soft)}
-.color-custom-row{display:flex;gap:8px;align-items:center;margin-top:8px}
-.color-custom-row input[type=color]{width:36px;height:30px;padding:0;border:1px solid var(--color-border);border-radius:6px;cursor:pointer}
-.color-custom-row input[type=text]{flex:1}
+.tag-color-fields{margin-top:16px;min-width:0}
+.tag-color-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:24px}
+.tag-color-heading>.field-label{margin:0}
+.color-selection{padding:2px 8px;border-radius:var(--radius-pill);background:var(--color-accent-tint);color:var(--color-accent);font-size:.75rem;line-height:1.5}
+.color-presets{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:8px}
+.color-swatch{--swatch-radius:8px;--swatch-check-inset:3px;position:relative;display:grid;place-content:center;width:100%;height:56px;border:1px solid var(--color-hairline);border-radius:var(--swatch-radius);background:none;cursor:pointer;padding:0}
+.color-swatch>span{width:22px;height:22px;border-radius:50%;background:var(--swatch-color);box-shadow:inset 0 0 0 1px var(--color-tag-ring)}
+.color-swatch:hover{background:var(--color-hover-fill)}
+.color-swatch[aria-checked=true]{border-color:var(--color-accent);background:var(--color-accent-tint)}
+.color-swatch[aria-checked=true]::after{content:"\e182";position:absolute;right:var(--swatch-check-inset);top:var(--swatch-check-inset);display:grid;place-content:center;width:16px;height:16px;border-radius:calc(var(--swatch-radius) - var(--swatch-check-inset) - 1px);font-family:Phosphor;font-size:12px;background:var(--color-accent);color:var(--color-on-accent)}
+.tag-color-fields>label{margin-top:16px}
+.color-custom-row{display:flex;gap:8px;align-items:center;padding:0;border:0;border-radius:6px}
+.color-custom-row input[type=color]{appearance:none;flex:0 0 44px;width:44px;height:44px;padding:4px;background:var(--color-field);border:1px solid var(--color-field-border);border-radius:6px;cursor:pointer}
+.color-custom-row input[type=color]::-webkit-color-swatch-wrapper{padding:0}
+.color-custom-row input[type=color]::-webkit-color-swatch{border:0;border-radius:3px}
+.color-custom-row input[type=color]::-moz-color-swatch{border:0;border-radius:3px}
+.color-custom-row input[type=text]{flex:1;min-width:0}
+.color-input-wrap{position:relative;display:block;flex:0 0 44px;width:44px;height:44px}
+.color-empty{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;border:1px solid var(--color-field-border);border-radius:6px;background:var(--color-field);color:var(--color-muted);font-size:16px}
+.tag-panel [hidden],.tag-edit-dialog [hidden]{display:none!important}
+.tag-delete-entry{margin-top:24px;padding-top:16px;border-top:1px solid var(--color-hairline)}
+.modal-dialog.tag-edit-dialog .tag-dialog-footer{flex-direction:row}
+.tag-edit-dialog .tag-dialog-footer>.btn{order:0;width:auto;margin:0;flex:0 1 128px}
+@media(max-width:400px){.tag-edit-dialog .tag-dialog-footer>.btn{flex:1}}
 
 /* Native dialogs share their frame and content defaults. Content geometry is
  * the only feature-level variation; see docs/ui-components.md. */
@@ -398,30 +436,41 @@ button.banner-action{background:none;border:0;padding:0;font:inherit;cursor:poin
 .account-control[data-clerk-state="ready"] .account-control-mount{visibility:visible}
 .account-control[data-clerk-state="ready"] .account-control-placeholder{display:none}
 .account-control-feedback{position:absolute;top:calc(100% + var(--space-2));right:0}
-.account-control[data-clerk-state="error"] .account-control-feedback{box-sizing:border-box;width:min(20rem,calc(100vw - var(--space-8)));max-height:calc(100dvh - var(--header-height) - env(safe-area-inset-top,0px) - var(--space-8));overflow:auto;padding:var(--space-5);border:1px solid var(--color-border);border-radius:var(--radius-lg);background:var(--color-panel);box-shadow:var(--shadow-modal);color:var(--color-ink-soft);font-size:13px;line-height:1.5;overflow-wrap:anywhere}
+.account-control[data-clerk-state="error"] .account-control-feedback{box-sizing:border-box;width:min(20rem,calc(100vw - var(--space-8)));max-height:calc(100dvh - var(--header-height) - env(safe-area-inset-top,0px) - var(--space-8));overflow:auto;padding:var(--space-5);border:1px solid var(--color-border);border-radius:var(--radius-lg);background:var(--color-panel);box-shadow:var(--shadow-modal);color:var(--color-ink-soft);font-size:0.8125rem;line-height:1.5;overflow-wrap:anywhere}
 .account-control-recovery{display:flex;align-items:center;gap:var(--space-5);margin-top:var(--space-4)}
 /* Gallery header link styles must not reveal the Clerk recovery fallback. */
 .account-control [hidden]{display:none!important}
 
-.modal-dialog h2{font-size:16px;font-weight:600;margin:0 0 12px;overflow-wrap:anywhere}
-.modal-dialog label[for]{display:block;font-size:12px;color:var(--color-ink-mid);margin:12px 0 4px}
-.modal-dialog input[type=text],.modal-dialog input[type=password],.modal-dialog select{width:100%;padding:7px 10px;border:1px solid var(--color-border);border-radius:6px;font-size:var(--field-font-size);background:var(--color-panel);color:var(--color-ink)}
+.modal-dialog h2{font-size:1.125rem;font-weight:600;margin:0 0 12px;overflow-wrap:anywhere}
+.field-label,.ingest-label,.settings-label,.modal-dialog label[for]{display:block;font-size:var(--text-label);font-weight:600;line-height:1.5;color:var(--color-label);margin:0 0 6px}
+.modal-dialog label[for]{margin-top:16px}
+.modal-dialog input[type=text],.modal-dialog input[type=password],.modal-dialog select{min-height:var(--control-height);box-sizing:border-box;line-height:1.4;width:100%;padding:7px 10px;border:1px solid var(--color-field-border);border-radius:6px;font-size:var(--field-font-size);background:var(--color-field);color:var(--color-ink)}
 .modal-dialog input:focus-visible,.modal-dialog select:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px}
 
 /* Direct fieldsets let a modal lock its native form as one working copy. */
 .modal-dialog > fieldset,.modal-fields{min-width:0;margin:0;padding:0;border:0}
-.modal-dialog p{font-size:13px;line-height:1.5;color:var(--color-ink-mid);margin:10px 0 0;overflow-wrap:anywhere}
-.modal-dialog code{background:var(--color-ground);padding:1px 5px;border-radius:3px;font-size:12px}
-.modal-dialog.modal-wide{width:480px}
-.modal-dialog .modal-check{display:flex;align-items:flex-start;gap:8px;margin-top:12px;font-size:13px;color:var(--color-ink-mid);cursor:pointer}
-.modal-check input[type=checkbox]{flex:0 0 auto;margin-top:3px;accent-color:var(--brand-blue)}
-.modal-check small{display:block;margin-top:4px;font-size:12px;line-height:1.5}
+.modal-dialog p{font-size:0.8125rem;line-height:1.5;color:var(--color-ink-mid);margin:10px 0 0;overflow-wrap:anywhere}
+.modal-dialog code{background:var(--color-ground);padding:1px 5px;border-radius:3px;font-size:0.75rem}
+.modal-dialog.modal-wide{width:496px}
+.modal-dialog .modal-check{display:flex;align-items:flex-start;gap:10px;margin-top:16px;font-size:.875rem;font-weight:500;line-height:1.5;color:var(--color-ink-soft);cursor:pointer}
+.modal-check input[type=checkbox]{flex:0 0 auto;margin-top:2px}
+.modal-check small{display:block;margin-top:4px;font-weight:400}
+:is(.modal-check small,.form-help,.version-help,.settings-note,.settings-copy){font-size:var(--text-helper);line-height:var(--line-helper);color:var(--color-muted)}
+.modal-dialog p.form-help{font-size:var(--text-helper);line-height:var(--line-helper);color:var(--color-muted)}
 .modal-dialog input:disabled,.modal-dialog select:disabled{opacity:.55;cursor:not-allowed}
 .modal-dialog input[readonly]{background:var(--color-ground);color:var(--color-ink-mid);cursor:default}
-.modal-dialog .modal-actions{display:flex;gap:8px;align-items:center;margin-top:18px;flex-wrap:wrap}
+.modal-dialog .modal-actions{display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}
+
+/* Field states follow the shared field shell, including its modal defaults. */
+.tag-color-fields input[aria-invalid=true],#tag-edit-name[aria-invalid=true],#tag-add-name[aria-invalid=true]{border-color:var(--color-danger)}
+.tag-edit-dialog .tag-name-field{margin-top:16px}
+.tag-name-field>label[for]{margin-top:0}
+.tag-field-feedback{margin-top:6px;min-height:1.5em;font-size:var(--text-helper);line-height:var(--line-helper)}
+.tag-field-feedback>.form-help{margin:0;font:inherit}
+.tag-field-feedback>.tag-field-error{color:var(--color-danger-hover)}
 
 
-.modal-dialog .modal-error,.modal-dialog [data-permission-status]{color:var(--color-danger-hover);font-size:12px;margin-top:10px}
+.modal-dialog .modal-error,.modal-dialog [data-permission-status]{color:var(--color-danger-hover);font-size:0.75rem;margin-top:10px}
 .modal-dialog .modal-error:empty,.modal-dialog [data-permission-status]:empty{display:none}
 .modal-dialog .modal-actions .btn{white-space:nowrap}
 
@@ -435,7 +484,7 @@ button.banner-action{background:none;border:0;padding:0;font:inherit;cursor:poin
 .relay-consent p { line-height:1.6; margin:.8rem 0; }
 .relay-dialog-actions { display:flex; justify-content:flex-end; gap:.6rem; margin-top:1.25rem; }
 .experimental-label { display:inline-flex; align-items:center; gap:.4rem; color:var(--color-accent); font:600 .7rem/1.2 ui-monospace,monospace; text-transform:uppercase; letter-spacing:.08em; }
-.network-warnings,.connection-request-notice{padding:var(--space-3);margin:var(--space-3) 0;border:1px solid var(--color-warn-tint-border);border-radius:var(--radius-md);background:var(--color-warn-tint);color:var(--color-warn-ink);font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+.network-warnings,.connection-request-notice{padding:var(--space-3);margin:var(--space-3) 0;border:1px solid var(--color-warn-tint-border);border-radius:var(--radius-md);background:var(--color-warn-tint);color:var(--color-warn-ink);font-size:0.75rem;line-height:1.5;overflow-wrap:anywhere}
 .network-warnings strong,.connection-request-notice strong{display:flex;align-items:center;gap:var(--space-2)}
 .network-warnings ul{padding-left:18px;margin:var(--space-2) 0 0}
 .network-warnings li+li{margin-top:var(--space-2)}
@@ -450,3 +499,86 @@ button.banner-action{background:none;border:0;padding:0;font:inherit;cursor:poin
   .modal-dialog .modal-error,.modal-dialog [data-permission-status]{font-size:var(--text-secondary);line-height:1.5;overflow-wrap:anywhere}
   .modal-dialog .modal-actions .btn{font-size:var(--text-secondary);white-space:normal;overflow-wrap:anywhere;max-width:100%}
 }
+
+.action-menu-help{display:block;max-width:220px;margin-top:4px;font-size:11px;line-height:1.4;color:var(--color-muted)}
+
+/* A shared keyboard treatment survives page resets and keeps focus distinct
+ * from hover or a selected state. CodeMirror owns its internal caret. */
+:root :is(a,button,input,select,textarea,summary,[tabindex]):where(:not(.cm-content)):focus-visible{outline:2px solid var(--color-accent);outline-offset:3px}
+@media (prefers-reduced-motion:reduce){
+  ::view-transition-old(root),::view-transition-new(root){animation:none}
+}
+
+.pip-name{min-width:0;max-width:22ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (pointer:coarse),(max-width:767px){
+  .pip-grip{min-width:44px}
+  .pip-title{min-width:44px}
+  .pip-menu a,.pip-menu button{min-height:44px}
+  .pip-tab,.pip-tab:hover,.pip-tab:focus-visible{width:44px;min-height:60px}
+}
+@media(max-width:480px){
+  .pip-title{gap:4px;padding:0 4px}
+  .pip-name{max-width:20vw}
+  .pip-caret{display:none}
+}
+
+.app-header a.btn:not(.btn-sec){color:var(--color-on-accent)}
+
+@media(max-width:480px){.pip-edit{display:none}.pip-name{max-width:28vw}}
+
+.app-header a.btn-sec{color:var(--color-ink-soft)}
+
+/* Quiet destructive entry points; confirmation retains the solid danger style. */
+.btn-danger-soft,.btn-danger-soft:hover,.btn-danger-soft:disabled:hover{background:var(--color-danger-tint);color:var(--color-danger-ink);border:1px solid var(--color-danger-tint-border)}
+@media(max-width:767px){
+  .field,.select,.modal-dialog input[type=text],.modal-dialog input[type=password],.modal-dialog select{min-height:44px}
+}
+
+input::placeholder,textarea::placeholder{font-style:normal}
+input::selection,textarea::selection{background:var(--color-code-selection);color:var(--color-ink)}
+
+/* Native semantics, shared choice scale. The checked glyph is the same
+ * self-hosted Phosphor check used by the rest of the interface. */
+input[type=checkbox]{appearance:none;-webkit-appearance:none;display:inline-grid;place-content:center;box-sizing:border-box;flex:0 0 18px;width:18px;height:18px;min-height:18px;padding:0;border:1px solid var(--color-field-border);border-radius:4px;background:var(--color-field);color:var(--color-on-accent);vertical-align:middle;cursor:pointer}
+input[type=checkbox]::before{content:"\e182";font-family:Phosphor!important;font-size:14px;line-height:1;opacity:0}
+input[type=checkbox]:checked{background:var(--color-accent);border-color:var(--color-accent)}
+input[type=checkbox]:checked::before{opacity:1}
+input[type=checkbox]:indeterminate::before{content:"−";font-family:inherit!important;opacity:1;color:var(--color-accent)}
+input[type=checkbox]:disabled{opacity:.55;cursor:not-allowed}
+
+.btn-danger-outline,.btn-danger-outline:hover{background:var(--color-panel);color:var(--color-danger);border:1px solid var(--color-danger-tint-border)}
+.btn-danger-outline:hover{background:var(--color-danger-tint)}
+
+/* A modal has a fixed header/footer and one scrollable body. The stable
+ * native dialog and modal controller still own focus, dismissal and locking. */
+.modal-dialog.modal-sheet{width:480px;padding:0;overflow:hidden}
+.modal-sheet[open],.modal-sheet>form{display:flex;flex-direction:column;min-height:0;max-height:calc(100dvh - 32px)}
+.modal-header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 24px;border-bottom:1px solid var(--color-hairline);flex:0 0 auto}
+.modal-dialog .modal-header h2{margin:0;line-height:1.4}
+.modal-header .icon-btn{flex:0 0 44px}
+.modal-sheet .modal-body{position:relative;isolation:isolate;flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:20px 24px}
+.modal-sheet .modal-body>:first-child,.modal-sheet .modal-body>.modal-fields>:first-child{margin-top:0}
+.modal-sheet .modal-footer{position:sticky;bottom:0;flex:0 0 auto;margin:0;padding:16px 24px;border-top:1px solid var(--color-hairline);background:var(--color-panel)}
+.modal-sheet .modal-actions .btn{min-height:44px}
+.modal-footer .modal-primary{order:2}
+.modal-footer .modal-secondary{order:1}
+.modal-footer .modal-destructive{order:0;margin-right:auto}
+@media(max-width:480px){
+  .modal-dialog.modal-sheet{margin:auto auto 0;width:100%;max-width:100%;max-height:calc(100dvh - 12px);border-radius:16px 16px 0 0;border-bottom:0}
+  .modal-sheet>form{max-height:calc(100dvh - 12px)}
+  .modal-header{padding:12px 20px}
+  .modal-sheet .modal-body{padding:20px}
+  .modal-sheet .modal-footer{padding:12px 20px max(16px,env(safe-area-inset-bottom))}
+}
+@media(max-width:400px){
+  .modal-sheet .modal-actions{flex-direction:column;align-items:stretch}
+  .modal-footer .btn{width:100%;margin:0}
+  .modal-footer .modal-primary{order:0}
+  .modal-footer .modal-secondary{order:1}
+  .modal-footer .modal-destructive{order:2}
+}
+
+
+.form-help,.modal-check small{text-wrap:pretty}
+
+@media(max-width:767px){.capability-popover-manage{min-height:44px}}

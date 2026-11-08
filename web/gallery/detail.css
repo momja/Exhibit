@@ -31,16 +31,16 @@ body[data-pip-corner^=t] .pip-notices{top:auto;bottom:0}
 .allowlist code{background:var(--color-code-on-tint);padding:1px 5px;border-radius:3px;font-size:12px}
 .allowlist input{border:1px solid var(--color-border);border-radius:4px;padding:3px 8px;font-size:var(--field-font-size);width:240px;margin:0 6px}
 /* Owner-only sharing controls and static saved-data illustrations. */
-/* Native top-layer dialog scrolls as one surface on short windows. */
+/* Shared sheet shell keeps the header and Done available while content scrolls. */
 #share-panel{width:560px}
 .share-cols{display:flex;flex-direction:column;gap:16px}
 .share-col{flex:0 0 auto;display:flex;flex-direction:column;gap:8px;min-width:0}
-.share-col h3{margin:0}
+.share-col h3{margin:0;font-size:.875rem;font-weight:600;line-height:1.5;color:var(--color-ink-soft)}
 .share-add{display:flex;gap:8px;align-items:center}
 .share-add .field{flex:1;min-width:0}
 /* A long guest list must not push the link and saved-data settings far away.
    Its limit follows the window rather than a fixed number of people. */
-#share-panel .share-people-list{display:flex;flex-direction:column;max-block-size:30dvh;min-block-size:0;overflow-y:auto;scrollbar-gutter:stable}
+#share-panel .share-people-list{display:flex;flex-direction:column;max-block-size:30dvh;min-block-size:0;overflow-y:auto;scrollbar-gutter:auto}
 #share-panel .share-people-list:focus-visible{outline:2px solid var(--brand-blue);outline-offset:3px;border-radius:4px}
 .share-grants{list-style:none;display:flex;flex-direction:column}
 .share-grant{display:flex;align-items:center;gap:8px;min-block-size:45px;font-size:13px;line-height:20px;padding:8px 0;border-bottom:1px solid var(--color-hairline)}
@@ -59,7 +59,7 @@ body[data-pip-corner^=t] .pip-notices{top:auto;bottom:0}
 .state-choice input:focus-visible+span{outline:2px solid var(--brand-blue);outline-offset:3px}
 .state-choice input:disabled+span{opacity:.6;cursor:wait}
 .state-choice strong{overflow-wrap:anywhere;font-size:var(--field-font-size);font-weight:600}
-.state-choice-description{font-size:12px;line-height:1.4;color:var(--color-ink-soft)}
+.state-choice-description{font-size:var(--text-helper);line-height:var(--line-helper);color:var(--color-ink-soft)}
 .state-mode-glyph{display:flex;flex-direction:column;width:108px;margin-bottom:4px;color:var(--brand-blue)}
 .state-glyph-people,.state-glyph-separate{display:grid;grid-template-columns:repeat(3,1fr)}
 .state-mode-glyph i{font-size:22px;line-height:1}
@@ -83,3 +83,30 @@ body[data-pip-corner^=t] .pip-notices{top:auto;bottom:0}
 /* The last guest row already supplies the section divider. */
 .share-col:has(.share-grant)+.share-col{border-top:0;padding-top:0}
 #share-panel #share-status{flex:1;min-width:0;color:var(--color-ink-soft);overflow-wrap:anywhere}
+
+@media(max-width:480px){
+  .state-choices{grid-template-columns:minmax(0,1fr)}
+  .state-choice>span{align-items:flex-start;text-align:left;padding:14px;gap:8px}
+  .state-choice .state-mode-glyph{display:none}
+  .state-choice-description{font-size:var(--text-helper);line-height:var(--line-helper)}
+}
+
+.share-link-row>.btn,.share-add>.btn{min-height:var(--control-height)}
+
+.share-replace-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.share-link-row>.field{text-overflow:ellipsis}
+.share-link-row>.field:focus{text-overflow:clip}
+@media(max-width:767px){
+  .share-link-row>.btn,.share-add>.btn{min-height:44px;align-self:stretch}
+  .share-replace-row{flex-direction:column;align-items:flex-start;gap:6px}
+}
+
+.share-people-list{border-bottom:1px solid var(--color-hairline)}
+.share-grant:last-child{border-bottom:0}
+
+.modal-dialog .share-data-note{display:flex;align-items:flex-start;gap:8px;margin:0;padding:12px;border-radius:var(--radius-md);background:var(--color-subtle);color:var(--color-ink-mid);font-size:var(--text-helper);line-height:var(--line-helper)}
+.share-data-note>i{flex:0 0 auto;font-size:1rem;line-height:1.5;color:var(--color-accent)}
+.share-col .modal-check{margin-top:0}
+#share-panel .share-replace-row>.btn,#share-panel .share-grant>.btn{min-height:44px}
+.state-choice input{left:14px;top:15px;z-index:1;opacity:1;width:18px;height:18px;accent-color:var(--color-accent);margin:0}
+@media(max-width:480px){.state-choice>span{padding-left:44px}}

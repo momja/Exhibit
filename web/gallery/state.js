@@ -407,8 +407,7 @@ import { registerEditorSection, editorChanged } from './editor-session.js';
   function readOnlyView(value) {
     const box = el('div', 'state-readonly');
     const note = el('div', 'text-sm muted');
-    note.textContent = 'No form control fits this shape, so it is shown as stored. ' +
-      'Delete it here, or let the artifact rewrite it.';
+    note.textContent = 'This value can be viewed or deleted, but not edited here.';
     const pre = document.createElement('pre');
     pre.textContent = JSON.stringify(value, null, 2);
     box.append(note, pre);
@@ -467,17 +466,17 @@ import { registerEditorSection, editorChanged } from './editor-session.js';
     const box = el('div', 'state-empty');
     box.appendChild(icon('ph-database'));
     const text = document.createElement('span');
-    text.textContent = 'This artifact has not stored anything yet. Add a key below to seed one by hand.';
+    text.textContent = 'No saved data yet. Add a key to enter data manually.';
     box.appendChild(text);
     return box;
   }
 
   function updateSummary() {
-    if (!loaded) { summaryEl.textContent = 'Stored state'; return; }
+    if (!loaded) { summaryEl.textContent = 'Saved data'; return; }
     const live = entries.filter(e => !e.deleted).length;
     summaryEl.textContent = live
-      ? 'Stored state · ' + live + (live === 1 ? ' key' : ' keys')
-      : 'Stored state · empty';
+      ? 'Saved data · ' + live + (live === 1 ? ' key' : ' keys')
+      : 'Saved data · empty';
   }
 
   // --- API --------------------------------------------------------------
@@ -510,12 +509,12 @@ import { registerEditorSection, editorChanged } from './editor-session.js';
       resp = await api('GET', stateURL());
     } catch (err) {
       if (sequence !== loadSequence) return;
-      setStatus('✗ Could not load state: ' + err.message);
+      setStatus('✗ Could not load saved data: ' + err.message);
       return;
     }
     if (sequence !== loadSequence) return;
     if (!resp.ok) {
-      setStatus('✗ Could not load state: ' + resp.statusText);
+      setStatus('✗ Could not load saved data: ' + resp.statusText);
       return;
     }
     const data = await resp.json().catch(() => ({}));
@@ -552,7 +551,7 @@ import { registerEditorSection, editorChanged } from './editor-session.js';
     }
     entries = entries.filter(e => !e.deleted);
     render();
-    setStatus('✓ Saved — the artifact reads this on its next render.');
+    setStatus('✓ Saved. Reload the artifact to use this data.');
     return true;
   }
 
@@ -567,11 +566,9 @@ import { registerEditorSection, editorChanged } from './editor-session.js';
 
   async function eraseAll() {
     const ok = window.confirm(
-      'Erase all stored data for “' + TITLE + '”?\n\n' +
-      'Every key this artifact saved is deleted from the server. State has no ' +
-      'version history, so this cannot be undone.\n\n' +
-      'The artifact itself, its network allowlist, and its capability approvals ' +
-      'are not touched.');
+      'Erase current saved data for “' + TITLE + '”?\n\n' +
+      'This permanently deletes the current saved data. Older versions and open pages may still hold copies. ' +
+      'The artifact and its permissions stay unchanged.');
     if (!ok) return;
     setStatus('Erasing…');
     let resp;
@@ -584,7 +581,7 @@ import { registerEditorSection, editorChanged } from './editor-session.js';
     if (!resp.ok) { setStatus('✗ Erase failed: ' + resp.statusText); return; }
     entries = [];
     render();
-    setStatus('✓ All stored data erased.');
+    setStatus('✓ Current saved data erased.');
   }
 
   // --- wiring -----------------------------------------------------------
@@ -648,6 +645,7 @@ import { registerEditorSection, editorChanged } from './editor-session.js';
       if (!result) document.getElementById('status').textContent = statusEl.textContent;
       return result;
     },
-    discard: cancelEdits
+    discard: cancelEdits,
+    saveMessage: () => statusEl.textContent
   });
 })();
