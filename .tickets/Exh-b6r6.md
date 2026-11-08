@@ -27,3 +27,9 @@ Mirror Exh-t9bv: on phones the header becomes position:fixed against the viewpor
 - Gallery phone chrome (hide on scroll down, reveal on scroll up, focus reveal) unchanged.
 - Browser test asserts the header is fixed at phone widths, occupies no layout space of its own, and that content clears it; existing header tests still pass at 1280-320px.
 
+
+## Notes
+
+**2026-11-08T19:59:33Z**
+
+Fix on bug/Exh-b6r6/pin-phone-header (PR #278): phones pin the standard header with position:fixed inside .app-header-slot; the app-header controller publishes the bar's border-box height as --app-header-height for the slot's min-height (compact calc fallback). Desktop renders the slot with display:contents, so the sticky desktop bar and every page layout are unchanged. TestPhoneHeaderPinnedBrowser fails with the bar sticky and passes with it fixed (390/320px). Remaining: confirm on the iPhone home-screen app after deploy.
