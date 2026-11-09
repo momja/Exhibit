@@ -55,7 +55,9 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
 <div id="{{.Grid.ID}}">
 {{if or .Spaces .Grid.Filters.Sections}}<div class="gallery-layout{{if not .Spaces}} gallery-layout-solo{{end}}">{{template "gallerySpaces" .}}{{end -}}
 <main id="main-content" tabindex="-1">
-<div class="gallery-overview"><h1 class="gallery-title">{{.Grid.Title}}</h1>{{if .Grid.Description}}<p class="gallery-description">{{.Grid.Description}}</p>{{end}}</div>
+{{/* The active space already names the destination; the heading exists only
+     so the main region still has an accessible label. */}}
+<h1 class="sr-only">{{.Grid.Title}}</h1>
 {{if .Grid.HideSearch}}{{if not .Grid.Activity}}<div hidden>{{template "gallerySearch" .Grid}}</div>{{end}}{{end}}
 {{if .Grid.SearchPage}}<div class="gallery-page-search">{{template "gallerySearch" .Grid}}</div>{{end}}
 {{/* Cards share their tile, title, status marks, and action menu with every
