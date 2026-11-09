@@ -83,6 +83,10 @@ func (grid galleryGridData) EmptyState() galleryEmptyState {
 	return grid.Empty
 }
 
+// loadGalleryGrid resolves one page of a destination's cards together with the
+// parameters and links its template renders. Selection and presentation stay
+// with the gallery definition, so this function never learns a destination's
+// ownership rules.
 func (ro *Router) loadGalleryGrid(r *http.Request, gallery galleryDefinition, offset int) (galleryGridData, error) {
 	grid := galleryGridData{
 		HideSearch: gallery.HideSearch, ResetURL: gallery.PagePath,
