@@ -209,12 +209,12 @@ main{padding:var(--page-top) var(--page-gutter)}
  * bar. The shown state carries no transform at all, because a transformed
  * header would become the containing block of any fixed popup inside it. */
 @media (max-width:767px){
-  #gallery-shell>.app-header,#gallery-shell .gallery-rail{transition:transform .2s ease,box-shadow .2s ease}
-  #gallery-shell[data-chrome-hidden]>.app-header{transform:translateY(calc(-100% + env(safe-area-inset-top,0px)));box-shadow:none}
+  #gallery-shell .app-header,#gallery-shell .gallery-rail{transition:transform .2s ease,box-shadow .2s ease}
+  #gallery-shell[data-chrome-hidden] .app-header{transform:translateY(calc(-100% + env(safe-area-inset-top,0px)));box-shadow:none}
   #gallery-shell[data-chrome-hidden] .gallery-rail{transform:translateY(100%)}
 }
 @media (max-width:767px) and (prefers-reduced-motion:reduce){
-  #gallery-shell>.app-header,#gallery-shell .gallery-rail{transition:none}
+  #gallery-shell .app-header,#gallery-shell .gallery-rail{transition:none}
 }
 
 /* Filters share server markup in the rail and native phone dialog. */

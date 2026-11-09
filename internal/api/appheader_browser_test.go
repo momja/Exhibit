@@ -282,3 +282,80 @@ func TestFloatingAppHeaderBrowser(t *testing.T) {
 		wait(`!document.getElementById('pip-menu').hidden`)
 	}
 }
+
+// Phones pin the bar to the viewport and the slot reserves the height it gives up (Exh-b6r6).
+func TestPhoneHeaderPinnedBrowser(t *testing.T) {
+	in := newProfileInstance(t, "header-pinned", "pinned@example.test")
+	id := createArtifact(t, in.ro, map[string]any{
+		"title": "A page tall enough to scroll",
+		"body":  "<!doctype html><h1>Pinned header</h1>",
+	})
+	app := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.AddCookie(in.cookie)
+		in.ro.ServeHTTP(w, r)
+	}))
+	defer app.Close()
+	in.ro.cfg.AppOrigin = app.URL
+
+	browser, err := chromium.New(chromiumtest.Start(t))
+	require.NoError(t, err)
+	ctx, cancel, err := browser.Tab(context.Background())
+	require.NoError(t, err)
+	defer cancel()
+	ctx, cancel = context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+
+	const (
+		// Out of flow: fixed at the viewport's top edge and full width.
+		pinned = `(() => {
+			const header = document.querySelector('.app-header');
+			const slot = document.querySelector('.app-header-slot');
+			const bar = header.getBoundingClientRect(), held = slot.getBoundingClientRect();
+			const main = document.querySelector('main').getBoundingClientRect();
+			return getComputedStyle(header).position === 'fixed' && Math.abs(bar.top) < 1 &&
+				Math.abs(bar.width - innerWidth) < 1 && Math.abs(held.height - bar.height) < 1 &&
+				main.top >= bar.bottom - 1 &&
+				parseFloat(getComputedStyle(slot).getPropertyValue('--app-header-height')) > 0; })()`
+		// Desktop keeps the bar in the flow: the slot draws no box at all.
+		inFlow = `(() => {
+			const header = document.querySelector('.app-header');
+			const slot = document.querySelector('.app-header-slot');
+			return getComputedStyle(header).position === 'sticky' && getComputedStyle(slot).display === 'contents' &&
+				slot.getClientRects().length === 0; })()`
+		// The slot's box is what replaces the bar in the flow.
+		slotBox = `getComputedStyle(document.querySelector('.app-header-slot')).display === 'block'`
+	)
+	poll := func(script, message string) {
+		t.Helper()
+		pollCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		require.NoError(t, chromedp.Do(pollCtx, chromedp.Poll[chromedp.Void](script)), message)
+	}
+	eval := func(script string) {
+		t.Helper()
+		require.NoError(t, chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](script)))
+	}
+
+	// A page shorter than the viewport and one that scrolls: the two shapes overscroll produces.
+	for _, width := range []int64{390, 320} {
+		_, err := chromedp.Call(ctx, emulation.SetDeviceMetricsOverride, emulation.SetDeviceMetricsOverrideParams{Width: width, Height: 700, DeviceScaleFactor: 1, Mobile: true})
+		require.NoError(t, err)
+		for _, path := range []string{"/profile", "/artifacts/" + id + "/edit?return_to=/artifacts/" + id} {
+			t.Run(fmt.Sprintf("%d%s", width, path), func(t *testing.T) {
+				require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(app.URL+path), chromedp.Poll[chromedp.Void](`document.querySelector('.app-header-slot')`)))
+				poll(slotBox, "the slot draws a box at phone widths, which is what holds the page's place")
+				poll(pinned, "the bar holds its place and the page content clears it")
+				eval(`window.scrollTo(0, document.scrollingElement.scrollHeight)`)
+				poll(`Math.abs(document.querySelector('.app-header').getBoundingClientRect().top) < 1`, "the bar stays at the top of the viewport at the end of the page")
+				eval(`window.scrollTo(0, 0)`)
+				poll(pinned, "back at the top the bar is where the slot reserved it")
+			})
+		}
+	}
+
+	_, err = chromedp.Call(ctx, emulation.SetDeviceMetricsOverride, emulation.SetDeviceMetricsOverrideParams{Width: 1280, Height: 800, DeviceScaleFactor: 1})
+	require.NoError(t, err)
+	require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(app.URL+"/artifacts/"+id+"/edit?return_to=/artifacts/"+id), chromedp.Poll[chromedp.Void](inFlow)), "desktop keeps the sticky bar with no slot box")
+	eval(`window.scrollTo(0, 400)`)
+	poll(`window.scrollY > 0 && Math.abs(document.querySelector('.app-header').getBoundingClientRect().top) < 1`, "the sticky bar still holds at the top once the page scrolls")
+}

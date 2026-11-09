@@ -50,6 +50,7 @@
 /* --- app bar ---------------------------------------------------------- */
 /* Every standard header shares a 56px band and 44px controls. Class-based sizing
  * works both directly under body and inside a gallery controller root. */
+.app-header-slot{display:contents}
 .app-header{box-sizing:border-box;position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:12px;min-height:var(--header-height);flex-shrink:0;padding:0 16px;background:var(--color-panel);border-bottom:1px solid var(--color-hairline-strong);box-shadow:var(--shadow-header)}
 .app-header .logo{height:24px;width:auto;display:block;flex:0 0 auto}
 .app-header a[hidden]{display:none}
@@ -64,7 +65,9 @@
 .app-header .btn.icon-btn{width:var(--header-control-size);height:var(--header-control-size)}
 @media (max-width:767px){
   .app-header,.app-header-actions{gap:8px}
-  .app-header{padding-top:env(safe-area-inset-top,0px);min-height:calc(var(--header-height) + env(safe-area-inset-top,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  /* Fixed, not sticky: a sticky bar rides down with iOS rubber-band overscroll (Exh-b6r6). */
+  .app-header-slot{display:block;min-height:var(--app-header-height,calc(var(--header-height) + env(safe-area-inset-top,0px)))}
+  .app-header{position:fixed;inset:0 0 auto;padding-top:env(safe-area-inset-top,0px);min-height:calc(var(--header-height) + env(safe-area-inset-top,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
   .app-header .btn{height:var(--header-control-size);min-height:var(--header-control-size);padding-top:0;padding-bottom:0}
   .app-header .btn.icon-btn{width:var(--header-control-size);height:var(--header-control-size)}
   .app-header-back{min-width:var(--header-control-size);min-height:var(--header-control-size)}

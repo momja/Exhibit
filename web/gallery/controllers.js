@@ -36,6 +36,8 @@ application.register('gallery-space', GallerySpaceController);
 
 import SpaceTabsController from './space-tabs-controller.js';
 application.register('space-tabs', SpaceTabsController);
+import AppHeaderController from './app-header-controller.js';
+application.register('app-header', AppHeaderController);
 import ScrollChromeController from './scroll-chrome-controller.js';
 application.register('scroll-chrome', ScrollChromeController);
 application.register('relay-host', RelayHostController);
