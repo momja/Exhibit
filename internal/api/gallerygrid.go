@@ -17,8 +17,9 @@ const galleryPageSize = 24
 // A gallery owns its routes and its artifact selection. Other gallery pages
 // supply their own selection without teaching paging or the browser about
 // ownership or other selection rules. Filters is the default owner selection.
+// Title names the destination for assistive technology; the active space in the
+// rail is its visible label, so galleries never repeat it as page copy.
 type galleryDefinition struct {
-	Description  string
 	NoFilters    bool
 	HideSearch   bool
 	Activity     bool
@@ -48,7 +49,6 @@ type galleryEmptyState struct {
 }
 
 type galleryGridData struct {
-	Description  string
 	HideSearch   bool
 	Activity     *activityFeed
 	PagePath     string
@@ -83,9 +83,13 @@ func (grid galleryGridData) EmptyState() galleryEmptyState {
 	return grid.Empty
 }
 
+// loadGalleryGrid resolves one page of a destination's cards together with the
+// parameters and links its template renders. Selection and presentation stay
+// with the gallery definition, so this function never learns a destination's
+// ownership rules.
 func (ro *Router) loadGalleryGrid(r *http.Request, gallery galleryDefinition, offset int) (galleryGridData, error) {
 	grid := galleryGridData{
-		Description: gallery.Description, HideSearch: gallery.HideSearch, ResetURL: gallery.PagePath,
+		HideSearch: gallery.HideSearch, ResetURL: gallery.PagePath,
 		PagePath: gallery.PagePath, SearchPage: gallery.SearchPage, Title: gallery.Title, ID: gallery.ID, FragmentPath: gallery.FragmentPath,
 		Query: strings.TrimSpace(r.URL.Query().Get("q")), Offset: offset,
 		Empty: gallery.Empty,

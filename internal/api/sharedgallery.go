@@ -11,8 +11,7 @@ import (
 
 var sharedGallery = galleryDefinition{
 	ID: "shared-gallery", Title: "Shared", PagePath: "/shared", FragmentPath: "/partials/gallery-grid/shared",
-	Description: "Artifacts shared with you and artifacts you’ve shared with others.",
-	Select:      selectAllShared, NoFilters: true,
+	Select: selectAllShared, NoFilters: true,
 	Empty: galleryEmptyState{Icon: "ph-share-network", Message: "Nothing shared yet", Hint: "Share one of your artifacts, or ask someone to share with you."},
 }
 

@@ -60,10 +60,9 @@ func TestGallerySpacesBrowser(t *testing.T) {
 			}
 			checkSpaceLayout := func() {
 				check(`(() => {
- const heading = document.querySelector('.gallery-title');
- const description = document.querySelector('.gallery-description');
- return !description || description.getBoundingClientRect().top >= heading.getBoundingClientRect().bottom + 4;
-})()`, "the destination description has visible separation below its heading")
+ const heading = document.querySelector('main h1');
+ return !document.querySelector('.gallery-overview') && !document.querySelector('.gallery-title') && Boolean(heading?.classList.contains('sr-only')) && heading.textContent.trim().length > 0;
+})()`, "the destination is named only for assistive technology")
 				if viewport.phone {
 					return
 				}

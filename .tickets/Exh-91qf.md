@@ -8,11 +8,12 @@ type: chore
 priority: 2
 assignee: Max Omdal
 ---
-# Remove redundant Starred tab description
+# Remove the duplicate gallery tab header block
 
-The Starred gallery shows the heading "Starred" followed by the line "Your go-to artifacts, most recently opened first." The heading already names the destination, and the ordering promise is not needed to use the tab. Remove the extra copy so the tab opens straight into the artifact grid.
+Every gallery destination repeats its active tab label as a page title and subtitle: Starred, Search, Shared, and Activity. The rail already names and highlights the destination, so the block is a second header before the artifacts.
+
+Remove the visible title and subtitle from all four destinations. Keep an accessible-only heading so the main region still has a name, and delete the now-unused description data and styles.
 
 ## Acceptance Criteria
 
-The Starred gallery renders only its heading, with no description line beneath it; other gallery destinations keep their descriptions; gallery tests and Exh-77m9 screenshots reflect the change.
-
+Starred, Search, Shared, and Activity render no visible page title or subtitle while each main region keeps an assistive-technology heading; gallery description fields and their CSS are gone; desktop and phone screenshots show the artifact content starting directly under the app header; gallery navigation, empty states, and responsive layouts still pass their tests.
