@@ -1,9 +1,10 @@
 # Mobile text readability
 
-Gallery cards show complete primary names on phones. Titles use `1rem`
-(16px at the default preference), wrap even unbroken names, and grow their
-metadata row. Desktop titles keep the existing 12.5px density and ellipsis;
-the row uses a minimum height so enlarged text is not vertically clipped.
+Gallery card titles stay on one line at every viewport width, with a 16px
+fade at the trailing edge and the complete name in the link's tooltip.
+Phone titles use `1rem` (16px at the default preference); desktop titles use
+`.875rem`. Metadata rows have a 48px desktop / 52px phone minimum height,
+with no two-line title floor. Larger text can still grow the row vertically.
 
 Creation descriptions, labels, gallery attribution/filter text, and shared
 modal explanations use scoped relative sizing. Primary phone prose is 16px;
@@ -22,10 +23,9 @@ on white / 3.11:1 on ground to 5.83:1 / 5.11:1.
 
 The targets story owns 44px title and metadata hit areas. Preserve its
 `min-height:44px` / `min-width:44px` on the title link when combining. This
-story owns its `line-height:1.4`, `padding-block:6px`, font size and wrapping;
+title uses `line-height:1.4`, `padding-block:6px`, and single-line clipping;
 a 44px line height is not a reliable hit-size floor after typography overrides.
-The metadata row's `min-height:26px` replaces the previous fixed height and
-must remain free to grow around larger controls.
+The metadata row remains free to grow around enlarged text or larger controls.
 
 The creation story owns method-choice layout. Preserve or adapt the scoped
 `.route b` / `.route-note` typography when combining its layout change. This
