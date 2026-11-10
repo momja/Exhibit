@@ -22,8 +22,8 @@ import (
 func TestReadabilityBrowser(t *testing.T) {
 	ro := newTestRouter(t)
 	for _, title := range []string{
-		"A long primary title that should remain fully readable alongside card metadata controls",
-		"AnUnbrokenArtifactNameThatMustWrapWithoutPushingControlsOffTheCardOrClippingTheLastLine",
+		"A long primary title that should fade on one line alongside card metadata controls",
+		"AnUnbrokenArtifactNameThatMustFadeWithoutPushingControlsOffTheCardOrAddingAnotherLine",
 	} {
 		createArtifact(t, ro, map[string]any{"title": title, "body": "<h1>Readability</h1>"})
 	}
@@ -51,15 +51,21 @@ func TestReadabilityBrowser(t *testing.T) {
 			require.NoError(t, err)
 			_, err = chromedp.Call(ctx, emulation.SetTouchEmulationEnabled, emulation.SetTouchEmulationEnabledParams{Enabled: width < 768})
 			require.NoError(t, err)
-			for _, path := range []string{"/", "/new"} {
+			for _, path := range []string{"/search", "/new"} {
 				t.Run(fmt.Sprintf("%s/%d%s", theme, width, path), func(t *testing.T) {
 					require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(app.URL+path), chromedp.WaitVisible(chromedp.CSS("main"))))
+					if path == "/search" {
+						require.NoError(t, chromedp.Do(ctx, chromedp.WaitVisible(chromedp.CSS(".card-title"))))
+					}
 					check(t, readabilityContrastChecks)
 					for _, percent := range []int{100, 200} {
 						// A larger root font models text-only enlargement, not a wider layout
 						// viewport or a page-scale transform that leaves text metrics unchanged.
 						require.NoError(t, chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](fmt.Sprintf(`document.documentElement.style.fontSize = '%d%%'`, percent))))
 						check(t, readabilityLayoutChecks)
+						if path == "/search" && percent == 100 {
+							modalBrowser{t, ctx}.capture("Exh-geph/gallery-"+theme, width)
+						}
 					}
 				})
 			}
@@ -105,7 +111,11 @@ const readabilityLayoutChecks = `(() => {
  for (const title of document.querySelectorAll('.card-title')) {
   const row = title.closest('.card-meta'), style = getComputedStyle(title);
   if (!fits(title,row)) failures.push('title outside metadata row');
-  if (phone && (title.scrollWidth > title.clientWidth + 1 || style.whiteSpace === 'nowrap' || parseFloat(style.fontSize) < root)) failures.push('mobile title clipped or too small');
+  if (style.whiteSpace !== 'nowrap' || style.overflowX !== 'hidden' || !style.maskImage.includes('linear-gradient')) failures.push('title must clip on one line with a fade');
+  if (title.textContent !== title.title) failures.push('full title tooltip missing');
+  if (phone && parseFloat(style.fontSize) < root) failures.push('mobile title too small');
+  const lineHeight = parseFloat(style.lineHeight), padding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+  if (title.clientHeight > Math.max(phone ? 44 : 0, lineHeight + padding) + 1) failures.push('title reserves more than one line');
   for (const control of row.querySelectorAll('button,[role=button]')) {
    if (control.getBoundingClientRect().width && !fits(control,row)) failures.push('metadata control outside its row');
   }
