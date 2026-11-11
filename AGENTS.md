@@ -42,5 +42,8 @@ All docs are in `./docs/` directory.
 
 ### Screenshots
 
-Agents can take screenshots using the CLI tool `shot-scraper`.
-Screenshots should stay up to date with UI changes.
+Use screenshots to verify UI changes and provide visual evidence in PRs.
+Save ticket-review screenshots and other generated review images outside the
+checkout (for example, under `/tmp/exhibit-review/`) and attach useful images
+to the PR. Do not commit review images to the repository. Existing screenshot
+links are historical evidence, not a requirement to refresh committed images.

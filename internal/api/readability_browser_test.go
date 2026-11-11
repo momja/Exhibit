@@ -25,7 +25,8 @@ func TestReadabilityBrowser(t *testing.T) {
 		"A long primary title that should fade on one line alongside card metadata controls",
 		"AnUnbrokenArtifactNameThatMustFadeWithoutPushingControlsOffTheCardOrAddingAnotherLine",
 	} {
-		createArtifact(t, ro, map[string]any{"title": title, "body": "<h1>Readability</h1>"})
+		id := createArtifact(t, ro, map[string]any{"title": title, "body": "<h1>Readability</h1>"})
+		require.NoError(t, ro.cfg.Store.SetArtifactStarred(t.Context(), store.ViewerID(1), id, true))
 	}
 	app := httptest.NewServer(ro)
 	defer app.Close()
@@ -64,7 +65,7 @@ func TestReadabilityBrowser(t *testing.T) {
 						require.NoError(t, chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](fmt.Sprintf(`document.documentElement.style.fontSize = '%d%%'`, percent))))
 						check(t, readabilityLayoutChecks)
 						if path == "/search" && percent == 100 {
-							modalBrowser{t, ctx}.capture("Exh-geph/gallery-"+theme, width)
+							modalBrowser{t, ctx}.capture("Exh-e736/gallery-"+theme, width)
 						}
 					}
 				})
@@ -116,6 +117,11 @@ const readabilityLayoutChecks = `(() => {
   if (phone && parseFloat(style.fontSize) < root) failures.push('mobile title too small');
   const lineHeight = parseFloat(style.lineHeight), padding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
   if (title.clientHeight > Math.max(phone ? 44 : 0, lineHeight + padding) + 1) failures.push('title reserves more than one line');
+  const star = row.querySelector('.card-star'), actions = row.querySelector('.card-actions');
+  if (star && actions) {
+   const a = star.getBoundingClientRect(), b = actions.getBoundingClientRect();
+   if (Math.abs((a.top + a.height/2) - (b.top + b.height/2)) > 1) failures.push('star is not centered with card actions');
+  }
   for (const control of row.querySelectorAll('button,[role=button]')) {
    if (control.getBoundingClientRect().width && !fits(control,row)) failures.push('metadata control outside its row');
   }
