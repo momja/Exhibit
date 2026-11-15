@@ -45,6 +45,10 @@ main{padding:var(--page-top) var(--page-gutter);max-width:900px;margin:0 auto}
 .security-col label.row{margin-bottom:12px}
 .security-col label.row:last-child{margin-bottom:0}
 .security-col label.row>.field-label{margin:0}
+.feature-select{position:relative;flex-shrink:0}
+.feature-select .select{appearance:none;padding-right:calc(var(--space-4) * 2 + 1em)}
+.feature-select .ph{position:absolute;right:var(--space-4);top:50%;transform:translateY(-50%);pointer-events:none}
+@media(forced-colors:active){.feature-select .select{appearance:auto}.feature-select .ph{display:none}}
 #security-summary{align-items:flex-start;line-height:1.5}
 #security-summary .details-caret{margin-top:3.5px}
 
