@@ -1,6 +1,6 @@
 ---
 id: Exh-xvbx
-status: open
+status: closed
 deps: []
 links: [Exh-iust]
 created: 2026-11-08T23:51:42Z
@@ -28,3 +28,9 @@ Decide whether removing the row was intended (the transcript-copy finding sugges
 2. The test still asserts the prepared source read is persisted in the session file.
 3. No other agent_record or transcript test regresses.
 
+
+## Notes
+
+**2026-11-15T18:33:03Z**
+
+Confirmed the prepared-source row is intentionally hidden by TestPreparedSourceProjectionHidesPreparationNoiseAndSource. Updated the kept-conversation expectation to three projected messages with Writing artifact at index 1, retaining the exhibit_source_read session-file assertion. Reproduced the original failure with Pi installed; the targeted test, all agent_record tests, and transcript tests pass.

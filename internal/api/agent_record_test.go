@@ -100,10 +100,9 @@ func TestAConversationIsKeptWithTheVersionItLeftBehind(t *testing.T) {
 
 	// And what a person sees of it is what they saw live.
 	msgs := agent.Messages(kept)
-	require.GreaterOrEqual(t, len(msgs), 4, "%+v", msgs)
+	require.GreaterOrEqual(t, len(msgs), 3, "%+v", msgs)
 	assert.Equal(t, agent.TranscriptMessage{Role: "user", Text: "make the button purple"}, msgs[0])
-	assert.Equal(t, agent.TranscriptMessage{Role: "tool", Text: "Prepared artifact source"}, msgs[1])
-	assert.Equal(t, agent.TranscriptMessage{Role: "tool", Text: "Writing artifact"}, msgs[2])
+	assert.Equal(t, agent.TranscriptMessage{Role: "tool", Text: "Writing artifact"}, msgs[1])
 	assert.Equal(t, "assistant", msgs[len(msgs)-1].Role)
 }
 
