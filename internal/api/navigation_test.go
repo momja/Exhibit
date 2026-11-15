@@ -197,7 +197,7 @@ func TestConnectedPrivateRenderRequiresTrustedFrameAndPublicShareIsExplicit(t *t
 		if dest == "iframe" {
 			require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 			assert.Contains(t, w.Body.String(), "PRIVATE-BALANCE-5932")
-			assert.Contains(t, w.Header().Get("Content-Security-Policy"), "sandbox allow-scripts allow-forms")
+			assert.Contains(t, w.Header().Get("Content-Security-Policy"), "sandbox allow-scripts allow-forms allow-modals")
 		} else {
 			assert.Equal(t, http.StatusForbidden, w.Code)
 			assert.NotContains(t, w.Body.String(), "PRIVATE-BALANCE-5932")

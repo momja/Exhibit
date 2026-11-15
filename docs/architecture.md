@@ -220,7 +220,7 @@ it safe behind the no-auth share path (§7).
   credential. `Access-Control-Allow-Origin: *`, real `Content-Type`, and it must
   never redirect (CSP path matching does not survive one).
 - **Framing**: the app embeds `<iframe src="RENDER_ORIGIN/a/:id"
-  sandbox="allow-scripts allow-forms">` (widget tiles: `allow-scripts` only), never
+  sandbox="allow-scripts allow-forms allow-modals">` (widget tiles: `allow-scripts` only), never
   `allow-same-origin`. No `allow=` delegation: for camera and clipboard it does
   nothing on an opaque origin, and Chromium's `geolocation` would spend the app
   origin's own permission (§6).

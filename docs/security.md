@@ -679,7 +679,7 @@ performed. Nothing about the document's principal would refuse it. So:
    handler must remember to check, and it is the half that makes the claim true of
    hostile code.
 3. **The document has no real origin, however it is loaded.** The response carries a
-   CSP `sandbox allow-scripts allow-forms` of its own. The frame is sandboxed too,
+   CSP `sandbox allow-scripts allow-forms allow-modals` of its own. The frame is sandboxed too,
    but a version URL opened top-level would otherwise be a real-origin document on
    the render origin, with IndexedDB, cookies and the Cache API shared with every
    other artifact there — places an old version could keep data that no restore
@@ -1719,3 +1719,13 @@ the unused remote account is revoked or retained as durable retry work. Cleanup
 never revokes a reference already adopted by a saved connection. Account erasure
 drains pending work first; unresolved provider outcomes cannot silently discard
 the remote account's cleanup record.
+
+### Artifact modal dialogs
+
+Interactive artifact frames and exported bundles grant `allow-modals` alongside
+`allow-scripts`, removing the sandbox restriction on modal APIs. Protected and
+version documents carry the same permission in their CSP sandbox. Gallery
+widgets do not receive this permission. The sandbox continues to omit
+`allow-same-origin`: opaque-origin frames still cannot show `alert`, `confirm`,
+or `prompt`, even with `allow-modals`. Other browser restrictions still apply
+to APIs such as `print`.

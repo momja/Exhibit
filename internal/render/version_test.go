@@ -126,7 +126,7 @@ func TestAVersionDocumentCannotPersistAnything(t *testing.T) {
 		t.Fatalf("a version view must say that it did not save, and say nothing else: %s", body)
 	}
 	csp := w.Header().Get("Content-Security-Policy")
-	if !strings.Contains(csp, "sandbox allow-scripts allow-forms") || strings.Contains(csp, "allow-same-origin") {
+	if !strings.Contains(csp, "sandbox allow-scripts allow-forms allow-modals") || strings.Contains(csp, "allow-same-origin") {
 		t.Fatalf("a version document must be sandboxed by its own CSP, with no real origin: %q", csp)
 	}
 	if pp := w.Header().Get("Permissions-Policy"); !strings.Contains(pp, "camera=()") || !strings.Contains(pp, "microphone=()") || !strings.Contains(pp, "geolocation=()") {

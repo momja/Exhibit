@@ -59,7 +59,7 @@ func TestTheVersionViewerShowsAnEarlierVersionRunning(t *testing.T) {
 	assert.Contains(t, frag, "Viewing <strong>v1</strong>")
 	assert.Contains(t, frag, "Created", "it says what the version is, in the Versions panel's words")
 	assert.Contains(t, frag, "A preview — nothing you do here is saved.")
-	assert.Contains(t, frag, `sandbox="allow-scripts allow-forms"`)
+	assert.Contains(t, frag, `sandbox="allow-scripts allow-forms allow-modals"`)
 	assert.NotContains(t, frag, "allow-same-origin")
 	assert.Contains(t, frag, `data-action="close-version-viewer"`)
 
@@ -156,7 +156,7 @@ func TestTheMintedVersionURLIsServedByTheRenderSurface(t *testing.T) {
 	assert.Contains(t, body, `"score":"10"`, "and the data version 1 left behind")
 	assert.NotContains(t, body, `"score":"99"`)
 	assert.Contains(t, body, "var VERSION_VIEW = true;")
-	assert.Contains(t, w.Header().Get("Content-Security-Policy"), "sandbox allow-scripts allow-forms")
+	assert.Contains(t, w.Header().Get("Content-Security-Policy"), "sandbox allow-scripts allow-forms allow-modals")
 
 	// Presented to the live document's route, the same token opens nothing.
 	live := httptest.NewRecorder()
