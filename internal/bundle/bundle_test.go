@@ -163,7 +163,7 @@ func TestGoRunnerHostOriginCSRFAndOpaqueRender(t *testing.T) {
 	}
 	token := csrfFromPage(t, bodyText(t, response))
 	response = localRequest(t, fixture.Client(), fixture.URL, "runner.example:8787", "GET", "/__exhibit/render", "", "", "")
-	if !strings.Contains(response.Header.Get("Content-Security-Policy"), "sandbox allow-scripts") || !strings.Contains(response.Header.Get("Content-Security-Policy"), "connect-src 'none'") {
+	if !strings.Contains(response.Header.Get("Content-Security-Policy"), "sandbox allow-scripts allow-modals") || !strings.Contains(response.Header.Get("Content-Security-Policy"), "connect-src 'none'") {
 		t.Error("direct render is not sandboxed")
 	}
 	render := bodyText(t, response)

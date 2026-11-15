@@ -387,7 +387,7 @@ func TestDetailPageMediatesClipboardViaBridge(t *testing.T) {
 	assert.Contains(t, string(detailJS), "__avClipboard",
 		"detail page script must handle the shim's clipboard bridge messages")
 	// The sandbox allows scripts and forms; same-origin is still withheld.
-	assert.Contains(t, page, `sandbox="allow-scripts allow-forms"`)
+	assert.Contains(t, page, `sandbox="allow-scripts allow-forms allow-modals"`)
 	assert.NotContains(t, page, "allow-same-origin")
 }
 

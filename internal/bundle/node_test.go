@@ -149,7 +149,7 @@ https.request=(url,options,callback)=>{const fixture=new URL(%q);fixture.pathnam
 	}
 	response.Body.Close()
 	response = localRequest(t, client, base, authority, "GET", "/__exhibit/render", "", "", "")
-	if !strings.Contains(response.Header.Get("Content-Security-Policy"), "sandbox allow-scripts") {
+	if !strings.Contains(response.Header.Get("Content-Security-Policy"), "sandbox allow-scripts allow-modals") {
 		t.Error("Node direct render is not opaque")
 	}
 	render := bodyText(t, response)

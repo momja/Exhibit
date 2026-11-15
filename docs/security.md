@@ -1719,3 +1719,11 @@ the unused remote account is revoked or retained as durable retry work. Cleanup
 never revokes a reference already adopted by a saved connection. Account erasure
 drains pending work first; unresolved provider outcomes cannot silently discard
 the remote account's cleanup record.
+
+### Artifact modal dialogs
+
+Interactive artifact frames and exported bundles grant `allow-modals` alongside
+`allow-scripts`, enabling native modal APIs such as `alert`, `confirm`, `prompt`,
+and `print` where the browser permits them. Protected and version documents
+carry the same permission in their CSP sandbox. Gallery widgets do not receive
+this permission. The sandbox continues to omit `allow-same-origin`.

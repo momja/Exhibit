@@ -10,7 +10,7 @@ test('localStorage survives reload and a fresh owner browser context through ser
   await page.goto(`/artifacts/${artifact.id}`);
   expect((await render).headers()['cache-control']).toBe('no-store');
   const iframe = page.locator('iframe').first();
-  await expect(iframe).toHaveAttribute('sandbox', 'allow-scripts allow-forms');
+  await expect(iframe).toHaveAttribute('sandbox', 'allow-scripts allow-forms allow-modals');
   expect(new URL(await iframe.getAttribute('src') as string).origin).toBe(renderOrigin);
   expect(appOrigin).not.toBe(renderOrigin);
   const tool = iframe.contentFrame();

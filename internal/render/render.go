@@ -618,13 +618,13 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 	csp := buildCSP(allowed, rd.cfg.AppOrigin, assetBase, frameAncestors...)
 	if versionView || protected {
 		// The page that embeds a version frame gives it sandbox="allow-scripts
-		// allow-forms" and nothing reaches the frame's storage from there — but
+		// allow-forms allow-modals" and nothing reaches its storage from there — but
 		// "nothing persists" is this document's whole promise, so it is also made
 		// by the document. Without this a version URL opened top-level would have
 		// a real origin, and with it real IndexedDB, cookies and Cache API shared
 		// with every other artifact on the render origin: places an old version
 		// could keep data that no restore would ever undo. The directive gives it
-		// an opaque origin however it is loaded, and is the same two tokens the
+		// an opaque origin however it is loaded, and is the same tokens the
 		// frame is given.
 		csp += "; " + versionSandbox
 	}
@@ -759,9 +759,9 @@ func privateFrameRequest(r *http.Request, appOrigin string) bool {
 // versionSandbox is the CSP sandbox directive a version document carries. The
 // tokens are the ones the app's frame for it carries (allow-scripts, so the tool
 // runs; allow-forms, so a form in it can be filled in and its submission stays
-// governed by form-action), and deliberately not allow-same-origin: that
-// omission is the whole point.
-const versionSandbox = "sandbox allow-scripts allow-forms"
+// governed by form-action); allow-modals, so native dialogs can open. It
+// deliberately omits allow-same-origin: that omission is the whole point.
+const versionSandbox = "sandbox allow-scripts allow-forms allow-modals"
 
 // originPolicy is what the network permission reporter needs to know about an
 // artifact's origin decisions (av-kmwj). Two lists rather than one, because the

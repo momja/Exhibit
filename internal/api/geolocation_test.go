@@ -84,7 +84,7 @@ func TestDetailPageSandboxUnchangedByGeolocationApproval(t *testing.T) {
 		start := strings.Index(page, "<iframe")
 		require.GreaterOrEqual(t, start, 0, "detail page must embed the renderer iframe")
 		iframeTag := page[start : start+strings.Index(page[start:], ">")]
-		assert.Contains(t, iframeTag, `sandbox="allow-scripts allow-forms"`)
+		assert.Contains(t, iframeTag, `sandbox="allow-scripts allow-forms allow-modals"`)
 		assert.NotContains(t, iframeTag, "allow-same-origin",
 			"approval must never relax the sandbox (approved=%v)", approved)
 		assert.NotContains(t, iframeTag, "allow=",
