@@ -11,8 +11,7 @@ import (
 
 var activityGallery = galleryDefinition{
 	ID: "activity-gallery", Title: "Activity", PagePath: "/activity", FragmentPath: "/partials/gallery-grid/activity",
-	Description: "The context behind changes to your artifacts and data.",
-	NoFilters:   true, HideSearch: true, Activity: true,
+	NoFilters: true, HideSearch: true, Activity: true,
 }
 
 type activityFeed struct{ Running, Items []activityItem }

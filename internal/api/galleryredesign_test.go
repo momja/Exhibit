@@ -28,6 +28,8 @@ func TestGalleryPersonalStarAPI(t *testing.T) {
 	body := in.get(t, "/", in.cookieTwo).Body.String()
 	assert.Contains(t, body, `data-href="/artifacts/`+in.granted+`"`)
 	assert.Contains(t, body, ` Unstar</button>`)
+	assert.NotContains(t, body, `gallery-overview`)
+	assert.Contains(t, body, `<h1 class="sr-only">Starred</h1>`)
 	assert.NotContains(t, body, `gallery-filter-trigger`)
 	assert.NotContains(t, body, `gallery-filter-section`)
 	assert.NotContains(t, in.get(t, "/", in.cookieOne).Body.String(), `data-href="/artifacts/`+in.granted+`"`)

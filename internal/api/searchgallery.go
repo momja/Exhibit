@@ -11,8 +11,7 @@ import (
 var searchGallery = galleryDefinition{
 	ID: "search-gallery", Title: "Search", PagePath: "/search", FragmentPath: "/partials/gallery-grid/search",
 	Select: selectSearchResults, SearchPage: true,
-	Description: "All your artifacts, including those shared with you.",
-	Empty:       galleryEmptyState{Welcome: true, Message: "Welcome to Exhibit", Hint: "Build with an agent, paste HTML, or start from a URL.", ActionURL: "/new", ActionLabel: "Create your first artifact"},
+	Empty: galleryEmptyState{Welcome: true, Message: "Welcome to Exhibit", Hint: "Build with an agent, paste HTML, or start from a URL.", ActionURL: "/new", ActionLabel: "Create your first artifact"},
 }
 
 func selectSearchResults(ro *Router, r *http.Request, offset, limit int, query string) ([]galleryCard, url.Values, error) {

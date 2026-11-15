@@ -383,6 +383,7 @@ go test -tags screenshot ./internal/api -run '^TestCapture(GallerySpaceNavigatio
 Empty sharing destinations retain navigation, including after the last share is
 revoked. `TestGalleryEmptySpacesBrowser` exercises both themes at 320, 375, 390,
 430 and 1280px, plus enlarged and long labels. Set `GALLERY_SCREENSHOT_DIR` to
+a directory outside the checkout, such as `/tmp/exhibit-review/gallery`, to
 capture these empty states while running the test.
 
 [Empty sharing space at 320px](screenshots/Exh-1l70/empty-320-light.png) ·
@@ -429,7 +430,8 @@ browser already changed to bring the sticky header's field into view. A
 `:focus-visible` control in a bar (a search field being typed in) keeps them
 shown. Reduced motion drops the slide. `scroll-chrome.test.mjs` covers the
 rules; `TestGalleryPhoneChromeBrowser` covers positions, focus, a space switch
-and desktop. Set `GALLERY_CHROME_SCREENSHOT_DIR` to refresh
+and desktop. Set `GALLERY_CHROME_SCREENSHOT_DIR` to a directory outside the
+checkout to capture these states for PR evidence. Historical captures show
 [scrolling down](screenshots/Exh-se4n/01-scrolling-down-390.png) and
 [scrolling back up](screenshots/Exh-se4n/02-scrolling-up-390.png) at 390px.
 
@@ -571,7 +573,7 @@ htmx in a Promise or restore references to controls that a swap has replaced.
 
 Run `go test ./internal/api -run 'Test(ModalInterfaceBrowser|TagModalBrowser)$' -count=1` for native
 focus/Tab, Escape/backdrop, validation, save/htmx, and disconnect/reconnect
-checks. Set `MODAL_SCREENSHOT_DIR="$PWD/docs/screenshots"` to refresh captures.
+checks. Set `MODAL_SCREENSHOT_DIR="/tmp/exhibit-review/modals"` to capture PR evidence.
 
 [Tag editor desktop](screenshots/Exh-p3ah/1280.png) ·
 [Tag editor phone](screenshots/Exh-p3ah/390.png)
@@ -780,10 +782,10 @@ permission forms; it needs no private label/field styling.
 [Direct-open phone](screenshots/Exh-sqny/390.png)
 
 
-Run all modal integrations and refresh their screenshots with:
+Run all modal integrations and capture screenshots outside the checkout with:
 
 ```sh
-MODAL_SCREENSHOT_DIR="$PWD/docs/screenshots" go test ./internal/api -run 'Test(.*Modal.*Browser|DirectOpenPendingBrowser|DirectOpenPreviewSwapBrowser|GalleryActionMenuDuplicationBrowser|GalleryFilterBrowser)$' -count=1
+MODAL_SCREENSHOT_DIR="/tmp/exhibit-review/modals" go test ./internal/api -run 'Test(.*Modal.*Browser|DirectOpenPendingBrowser|DirectOpenPreviewSwapBrowser|GalleryActionMenuDuplicationBrowser|GalleryFilterBrowser)$' -count=1
 ```
 
 Direct-open keeps Cancel live while its placeholder tab awaits approval. The tab

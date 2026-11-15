@@ -23,8 +23,11 @@
      component owns the frame and responsive labels. Gallery search remains
      a server-rendered partial, including its filter-sheet controller hooks.
      Standard links/buttons stay native. The floating variant connects the
-     shared floating-header controller for dragging, placement and popups. */}}
-{{define "appHeader"}}{{if .Floating}}{{template "floatingAppHeader" .Floating}}{{else}}<header class="app-header" data-app-header>
+     shared floating-header controller for dragging, placement and popups.
+     On phones the slot holds the bar's place while the bar is fixed (Exh-b6r6). */}}
+{{define "appHeader"}}{{if .Floating}}{{template "floatingAppHeader" .Floating}}{{else}}<div class="app-header-slot" data-controller="app-header">{{template "appHeaderBar" .}}</div>{{end}}{{end}}
+
+{{define "appHeaderBar"}}<header class="app-header" data-app-header>
   {{if .Logo}}{{.Logo}}{{end}}
   {{with .Back}}<a class="app-header-back{{if .CollapseLabel}} app-header-back-collapse{{end}}" href="{{.URL}}" title="{{.Label}}"><i class="ph ph-arrow-left" aria-hidden="true"></i> <span class="app-header-back-label">{{.Label}}</span></a>{{end}}
   {{if .Search}}{{template "gallerySearchRegion" .Search}}{{else}}
@@ -35,7 +38,7 @@
     {{range .Actions}}{{template "appHeaderAction" .}}{{end}}
   </div>{{end}}
   {{if .Account}}{{template "accountControl" .Clerk}}{{end}}
-</header>{{end}}{{end}}
+</header>{{end}}
 
 {{define "appHeaderAction"}}{{if .Href}}<a class="btn{{if not .Primary}} btn-sec{{end}}{{if .IconOnly}} icon-btn{{end}}{{if .DesktopOnly}} app-header-desktop-action{{end}}" href="{{.Href}}" aria-label="{{.Label}}" title="{{.Label}}">{{template "appHeaderActionContent" .}}</a>
 {{else}}{{if .SaveEditor}}<div class="editor-save-controls"><span class="editor-save-status" id="editor-save-status" role="status" aria-live="polite" aria-atomic="true" data-unsaved-changes-target="status">Saved</span>{{end}}<button type="button" class="btn{{if or (not .Primary) .SaveEditor}} btn-sec{{end}}{{if .IconOnly}} icon-btn{{end}}"{{if .ID}} id="{{.ID}}"{{end}}{{if .SaveEditor}} data-save-editor data-unsaved-changes-target="saveButton" data-action="unsaved-changes#save" disabled aria-busy="false" aria-describedby="editor-save-status"{{end}} aria-label="{{.Label}}" title="{{.Label}}">{{template "appHeaderActionContent" .}}</button>{{if .SaveEditor}}<p class="editor-save-message" role="alert" data-unsaved-changes-target="saveMessage" hidden><i class="ph ph-warning" aria-hidden="true"></i><span data-unsaved-changes-target="saveMessageText"></span></p></div>{{end}}{{end}}{{end}}
