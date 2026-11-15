@@ -19,6 +19,7 @@ func TestPromptsMatchGoldens(t *testing.T) {
 		"system-connections.golden": buildSystemPrompt("", CreateOpts{NetworkRelayEnabled: true, ConnectionsEnabled: true}),
 		"system-default.golden":     buildSystemPrompt("", CreateOpts{}),
 		"system-edit.golden":        buildSystemPrompt("", CreateOpts{ArtifactID: "a"}),
+		"system-edit-state.golden":  buildSystemPrompt("", CreateOpts{ArtifactID: "a", StateTools: true}),
 		"system-widget-only.golden": buildSystemPrompt("", CreateOpts{ArtifactID: "a", WidgetOnly: true}),
 		"system-override.golden":    buildSystemPrompt("You are a haiku generator.", CreateOpts{ArtifactID: "a"}),
 		"selection-1.golden":        selectionNotice(1),

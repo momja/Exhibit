@@ -181,6 +181,26 @@ describe("network warnings and native connection tools", () => {
 		}
 	});
 
+	it("offers state tools only when the owner allows agents to use saved data (Exh-dabd)", () => {
+		delete process.env.EXHIBIT_STATE_TOOLS;
+		const withheld = makePi();
+		exhibitMod.default(withheld);
+		for (const name of ["get_state", "set_state", "delete_state"]) {
+			assert.ok(!withheld.tools.has(name), name + " is not offered by default");
+		}
+		assert.ok(withheld.tools.has("get_artifact"), "the rest of the tool surface is unchanged");
+		process.env.EXHIBIT_STATE_TOOLS = "1";
+		try {
+			const allowed = makePi();
+			exhibitMod.default(allowed);
+			for (const name of ["get_state", "set_state", "delete_state"]) {
+				assert.ok(allowed.tools.has(name), name + " is offered when allowed");
+			}
+		} finally {
+			delete process.env.EXHIBIT_STATE_TOOLS;
+		}
+	});
+
 	it("offers connector tools only when enabled and never in widget sessions", () => {
 		delete process.env.EXHIBIT_CONNECTIONS_ENABLED;
 		const disabled = makePi();
@@ -653,20 +673,25 @@ describe("oversized writes (av-ombn)", () => {
 
 	it("set_state refuses an oversized value without sending it", async (t) => {
 		needExhibit(t);
-		const pi = makePi();
-		await exhibitMod.default(pi);
-		await prime(pi);
-		const calls = [];
-		await withFetch(async (url, opts) => {
-			calls.push({ url, method: opts?.method });
-			throw new Error("unexpected fetch");
-		}, async () => {
-			await assert.rejects(
-				pi.tools.get("set_state").execute("call-1", { key: "k", value: "v".repeat(BODY_LIMIT) }),
-				/PUT \/api\/artifacts\/artifact-1\/state refused: .*Nothing was saved/,
-			);
-			assert.equal(calls.length, 0, "nothing sent");
-		});
+		process.env.EXHIBIT_STATE_TOOLS = "1";
+		try {
+			const pi = makePi();
+			await exhibitMod.default(pi);
+			await prime(pi);
+			const calls = [];
+			await withFetch(async (url, opts) => {
+				calls.push({ url, method: opts?.method });
+				throw new Error("unexpected fetch");
+			}, async () => {
+				await assert.rejects(
+					pi.tools.get("set_state").execute("call-1", { key: "k", value: "v".repeat(BODY_LIMIT) }),
+					/PUT \/api\/artifacts\/artifact-1\/state refused: .*Nothing was saved/,
+				);
+				assert.equal(calls.length, 0, "nothing sent");
+			});
+		} finally {
+			delete process.env.EXHIBIT_STATE_TOOLS;
+		}
 	});
 
 	it("turns the API's 413 into the same message, with the limit the API names", async (t) => {

@@ -357,8 +357,14 @@ func (ro *Router) galleryEdit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	agentStateDefault, err := ro.cfg.Store.AgentStateAccessDefault(r.Context(), ownerID)
+	if err != nil {
+		serverError(w, r, "gallery edit agent state access", err)
+		return
+	}
+
 	canGenerate, generateHint := ro.widgetGenerateAvailability(r)
-	page, err := renderEditPage(a, decisions, library, string(src), ro.widgetSource(r, a), ro.pageCredentials(r), ro.renderURLs(r), canGenerate, generateHint, versions, editorReturn(r, a))
+	page, err := renderEditPage(a, decisions, library, string(src), ro.widgetSource(r, a), ro.pageCredentials(r), ro.renderURLs(r), canGenerate, generateHint, versions, editorReturn(r, a), agentStateDefault)
 	if err != nil {
 		serverError(w, r, "gallery edit render", err)
 		return
@@ -1195,6 +1201,7 @@ type editPageData struct {
 	CameraApproved      bool
 	MicrophoneApproved  bool
 	GeolocationApproved bool
+	AgentState          editAgentStateView
 	// The gallery widget (av-fafu): its source for the editor, and the same
 	// tile view the library renders for the live preview beside it. WidgetSrc
 	// is "" when the artifact has no widget, which is also when Widget renders
@@ -1257,7 +1264,7 @@ func newVersionViews(versions []store.Version) []versionView {
 	return out
 }
 
-func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, library []*store.Tag, src, widgetSrc string, creds pageCredentials, urls renderURLs, canGenerate bool, generateHint string, versions []store.Version, navigation editNavigation) (string, error) {
+func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, library []*store.Tag, src, widgetSrc string, creds pageCredentials, urls renderURLs, canGenerate bool, generateHint string, versions []store.Version, navigation editNavigation, agentStateDefault bool) (string, error) {
 	if navigation.URL == "" {
 		navigation = editNavigation{URL: "/search", Label: "Search"}
 	}
@@ -1293,7 +1300,16 @@ func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, library
 		CameraApproved:      a.CameraApproved,
 		MicrophoneApproved:  a.MicrophoneApproved,
 		GeolocationApproved: a.GeolocationApproved,
+		AgentState:          editAgentStateView{Access: a.AgentStateAccess, AccountDefault: agentStateDefault},
 	})
+}
+
+// editAgentStateView is the edit page's per-artifact answer to whether agents
+// may read and change saved data (Exh-dabd), with the account default the
+// "inherit" choice resolves to, so the page can say what following it means.
+type editAgentStateView struct {
+	Access         string
+	AccountDefault bool
 }
 
 // diffOrigins returns the origins in footprint that appear in none of the

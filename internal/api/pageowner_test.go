@@ -220,6 +220,7 @@ var appOriginGETOwnerScope = []pageOwnerRoute{
 	{route: "/api/artifacts/{artifactID}/transcripts", why: "API group, covered by owner_scope_test.go"},
 	{route: "/api/artifacts/{artifactID}/transcripts/{sessionID}", why: "API group, covered by owner_scope_test.go"},
 	{route: "/api/agent/key", why: "API group, covered by owner_scope_test.go"},
+	{route: "/api/settings/agent-state-access", why: "API group, takes no owner id; covered by agentstate_test.go"},
 	{route: "/api/collections/", why: "API group, covered by owner_scope_test.go"},
 	{route: "/api/tags/", why: "API group, covered by owner_scope_test.go"},
 

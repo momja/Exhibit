@@ -214,6 +214,10 @@ func (ro *Router) generateWidget(w http.ResponseWriter, r *http.Request) {
 	}
 	opts.ArtifactID = id
 	opts.WidgetOnly = true
+	if opts.StateTools, err = ro.sessionStateTools(r.Context(), opts.OwnerID, a); err != nil {
+		serverError(w, r, "widget agent state access", err)
+		return
+	}
 
 	s, err := ro.cfg.Agent.Create(r.Context(), opts)
 	if err != nil {

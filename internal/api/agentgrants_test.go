@@ -63,6 +63,7 @@ func TestLibraryGrantReachesOwnedArtifactsAndRecordsAgentVersions(t *testing.T) 
 	// Labels are trimmed on issue, but internal whitespace remains part of
 	// the owner's label and must survive unchanged in every version message.
 	issued := issueAgentGrant(t, r, "  Claude  Code\non my laptop  ")
+	allowAgentStateByDefault(t, r)
 	require.Equal(t, "Claude  Code\non my laptop", issued.Grant.Label)
 	for _, id := range []string{first, second} {
 		path := "/api/artifacts/" + id
@@ -215,6 +216,7 @@ func TestLibraryGrantRefusesOtherRouteFamilies(t *testing.T) {
 		{"GET", "/api/agent-grants"}, {"POST", "/api/agent-grants"}, {"DELETE", "/api/agent-grants/" + issued.Grant.ID},
 		{"GET", "/api/tags"}, {"POST", "/api/artifacts/" + id + "/tags/1"}, {"GET", "/api/collections"}, {"POST", "/api/artifacts/" + id + "/collections/1"},
 		{"GET", "/api/agent/key"}, {"POST", "/api/agent/sessions"}, {"DELETE", "/api/account"}, {"GET", "/api/admin/users"},
+		{"GET", "/api/settings/agent-state-access"}, {"PUT", "/api/settings/agent-state-access"},
 		{"GET", "/"}, {"GET", "/settings"}, {"GET", "/profile"}, {"GET", "/artifacts/" + id}, {"GET", "/partials/agent-grants"}, {"GET", "/partials/gallery-grid"},
 	}
 	for _, tc := range cases {
@@ -442,6 +444,8 @@ func TestLibraryGrantCannotWriteSavedData(t *testing.T) {
 	path := "/api/artifacts/" + id + "/state"
 	require.Equal(t, 204, doJSON(t, r, "PUT", path, map[string]any{"key": "glasses", "value": "6"}).Code)
 	issued := issueAgentGrant(t, r, "agent")
+	// Reading is allowed, so the refusals below are about writing.
+	allowAgentStateByDefault(t, r)
 
 	for _, tc := range []struct {
 		method, path string

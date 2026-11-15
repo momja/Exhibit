@@ -18,7 +18,7 @@ func TestDuplicateArtifactOptionsAndIndependentMetadata(t *testing.T) {
 				seedOwnerAccounts(t, s)
 				ctx := context.Background()
 				require.NoError(t, s.PutArtifact(ctx, &Artifact{ID: "source", OwnerID: alice, Title: "Original", SourceBlobID: "body", WidgetBlobID: "widget", SourceURL: "https://example.com/tool", Tier: Tier2, DownloadsApproved: true, ClipboardApproved: true, LinksApproved: true, CameraApproved: true, MicrophoneApproved: true, GeolocationApproved: true, NetworkAllowlist: []string{"https://allowed.example"}}))
-				require.NoError(t, s.UpdateArtifact(ctx, alice, "source", map[string]any{"share_state_mode": ShareStateShared}))
+				require.NoError(t, s.UpdateArtifact(ctx, alice, "source", map[string]any{"share_state_mode": ShareStateShared, "agent_state_access": AgentStateDeny}))
 				require.NoError(t, s.SetOriginDecision(ctx, alice, "source", "https://blocked.example", DecisionBlock, "user"))
 				require.NoError(t, s.SetState(ctx, OwnerID(alice), "source", ViewerID(alice), "mine", "owner data"))
 				require.NoError(t, s.SetState(ctx, OwnerID(alice), "source", ViewerID(bob), "private", "viewer data"))
@@ -46,6 +46,8 @@ func TestDuplicateArtifactOptionsAndIndependentMetadata(t *testing.T) {
 				assert.Equal(t, Tier2, a.Tier)
 				assert.True(t, a.DownloadsApproved && a.ClipboardApproved && a.LinksApproved && a.CameraApproved && a.MicrophoneApproved && a.GeolocationApproved)
 				assert.Equal(t, []string{"https://allowed.example"}, a.NetworkAllowlist)
+				assert.Equal(t, AgentStateDeny, a.AgentStateAccess,
+					"a copy of an artifact kept from agents must not fall back to the account default")
 				require.Len(t, a.Tags, 1)
 				assert.Equal(t, "tag", a.Tags[0].ID)
 				matches, err := s.ListArtifacts(ctx, ListOptions{OwnerID: alice, Collections: []string{"Work"}, Query: "searchablecopyterm"})

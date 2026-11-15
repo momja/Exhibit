@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -207,6 +208,16 @@ func (ro *Router) agentSessionOpts(w http.ResponseWriter, r *http.Request) (agen
 	}, true
 }
 
+// sessionStateTools decides whether a new Pi session gets the state tools
+// (Exh-dabd): the bound artifact's effective setting, or in create mode the
+// owner's account default, which is what the artifact it creates will follow.
+func (ro *Router) sessionStateTools(ctx context.Context, ownerID int64, bound *store.Artifact) (bool, error) {
+	if bound != nil {
+		return ro.agentStateAllowed(ctx, bound)
+	}
+	return ro.cfg.Store.AgentStateAccessDefault(ctx, ownerID)
+}
+
 // writeAgentCreateError answers a refused Create. The session limit
 // (av-99f4) is a refusal with a message, not a fault: it answers 429 so the
 // chat treats it as a limit. Everything else is the 500 it has always been.
@@ -230,6 +241,7 @@ func (ro *Router) createAgentSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	opts.ArtifactID = req.ArtifactID
+	var bound *store.Artifact
 	if req.ArtifactID != "" {
 		a, err := ro.cfg.Store.GetArtifact(r.Context(), opts.OwnerID, req.ArtifactID)
 		if err != nil {
@@ -240,7 +252,14 @@ func (ro *Router) createAgentSession(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "artifact not found")
 			return
 		}
+		bound = a
 	}
+	stateTools, err := ro.sessionStateTools(r.Context(), opts.OwnerID, bound)
+	if err != nil {
+		serverError(w, r, "agent session state access", err)
+		return
+	}
+	opts.StateTools = stateTools
 
 	if req.ResumeSessionID != "" {
 		if req.ArtifactID == "" {

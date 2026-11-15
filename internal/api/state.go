@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -27,7 +28,7 @@ func (ro *Router) getState(w http.ResponseWriter, r *http.Request) {
 	artifactID := urlParamID(r, "artifactID")
 	w.Header().Set("Cache-Control", "no-store")
 
-	if !ro.artifactExists(w, r, artifactID, "get state") {
+	if !ro.stateArtifactAllowed(w, r, artifactID, "get state") {
 		return
 	}
 	if !ro.stateFramePolicy(w, r, artifactID) {
@@ -105,7 +106,7 @@ func (ro *Router) setState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !ro.artifactExists(w, r, artifactID, "set state") {
+	if !ro.stateArtifactAllowed(w, r, artifactID, "set state") {
 		return
 	}
 	unlock, allowed := ro.lockStateFramePolicy(w, r, artifactID)
@@ -151,7 +152,7 @@ func (ro *Router) setState(w http.ResponseWriter, r *http.Request) {
 func (ro *Router) deleteState(w http.ResponseWriter, r *http.Request) {
 	artifactID := urlParamID(r, "artifactID")
 
-	if !ro.artifactExists(w, r, artifactID, "delete state") {
+	if !ro.stateArtifactAllowed(w, r, artifactID, "delete state") {
 		return
 	}
 	unlock, allowed := ro.lockStateFramePolicy(w, r, artifactID)
@@ -198,13 +199,48 @@ func (ro *Router) deleteState(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// artifactExists authorizes access and writes a 404/500 when it fails. Human
-// viewers may reach shared artifacts, just as the store's AsViewer methods
-// allow. Agent principals must own the artifact: this check is the additional
-// security boundary preventing a library grant from spending incoming shares.
-// Artifact ownership is immutable, so the subsequent AsViewer call cannot
-// switch to a different owner between this check and the state operation.
+// artifactExists authorizes access and writes a 403/404/500 when it fails.
+// Human viewers may reach shared artifacts, just as the store's AsViewer
+// methods allow. Agent principals must own the artifact: this check is the
+// additional security boundary preventing a library grant from spending
+// incoming shares. Artifact ownership is immutable, so the subsequent AsViewer
+// call cannot switch to a different owner between this check and the state
+// operation.
 func (ro *Router) artifactExists(w http.ResponseWriter, r *http.Request, artifactID, op string) bool {
+	_, ok := ro.authorizedArtifact(w, r, artifactID, op)
+	return ok
+}
+
+// stateArtifactAllowed is artifactExists for the saved-data routes. An agent
+// principal must also have the owner's permission to use this artifact's saved
+// data (Exh-dabd). Every state route an agent can reach comes through here,
+// which makes this the boundary: the Pi extension leaving its state tools
+// unregistered, and the prompt saying so, are only what keeps the model from
+// asking. Other sub-resources an agent reads, such as asset metadata, use
+// artifactExists and are not gated on it.
+func (ro *Router) stateArtifactAllowed(w http.ResponseWriter, r *http.Request, artifactID, op string) bool {
+	a, ok := ro.authorizedArtifact(w, r, artifactID, op)
+	if !ok {
+		return false
+	}
+	if agentGrantFromCtx(r.Context()) == nil {
+		return true
+	}
+	allowed, err := ro.agentStateAllowed(r.Context(), a)
+	if err != nil {
+		serverError(w, r, op+" agent state access", err)
+		return false
+	}
+	if !allowed {
+		writeError(w, http.StatusForbidden, agentStateRefusal)
+		return false
+	}
+	return true
+}
+
+// authorizedArtifact is the lookup behind artifactExists. For an agent
+// principal the artifact it returns was read owner-scoped.
+func (ro *Router) authorizedArtifact(w http.ResponseWriter, r *http.Request, artifactID, op string) (*store.Artifact, bool) {
 	var a *store.Artifact
 	var err error
 	if agentGrantFromCtx(r.Context()) != nil {
@@ -215,13 +251,32 @@ func (ro *Router) artifactExists(w http.ResponseWriter, r *http.Request, artifac
 	}
 	if err != nil {
 		serverError(w, r, op+" artifact lookup", err)
-		return false
+		return nil, false
 	}
 	if a == nil {
 		http.Error(w, "not found", http.StatusNotFound)
-		return false
+		return nil, false
 	}
-	return true
+	return a, true
+}
+
+// agentStateRefusal is what an agent is told when the owner has not let agents
+// use an artifact's saved data. It is written for the model reading it as a
+// tool error: what happened, that retrying will not help, and where the person
+// can change it.
+const agentStateRefusal = "the owner has not allowed agents to read or change this artifact's saved data. " +
+	"Do not retry. If the request needs it, tell the person they can allow it on the artifact's edit page " +
+	"(Saved data) or for every artifact in Settings."
+
+// agentStateAllowed resolves whether agents may use a's saved data: the
+// artifact's own override, else its owner's account default. a must be read
+// owner-scoped, so a.OwnerID is whose default applies.
+func (ro *Router) agentStateAllowed(ctx context.Context, a *store.Artifact) (bool, error) {
+	accountDefault, err := ro.cfg.Store.AgentStateAccessDefault(ctx, a.OwnerID)
+	if err != nil {
+		return false, err
+	}
+	return a.AgentStateAllowed(accountDefault), nil
 }
 
 // Unversioned API edits are deliberate owner/agent actions. Frame writes carry

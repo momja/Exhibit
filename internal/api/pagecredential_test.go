@@ -141,6 +141,7 @@ var appOriginGETRoutePaths = []pageRoute{
 	{route: "/api/artifacts/{artifactID}/transcripts", path: "/api/artifacts/{id}/transcripts"},
 	{route: "/api/artifacts/{artifactID}/transcripts/{sessionID}", path: "/api/artifacts/{id}/transcripts/s"},
 	{route: "/api/agent/key", path: "/api/agent/key"},
+	{route: "/api/settings/agent-state-access", path: "/api/settings/agent-state-access"},
 	{route: "/api/agent/sessions/{sessionID}/questions/{requestID}", path: "/api/agent/sessions/none/questions/none"},
 	// SSE. With no agent manager configured it answers "not enabled" and
 	// returns, so walking it does not park the test on an open stream.

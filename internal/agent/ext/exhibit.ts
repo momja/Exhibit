@@ -4,7 +4,8 @@
  * Loaded by the exhibit service into every agent session it spawns
  * (`pi --mode rpc --no-builtin-tools -e exhibit.ts`). It gives the model twelve
  * tools — create_artifact / write_artifact / edit_artifact / get_artifact for the document,
- * get_state / set_state / delete_state for the artifact's stored state,
+ * get_state / set_state / delete_state for the artifact's stored state (only
+ * when the owner allows agents to use it, EXHIBIT_STATE_TOOLS, Exh-dabd),
  * set_widget / edit_widget / get_widget for the artifact's gallery-card widget (av-fafu), and
  * get_selection for the elements the user picked in the preview, and ask_user
  * for interactive questions in the chat. Artifact operations go through the exhibit HTTP API, so agent output enters the
@@ -546,98 +547,105 @@ export default function (pi: ExtensionAPI) {
 		},
 	});
 
-	pi.registerTool({
-		name: "get_state",
-		label: "Read artifact state",
-		description:
-			"Read every state key/value the artifact has stored (what its localStorage writes " +
-			"through to, per artifact_state — sessionStorage is frame-local and never appears " +
-			"here). Values are opaque strings; artifacts usually store JSON in them. Each key's " +
-			"value is shown verbatim, byte for byte — copy it back exactly via set_state except " +
-			"for whatever the user asked you to change. Do not reformat, reorder object keys, " +
-			"change number/whitespace formatting, or otherwise 'clean up' a value you were not " +
-			"asked to touch.",
-		parameters: Type.Object({}),
-		async execute() {
-			const target = requireBoundArtifact();
-			const state = await api("GET", "/api/artifacts/" + encodeURIComponent(target) + "/state");
-			return ok(formatState(state), {
-				exhibit: "state_read",
-				artifactId: target,
-				keys: Object.keys(state),
-			});
-		},
-	});
+	// Saved data is what a person typed into their tool, and a tool result is
+	// sent to the inference provider. The server registers these only when the
+	// owner allowed agents to use this artifact's saved data (Exh-dabd); the
+	// state routes refuse an agent either way, so this is what keeps the model
+	// from asking, not what keeps the data in.
+	if (process.env.EXHIBIT_STATE_TOOLS === "1") {
+		pi.registerTool({
+			name: "get_state",
+			label: "Read artifact state",
+			description:
+				"Read every state key/value the artifact has stored (what its localStorage writes " +
+				"through to, per artifact_state — sessionStorage is frame-local and never appears " +
+				"here). Values are opaque strings; artifacts usually store JSON in them. Each key's " +
+				"value is shown verbatim, byte for byte — copy it back exactly via set_state except " +
+				"for whatever the user asked you to change. Do not reformat, reorder object keys, " +
+				"change number/whitespace formatting, or otherwise 'clean up' a value you were not " +
+				"asked to touch.",
+			parameters: Type.Object({}),
+			async execute() {
+				const target = requireBoundArtifact();
+				const state = await api("GET", "/api/artifacts/" + encodeURIComponent(target) + "/state");
+				return ok(formatState(state), {
+					exhibit: "state_read",
+					artifactId: target,
+					keys: Object.keys(state),
+				});
+			},
+		});
 
-	pi.registerTool({
-		name: "set_state",
-		label: "Set state key",
-		description:
-			"Write one state key on an artifact, creating it if absent. This is the same write " +
-			"path the edit page's state inspector uses. Only the given key changes — every other " +
-			"key is left exactly as stored, since this call never touches them. If the value is " +
-			"JSON and you are only changing one field inside it, reproduce every other byte " +
-			"(key order, spacing, number formatting) exactly as read from get_state — do not " +
-			"reformat the whole document.",
-		parameters: Type.Object({
-			key: Type.String({ description: "State key to write" }),
-			value: Type.String({ description: "New value, verbatim (JSON-encode it yourself if it's structured data)" }),
-		}),
-		async execute(_id, params) {
-			const target = requireBoundArtifact();
-			await api("PUT", "/api/artifacts/" + encodeURIComponent(target) + "/state", {
-				key: params.key,
-				value: params.value,
-			});
-			return ok(`Set state key ${JSON.stringify(params.key)}.`, {
-				exhibit: "state_changed",
-				artifactId: target,
-				action: "set",
-				key: params.key,
-			});
-		},
-	});
-
-	pi.registerTool({
-		name: "delete_state",
-		label: "Delete artifact state",
-		description:
-			"Delete artifact state. Pass key to remove just that one key (idempotent — no error " +
-			"if it was already absent). Omit key to erase ALL state for the artifact — this is " +
-			"destructive and irreversible (no version history), so only do it when the user " +
-			"clearly asked to reset/clear everything, not when they asked to fix or remove one " +
-			"field.",
-		parameters: Type.Object({
-			key: Type.Optional(Type.String({ description: "State key to delete; omit to erase all state" })),
-		}),
-		async execute(_id, params) {
-			const target = requireBoundArtifact();
-			// Presence, not truthiness: "" is a legitimate Web Storage key, and
-			// a falsy test would route a request to delete it into erase-all.
-			if (params.key !== undefined) {
-				await api(
-					"DELETE",
-					// The key is a query value, never a path segment — as a
-					// segment, a key of ".." resolves away and hits the artifact
-					// delete route (av-hh1o).
-					"/api/artifacts/" + encodeURIComponent(target) +
-						"/state?key=" + encodeURIComponent(params.key),
-				);
-				return ok(`Deleted state key ${JSON.stringify(params.key)}.`, {
+		pi.registerTool({
+			name: "set_state",
+			label: "Set state key",
+			description:
+				"Write one state key on an artifact, creating it if absent. This is the same write " +
+				"path the edit page's state inspector uses. Only the given key changes — every other " +
+				"key is left exactly as stored, since this call never touches them. If the value is " +
+				"JSON and you are only changing one field inside it, reproduce every other byte " +
+				"(key order, spacing, number formatting) exactly as read from get_state — do not " +
+				"reformat the whole document.",
+			parameters: Type.Object({
+				key: Type.String({ description: "State key to write" }),
+				value: Type.String({ description: "New value, verbatim (JSON-encode it yourself if it's structured data)" }),
+			}),
+			async execute(_id, params) {
+				const target = requireBoundArtifact();
+				await api("PUT", "/api/artifacts/" + encodeURIComponent(target) + "/state", {
+					key: params.key,
+					value: params.value,
+				});
+				return ok(`Set state key ${JSON.stringify(params.key)}.`, {
 					exhibit: "state_changed",
 					artifactId: target,
-					action: "deleted_key",
+					action: "set",
 					key: params.key,
 				});
-			}
-			await api("DELETE", "/api/artifacts/" + encodeURIComponent(target) + "/state");
-			return ok("Erased all state on this session's artifact.", {
-				exhibit: "state_changed",
-				artifactId: target,
-				action: "cleared_all",
-			});
-		},
-	});
+			},
+		});
+
+		pi.registerTool({
+			name: "delete_state",
+			label: "Delete artifact state",
+			description:
+				"Delete artifact state. Pass key to remove just that one key (idempotent — no error " +
+				"if it was already absent). Omit key to erase ALL state for the artifact — this is " +
+				"destructive and irreversible (no version history), so only do it when the user " +
+				"clearly asked to reset/clear everything, not when they asked to fix or remove one " +
+				"field.",
+			parameters: Type.Object({
+				key: Type.Optional(Type.String({ description: "State key to delete; omit to erase all state" })),
+			}),
+			async execute(_id, params) {
+				const target = requireBoundArtifact();
+				// Presence, not truthiness: "" is a legitimate Web Storage key, and
+				// a falsy test would route a request to delete it into erase-all.
+				if (params.key !== undefined) {
+					await api(
+						"DELETE",
+						// The key is a query value, never a path segment — as a
+						// segment, a key of ".." resolves away and hits the artifact
+						// delete route (av-hh1o).
+						"/api/artifacts/" + encodeURIComponent(target) +
+							"/state?key=" + encodeURIComponent(params.key),
+					);
+					return ok(`Deleted state key ${JSON.stringify(params.key)}.`, {
+						exhibit: "state_changed",
+						artifactId: target,
+						action: "deleted_key",
+						key: params.key,
+					});
+				}
+				await api("DELETE", "/api/artifacts/" + encodeURIComponent(target) + "/state");
+				return ok("Erased all state on this session's artifact.", {
+					exhibit: "state_changed",
+					artifactId: target,
+					action: "cleared_all",
+				});
+			},
+		});
+	}
 
 	/**
 	 * Persist a full widget document through the single write path. Shared

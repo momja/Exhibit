@@ -183,6 +183,7 @@ func TestAgentCredentialReachesItsOwnArtifactSubResources(t *testing.T) {
 	grant, err := reg.Issue(1, id, "")
 	require.NoError(t, err)
 	tok := grant.Token()
+	allowAgentStateByDefault(t, r)
 
 	w := doWithToken(t, r, "PUT", "/api/artifacts/"+id+"/state", tok,
 		map[string]any{"key": "count", "value": "7"})
