@@ -28,7 +28,7 @@ func (ro *Router) getState(w http.ResponseWriter, r *http.Request) {
 	artifactID := urlParamID(r, "artifactID")
 	w.Header().Set("Cache-Control", "no-store")
 
-	if !ro.artifactExists(w, r, artifactID, "get state") {
+	if !ro.stateArtifactAllowed(w, r, artifactID, "get state") {
 		return
 	}
 	if !ro.stateFramePolicy(w, r, artifactID) {
@@ -106,7 +106,7 @@ func (ro *Router) setState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !ro.artifactExists(w, r, artifactID, "set state") {
+	if !ro.stateArtifactAllowed(w, r, artifactID, "set state") {
 		return
 	}
 	unlock, allowed := ro.lockStateFramePolicy(w, r, artifactID)
@@ -152,7 +152,7 @@ func (ro *Router) setState(w http.ResponseWriter, r *http.Request) {
 func (ro *Router) deleteState(w http.ResponseWriter, r *http.Request) {
 	artifactID := urlParamID(r, "artifactID")
 
-	if !ro.artifactExists(w, r, artifactID, "delete state") {
+	if !ro.stateArtifactAllowed(w, r, artifactID, "delete state") {
 		return
 	}
 	unlock, allowed := ro.lockStateFramePolicy(w, r, artifactID)
@@ -206,17 +206,44 @@ func (ro *Router) deleteState(w http.ResponseWriter, r *http.Request) {
 // incoming shares. Artifact ownership is immutable, so the subsequent AsViewer
 // call cannot switch to a different owner between this check and the state
 // operation.
-//
-// An agent principal must also have the owner's permission to use this
-// artifact's saved data (Exh-dabd). Every state route an agent can reach comes
-// through here, which makes this the boundary: the Pi extension leaving its
-// state tools unregistered, and the prompt saying so, are only what keeps the
-// model from asking.
 func (ro *Router) artifactExists(w http.ResponseWriter, r *http.Request, artifactID, op string) bool {
+	_, ok := ro.authorizedArtifact(w, r, artifactID, op)
+	return ok
+}
+
+// stateArtifactAllowed is artifactExists for the saved-data routes. An agent
+// principal must also have the owner's permission to use this artifact's saved
+// data (Exh-dabd). Every state route an agent can reach comes through here,
+// which makes this the boundary: the Pi extension leaving its state tools
+// unregistered, and the prompt saying so, are only what keeps the model from
+// asking. Other sub-resources an agent reads, such as asset metadata, use
+// artifactExists and are not gated on it.
+func (ro *Router) stateArtifactAllowed(w http.ResponseWriter, r *http.Request, artifactID, op string) bool {
+	a, ok := ro.authorizedArtifact(w, r, artifactID, op)
+	if !ok {
+		return false
+	}
+	if agentGrantFromCtx(r.Context()) == nil {
+		return true
+	}
+	allowed, err := ro.agentStateAllowed(r.Context(), a)
+	if err != nil {
+		serverError(w, r, op+" agent state access", err)
+		return false
+	}
+	if !allowed {
+		writeError(w, http.StatusForbidden, agentStateRefusal)
+		return false
+	}
+	return true
+}
+
+// authorizedArtifact is the lookup behind artifactExists. For an agent
+// principal the artifact it returns was read owner-scoped.
+func (ro *Router) authorizedArtifact(w http.ResponseWriter, r *http.Request, artifactID, op string) (*store.Artifact, bool) {
 	var a *store.Artifact
 	var err error
-	agentRequest := agentGrantFromCtx(r.Context()) != nil
-	if agentRequest {
+	if agentGrantFromCtx(r.Context()) != nil {
 		// Sharing with a person does not delegate that artifact to their agent.
 		a, err = ro.cfg.Store.GetArtifact(r.Context(), ownerIDFromCtx(r.Context()), artifactID)
 	} else {
@@ -224,24 +251,13 @@ func (ro *Router) artifactExists(w http.ResponseWriter, r *http.Request, artifac
 	}
 	if err != nil {
 		serverError(w, r, op+" artifact lookup", err)
-		return false
+		return nil, false
 	}
 	if a == nil {
 		http.Error(w, "not found", http.StatusNotFound)
-		return false
+		return nil, false
 	}
-	if agentRequest {
-		allowed, err := ro.agentStateAllowed(r.Context(), a)
-		if err != nil {
-			serverError(w, r, op+" agent state access", err)
-			return false
-		}
-		if !allowed {
-			writeError(w, http.StatusForbidden, agentStateRefusal)
-			return false
-		}
-	}
-	return true
+	return a, true
 }
 
 // agentStateRefusal is what an agent is told when the owner has not let agents

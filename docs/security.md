@@ -1631,10 +1631,12 @@ no, in keeping with §5's deny-by-default stance (Exh-dabd).
   combined, and every value other than `allow`, or `inherit` with the default on,
   refuses — a zero-valued artifact fails towards keeping data private.
 - **Enforced on the state routes, for both kinds of agent.** Every state
-  operation an agent principal can reach goes through `artifactExists`
+  operation an agent principal can reach goes through `stateArtifactAllowed`
   (`internal/api/state.go`), which answers `403` with no data when access is
-  off. Pi leaving `get_state`/`set_state`/`delete_state` unregistered, and its
-  prompt saying saved data is unavailable, only keeps the model from asking.
+  off. Only the state routes are gated: asset metadata, which describes the
+  artifact's files rather than what the person entered, stays readable. Pi
+  leaving `get_state`/`set_state`/`delete_state` unregistered, and its prompt
+  saying saved data is unavailable, only keeps the model from asking.
 - **An agent cannot widen it.** PATCH `agent_state_access` from an agent
   principal is refused (as `share_state_mode` is), and
   `/api/settings/agent-state-access` is outside `agentScopeAllows` and refuses

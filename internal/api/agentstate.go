@@ -8,12 +8,14 @@ import (
 // so a state tool is a way for what a person typed into their tools to leave
 // the instance. Whether it may is the owner's decision, made once for their
 // library here and optionally per artifact through PATCH agent_state_access.
-// Enforcement is in the state routes (state.go: artifactExists).
+// Enforcement is in the state routes (state.go: stateArtifactAllowed).
 
 type agentStateAccessDefault struct {
 	Allowed *bool `json:"allowed"`
 }
 
+// getAgentStateAccessDefault answers whether the caller's account lets agents
+// use saved data on artifacts that inherit the default.
 func (ro *Router) getAgentStateAccessDefault(w http.ResponseWriter, r *http.Request) {
 	allowed, err := ro.cfg.Store.AgentStateAccessDefault(r.Context(), ownerIDFromCtx(r.Context()))
 	if err != nil {
@@ -24,6 +26,8 @@ func (ro *Router) getAgentStateAccessDefault(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, map[string]bool{"allowed": allowed})
 }
 
+// putAgentStateAccessDefault sets the caller's account default. Agent
+// principals are refused: only the person may widen what agents read.
 func (ro *Router) putAgentStateAccessDefault(w http.ResponseWriter, r *http.Request) {
 	// agentScopeAllows already refuses this route to every agent credential.
 	// Checked again here because this is the one switch an agent must never

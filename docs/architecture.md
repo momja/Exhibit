@@ -828,8 +828,9 @@ Full flow: `agent.md`.
 What an agent reads goes to its inference provider, so neither kind of agent
 reads or changes saved data until the owner allows it: an account default in
 Settings (off) and a per-artifact override on the edit page, both applied the
-moment they change. The state handlers' agent branch (`artifactExists`,
-`internal/api/state.go`) is the boundary and answers 403; Pi's tool registration
+moment they change. The state handlers' gate (`stateArtifactAllowed`,
+`internal/api/state.go`) is the boundary and answers 403; asset metadata stays
+readable; Pi's tool registration
 and prompt paragraph follow the answer at session start, and the MCP `get_state`
 turns the refusal into a do-not-retry tool error. Agents can set neither answer.
 Source, selections and chat text are not covered. `security.md` §5.6.

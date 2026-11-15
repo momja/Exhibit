@@ -73,6 +73,26 @@ func TestAgentsCannotUseSavedDataByDefault(t *testing.T) {
 	assert.JSONEq(t, `{"notes":"private"}`, w.Body.String())
 }
 
+// Refusing saved data refuses only saved data: asset metadata describes the
+// artifact's files, not what the person entered, so agents still list it.
+func TestDenyingSavedDataLeavesAgentAssetListingsReadable(t *testing.T) {
+	r, reg := newScopedTestRouter(t)
+	r.cfg.MCPURL = "https://agents.example.test/mcp"
+	id := createArtifact(t, r, map[string]any{"title": "Journal", "body": "<p>journal</p>"})
+	setArtifactAgentStateAccess(t, r, id, store.AgentStateDeny)
+
+	pi, err := reg.Issue(1, id, "")
+	require.NoError(t, err)
+	library := issueAgentGrant(t, r, "External agent")
+
+	for name, token := range map[string]string{"pi": pi.Token(), "library": library.Token} {
+		w := doWithToken(t, r, http.MethodGet, "/api/artifacts/"+id+"/state", token, nil)
+		assert.Equal(t, http.StatusForbidden, w.Code, name)
+		w = doWithToken(t, r, http.MethodGet, "/api/artifacts/"+id+"/assets", token, nil)
+		assert.Equal(t, http.StatusOK, w.Code, "%s: %s", name, w.Body.String())
+	}
+}
+
 // The artifact's own answer wins over the account default in both directions.
 func TestArtifactAgentStateAccessOverridesTheAccountDefault(t *testing.T) {
 	r, reg := newScopedTestRouter(t)
