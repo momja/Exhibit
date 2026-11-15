@@ -16,5 +16,5 @@ Apply the new look across the app: card shadow and hairline values, selected rai
 
 ## Acceptance Criteria
 
-All gallery tabs, detail, edit, settings, admin and 404 reviewed in light and dark on desktop and phone; docs screenshots refreshed.
+All gallery tabs, detail, edit, settings, admin and 404 reviewed in light and dark on desktop and phone; screenshots attached to the PR.
 

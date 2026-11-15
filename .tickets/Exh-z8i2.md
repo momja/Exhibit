@@ -16,5 +16,5 @@ Snap default tile hues (--tile-hue, derived from the artifact id in Go) to a sma
 
 ## Acceptance Criteria
 
-Default tiles and monograms use palette hues with grain in light and dark; widget tiles unaffected; gallery screenshots refreshed.
+Default tiles and monograms use palette hues with grain in light and dark; widget tiles unaffected; gallery screenshots attached to the PR.
 

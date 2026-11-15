@@ -24,5 +24,5 @@ Re-theme Clerk's embedded panels through clerk-appearance.js to match.
 
 ## Acceptance Criteria
 
-Every text/background token pair passes WCAG AA in light and dark (record the check). No colour literals added to page sheets. Clerk panels match. Screenshots of gallery, detail, edit, settings in both modes.
+Every text/background token pair passes WCAG AA in light and dark (record the check). No colour literals added to page sheets. Clerk panels match. PR attaches screenshots of gallery, detail, edit and settings in both modes.
 

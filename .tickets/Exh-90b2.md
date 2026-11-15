@@ -18,5 +18,5 @@ Scope is the sign-in page only, not a public page for signed-out visitors. Headl
 
 ## Acceptance Criteria
 
-Local and Clerk login both styled in light and dark on desktop and phone; fields usable on first paint; text contrast passes AA over the painting; screenshots added.
+Local and Clerk login both styled in light and dark on desktop and phone; fields usable on first paint; text contrast passes AA over the painting; screenshots attached to the PR.
 
