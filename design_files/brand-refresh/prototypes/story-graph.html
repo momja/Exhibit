@@ -1,0 +1,107 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+  :root{--poppy:#d9432b;--slate:#4f74a3;--sun:#e0a23a}
+  body{font-family:var(--font-sans);color:var(--foreground)}
+  .wrap{max-width:728px}
+  svg{display:block;width:100%;height:auto;overflow:visible}
+  .colh{font-size:11px;letter-spacing:.08em;text-transform:uppercase;fill:var(--muted-foreground);font-weight:600}
+  .node rect.box{fill:var(--card);stroke:var(--border);stroke-width:1}
+  .node.crit rect.box{stroke:var(--poppy);stroke-width:1.6}
+  .node.ext rect.box{fill:none;stroke:var(--slate);stroke-dasharray:4 3}
+  .node.ref rect.box{fill:none;stroke:var(--muted-foreground);stroke-dasharray:1.5 3}
+  .t{font-size:13px;font-weight:650;fill:var(--card-foreground)}
+  .s{font-size:11.5px;fill:var(--muted-foreground)}
+  .id{font-size:11.5px;font-weight:650;fill:var(--slate)}
+  .num{font-size:11px;font-weight:700;fill:var(--background)}
+  .badge{fill:var(--foreground)}
+  .crit .badge{fill:var(--poppy)}
+  .newtag{font-size:9.5px;font-weight:700;letter-spacing:.06em;fill:var(--poppy)}
+  .size{font-size:10.5px;font-weight:650;fill:var(--muted-foreground)}
+  path.e{fill:none;stroke:var(--muted-foreground);stroke-width:1.4}
+  path.e.crit{stroke:var(--poppy);stroke-width:2.2}
+  path.e.soft{stroke-dasharray:5 4}
+  path.e.ext{stroke:var(--slate);stroke-dasharray:5 4}
+  path.e.ref{stroke-dasharray:1.5 3.5;stroke-linecap:round}
+  .legend{display:flex;flex-wrap:wrap;gap:6px 18px;margin:14px 0 0;font-size:12.5px;color:var(--muted-foreground)}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .legend svg{width:30px;height:10px;display:inline}
+  .oos{margin-top:10px;font-size:12.5px;color:var(--muted-foreground)}
+  .oos b{color:var(--foreground);font-weight:600}
+</style></head>
+<body><div class="wrap">
+<svg id="g" viewBox="0 0 728 532" role="img" aria-label="Dependency graph of the brand refresh stories"></svg>
+<div class="legend">
+  <span><svg viewBox="0 0 30 10"><path d="M0 5H30" stroke="#d9432b" stroke-width="2.2"/></svg>Longest chains (1 or 9 → 5 → 7 → 8)</span>
+  <span><svg viewBox="0 0 30 10"><path d="M0 5H30" stroke="currentColor" stroke-width="1.4"/></svg>Blocks</span>
+  <span><svg viewBox="0 0 30 10"><path d="M0 5H30" stroke="currentColor" stroke-width="1.4" stroke-dasharray="5 4"/></svg>Can start on today's paintings</span>
+  <span><svg viewBox="0 0 30 10"><path d="M0 5H30" stroke="#4f74a3" stroke-width="1.4" stroke-dasharray="5 4"/></svg>Merge first (same cards/headers)</span>
+  <span><svg viewBox="0 0 30 10"><path d="M0 5H30" stroke="currentColor" stroke-width="1.4" stroke-dasharray="1.5 3.5" stroke-linecap="round"/></svg>Coordinate copy</span>
+</div>
+<div class="oos"><b>Not in this epic:</b> desire paths, wear marks, the "Well trodden" rail, mats, meadow accent (exploratory tickets Exh-4h60, Exh-ajri stay separate). Editor dark theme stays One Dark.</div>
+</div>
+<script>
+const NS='http://www.w3.org/2000/svg', g=document.getElementById('g');
+const W=136, COL=[0,197,394,592];
+const heads=['Start now','Next','Then','Last'];
+const el=(n,a,p=g)=>{const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);p.append(e);return e};
+heads.forEach((h,i)=>el('text',{x:COL[i],y:12,class:'colh'}).textContent=h);
+
+const N={
+  fl:{c:0,y:34,h:104,cls:'ext',lines:[['Finish first','t'],['Exh-geph  card titles','id'],['Exh-e736  star align','id'],['Exh-91qf  tab headers','id']]},
+  p1:{c:0,y:158,n:1,t:'Palette tokens',s:'paper/dusk, ink, slate',z:'M',crit:1},
+  p9:{c:0,y:240,n:9,t:'Logo cleanup',s:'flat mark + tidy hanger',z:'S',crit:1,new:1},
+  p2:{c:0,y:322,n:2,t:'Self-hosted fonts',s:'Schibsted + Fraunces',z:'S'},
+  p6:{c:0,y:420,n:6,t:'Paintings',s:'day/dusk + layers',z:'S'},
+  p3:{c:1,y:110,n:3,t:'Grainy tiles',s:'palette hues + grain',z:'S–M'},
+  p5:{c:1,y:236,n:5,t:'Logo pigments',s:'both variants, icons, OG',z:'S',crit:1},
+  s7:{c:1,y:440,h:50,cls:'ref',lines:[['Exh-s7kn','id'],['onboarding copy','s']]},
+  p4:{c:2,y:60,n:4,t:'UI polish',s:'shadows, rail, titles',z:'M'},
+  p7:{c:2,y:330,n:7,t:'Painted sign-in',s:'local + Clerk login',z:'M–L',crit:1},
+  p8:{c:3,y:410,n:8,t:'Descent animation',s:'play once, skippable',z:'M',crit:1},
+};
+for(const k in N){const d=N[k];d.x=COL[d.c];d.h=d.h||66}
+
+// edges: [from, fromPortY, to, toPortY, cls, viaY]
+const E=[
+  ['fl',86,'p3',128,'ext'],
+  ['p1',180,'p3',158,''],
+  ['p1',204,'p5',252,'crit'],
+  ['p9',273,'p5',282,'crit'],
+  ['p3',143,'p4',78,''],
+  ['p2',342,'p4',108,'',206],
+  ['p5',269,'p7',342,'crit'],
+  ['p2',366,'p7',356,'',340],
+  ['p6',444,'p7',370,'soft',400],
+  ['s7',465,'p7',384,'ref'],
+  ['p6',470,'p8',428,'',512],
+  ['p7',363,'p8',446,'crit'],
+];
+const defs=el('defs',{});
+[['a',getComputedStyle(document.body).getPropertyValue('--muted-foreground')||'#888'],['ac','#d9432b'],['ae','#4f74a3']].forEach(([id,c])=>{
+  const m=el('marker',{id,viewBox:'0 0 8 8',refX:7,refY:4,markerWidth:7,markerHeight:7,orient:'auto'},defs);
+  el('path',{d:'M0 0L8 4L0 8z',fill:c.trim()},m)});
+const seg=(a,b)=>{const dx=(b[0]-a[0])/2;return `C${a[0]+dx} ${a[1]} ${b[0]-dx} ${b[1]} ${b[0]} ${b[1]}`};
+const eg=el('g',{});
+for(const [f,fy,t,ty,cls,via] of E){
+  const A=N[f],B=N[t];const pts=[[A.x+W,fy]];
+  if(via!==undefined) for(let c=A.c+1;c<B.c;c++){pts.push([COL[c]-10,via]);pts.push([COL[c]+W+10,via])}
+  pts.push([B.x-1,ty]);
+  let d=`M${pts[0][0]} ${pts[0][1]}`;
+  for(let i=1;i<pts.length;i++){const a=pts[i-1],b=pts[i];d+= (a[1]===b[1]&&i%2===0&&via!==undefined)?`L${b[0]} ${b[1]}`:seg(a,b)}
+  const mk=cls==='crit'?'ac':cls==='ext'?'ae':'a';
+  el('path',{d,class:'e '+cls,'marker-end':`url(#${mk})`},eg);
+}
+for(const k in N){const d=N[k];const ng=el('g',{class:'node '+(d.crit?'crit ':'')+(d.cls||'')});
+  el('rect',{class:'box',x:d.x,y:d.y,width:W,height:d.h,rx:10},ng);
+  if(d.lines){d.lines.forEach(([txt,c],i)=>el('text',{x:d.x+12,y:d.y+(d.lines.length>2?22:20)+i*(d.lines.length>2?22:18),class:c},ng).textContent=txt)}
+  else{
+    el('circle',{class:'badge',cx:d.x+19,cy:d.y+20,r:9},ng);
+    el('text',{class:'num',x:d.x+19,y:d.y+24,'text-anchor':'middle'},ng).textContent=d.n;
+    el('text',{class:'size',x:d.x+W-10,y:d.y+24,'text-anchor':'end'},ng).textContent=d.z;
+    if(d.new)el('text',{class:'newtag',x:d.x+34,y:d.y+24},ng).textContent='NEW';
+    el('text',{class:'t',x:d.x+12,y:d.y+44},ng).textContent=d.t;
+    el('text',{class:'s',x:d.x+12,y:d.y+58},ng).textContent=d.s;
+  }}
+</script>
+</body></html>

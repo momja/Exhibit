@@ -1,0 +1,18 @@
+html[data-pal] .login-page{background:#2f6fc4 url(/mock/hero.jpg) 78% 50%/cover no-repeat;position:relative;isolation:isolate}
+html[data-pal] .login-page::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:9;background:var(--grain-url);mix-blend-mode:overlay;opacity:.2}
+html[data-pal] .login-page .app-header{background:none;box-shadow:none;border:0;color:#fbf6e8;padding-inline:40px;padding-top:14px}
+html[data-pal] .login-page .app-header-title{color:#fbf6e8;font-size:1.125rem;font-weight:700}
+html[data-pal] .login-page svg.logo{height:44px!important;width:auto!important}
+html[data-pal] .login-content{justify-content:flex-start;align-items:flex-start;padding:5vh 40px 40px;flex-direction:column;gap:28px}
+.mock-head{font-family:Fraunces,Georgia,serif;font-variation-settings:"SOFT" 100,"WONK" 0,"opsz" 144;font-weight:800;font-size:clamp(44px,6.4vw,92px);line-height:.9;letter-spacing:-.02em;color:#fbf6e8;margin:0;text-shadow:0 2px 18px #0b2a5a33}
+.mock-head i{font-weight:500}
+.mock-tag{color:#fbf6e8;font-size:1.0625rem;margin:14px 0 0;max-width:30ch;text-shadow:0 1px 8px #0b2a5a55}
+html[data-pal] .login{border-radius:3px;outline:2px solid var(--frame);box-shadow:6px 6px 0 var(--frame);align-items:stretch;padding:22px 24px 24px;max-width:340px;background:var(--color-panel)}
+html[data-pal] .login-sub{margin:0;font-weight:700;color:var(--color-ink)}
+html[data-pal] .login-form{margin-top:14px}
+html[data-pal] .login .field{border-radius:3px;border:1.5px solid var(--frame)}
+@media (max-width:600px){html[data-pal] .login-content{padding:3vh 20px 20px}html[data-pal] .login-page .app-header{padding-inline:20px}html[data-pal] .login-page{background-position:80% 50%}}
+html[data-pal]{--sky-top:#2f78dc}
+@media (prefers-color-scheme:dark){html[data-pal]{--sky-top:#18235c}}
+@media (max-width:600px){html[data-pal] .login-page{background:linear-gradient(var(--sky-top) 0 42%,transparent 56%),url(/mock/hero.jpg) 84% 100%/auto 60% no-repeat,var(--sky-top)}
+ .mock-tag{font-size:.9375rem;margin-top:10px}html[data-pal] .login-content{gap:18px}html[data-pal] .login{padding:16px 18px 18px}html[data-pal] .login-form{margin-top:8px;gap:4px}html[data-pal] .login-form .login-label+.field{margin-bottom:6px}}
