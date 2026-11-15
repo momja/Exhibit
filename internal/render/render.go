@@ -759,7 +759,7 @@ func privateFrameRequest(r *http.Request, appOrigin string) bool {
 // versionSandbox is the CSP sandbox directive a version document carries. The
 // tokens are the ones the app's frame for it carries (allow-scripts, so the tool
 // runs; allow-forms, so a form in it can be filled in and its submission stays
-// governed by form-action); allow-modals, so native dialogs can open. It
+// governed by form-action); allow-modals, removing the sandbox restriction on modal APIs. It
 // deliberately omits allow-same-origin: that omission is the whole point.
 const versionSandbox = "sandbox allow-scripts allow-forms allow-modals"
 
