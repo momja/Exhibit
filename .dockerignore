@@ -30,3 +30,6 @@ dev/
 
 # Editor and platform cruft.
 **/.DS_Store
+
+# Design references (design_files/) are inputs for people, not the image.
+design_files/
