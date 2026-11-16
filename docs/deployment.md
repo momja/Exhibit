@@ -1397,9 +1397,30 @@ frame below it. The tool gets its own remaining viewport: `100vh`, fixed bottom
 controls and scroll locking refer to that viewport. This costs a browsing
 context, escaped HTML bytes and an extra focus boundary; it adds no network
 request. The tool cannot access the bar's DOM. This is a compatibility change
-only for enabled shares: scripts relying on being top-level, device permissions,
-relative URLs tied to `about:srcdoc`, native popups or durable origin storage may
-behave differently. Disable the bar per artifact for such tools.
+only for enabled shares. The tool sees `about:srcdoc` with empty URL query and
+hash, and `window.top === window` becomes false; query/hash routing, History
+API URL changes, relative URLs and top-level checks can break. The outer
+device-width viewport meta overrides the artifact's viewport meta. Long tools
+scroll in the child, but printing/Save as PDF can truncate to the visible frame
+(round-one Chromium: nine pages hidden, one page shown). sessionStorage uses an
+in-memory shim and is lost on reload.
+
+Frame focus on load restores initial keyboard input without moving focus away
+from an already-focused bar link. Chromium also restores form autofocus; WebKit
+suppresses cross-origin form autofocus, so use Tab to reach fields. Native Tab
+traversal still crosses the frame.
+Fullscreen and clipboard write have explicit delegation within the unchanged
+opaque sandbox, but browser policy, permissions and embedding ancestors can
+still refuse them. The updated fixture restores fullscreen in both engines;
+clipboard succeeds in WebKit and rejects in Chromium in both hidden and shown
+modes. Real clipboard permission UX remains unmeasured. The child retains local storage
+and fetch shims, without gallery capability bridges. Device access, origin
+storage, downloads and popups still face sandbox restrictions. Playwright WebKit
+does not establish iOS Safari toolbar or permission behavior; a non-scrolling
+outer page can keep mobile browser chrome expanded. Disable the bar per artifact
+for tools needing full top-level compatibility. See
+[security compatibility costs](security.md#optional-anonymous-share-attribution)
+for the measured limits.
 
 The product link navigates the current document when opened directly. Inside
 any iframe it is intentionally plain text (no href, no tab stop), with a title

@@ -717,7 +717,11 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 	if !widget {
 		body = injectFavicon(body, artifacticon.DataURI(a.Tags))
 	}
-	out := injectPreamble(body, a.ID, rd.cfg.AppOrigin, state, origins, widget, viewer.Anonymous, versionView, manifest, a.VersionSeq)
+	bridges := bridgeScript
+	if doc.attribution {
+		bridges = frameLocalScript + "\n  }\n"
+	}
+	out := injectPreambleWithBridges(body, a.ID, rd.cfg.AppOrigin, state, origins, widget, viewer.Anonymous, versionView, manifest, bridges, a.VersionSeq)
 	if rd.cfg.RelayEnabled && !widget && !versionView && !viewer.Anonymous && doc.headMeta == "" {
 		out = injectRelay(out, rd.cfg.AppOrigin, a.ID, allowed)
 	}
@@ -1469,7 +1473,10 @@ const shimTemplate = `<script>
 // top-level (a direct render-origin visit or a share) there is no host frame
 // and no sandbox — the document has a real origin where all of this works
 // natively — so none of it installs.
-const bridgeScript = `
+const bridgeScript = frameLocalScript + capabilityBridgeScript
+
+// frameLocalScript needs no host; attributed shares retain only these local shims.
+const frameLocalScript = `
   if (window.parent !== window) {
     // ---- sessionStorage ----
     // Its own, purely in-memory Storage object: separate cache, no persist
@@ -1574,7 +1581,9 @@ const bridgeScript = `
       return new Uint8Array(out);
     }
 
-    // ---- Unsupported-capability diagnostic (av-yvtb) ----
+`
+
+const capabilityBridgeScript = `    // ---- Unsupported-capability diagnostic (av-yvtb) ----
     // Some browser capabilities cannot work inside this opaque-origin sandbox no
     // matter the CSP, and fail silently rather than throwing something the
     // artifact surfaces. We detect those cases and post a GENERIC
@@ -2498,6 +2507,12 @@ const widgetHealthScript = `<script>
 // data the shim must hold before the artifact's first line runs, not a mode
 // flag.
 func injectPreamble(body, artifactID, appOrigin string, state map[string]string, origins originPolicy, widget, anonymous, versionView bool, assetManifest map[string]string, versionSeq ...int) string {
+	return injectPreambleWithBridges(body, artifactID, appOrigin, state, origins, widget, anonymous, versionView, assetManifest, bridgeScript, versionSeq...)
+}
+
+// injectPreambleWithBridges lets the attributed share retain local shims without
+// installing gallery capability requests for a host that does not exist.
+func injectPreambleWithBridges(body, artifactID, appOrigin string, state map[string]string, origins originPolicy, widget, anonymous, versionView bool, assetManifest map[string]string, bridges string, versionSeq ...int) string {
 	if state == nil {
 		state = map[string]string{}
 	}
@@ -2527,7 +2542,6 @@ func injectPreamble(body, artifactID, appOrigin string, state map[string]string,
 	if err != nil {
 		blockedJSON = []byte("[]")
 	}
-	bridges := bridgeScript
 	if widget {
 		bridges = ""
 	}

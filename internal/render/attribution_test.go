@@ -26,7 +26,7 @@ func TestShareAttributionOwnerChoiceAndLegacyBytes(t *testing.T) {
 			show := mode == "show" || mode == "inherit" && instance
 			if show {
 				require.Contains(t, got.Body.String(), `id="exhibit-attribution" href="`+ExhibitProductOrigin+`"`)
-				require.Contains(t, got.Body.String(), `sandbox="allow-scripts allow-forms" srcdoc=`)
+				require.Contains(t, got.Body.String(), `sandbox="allow-scripts allow-forms" allow="fullscreen *; clipboard-write *"`)
 				require.Contains(t, got.Header().Get("Content-Security-Policy"), versionSandbox)
 			} else {
 				require.Equal(t, baseline.Body.String(), got.Body.String())

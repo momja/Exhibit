@@ -2,7 +2,7 @@ import { test, expect } from '../fixtures';
 import { renderOrigin } from '../environment';
 import { mkdir, writeFile } from 'node:fs/promises';
 
-const evidence = '/tmp/exhibit-review/banner';
+const evidence = '/tmp/exhibit-review/banner/r2';
 const body = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>
 html,body{margin:0;overflow:hidden;font:16px system-ui;color-scheme:light dark}main{height:100vh;display:grid;grid-template-rows:48px 1fr 48px;background:light-dark(#eef2f8,#151d2a);color:light-dark(#24324a,#e1e8f4)}h1{font-size:18px;margin:12px}canvas{width:100%;height:100%;min-height:0;background:light-dark(#d9e5f5,#283c58)}footer{position:fixed;bottom:0;height:48px;left:0;right:0;display:flex;align-items:center;justify-content:center;background:light-dark(#fff,#182333)}button{font:inherit;padding:6px 18px}</style></head><body><main><h1>Viewport canvas</h1><canvas aria-label="Drawing surface" onpointerdown="this.dataset.drawn='yes';this.getContext('2d').fillRect(0,0,20,20)"></canvas><footer><button onclick="this.textContent='Saved'">Save drawing</button></footer></main></body></html>`;
 
@@ -30,6 +30,7 @@ test('attribution viewport, theme, keyboard, hostile code and embed behavior', a
   await expect(page.getByRole('link',{name:'made with exhibit'})).not.toBeFocused();
   await page.getByRole('link',{name:'made with exhibit'}).focus();
   await expect(page.getByRole('link',{name:'made with exhibit'})).toBeFocused();
+  await page.screenshot({path:`${evidence}/${info.project.name}-focus-${width}-${colorScheme}.png`});
   await page.keyboard.press('Tab');
   await expect(tool.getByRole('button')).toBeFocused();
   await page.keyboard.press('Enter');
@@ -63,16 +64,24 @@ test('attribution viewport, theme, keyboard, hostile code and embed behavior', a
  await writeFile(`${evidence}/${info.project.name}-measurements.json`,JSON.stringify(measurements,null,2));
 });
 
-test('owner attribution selection persists through the server-rendered share panel',async({page,api,artifacts})=>{
+test('owner attribution selection persists through the server-rendered share panel',async({page,api,artifacts},info)=>{
  const artifact=await artifacts.create('<h1>Owner tool</h1>');
  await page.goto(`/artifacts/${artifact.id}`);
  await page.locator('#share-open').click();
  await expect(page.locator('#share-attribution')).toHaveValue('inherit');
+ await mkdir(evidence,{recursive:true});
+ await page.screenshot({path:`${evidence}/${info.project.name}-panel-inherit.png`});
  await page.locator('#share-attribution').selectOption('show');
  await expect(page.locator('#share-body')).toBeEnabled();
  await expect(page.locator('#share-attribution')).toHaveValue('show');
  expect((await (await api.get(`/api/artifacts/${artifact.id}`)).json()).share_attribution).toBe('show');
- await page.screenshot({path:'/tmp/exhibit-review/banner/share-panel.png'});
+ await expect(page.locator('#share-attribution-help')).toContainText('Only affects the public /s/ link');
+ await expect(page.locator('#share-attribution-help')).toContainText('plain attribution text');
+ await page.screenshot({path:`${evidence}/${info.project.name}-panel-show.png`});
+ await page.locator('#share-attribution').selectOption('hide');
+ await expect.poll(async()=>(await(await api.get(`/api/artifacts/${artifact.id}`)).json()).share_attribution).toBe('hide');
+ await expect(page.locator('#share-attribution')).toHaveValue('hide');
+ await page.screenshot({path:`${evidence}/${info.project.name}-panel-hide.png`});
 });
 
 test('native framed anchors under the actual share CSP sandbox',async({page,api,artifacts},info)=>{
@@ -96,4 +105,109 @@ test('native framed anchors under the actual share CSP sandbox',async({page,api,
  await frame.getByText('self',{exact:true}).click();
  await expect.poll(()=>page.frames()[1].url()).toBe('https://exhibit.dizzard.net/native');
  await writeFile(`${evidence}/${info.project.name}-native-anchors.json`,JSON.stringify({csp,messages,popup:'blocked',top:'blocked',self:'navigated child',decision:'inert framed attribution avoids replacing the embedded tool'},null,2));
+});
+
+test('initial keyboard input, autofocus and accessible return to attribution',async({page,api,artifacts},info)=>{
+ await mkdir(evidence,{recursive:true});
+ const artifact=await artifacts.create(`<!doctype html><html><head><title>Keyboard tool</title></head><body><input aria-label="First input" autofocus><button>Next</button><script>window.keys=0;window.addEventListener('keydown',()=>window.keys++);</script></body></html>`);
+ const {share}=await(await api.post('/api/shares',{data:{artifact_id:artifact.id}})).json();
+ const results=[];
+ for(const mode of ['hide','show']){
+  await api.patch(`/api/artifacts/${artifact.id}`,{data:{share_attribution:mode}});
+  await page.goto('about:blank');
+  await page.bringToFront();
+  await page.goto(`${renderOrigin}/s/${share.id}?x=1#frag`);
+  const tool=mode==='show'?page.frames()[1]:page.mainFrame();
+  if(mode==='hide'||info.project.name==='chromium')await expect(tool.locator('input'),mode).toBeFocused();
+  else await expect(page.locator('iframe')).toBeFocused();
+  await page.keyboard.press('a'); await page.keyboard.press('b');
+  expect(await tool.evaluate(()=>(window as any).keys)).toBe(2);
+  results.push({mode,autofocus:await tool.locator('input').inputValue()});
+  if(mode==='hide'||info.project.name==='chromium')await expect(tool.locator('input')).toHaveValue('ab');
+  else expect(['','ab']).toContain(await tool.locator('input').inputValue()); // WebKit suppresses cross-origin form autofocus.
+  if(mode==='show'){
+   // Reverse traversal reaches the parent link, then forward returns to the tool.
+   await page.keyboard.press('Shift+Tab');
+   await expect(page.locator('#exhibit-attribution')).toBeFocused();
+   await page.keyboard.press('Tab');
+   await expect(tool.locator('input')).toBeFocused();
+   await page.keyboard.press('Shift+Tab');
+   await tool.goto('about:blank');
+   await expect(page.locator('#exhibit-attribution')).toBeFocused();
+  }
+ }
+ await writeFile(`${evidence}/${info.project.name}-initial-focus.json`,JSON.stringify(results,null,2));
+});
+
+test('scroll-heavy tool and light narrow/short embeds remain usable',async({page,api,artifacts},info)=>{
+ const artifact=await artifacts.create(`<!doctype html><meta name="viewport" content="width=1024"><style>body{margin:0;font:16px system-ui}section{height:400px;padding:16px;background:#eef2f8;border-bottom:1px solid #888}@media print{section{break-after:page}}</style>${Array.from({length:10},(_,i)=>`<section>Section ${i+1}</section>`).join('')}<button onclick="this.textContent='Done'">Finish document</button>`,'Long document');
+ await api.patch(`/api/artifacts/${artifact.id}`,{data:{share_attribution:'show'}});
+ const {share}=await(await api.post('/api/shares',{data:{artifact_id:artifact.id}})).json();
+ const url=`${renderOrigin}/s/${share.id}?x=1#frag`;
+ await page.setViewportSize({width:320,height:720}); await page.emulateMedia({colorScheme:'light'});
+ await page.goto(url);
+ const tool=page.frames()[1];
+ await tool.getByRole('button').scrollIntoViewIfNeeded();
+ await tool.getByRole('button').click(); await expect(tool.getByRole('button')).toHaveText('Done');
+ expect(await tool.evaluate(()=>scrollY)).toBeGreaterThan(3000);
+ await page.screenshot({path:`${evidence}/${info.project.name}-scroll-bottom.png`});
+ const costs=await tool.evaluate(()=>({location:location.href,search:location.search,hash:location.hash,top:self===top,width:innerWidth,height:innerHeight,scrollHeight:document.documentElement.scrollHeight}));
+ expect(costs).toMatchObject({location:'about:srcdoc',search:'',hash:'',top:false,width:320,height:684});
+ await writeFile(`${evidence}/${info.project.name}-wrapper-costs.json`,JSON.stringify(costs,null,2));
+ await tool.evaluate(()=>sessionStorage.setItem('draft','temporary'));
+ expect(await tool.evaluate(()=>sessionStorage.getItem('draft'))).toBe('temporary');
+ await page.reload();
+ expect(await page.frames()[1].evaluate(()=>sessionStorage.getItem('draft'))).toBeNull();
+ if(info.project.name==='chromium'){
+  const counts=[];
+  for(const mode of ['hide','show']){
+   await api.patch(`/api/artifacts/${artifact.id}`,{data:{share_attribution:mode}});
+   await page.goto('about:blank');
+   await page.goto(url);
+   const pdf=await page.pdf({path:`${evidence}/chromium-long-${mode}.pdf`});
+   counts.push({mode,pages:(pdf.toString('latin1').match(/\/Type\s*\/Page\b/g)||[]).length});
+  }
+  expect(counts[0].pages).toBeGreaterThan(counts[1].pages);
+  await writeFile(`${evidence}/chromium-print.json`,JSON.stringify(counts,null,2));
+ }
+ await api.patch(`/api/artifacts/${artifact.id}`,{data:{share_attribution:'show'}});
+ for(const height of [600,144]){
+  await page.goto('http://127.0.0.1:18382/?src='+encodeURIComponent(url));
+  const outer=page.locator('iframe'); await outer.evaluate((el,h)=>el.style.height=`${h}px`,height);
+  const shareFrame=page.frames()[1];
+  await expect(shareFrame.locator('#exhibit-attribution')).not.toHaveAttribute('href');
+  await shareFrame.locator('#exhibit-attribution').evaluate(el=>(el as HTMLElement).focus());
+  await expect(shareFrame.locator('#exhibit-attribution')).not.toBeFocused();
+  const child=page.frames()[2];
+  expect(await child.evaluate(()=>innerHeight)).toBe(height-36);
+  await child.getByRole('button').click(); await expect(child.getByRole('button')).toHaveText('Done');
+  await page.screenshot({path:`${evidence}/${info.project.name}-embed-light-320-${height}.png`,fullPage:true});
+ }
+});
+
+test('native fullscreen and clipboard outcomes without gallery capability requests',async({page,api,artifacts},info)=>{
+ const artifact=await artifacts.create(`<button id="full" onclick="document.documentElement.requestFullscreen().then(()=>this.dataset.result='ok',e=>this.dataset.result=e.name+': '+e.message)">Fullscreen</button><button id="clip" onclick="navigator.clipboard.writeText('Attribution test').then(()=>this.dataset.result='ok',e=>this.dataset.result=e.name+': '+e.message)">Copy</button><script>window.messages=[];addEventListener('message',e=>window.messages.push(e.data));</script>`);
+ const {share}=await(await api.post('/api/shares',{data:{artifact_id:artifact.id}})).json();
+ const results=[];
+ for(const mode of ['hide','show']){
+  await api.patch(`/api/artifacts/${artifact.id}`,{data:{share_attribution:mode}});
+  await page.goto(`${renderOrigin}/s/${share.id}`);
+  const tool=mode==='show'?page.frames()[1]:page.mainFrame();
+  if(mode==='show'){
+   await expect(page.locator('iframe')).toHaveAttribute('allow','fullscreen *; clipboard-write *');
+   await expect(page.locator('iframe')).toHaveAttribute('sandbox','allow-scripts allow-forms');
+   // The shim must preserve the native API, not replace it with a host request.
+   expect(await tool.evaluate(()=>String(navigator.clipboard.writeText))).toContain('[native code]');
+  }
+  await tool.locator('#full').click();
+  await expect(tool.locator('#full')).toHaveAttribute('data-result',/.+/);
+  const fullscreen=await tool.locator('#full').getAttribute('data-result');
+  if(info.project.name==='chromium')expect(fullscreen).toBe('ok');
+  await tool.evaluate(async()=>{if(document.fullscreenElement)await document.exitFullscreen()});
+  await tool.locator('#clip').click();
+  await expect(tool.locator('#clip')).toHaveAttribute('data-result',/.+/);
+  const clipboard=await tool.locator('#clip').getAttribute('data-result');
+  results.push({mode,fullscreen,clipboard});
+ }
+ await writeFile(`${evidence}/${info.project.name}-native-capabilities.json`,JSON.stringify(results,null,2));
 });

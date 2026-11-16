@@ -1747,8 +1747,11 @@ usability: code can still blank or navigate its own frame, exhaust resources,
 mislead the viewer, or expose the data its owner chose to publish. A third-party
 framer can cover or crop the entire share. Branding is not a security seal.
 
-The bar is outside the artifact's viewport and reserves 36px; no overlay, focus
-call, pointer handler or mutation observer runs over the tool. The product link
+The bar is outside the artifact's viewport and reserves 36px. On child load the
+wrapper focuses the frame if focus is still on its body or the frame, restoring
+initial keyboard input without taking focus from the attribution link. Native
+Tab and Shift+Tab navigation cross the boundary; no keyboard forwarding, pointer
+handler or mutation observer runs over the tool. The product link
 uses self navigation on direct shares. In any frame it loses href synchronously
 at parse time, becoming intentionally inert plain attribution with an explanatory
 title. Both Chromium and WebKit browser regressions exercise this behavior under
@@ -1764,3 +1767,45 @@ canvas tool; its bottom-fixed Save button, keyboard traversal and canvas pointer
 input remained usable. The third-party embed used an origin explicitly named in
 `EMBED_ORIGINS`. These fixtures establish compatibility for those layouts, not
 every possible artifact; owners retain the hide override.
+
+
+Enabled-share compatibility costs:
+
+- The child sees `about:srcdoc`, with empty `location.search` and
+  `location.hash`, and `window.top === window` is false. Query/hash routing,
+  URL-changing History APIs, relative URLs and top-level checks can break.
+  No URL/state bridge is installed.
+- The outer viewport meta uses device width; an artifact's custom viewport
+  meta (for example `width=1024`) does not control the outer mobile viewport.
+- The frame scrolls independently. Long documents remain scrollable, but
+  printing/Save as PDF can truncate to the visible frame. Round-one Chromium
+  measured nine pages without attribution versus one with it; the regression
+  fixture with explicit page breaks measures eleven versus one. We do not
+  attempt cross-origin frame resizing for printing.
+- Fullscreen and clipboard write are explicitly delegated only to the tool
+  (`allow="fullscreen *; clipboard-write *"`, plus `allowfullscreen`). The
+  wildcard is necessary for the opaque child origin, and is limited to these
+  two features; device/location policy and the sandbox are unchanged.
+  Browser policy, user activation, enclosing embed policy and permissions still
+  apply. After explicit opaque-origin delegation, the regression fixture
+  restored fullscreen in both Chromium and WebKit. Clipboard write succeeded
+  in WebKit; Chromium rejected with NotAllowedError in both hidden and shown
+  modes. These headless results do not establish real clipboard permission UX.
+- Attributed tools retain local sessionStorage and data-URL fetch shims but omit
+  gallery capability bridges: there is no host to answer them. Native clipboard
+  calls therefore succeed or reject under browser policy rather than waiting
+  forever for a nonexistent host. No clipboard read delegation is added.
+- sessionStorage is an in-memory framed shim, lost on reload, unlike the native
+  top-level share's sessionStorage. Origin storage, popups, downloads and device
+  APIs retain the opaque sandbox's limitations.
+- The original wrapper lost initial keyboard input and autofocus until a click.
+  Frame focus on load fixes window handlers. The child attempts autofocus
+  after focus settles; Chromium restores it, but WebKit suppresses cross-origin
+  form autofocus. Fields remain reachable with Tab. Both outcomes and native
+  cross-boundary traversal are regression-tested. There is still an extra focus
+  boundary, a browsing context and escaped HTML overhead.
+- Playwright WebKit is not iOS Safari. Mobile toolbar collapse and real-device
+  clipboard permission UX remain unmeasured. The non-scrolling outer page may
+  keep mobile browser chrome expanded. Short embeds lose the same 36px.
+
+Owners should select Hide for tools needing full top-level compatibility.
