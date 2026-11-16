@@ -1,8 +1,8 @@
 ---
 id: Exh-38vu
-status: in_progress
+status: open
 deps: []
-links: [Exh-lmor]
+links: []
 created: 2026-11-16T06:04:24Z
 type: epic
 priority: 2
@@ -22,15 +22,6 @@ This epic adds an optional, unobtrusive attribution line to share pages. It is
 **off unless an instance turns it on**, and the artifact's owner can opt out
 per artifact even then.
 
-## The banner, as decided
-
-A bar across the top of the share page: the Exhibit mark at icon size, the
-words "made with exhibit", linked to `https://exhibit.dizzard.net`. That
-placement is settled — the product owner is not choosing it, and neither is the
-implementer. Exh-u1t3 builds it; independent reviewer subagents judge the
-result and the iteration continues until they pass. Everything below is the
-flag, the per-artifact control and the safety envelope around that bar.
-
 ## Scope
 
 1. **Instance flag**, default off — self-hosted and hosted instances both ship
@@ -44,23 +35,19 @@ flag, the per-artifact control and the safety envelope around that bar.
    exposed through the API with validation in the handler and the store (the
    `share_state_mode` pattern in `internal/api/artifacts.go` + `store.UpdateArtifact`
    is the precedent).
-3. **The banner itself** on `/s/:shareID` only — top strip, icon-size mark,
-   "made with exhibit", linking to `https://exhibit.dizzard.net`. Not on
-   `/a/:id`, `/w/:id`, version views, widget documents, or direct-open pages —
-   those are framed by our own gallery, which already carries the brand.
-4. **The safety envelope around the bar.** The share document is the artifact's
-   own HTML in an opaque-origin sandbox, and a share can be framed by a
-   third-party blog, so the display still has consequences to settle — how the
-   link behaves in a frame, what a `100vh` tool does under a top strip, and how
-   far the bar resists an artifact's own script. Exh-u1t3 settles them by
-   building the decided default and iterating against reviewer verdicts, not by
-   asking the owner to pick a placement.
+3. **The badge itself** on `/s/:shareID` only. Not on `/a/:id`, `/w/:id`,
+   version views, widget documents, or direct-open pages — those are framed by
+   our own gallery, which already carries the brand.
+4. **A way to settle how it is displayed before building it.** The share
+   document is the artifact's own HTML in an opaque-origin sandbox, and a share
+   can be framed by a third-party blog, so "just put a div at the bottom" is
+   not a design — it is a decision with security and layout consequences. That
+   question is a spike, and it is the first child of this epic.
 
 ## What must be true when it ships
 
-- The banner cannot be removed, hidden, or restyled by the artifact's own
-  script or CSS beyond the guarantee Exh-u1t3 states and justifies, and cannot
-  break the tool it decorates.
+- The badge cannot be removed, hidden, or restyled by the artifact's own script
+  or CSS, and cannot break the tool it decorates.
 - It never steals clicks, focus, or keyboard navigation from the artifact, and
   a full-viewport tool is still usable.
 - It reads correctly in light and dark, at 320 px through desktop, and is
@@ -70,26 +57,25 @@ flag, the per-artifact control and the safety envelope around that bar.
   not imply the artifact was authored by us.
 - Self-hosted instances that never set the flag see byte-identical share pages
   to today (a pinned test, like the 404 page's).
-- The link preview (`og:*` tags and `/s/:id/og.png`) is unchanged: the picture
-  stays a picture of the widget and does not become a logo card.
+- The link preview (`og:*` tags and `/s/:id/og.png`) is unchanged unless the
+  spike decides the picture should carry the mark — that is its call to make,
+  and it must not become a logo card instead of a picture of the widget.
 
 ## Sequencing
 
-Exh-u1t3 goes first: it builds the decided banner and gets it through review,
-and the flag, the per-artifact column and the API controls follow from what it
-learns. The brand mark comes from the brand refresh epic (Exh-od5a) — reuse it,
-do not invent a second wordmark.
+Child 1 is the spike. Implementation children are filed from its findings
+rather than guessed now. The brand mark and its usage rules come from the brand
+refresh epic (Exh-od5a) — reuse, do not invent a second wordmark.
 
 ## Acceptance criteria
 
 1. With the flag off, share pages and their headers are byte-identical to
    today, pinned by test.
 2. With the flag on, every share page of an artifact left on *inherit* shows
-   the banner; *hide* removes it; *show* adds it even on an instance with the
+   the badge; *hide* removes it; *show* adds it even on an instance with the
    flag off (owner's explicit choice wins).
-3. The banner is present in the server-rendered document (not added by JS),
-   shows the icon-size mark, the text "made with exhibit" and links to
-   `https://exhibit.dizzard.net`.
+3. Badge is present in the server-rendered document (not added by JS), and the
+   artifact cannot remove or occlude it.
 4. Displayed correctly: light/dark, 320 px and desktop, keyboard, screen
    reader, and inside a third-party iframe under `EMBED_ORIGINS`.
 5. Documented in `docs/deployment.md` and `docs/security.md` (what it does and
