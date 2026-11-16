@@ -72,25 +72,6 @@ func TestNavigationPermissionsRemainIndependentOfConnectionsAndRejectStaleHosts(
 	assert.Equal(t, http.StatusForbidden, w.Code, "agent grants cannot spend the host navigation authority")
 }
 
-func TestPublicNavigationExemptionIsOnlyAnonymousAndUnconnected(t *testing.T) {
-	a := &store.Artifact{ID: "app-1", OwnerID: 1, Title: "Public app"}
-	for _, test := range []struct {
-		anonymous, protected, allowed bool
-	}{{false, false, false}, {false, true, false}, {true, false, true}, {true, true, false}} {
-		urls := testRenderURLs("https://render.example.test")
-		urls.anonymous = test.anonymous
-		creds := testPageCreds
-		creds.ReadOnly = true
-		page, err := renderDetailPage(a, urls, creds, nil, detailNetworkPolicy{Token: "policy", Protected: test.protected})
-		require.NoError(t, err)
-		if test.allowed {
-			assert.Contains(t, page, "const PUBLIC_NAVIGATION = true;")
-		} else {
-			assert.Contains(t, page, "const PUBLIC_NAVIGATION = false;")
-		}
-	}
-}
-
 func TestUnconnectedPassThroughNavigationKeepsExistingLinkBehavior(t *testing.T) {
 	ro := newTestRouter(t)
 	id := createOwnArtifact(t, ro)

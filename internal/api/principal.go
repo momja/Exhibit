@@ -2,7 +2,7 @@
 // (av-o5cf). Five call sites used to derive that answer independently —
 // authMiddleware, sessionGate, adminRequest, authorizeEventStream, and
 // pageCredentials each re-checked some subset of {session cookie, service
-// token, agent grant, public mode} against the raw request, and the
+// token, agent grant} against the raw request, and the
 // invariant that they agree lived only in comments and tests. It broke once
 // already (av-syug: the page chain wasn't wired to the session and quietly
 // served owner 1's library to everyone).
@@ -44,23 +44,17 @@ const (
 	// (agentscope, av-e0yj): authority over exactly the one artifact that
 	// session was opened against.
 	PrincipalAgentGrant
-	// PrincipalPublic is an anonymous visitor admitted only because this
-	// instance publishes its library (av-wmp6). ReadOnly is always true.
-	PrincipalPublic
 )
 
 // Principal is the request's resolved identity and reach.
 type Principal struct {
 	// OwnerID is whose library this request may touch. It is meaningful for
 	// every kind, including PrincipalNone: ownerMiddleware's backstop and
-	// authMiddleware's public branch both set it to a real value, never left
+	// authentication both set it to a real value, never left
 	// for a later guess (av-syug AC#6 — see ownerIDFromCtx).
 	OwnerID int64
 	Kind    PrincipalKind
 	// ReadOnly says this principal may not mutate, whatever route it reaches.
-	// Only PrincipalPublic sets it today; it is its own field rather than
-	// `Kind == PrincipalPublic` because a future principal (a shared
-	// artifact's viewer, av-7k7b) may be read-only without being anonymous.
 	ReadOnly bool
 	// Grant is the scoped credential this request authenticated with, non-nil
 	// only when Kind is PrincipalAgentGrant.
@@ -111,7 +105,7 @@ func principalResolved(ctx context.Context) bool {
 //
 // Failing closed is affordable because no caller depends on the guess any
 // more: every credential path resolves a full Principal — authMiddleware from
-// the session, service token, agent grant, or public-mode configuration;
+// the session, service token, or agent grant;
 // sessionGate from the session cookie — and ownerMiddleware backstops both
 // groups with the single-user default. A request that reaches a handler with
 // no Principal in context is therefore a wiring defect, not a deployment
@@ -136,21 +130,8 @@ func agentGrantFromCtx(ctx context.Context) *agentscope.Grant {
 	return principalFromCtx(ctx).Grant
 }
 
-// publicVisitor reports whether this request was let through with no
-// credential because the instance is public (av-wmp6 AC#5). It is the branch
-// a handler takes to render a page with no edit controls, and to mint render
-// tokens that carry no principal.
-//
-// False is the safe answer and the default: a request nobody marked reads
-// back PrincipalNone, which is not PrincipalPublic — the reading that
-// withholds rather than publishes.
-func publicVisitor(ctx context.Context) bool {
-	return principalFromCtx(ctx).Kind == PrincipalPublic
-}
-
 // sessionAuthed reports whether this request presented a session cookie that
-// resolved to a live session. False is the safe default, for the same reason
-// publicVisitor's is.
+// resolved to a live session. An unresolved principal safely returns false.
 func sessionAuthed(ctx context.Context) bool {
 	return principalFromCtx(ctx).Kind == PrincipalSession
 }

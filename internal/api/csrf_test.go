@@ -156,7 +156,6 @@ var appOriginGETRoutes = []getRoute{
 	{route: "/favicon.ico"},
 	{route: "/s/{shareID}"},
 	{route: "/s/{shareID}/widget"},
-	{route: "/api/settings/public"},
 
 	// The authenticated API group — the routes the session cookie actually
 	// unlocks, and therefore the ones a forged GET would be aimed at.

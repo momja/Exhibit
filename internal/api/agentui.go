@@ -209,9 +209,6 @@ func (ro *Router) agentPage(w http.ResponseWriter, r *http.Request) {
 	}
 	data.DirectOpen.OpenURL = data.Preview.OpenURL
 	data.DirectOpen.ViewerPreference = strconv.FormatInt(ownerIDFromCtx(r.Context()), 10)
-	if ro.renderURLs(r).anonymous {
-		data.DirectOpen.ViewerPreference = "anonymous"
-	}
 	page, err := renderPage("agent", data)
 	if err != nil {
 		serverError(w, r, "agent page render", err)

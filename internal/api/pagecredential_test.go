@@ -116,7 +116,6 @@ var appOriginGETRoutePaths = []pageRoute{
 	{route: "/favicon.ico", path: "/favicon.ico"},
 	{route: "/s/{shareID}", path: "/s/some-share"},
 	{route: "/s/{shareID}/widget", path: "/s/some-share/widget"},
-	{route: "/api/settings/public", path: "/api/settings/public"},
 
 	// The authenticated API. A JSON response has no business echoing the
 	// service token either, and including the group means the walk covers the
@@ -343,10 +342,6 @@ func TestSingleUserPageStillCarriesTheStaticToken(t *testing.T) {
 	}
 }
 
-// The three cases, at the one function that decides them. The walk above
-// covers the two an HTTP request can currently produce; nothing marks a *page*
-// request as a public visitor yet (av-wmp6 marks API requests only), so the
-// anonymous case is asserted here, where it can be constructed.
 func TestPageCredentialsPerVisitor(t *testing.T) {
 	single, _ := newPageCredentialRouter(t, nil)
 	withIdentity, _ := newPageCredentialRouter(t, &stubProvider{})
@@ -354,7 +349,7 @@ func TestPageCredentialsPerVisitor(t *testing.T) {
 	req := func(ctx context.Context) *http.Request {
 		return httptest.NewRequest("GET", "/", nil).WithContext(ctx)
 	}
-	anonymous := withPrincipal(context.Background(), Principal{Kind: PrincipalPublic, ReadOnly: true})
+
 	session := withPrincipal(context.Background(), Principal{Kind: PrincipalSession})
 
 	assert.Equal(t, pageCredentials{Token: pageCredentialToken, StateWritable: true},
@@ -365,16 +360,9 @@ func TestPageCredentialsPerVisitor(t *testing.T) {
 		withIdentity.pageCredentials(req(session)),
 		"session-authenticated: the cookie is the credential, so the page is handed none")
 
-	assert.Equal(t, pageCredentials{ReadOnly: true},
-		single.pageCredentials(req(anonymous)),
-		"anonymous: no credential, and the page's JS refuses writes locally rather than erroring")
-	assert.Equal(t, pageCredentials{ReadOnly: true},
-		withIdentity.pageCredentials(req(anonymous)),
-		"anonymous, identity configured: same answer — nothing about the instance grants a stranger authority")
-
 	// The dangerous middle case: a provider is configured but this request
-	// resolved no session. That is a public visitor or a hole in sessionGate,
-	// and the static token is not the right answer to either — nor is a page
+	// resolved no session. That is a hole in sessionGate,
+	// and the static token is not the right answer — nor is a page
 	// whose JS believes its writes will land, since the state routes would
 	// 401 a request with no credential behind it.
 	assert.Equal(t, pageCredentials{StateWritable: false},
@@ -395,11 +383,7 @@ func TestPageCredentialsPerVisitor(t *testing.T) {
 		withLocal.pageCredentials(req(session)),
 		"local login, session-authenticated: the cookie is the credential")
 
-	// ReadOnly comes from the resolved Principal's own field, not from
-	// re-deriving "is this an anonymous public visitor" — a non-public,
-	// non-anonymous Principal that is nonetheless read-only (the shape a
-	// shared artifact's viewer will have, av-7k7b) must still come out
-	// read-only rather than being missed because it isn't PrincipalPublic.
+	// ReadOnly follows the resolved principal, including read-only sessions.
 	readOnlySession := withPrincipal(context.Background(), Principal{Kind: PrincipalSession, ReadOnly: true})
 	assert.Equal(t, pageCredentials{ReadOnly: true},
 		withIdentity.pageCredentials(req(readOnlySession)),
@@ -407,12 +391,10 @@ func TestPageCredentialsPerVisitor(t *testing.T) {
 
 	// StateWritable is not ReadOnly inverted, and this is where the two part
 	// company (av-v991). A visitor writes an artifact's saved data when they
-	// have a principal to write it as, so the anonymous cases above are false
+	// have a principal to write it as; unresolved login requests are refused
 	// and everyone else is true. The recipient — read-only about the artifact,
 	// state-writable within it — is made by forArtifactOwnedBy below, which is
 	// why it is asserted there rather than here.
-	assert.False(t, single.pageCredentials(req(anonymous)).StateWritable,
-		"an anonymous visitor has no principal whose rows a write could land in")
 	assert.True(t, withIdentity.pageCredentials(req(session)).StateWritable,
 		"a signed-in person does")
 }

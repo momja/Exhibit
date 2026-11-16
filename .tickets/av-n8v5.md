@@ -18,3 +18,9 @@ Make the global UI chrome (header, minimal footer) adapt based on authentication
 
 1. Unauthenticated public-mode header shows logo + instance name (or fallback to 'Exhibit') + 'Sign in' link. 2. Authenticated header is unchanged from current behavior. 3. No management links (settings, upload) appear in the public header. 4. Footer is minimal or absent in public mode; present but unobtrusive in authenticated mode. 5. All navigation links are valid for the user's auth state.
 
+
+## Notes
+
+**2026-11-16T07:14:42Z**
+
+Public mode was retired in Exh-lmor rather than completed. The public demo gallery is a separate site built from artifact exports, not an anonymous library in the core service.

@@ -566,7 +566,6 @@ func TestOAuthConsentRequiresPersonAndSameOrigin(t *testing.T) {
 	cfg := in.ro.cfg
 	cfg.Identity = nil
 	cfg.LocalCredential = nil
-	cfg.Public = PublicMode{Enabled: true, OwnerID: in.ownerOne}
 	public := NewRouter(cfg)
 	clientID, err := public.mintClientID(oauthClient{Name: "public test", RedirectURIs: []string{testRedirect}})
 	require.NoError(t, err)
@@ -583,7 +582,6 @@ func TestOAuthConsentRequiresPersonAndSameOrigin(t *testing.T) {
 		assert.GreaterOrEqual(t, w.Code, 400, "public visitors cannot approve")
 	}
 	// No login: reaching the page identifies the operator, just as Settings does.
-	cfg.Public = PublicMode{}
 	open := NewRouter(cfg)
 	clientID, err = open.mintClientID(oauthClient{Name: "operator agent", RedirectURIs: []string{testRedirect}})
 	require.NoError(t, err)

@@ -19,7 +19,7 @@ Then run it with Compose:
 docker compose up
 ```
 
-or configure your origins (auth token is currently a placeholder. It's required but does not actually authenticate):
+or configure your origins and API bearer token:
 
 ```bash
 AUTH_TOKEN=changeme \
@@ -76,10 +76,6 @@ Env vars, all optional except `AUTH_TOKEN`.
 | `OIDC_ISSUER` | *(unset)* | Identity provider to delegate login to. Unset = no OIDC |
 | `OIDC_CLIENT_ID` | *(unset)* | Client id registered at that provider — required when `OIDC_ISSUER` is set |
 | `OIDC_CLIENT_SECRET` | *(unset)* | Client secret, if your provider issues one |
-| `PUBLIC_MODE_ENABLED` | `false` | Publishes this instance's library for reading without a credential. Accepts `true`/`1`/`yes`/`on`; anything unrecognized is read as off |
-| `PUBLIC_INSTANCE_NAME` | *(unset)* | What this instance calls itself |
-| `PUBLIC_INSTANCE_DESCRIPTION` | *(unset)* | One line about it |
-| `PUBLIC_OWNER_ID` | `1` | Whose library the instance publishes — every artifact query filters on an owner, so a public instance has to name one. `1` is the owner a single-user library is already filed under |
 | `EMBED_ORIGINS` | *(unset)* | Restricts who may put a **share** in an iframe to `APP_ORIGIN` plus these. Origins separated by commas or spaces; an entry that is not an origin is a startup failure rather than a silent drop. Unset = any site may frame a share, which is what a public link is for; `/a/:id` and `/w/:id` are framed by your gallery alone either way |
 | `CHROMIUM_CDP_URL` | *(unset)* | DevTools endpoint of a headless Chromium (`ws://chrome:9222`, or `https://`/`wss://` behind a TLS proxy) that server features share. Today it draws each share link's preview image from its widget. Unset = no browser, and every link preview shows the Exhibit logo card. A value that is not a `ws(s)://` or `http(s)://` URL is a startup failure (below) |
 | `BLOB_S3_BUCKET` | *(unset)* | Store artifact bodies in this S3-compatible bucket instead of on disk. Unset = filesystem under `DATA_DIR`, exactly as before (§7) |
@@ -92,28 +88,9 @@ Env vars, all optional except `AUTH_TOKEN`.
 | `ENTITLEMENTS_DEFAULT_STORAGE_BYTES` | *(unset)* | The storage ceiling for an account with no entitlement of its own, in bytes. **Required** when limits are on — the server refuses to start without it rather than boot with every account unlimited |
 | `ENTITLEMENTS_DEFAULT_PLAN` | *(unset)* | A label for accounts on that default. Display only; no limit is ever read out of a plan name |
 
-The four `PUBLIC_*` variables are read at startup and surfaced at
-`GET /api/settings/public`, which answers `{"name", "description"}` with no
-authentication when `PUBLIC_MODE_ENABLED` is on, and `404`s when it is off — an
-instance that has not opted in does not name itself to a stranger.
-
-**What turning it on actually opens.** Exactly two reads, to a request carrying
-no credential at all: `GET /api/artifacts` and `GET /api/artifacts/:id`, scoped
-to `PUBLIC_OWNER_ID`'s library. Nothing else changes. Every mutating method
-still requires the token or a session — a visitor cannot create, edit, or delete
-anything — and so does every other read, including artifact state, agent
-transcripts, tags, collections, shares, and the agent's provider key.
-
-**What a visitor does not get: your data inside the tools.** An artifact opened
-by an unauthenticated visitor renders with **no state inlined and no state
-saved** — it boots empty, and anything it stores lives only until they close the
-tab. A tool of yours that tracks runs shows a stranger an empty tracker, not
-your runs, and its gallery tile shows its empty state. This is the conservative
-default, not a per-artifact choice: publishing a library is one environment
-variable, and it should not also publish everything the library's tools hold.
-If you *want* a link that carries your data with it, that is what a share
-(`/s/:id`) is — a decision you make one artifact at a time, and it still renders
-as you see it.
+A public demo gallery is a separate site built from artifact exports
+(`GET /api/artifacts/:id/export`), not an anonymous library in the core service.
+Share links remain per-artifact capabilities.
 
 **Restricting who may frame a share (`EMBED_ORIGINS`).** A share is a public
 link, so by default any site may put one in an iframe — your landing page can

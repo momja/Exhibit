@@ -82,3 +82,7 @@ Second-order (writes vanishing silently): fixed in the render preamble, not the 
 Routes opened: GET /api/artifacts and GET /api/artifacts/:id only, resolved to PUBLIC_OWNER_ID by ownerMiddleware. /state, /widget, /transcripts, collections, tags, shares and agent routes all stay authenticated, as does every mutating method.
 
 Still open for the frontend tickets (av-eu3v/av-epnt/av-n8v5): the gallery PAGE routes sit outside the auth group and embed AUTH_TOKEN in their bootstrap script. Nothing marks a page request as a public visitor today (correctly — without an identity provider the operator and a visitor are indistinguishable there), so no page is anonymous-readable yet. Whoever builds the public page must both set the public-visitor mark AND stop emitting the token.
+
+**2026-11-16T07:14:41Z**
+
+Public mode was retired in Exh-lmor rather than completed. The public demo gallery is a separate site built from artifact exports, not an anonymous library in the core service.

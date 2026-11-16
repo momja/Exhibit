@@ -217,7 +217,7 @@ func (rd *Renderer) authorizeScope(w http.ResponseWriter, r *http.Request, id, s
 		http.Error(w, "not found", http.StatusNotFound)
 		return nil, rendertoken.Claims{}, false
 	}
-	if rd.cfg.DocumentPolicy != nil && !viewer.Anonymous {
+	if rd.cfg.DocumentPolicy != nil {
 		current, protected, err := rd.cfg.DocumentPolicy(r.Context(), viewer.ViewerID, id)
 		if err != nil {
 			http.Error(w, "connection policy is unavailable", http.StatusServiceUnavailable)
@@ -261,29 +261,8 @@ func (rd *Renderer) ServeShare(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	// The share row is the authorization (architecture.md §7), so this route
-	// carries no token and has no principal of its own. State is inlined for
-	// the artifact's owner: a share publishes the artifact *as its owner sees
-	// it*, which is what a link recipient with no account can be shown. Both
-	// principals are therefore named here explicitly (av-6axy): the owner
-	// authorizes the read and is also, on this route alone, the viewer whose
-	// rows are inlined. Leaving the viewer unset would inline nobody's — the
-	// fail-closed direction, and still the wrong document.
-	//
-	// Deliberately NOT the anonymous viewer that a public-instance visitor gets
-	// (av-wmp6), even though both are strangers with no credential. A share is
-	// a decision its owner made about one artifact; public mode is one env var
-	// over a whole library. The blast radius differs by orders of magnitude, so
-	// the defaults do too.
-	//
-	// Share routes are also the only ones whose documents any site may frame
-	// (av-q3iy), and the ones an operator can narrow with EMBED_ORIGINS — shares only,
-	// because a share is the render document that already carries neither a
-	// principal nor a credential. Config.EmbedOrigins holds the argument.
-	//
-	// It is also the one document carrying link-preview tags (av-rclm): the
-	// only render URL a person pastes into a chat, and the only one a crawler
-	// may open with no credential.
+	// The share capability authorizes this read. Inline the owner's state,
+	// as explicitly selected by the link, without issuing a viewer credential.
 	rd.serveDoc(w, r, a,
 		document{blobID: a.SourceBlobID, kind: kindArtifact, headMeta: rd.previewTags(a, shareID), publicShare: true},
 		rendertoken.Claims{OwnerID: a.OwnerID, ViewerID: a.OwnerID},
@@ -470,7 +449,7 @@ func (rd *Renderer) ServeVersion(w http.ResponseWriter, r *http.Request) {
 	// Belt to the minting site's braces, as authorize's owner check is: nothing
 	// mints a version token for anyone but the owner, and this keeps that true
 	// if a future call site gets it wrong.
-	if viewer.Anonymous || viewer.ViewerID != viewer.OwnerID {
+	if viewer.ViewerID != viewer.OwnerID {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
@@ -541,7 +520,7 @@ type document struct {
 // both principals (av-6axy). viewer.OwnerID authorized the read; it is
 // viewer.ViewerID that answers "whose state should be inlined here" — since
 // av-q0ub artifact_state is keyed by (artifact_id, user_id, key), and that is
-// the user_id — or, when the viewer is anonymous, the answer "nobody's".
+// the user_id.
 //
 // frameAncestors is who may frame *this* document — the complete set, with nil
 // meaning the app origin alone (av-6nbo, av-q3iy). It is a parameter rather
@@ -552,7 +531,7 @@ type document struct {
 func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Artifact, doc document, viewer rendertoken.Claims, frameAncestors []string) {
 	widget, versionView := doc.kind == kindWidget, doc.kind == kindVersion
 	protected := false
-	if rd.cfg.ConnectionProtected != nil && !viewer.Anonymous {
+	if rd.cfg.ConnectionProtected != nil {
 		var err error
 		protected, err = rd.cfg.ConnectionProtected(r.Context(), viewer.ViewerID, a.ID, doc.publicShare)
 		if err != nil {
@@ -608,7 +587,7 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 	}
 
 	allowed := a.NetworkAllowlist
-	if rd.cfg.NetworkOrigins != nil && !viewer.Anonymous {
+	if rd.cfg.NetworkOrigins != nil {
 		allowed, err = rd.cfg.NetworkOrigins(r.Context(), viewer.ViewerID, a.ID, allowed)
 		if err != nil {
 			http.Error(w, "connection policy is unavailable", http.StatusServiceUnavailable)
@@ -647,42 +626,13 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 	// document (old shim/state) after a redeploy or state change.
 	w.Header().Set("Cache-Control", "no-store")
 
-	// Inline the state so the shim's cache is ready before any artifact script
-	// runs (avoids the async-hydration race). Degrade to an empty cache if it
-	// can't be read — the artifact still renders.
-	//
-	// The two principals are read off different things on purpose (av-q0ub).
-	// Authorization comes from the artifact this handler already resolved, so
-	// the read stays owner-scoped without a third unscoped accessor. Selection
-	// comes from the token's viewer claim (av-6axy) — a principal of its own on
-	// the wire, defaulting to the owner when the token names none, which is
-	// every token minted today. They are equal on every route that exists, and
-	// the point of keeping them separate is that a shared artifact opened by
-	// someone else (av-7k7b) inlines *that viewer's* rows, not the owner's.
-	//
-	// An anonymous viewer (a public instance's unauthenticated visitor,
-	// av-wmp6) is that separation taken to its limit: there is no user_id to
-	// select by, so there is no state to inline. The query is skipped rather
-	// than issued and discarded — "nobody's rows" is not a row set the store
-	// should be asked for.
-	//
-	// Which rows the viewer claim selects is the artifact's answer, not this
-	// handler's (av-v991): StatePrincipal maps the token's viewer through
-	// share_state_mode, so 'shared' inlines the owner's board for everybody
-	// looking at it and 'own' inlines each viewer's own. It is the same
-	// function the write path resolves through, which is what keeps a shared
-	// artifact from being read off one set of rows and written to another.
-	//
-	// A version view is the exception to all of the above and the simplest case:
-	// its data is not anybody's live rows but the snapshot that version left
-	// behind, which the caller read in the same query as the body. It is the
-	// owner's by construction (ServeVersion refuses any other principal), so
-	// there is no viewer to select between.
+	// Select state for the verified viewer, or the owner on share routes.
+	// Historical versions use their captured state instead of current rows.
 	var state map[string]string
 	switch {
 	case versionView:
 		state = doc.state
-	case !viewer.Anonymous:
+	default:
 		s, err := rd.cfg.Store.GetState(r.Context(), store.OwnerID(a.OwnerID), a.ID,
 			a.StatePrincipal(store.ViewerID(viewer.ViewerID)))
 		if err != nil {
@@ -712,8 +662,8 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 	if !widget {
 		body = injectFavicon(body, artifacticon.DataURI(a.Tags))
 	}
-	out := injectPreamble(body, a.ID, rd.cfg.AppOrigin, state, origins, widget, viewer.Anonymous, versionView, manifest, a.VersionSeq)
-	if rd.cfg.RelayEnabled && !widget && !versionView && !viewer.Anonymous && doc.headMeta == "" {
+	out := injectPreamble(body, a.ID, rd.cfg.AppOrigin, state, origins, widget, versionView, manifest, a.VersionSeq)
+	if rd.cfg.RelayEnabled && !widget && !versionView && doc.headMeta == "" {
 		out = injectRelay(out, rd.cfg.AppOrigin, a.ID, allowed)
 	}
 	if doc.headMeta != "" {
@@ -725,7 +675,6 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 		slog.String("artifact_id", a.ID),
 		slog.Int64("owner", viewer.OwnerID),
 		slog.Int64("principal", viewer.ViewerID),
-		slog.Bool("anonymous", viewer.Anonymous),
 		slog.Bool("widget", widget),
 		slog.Bool("version", versionView),
 		slog.Int("body_bytes", len(bodyBytes)),
@@ -1128,88 +1077,12 @@ func (rd *Renderer) ServeAsset(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// shimScript is the shim injected before any artifact scripts run. It
-// intercepts the two Web Storage namespaces — localStorage, whose backing is
-// swapped to the server, and (framed only) sessionStorage, which stays in
-// memory for the life of the frame — and bridges the capabilities the sandbox
-// denies — downloads (the sandbox omits allow-downloads) and clipboard
-// read/write (opaque-origin permissions policy) — to the host frame, where
-// they run only after user approval, and gates the ones it denies that the
-// host does not re-grant (camera/microphone, av-mv3k; location, av-f446).
-// Framed-only, it also
-// (av-02xs) shims
-// fetch() of data: URLs into locally constructed Responses — WebKit refuses
-// large data: fetches from an opaque-origin sandbox, which Safari artifacts
-// otherwise hang on.
-//
-// A canvas-leak mitigation (willReadFrequently + CSS overrides behind a state
-// flag) was trialed here in av-02xs deploy 1 and removed: it did NOT stop the
-// Chromium per-frame putImageData leak (verified live at 7.3GB->10GB with the
-// mitigation active), and it degraded pixel-art rendering for no benefit.
-//
-// State also travels the other way (av-v991). The inlined cache is a snapshot,
-// and on an artifact whose share_state_mode is 'shared' somebody else is
-// writing the same rows; the host frame refetches and posts the current map
-// back in, which the shim applies to the cache in place and reports as real
-// 'storage' events. Same channel as persistState, reversed — so there is no
-// endpoint on this origin, no connect-src source and no credential in this
-// document, and the render surface stays read-only.
-//
-// WIDGET (av-fafu) narrows the same shim for a widget render. A widget is a
-// *view* of an artifact: it reads the artifact's state and shows one fact from
-// it. So in widget mode writes stop at the in-memory cache — the write-through
-// to the host is short-circuited — and bridgeScript below is not spliced in at
-// all. Both are subtractions from the one preamble rather than a second shim,
-// which is what makes "a widget's authority is a strict subset of its
-// artifact's" a property you can read off this file instead of a claim two
-// files have to keep agreeing on. A widget that calls setItem still behaves
-// like Storage within its own frame — it just cannot outlive the render.
-//
-// ANONYMOUS (av-wmp6) narrows it the same way for a viewer with no identity:
-// the public instance's unauthenticated visitor. Their document already inlines
-// no state — there is no principal whose rows to inline — and this is the same
-// fact from the write side. It belongs here, in the preamble, rather than in
-// the host frame for two reasons. It is one fact about one document, and
-// keeping both halves of it in one template is what makes "no principal means
-// no state, in or out" readable in a single place instead of inferred from two
-// files. And the host's bridge is shared machinery serving every frame on the
-// page: teaching it to drop messages per frame would mean tracking each frame's
-// principal, and its failure mode is the silent one this ticket exists to
-// remove (mutating routes stay authenticated, so the write would 401 into a
-// swallowed .catch and the tool would look like it saved). Not persisting is
-// honest; persisting into a void is not. The API's auth remains the
-// enforcement — this only stops the frame from lying to the visitor about it.
-//
-// VERSION_VIEW (a version view) is the third narrowing and the one where the API's
-// auth is NOT the enforcement, which is why it cannot lean on the argument
-// above. The host that frames a version is the owner's own page, authenticated
-// as the owner, so a write that reached it would be performed; nothing about
-// the document's principal would refuse it. What keeps a version view from
-// persisting anything is therefore three independent things, each of which is
-// enough alone for the writes this shim makes: this flag (the shim does not
-// post them), the host (it treats a version frame as a different element from
-// its artifact frame, and only listens to the latter — which also covers a
-// message the artifact forges itself rather than sending through this shim),
-// and the response's own CSP sandbox (the document has no real origin, however
-// it is loaded). The state it reads is the snapshot the render surface inlined,
-// and a setItem still behaves like Storage within the frame — it just cannot
-// outlive it.
-//
-// It does not drop those writes silently, though. A tool that saves quietly
-// looks exactly like one that has, so the first write the view refuses is
-// reported to the host (warnUnsaved below), which says so in its own chrome. It
-// is the one message from a version frame that the host listens for, and it is
-// not a write: it names no key and carries no value. The host hears it through a
-// listener of its own whose only effect is revealing a fixed sentence, not
-// through the bridges that serve the artifact frame, so a notice forged by hand
-// is no worse than the notice appearing.
 const shimTemplate = `<script>
 (function() {
   var ARTIFACT_ID = %q;
   var VERSION_SEQ = %d;
   var API_ORIGIN = %q;
   var WIDGET = %t;
-  var ANONYMOUS = %t;
   var VERSION_VIEW = %t;
 
   // The artifact's origin decisions, inlined rather than fetched for the same
@@ -1241,7 +1114,6 @@ const shimTemplate = `<script>
   // clear has no key at all, so it gets its own op rather than a sentinel key.
   function persistState(op, key, value) {
     if (WIDGET) return;                    // a widget renders state, never edits it
-    if (ANONYMOUS) return;                 // no principal to persist for; the API would refuse
     if (VERSION_VIEW) {                    // a version view shows data it must never change,
       warnUnsaved();                       //   and says so, rather than looking as if it saved
       return;
@@ -1388,9 +1260,7 @@ const shimTemplate = `<script>
     window.dispatchEvent(ev);
   }
 
-  // Framed and with a principal: the two conditions under which a resync can
-  // arrive at all. An anonymous render (av-wmp6) inlines no state and persists
-  // none, so there is nothing to keep in step; top-level there is no host.
+  // Resync requires a frame: top-level there is no host.
   // Widgets do get this — receiving an update is a read, and reading state to
   // show one fact from it is the whole of what a widget does.
   //
@@ -1398,7 +1268,7 @@ const shimTemplate = `<script>
   // snapshot of how the data *was*, and a resync is the host posting in how it
   // is *now*. Applying one would overwrite the very thing the view exists to
   // show, so it is refused here whatever a host might send.
-  if (window.parent !== window && !ANONYMOUS && !VERSION_VIEW) {
+  if (window.parent !== window && !VERSION_VIEW) {
     // Whether anything in this frame is listening for 'storage'. The shim can
     // guarantee getItem returns fresh data; it cannot re-render an artifact
     // that read storage once at startup and never looked again. So the host is
@@ -2288,106 +2158,102 @@ const bridgeScript = `
     // prompt cannot live in this frame: the artifact owns this DOM and could
     // draw a convincing forgery of it.
     //
-    // ANONYMOUS is the one case that stays silent. A public instance's
-    // unauthenticated visitor cannot write a decision — the API would refuse
-    // it — so asking them would be the same lie persistState refuses to tell.
-    if (!ANONYMOUS) {
-      // Directives whose sources the per-artifact allowlist actually builds
-      // (buildCSP above). A violation outside this set is real but not
-      // actionable: an <iframe> blocked by default-src 'none' would still be
-      // blocked after the user approved its origin, because no allowlist entry
-      // reaches frame-src. Prompting there would promise a fix that does not
-      // arrive. The -elem/-attr variants are here because that is what browsers
-      // report as the effective directive even when the policy only spells out
-      // the parent (a blocked script element reports 'script-src-elem').
-      var GOVERNED = {
-        'script-src': 1, 'script-src-elem': 1, 'script-src-attr': 1,
-        'worker-src': 1, 'style-src': 1, 'style-src-elem': 1,
-        'style-src-attr': 1, 'img-src': 1, 'font-src': 1, 'media-src': 1,
-        'connect-src': 1, 'form-action': 1
-      };
-      // Seeded with the refused origins, then joined by every origin as it is
-      // handled. One membership test covers both jobs: an origin the user said
-      // "don't ask again" to never surfaces, and an origin in a retry loop is
-      // handled once per load rather than once per attempt.
-      var silencedOrigins = {};
-      (BLOCKED_ORIGINS || []).forEach(function(o) { silencedOrigins[o] = true; });
 
-      // The origins the CSP was built from. A violation naming one of these is
-      // the redirect case below — never a prompt, because the answer is
-      // already yes.
-      var allowedOrigins = {};
-      (ALLOWED_ORIGINS || []).forEach(function(o) { allowedOrigins[o] = true; });
+    // Directives whose sources the per-artifact allowlist actually builds
+    // (buildCSP above). A violation outside this set is real but not
+    // actionable: an <iframe> blocked by default-src 'none' would still be
+    // blocked after the user approved its origin, because no allowlist entry
+    // reaches frame-src. Prompting there would promise a fix that does not
+    // arrive. The -elem/-attr variants are here because that is what browsers
+    // report as the effective directive even when the policy only spells out
+    // the parent (a blocked script element reports 'script-src-elem').
+    var GOVERNED = {
+      'script-src': 1, 'script-src-elem': 1, 'script-src-attr': 1,
+      'worker-src': 1, 'style-src': 1, 'style-src-elem': 1,
+      'style-src-attr': 1, 'img-src': 1, 'font-src': 1, 'media-src': 1,
+      'connect-src': 1, 'form-action': 1
+    };
+    // Seeded with the refused origins, then joined by every origin as it is
+    // handled. One membership test covers both jobs: an origin the user said
+    // "don't ask again" to never surfaces, and an origin in a retry loop is
+    // handled once per load rather than once per attempt.
+    var silencedOrigins = {};
+    (BLOCKED_ORIGINS || []).forEach(function(o) { silencedOrigins[o] = true; });
 
-      // Reports are buffered until the host announces itself, the same problem
-      // and the same handshake as the capability diagnostic above (av-yvtb).
-      // The violation that matters most is the one an artifact triggers on its
-      // first line — an <img src> in the initial markup — and that fires before
-      // the host page has finished parsing, let alone attached its listener. A
-      // one-shot postMessage there is simply lost, which is exactly the kind of
-      // intermittent "sometimes there is no prompt" this feature cannot afford.
+    // The origins the CSP was built from. A violation naming one of these is
+    // the redirect case below — never a prompt, because the answer is
+    // already yes.
+    var allowedOrigins = {};
+    (ALLOWED_ORIGINS || []).forEach(function(o) { allowedOrigins[o] = true; });
+
+    // Reports are buffered until the host announces itself, the same problem
+    // and the same handshake as the capability diagnostic above (av-yvtb).
+    // The violation that matters most is the one an artifact triggers on its
+    // first line — an <img src> in the initial markup — and that fires before
+    // the host page has finished parsing, let alone attached its listener. A
+    // one-shot postMessage there is simply lost, which is exactly the kind of
+    // intermittent "sometimes there is no prompt" this feature cannot afford.
+    //
+    // Buffer-then-flush rather than the capability warning's post-and-replay:
+    // that one is idempotent on the host (it reveals one banner however many
+    // times it hears), where a duplicated report here would queue a second
+    // prompt for an origin the user just answered.
+    var hostReady = false;
+    var queuedReports = [];
+    var sendReport = function(msg) {
+      if (hostReady) window.parent.postMessage(msg, API_ORIGIN);
+      else queuedReports.push(msg);
+    };
+    window.addEventListener('message', function(e) {
+      // Only our own host may release the queue; the frame's origin is opaque
+      // so identity is e.source, as with every other message the shim trusts.
+      if (e.origin !== API_ORIGIN || e.source !== window.parent) return;
+      if (!e.data || e.data.__avHostReady !== true || hostReady) return;
+      hostReady = true;
+      var pending = queuedReports;
+      queuedReports = [];
+      pending.forEach(function(m) { window.parent.postMessage(m, API_ORIGIN); });
+    });
+
+    document.addEventListener('securitypolicyviolation', function(e) {
+      // violatedDirective historically carried the whole source expression
+      // ("script-src 'unsafe-inline'"); effectiveDirective is the modern,
+      // narrower name. Take whichever names a governed directive.
+      var effective = String(e.effectiveDirective || '').split(' ')[0];
+      var violated = String(e.violatedDirective || '').split(' ')[0];
+      var directive = GOVERNED[effective] ? effective : (GOVERNED[violated] ? violated : '');
+      if (!directive) return;
+      // Inline/eval violations report a keyword ('inline', 'eval'), not a
+      // URL, and are policy we set deliberately. Only a real origin is
+      // something the user can decide about.
+      var uri = String(e.blockedURI || '');
+      if (uri.indexOf('http://') !== 0 && uri.indexOf('https://') !== 0) return;
+      var origin;
+      try { origin = new URL(uri).origin; } catch (err) { return; }
+      if (silencedOrigins[origin]) return;
+      silencedOrigins[origin] = true;
+
+      // The origin is already on the allowlist and the request was blocked
+      // anyway, which means it did not end where it started: the fetch was
+      // redirected to some other origin, and CSP re-checks every hop. The
+      // report deliberately names the *pre-redirect* URL — the spec strips
+      // the destination so a policy cannot be used to probe where a
+      // cross-origin redirect leads — so neither this frame nor the host can
+      // learn the origin that actually needs approving.
       //
-      // Buffer-then-flush rather than the capability warning's post-and-replay:
-      // that one is idempotent on the host (it reveals one banner however many
-      // times it hears), where a duplicated report here would queue a second
-      // prompt for an origin the user just answered.
-      var hostReady = false;
-      var queuedReports = [];
-      var sendReport = function(msg) {
-        if (hostReady) window.parent.postMessage(msg, API_ORIGIN);
-        else queuedReports.push(msg);
-      };
-      window.addEventListener('message', function(e) {
-        // Only our own host may release the queue; the frame's origin is opaque
-        // so identity is e.source, as with every other message the shim trusts.
-        if (e.origin !== API_ORIGIN || e.source !== window.parent) return;
-        if (!e.data || e.data.__avHostReady !== true || hostReady) return;
-        hostReady = true;
-        var pending = queuedReports;
-        queuedReports = [];
-        pending.forEach(function(m) { window.parent.postMessage(m, API_ORIGIN); });
-      });
-
-      document.addEventListener('securitypolicyviolation', function(e) {
-        // violatedDirective historically carried the whole source expression
-        // ("script-src 'unsafe-inline'"); effectiveDirective is the modern,
-        // narrower name. Take whichever names a governed directive.
-        var effective = String(e.effectiveDirective || '').split(' ')[0];
-        var violated = String(e.violatedDirective || '').split(' ')[0];
-        var directive = GOVERNED[effective] ? effective : (GOVERNED[violated] ? violated : '');
-        if (!directive) return;
-        // Inline/eval violations report a keyword ('inline', 'eval'), not a
-        // URL, and are policy we set deliberately. Only a real origin is
-        // something the user can decide about.
-        var uri = String(e.blockedURI || '');
-        if (uri.indexOf('http://') !== 0 && uri.indexOf('https://') !== 0) return;
-        var origin;
-        try { origin = new URL(uri).origin; } catch (err) { return; }
-        if (silencedOrigins[origin]) return;
-        silencedOrigins[origin] = true;
-
-        // The origin is already on the allowlist and the request was blocked
-        // anyway, which means it did not end where it started: the fetch was
-        // redirected to some other origin, and CSP re-checks every hop. The
-        // report deliberately names the *pre-redirect* URL — the spec strips
-        // the destination so a policy cannot be used to probe where a
-        // cross-origin redirect leads — so neither this frame nor the host can
-        // learn the origin that actually needs approving.
-        //
-        // Prompting here is therefore worse than useless: it offers to grant a
-        // permission that is already granted, the request fails identically on
-        // the next load, and the prompt returns for as long as the artifact
-        // keeps asking. That is the loop this branch exists to break. It goes
-        // to the capability banner instead, which is the channel for "this
-        // failed in a way you cannot fix from here" (av-yvtb) — a slug and a
-        // copy entry, no new message type.
-        if (allowedOrigins[origin]) {
-          if (typeof warnCapability === 'function') warnCapability('redirected-origin', uri);
-          return;
-        }
-        sendReport({ __avNetwork: true, artifactId: ARTIFACT_ID, origin: origin, directive: directive });
-      });
-    }
+      // Prompting here is therefore worse than useless: it offers to grant a
+      // permission that is already granted, the request fails identically on
+      // the next load, and the prompt returns for as long as the artifact
+      // keeps asking. That is the loop this branch exists to break. It goes
+      // to the capability banner instead, which is the channel for "this
+      // failed in a way you cannot fix from here" (av-yvtb) — a slug and a
+      // copy entry, no new message type.
+      if (allowedOrigins[origin]) {
+        if (typeof warnCapability === 'function') warnCapability('redirected-origin', uri);
+        return;
+      }
+      sendReport({ __avNetwork: true, artifactId: ARTIFACT_ID, origin: origin, directive: directive });
+    });
   }`
 
 // widgetBaseCSS is one of two things a widget render adds that an artifact
@@ -2466,30 +2332,7 @@ const widgetHealthScript = `<script>
 })();
 </script>`
 
-// injectPreamble inserts the render preamble as the first element inside <head>
-// (prepended to the document if it has no <head>). The artifact's current state
-// is inlined into the shim so the cache is populated before any script runs.
-//
-// widget selects the narrower preamble for a widget render (av-fafu): the same
-// storage shim with writes stopping at the cache, no capability bridges, no
-// element picker, plus the widget base stylesheet.
-//
-// anonymous marks a render for a viewer with no identity (av-wmp6). Callers
-// pass a nil state with it — there is no principal to have any — and the shim
-// stops writing through, so the frame's storage lives and dies with the frame.
-//
-// versionView marks a version view: the state passed with it is the snapshot that
-// version left behind, and the shim does not write through (see shimTemplate).
-// Unlike the two above it narrows the shim and nothing else — the bridges, the
-// picker and the rest are the full preamble's, because a version is shown
-// running, and what a person does in it works within its own frame.
-//
-// origins is the artifact's origin decisions (av-kmwj), inlined so the network
-// permission reporter can tell an undecided origin from one it must not offer
-// to fix. It sits beside state because it is the same kind of thing: per-render
-// data the shim must hold before the artifact's first line runs, not a mode
-// flag.
-func injectPreamble(body, artifactID, appOrigin string, state map[string]string, origins originPolicy, widget, anonymous, versionView bool, assetManifest map[string]string, versionSeq ...int) string {
+func injectPreamble(body, artifactID, appOrigin string, state map[string]string, origins originPolicy, widget, versionView bool, assetManifest map[string]string, versionSeq ...int) string {
 	if state == nil {
 		state = map[string]string{}
 	}
@@ -2527,7 +2370,7 @@ func injectPreamble(body, artifactID, appOrigin string, state map[string]string,
 	if len(versionSeq) > 0 {
 		version = versionSeq[0]
 	}
-	shim := fmt.Sprintf(shimTemplate, artifactID, version, appOrigin, widget, anonymous, versionView, allowedJSON, blockedJSON, stateJSON, bridges)
+	shim := fmt.Sprintf(shimTemplate, artifactID, version, appOrigin, widget, versionView, allowedJSON, blockedJSON, stateJSON, bridges)
 	if widget {
 		// No snippet picker: it exists so the user can point at an element in
 		// the *artifact* preview and hand it to the agent. A widget frame is

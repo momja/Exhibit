@@ -198,7 +198,7 @@ func TestAdminRefusalDoesNotRevealWhetherTheAccountExists(t *testing.T) {
 // still attached to r. The cookie is left on r throughout regardless, and
 // deliberately unused by the agent/public cases, to show it carries no
 // authority once the context says otherwise.
-func TestNeitherAgentSessionsNorPublicVisitorsAreAdmins(t *testing.T) {
+func TestAgentSessionsAreNotAdmins(t *testing.T) {
 	in := newAdminInstance(t)
 	r := httptest.NewRequest(http.MethodGet, "/api/admin/users", nil)
 	r.AddCookie(in.adminCookie) // an admin's own cookie, deliberately
@@ -208,10 +208,6 @@ func TestNeitherAgentSessionsNorPublicVisitorsAreAdmins(t *testing.T) {
 		Principal{OwnerID: in.admin.ID, Kind: PrincipalAgentGrant, Grant: grant}))
 	assert.False(t, in.ro.adminRequest(withAgent),
 		"an agent session credential must never carry admin authority, whatever else the request holds")
-
-	withPublic := r.WithContext(withPrincipal(r.Context(), Principal{Kind: PrincipalPublic, ReadOnly: true}))
-	assert.False(t, in.ro.adminRequest(withPublic),
-		"publishing a library says nothing about who administers the instance (av-wmp6)")
 
 	// The control: the same cookie, resolved as an ordinary session Principal
 	// (as sessionGate/authMiddleware would have done), is an admin.

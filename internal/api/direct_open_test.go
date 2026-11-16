@@ -56,10 +56,6 @@ func TestDirectOpenPromptForEveryViewer(t *testing.T) {
 		other, err := renderDetailPage(a, urls, creds, nil)
 		require.NoError(t, err)
 		assert.Contains(t, other, `data-viewer="43"`)
-		urls.anonymous = true
-		anonymous, err := renderDetailPage(a, urls, creds, nil)
-		require.NoError(t, err)
-		assert.Contains(t, anonymous, `data-viewer="anonymous"`)
 	}
 }
 

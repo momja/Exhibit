@@ -112,3 +112,9 @@ correct the docs and the four tickets.
 5. `docs/` no longer describes a feature that does not exist, and states where the public demo lives instead.
 6. The eight tickets above carry the retirement note; Exh-fkla still meets its own ACs without a public principal.
 
+
+## Notes
+
+**2026-11-16T07:14:44Z**
+
+Deleted the flag/API bypass instead of using the freeze escape hatch: no server-side reader was identified. Preserved envBool in env.go and artifactsSubPath for agentScopeAllows. Legacy anonymous render claim is rejected (including signed tokens) instead of silently becoming an owner render. Auth-disabled no-token/no-login pass-through remains the existing separate policy; 401 regression covers token-only and login-enabled configurations, including retired env values. This is a literal every-configuration AC limitation for independent review, not a retained public-mode API.

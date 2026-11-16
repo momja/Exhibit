@@ -18,3 +18,9 @@ Add persisted Bazarre draft isolation for all imports and update candidates. Dra
 
 Anonymous public gallery/API/search/detail/render/widget/share/export cannot read drafts; guest grants and prior tokens cannot bypass; owner can remix/test; explicit Keep in gallery persists visibility without deleting parent; duplicate draft remains private; tests cover public mode and all changed surfaces.
 
+
+## Notes
+
+**2026-11-16T07:14:43Z**
+
+Coordination check after Exh-lmor: public-mode list/search/detail filtering and public-mode tests in the description/AC refer to a retired principal. Library reads remain owner/grant-scoped; unauthenticated reads require credentials. Draft isolation still applies to guest grants, share/export/widget/render paths and old/forged tokens. No dependency or scope change needed; interpret the public-mode wording as superseded.

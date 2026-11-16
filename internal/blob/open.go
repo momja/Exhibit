@@ -25,7 +25,7 @@ var s3EnvVars = []string{
 // Absent means filesystem. With none of BLOB_S3_* set there is no bucket, no
 // credential to supply and no behavioural difference from before this existed —
 // a self-hoster gets no new required configuration, which is the shape every
-// optional feature in this service takes (OIDC_ISSUER, PUBLIC_MODE_ENABLED).
+// optional feature in this service takes (OIDC_ISSUER, SINGLE_LISTENER).
 //
 // But absent has to mean *entirely* absent. BLOB_S3_BUCKET alone is the
 // selector, and reading a missing bucket as "filesystem, then" would let an

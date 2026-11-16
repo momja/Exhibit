@@ -82,33 +82,11 @@ const (
 	// Absent means "the owner", which is what keeps the common case — the two
 	// being the same person — at exactly two claims.
 	claimViewer = "p"
-	// claimAnonymous marks a document rendered for nobody in particular — a
-	// visitor reading a public instance's library with no credential of their
-	// own (av-wmp6).
-	//
-	// It is a claim rather than a query parameter because it *subtracts*
-	// authority: the render surface inlines no state for an anonymous viewer
-	// and its shim persists none. A parameter would be a privilege the viewer
-	// could drop by editing the URL; inside the MAC it is the issuer's
-	// statement, not the bearer's.
-	//
-	// It is its own key rather than claimViewer=0 for the same reason. A zero
-	// principal is one careless `if viewerID == 0 { viewerID = ownerID }` away
-	// from silently promoting a nobody to the owner, and that failure is
-	// invisible from outside: the document renders, just with somebody's
-	// private state in it. A key that has to be *absent* to mean "not
-	// anonymous" has no falsy value to be confused about.
-	claimAnonymous = "a"
+
 	// claimShare is the anonymous link id this render happens under. Absent means the
 	// render is not a share.
 	claimShare = "s"
 )
-
-// anonymousValue is the only value claimAnonymous may carry. A boolean claim
-// with one accepted spelling has exactly one byte string, and nothing has to
-// decide what `a=0` or `a=false` mean — they are not tokens this package
-// issues, so they do not verify.
-const anonymousValue = "1"
 
 var (
 	// ErrInvalid covers every "this is not a token I issued for this artifact"
@@ -140,11 +118,6 @@ var (
 // own state inside it. Collapsing them back into one field is not a
 // simplification, it is a cross-tenant read waiting for the next route.
 //
-// Anonymous is the answer neither principal can express: a viewer with no
-// identity at all. It is not ViewerID == 0 — see claimAnonymous — and a token
-// carrying both it and a principal is rejected rather than resolved, because a
-// claim that subtracts authority must not be negotiable with one that adds it.
-//
 // The zero value is deliberately useless: it authorizes nothing (owner 0 owns
 // no artifact) and selects nobody's rows. The direction that matters is which
 // way each end fails. A caller that hands Claims straight to the render surface
@@ -161,9 +134,8 @@ type Claims struct {
 	// OwnerID when the token carries no principal of its own, so no reader has
 	// to know which spelling was on the wire.
 	ViewerID int64
-	// Anonymous marks a viewer with no identity — a public instance's
-	// unauthenticated visitor. The artifact renders; nobody's state does. It
-	// leaves ViewerID zero, because there is no principal to name.
+	// Anonymous is retained for rejecting obsolete claim sets at the mint boundary.
+	// It is never emitted or accepted on the wire.
 	Anonymous bool
 	// ShareID is an anonymous share_links.id, never a grant (Exh-grj9).
 	// Reserved for av-7k7b: no production caller sets or reads it yet.
@@ -247,23 +219,11 @@ func (s *Signer) MintViewer(artifactID string, ownerID, viewerID int64) string {
 	return mustMint(s.mint(artifactID, Claims{OwnerID: ownerID, ViewerID: viewerID}, TTL))
 }
 
-// MintAnonymous returns a token that renders ownerID's artifact for a viewer
-// with no identity — the public-instance case (av-wmp6). The document it
-// authorizes carries the artifact and no state at all.
-func (s *Signer) MintAnonymous(artifactID string, ownerID int64) string {
-	return s.MintAnonymousFor(artifactID, ownerID, TTL)
-}
-
 // MintFor is Mint with an explicit lifetime: for a caller whose horizon is
 // known to be shorter than TTL, and for tests, which need an already-expired
 // token (a non-positive d) without waiting minutes to get one.
 func (s *Signer) MintFor(artifactID string, ownerID int64, d time.Duration) string {
 	return mustMint(s.mint(artifactID, Claims{OwnerID: ownerID}, d))
-}
-
-// MintAnonymousFor is MintAnonymous with an explicit lifetime.
-func (s *Signer) MintAnonymousFor(artifactID string, ownerID int64, d time.Duration) string {
-	return mustMint(s.mint(artifactID, Claims{OwnerID: ownerID, Anonymous: true}, d))
 }
 
 // MintClaims returns a token carrying an arbitrary claim set, for what the
@@ -347,23 +307,21 @@ func (s *Signer) Verify(tok, artifactID string) (Claims, error) {
 // The field order is fixed rather than incidental, and that is the point: one
 // claim set has exactly one byte string, so two tokens are the same token if
 // and only if they are the same bytes. It is written out as a sequence in the
-// order the claim set is documented (o, e, p, a, s) rather than sorted at
+// order the claim set is documented (o, e, p, s) rather than sorted at
 // runtime — the property wanted is a canonical order, and a sort is a second
 // place the order could quietly change.
 //
 // The two rules a caller can actually violate are checked here, at the single
 // point every mint path passes through:
 //
-//   - A principal beside the anonymous claim is refused, not resolved. It is
-//     the contradiction parseClaims rejects, refused at the end that could
-//     still ask what was meant.
+//   - Retired anonymous claim sets are refused.
 //   - No value may contain '.' or '=', the two bytes the encoding is made of.
 //     Enforced rather than assumed: the share id is the one free-form value,
 //     and a share id with a dot in it would mint a token that parses as two
 //     claims, one of them unknown — so the credential would simply stop
 //     working, at the far end, for reasons nothing logs.
 func encodeClaims(c Claims, exp int64) (string, error) {
-	if c.Anonymous && c.ViewerID != 0 {
+	if c.Anonymous {
 		return "", ErrUnmintable
 	}
 	if c.ShareID != "" && !validValue(c.ShareID) {
@@ -381,9 +339,6 @@ func encodeClaims(c Claims, exp int64) (string, error) {
 	if c.ViewerID != 0 && c.ViewerID != c.OwnerID {
 		fields = append(fields, claimViewer+"="+strconv.FormatInt(c.ViewerID, 10))
 	}
-	if c.Anonymous {
-		fields = append(fields, claimAnonymous+"="+anonymousValue)
-	}
 	if c.ShareID != "" {
 		fields = append(fields, claimShare+"="+c.ShareID)
 	}
@@ -394,7 +349,7 @@ func encodeClaims(c Claims, exp int64) (string, error) {
 // expiry. It answers ok=false for anything it cannot read *in full* — a signed
 // message this version half understands is one it must not act on half of.
 //
-// Three rejections carry the weight:
+// Two rejections carry the weight:
 //
 //   - A duplicate key. `o=1.o=2` must not mean whatever a last-wins reader
 //     would make of it; the two obvious readers disagree, so neither is
@@ -402,9 +357,6 @@ func encodeClaims(c Claims, exp int64) (string, error) {
 //   - An unknown key. Fail closed, unlike JWT's ignore-what-you-don't-know: a
 //     future claim that subtracts authority would otherwise be dropped here
 //     and the subtraction would silently disappear.
-//   - The anonymous claim beside a principal, in either order. Rejected rather
-//     than resolved, because there is no reading of "for nobody, as user 7"
-//     safe enough to guess at.
 func parseClaims(s string) (Claims, int64, bool) {
 	var (
 		c          Claims
@@ -443,11 +395,6 @@ func parseClaims(s string) (Claims, int64, bool) {
 		case claimViewer:
 			viewer, err = strconv.ParseInt(value, 10, 64)
 			haveViewer = true
-		case claimAnonymous:
-			if value != anonymousValue {
-				return Claims{}, 0, false
-			}
-			c.Anonymous = true
 		case claimShare:
 			c.ShareID = value
 		default:
@@ -460,20 +407,9 @@ func parseClaims(s string) (Claims, int64, bool) {
 	if !haveOwner || !haveExpiry {
 		return Claims{}, 0, false
 	}
-	if c.Anonymous && haveViewer {
-		return Claims{}, 0, false
-	}
-	// "Absent means the owner", applied once, here, so no reader downstream
-	// has to know the claim was optional — and so nobody writes the
-	// zero-is-really-the-owner branch claimAnonymous exists to avoid. An
-	// anonymous token keeps ViewerID at zero: it names no principal, and
-	// filling one in would invent exactly what the claim removed.
-	switch {
-	case c.Anonymous:
-		c.ViewerID = 0
-	case haveViewer:
+	if haveViewer {
 		c.ViewerID = viewer
-	default:
+	} else {
 		c.ViewerID = c.OwnerID
 	}
 	return c, exp, true

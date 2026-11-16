@@ -294,29 +294,6 @@ func TestAgentGrantLabelsAndNoLoginInstance(t *testing.T) {
 	assert.Equal(t, 401, doWithToken(t, open, "GET", "/api/artifacts", "exgrant_invalid", nil).Code)
 }
 
-func TestAgentGrantPublicVisitorCannotManageCredentials(t *testing.T) {
-	r := newPublicModeRouter(t, PublicMode{Enabled: true, OwnerID: defaultOwnerID})
-	r.cfg.MCPURL = "https://agents.example.test/mcp"
-	issueAgentGrant(t, r, "Operator connection")
-	for _, path := range []string{"/settings", "/partials/agent-grants"} {
-		w := doJSON(t, r, "GET", path, nil)
-		require.Equal(t, 200, w.Code)
-		assert.Contains(t, w.Body.String(), "Operator connection")
-	}
-	for _, tc := range []struct{ method, path string }{{"GET", "/api/agent-grants"}, {"POST", "/api/agent-grants"}, {"DELETE", "/api/agent-grants/missing"}} {
-		w := doWithCookie(t, r, tc.method, tc.path, nil, map[string]string{"label": "visitor"})
-		assert.Equal(t, 401, w.Code, w.Body.String())
-	}
-	w := doWithCookie(t, r, "GET", "/partials/agent-grants", nil, nil)
-	assert.NotEqual(t, 200, w.Code)
-	for _, path := range []string{"/settings", "/profile"} {
-		w := doWithCookie(t, r, "GET", path, nil, nil)
-		assert.Equal(t, 401, w.Code)
-		assert.NotContains(t, w.Body.String(), "Connected agents")
-		assert.NotContains(t, w.Body.String(), "secret")
-	}
-}
-
 func TestAgentGrantsPanelIsTheOwners(t *testing.T) {
 	r := newTestRouter(t)
 	r.cfg.MCPURL = "https://agents.example.test/mcp"
@@ -372,7 +349,6 @@ func TestRevokedLibraryGrantNeverFallsBackToPublicOrNoLoginAccess(t *testing.T) 
 			if !public {
 				cfg.AuthToken = ""
 			}
-			cfg.Public = PublicMode{Enabled: public, OwnerID: defaultOwnerID}
 			r := NewRouter(cfg)
 			issued := issueAgentGrant(t, r, "operator")
 			require.Equal(t, 204, doJSON(t, r, "DELETE", "/api/agent-grants/"+issued.Grant.ID, nil).Code)

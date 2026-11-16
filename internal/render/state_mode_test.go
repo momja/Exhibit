@@ -137,24 +137,6 @@ func TestASharedArtifactsWidgetRendersTheSameBoard(t *testing.T) {
 // keeps it that way. 'shared' says whose rows a viewer is on; it does not say
 // that a stranger with no principal becomes a viewer, and reading it that way
 // would publish the owner's data to every visitor of a public instance.
-func TestSharedModeInlinesNothingForAnAnonymousViewer(t *testing.T) {
-	rd, st := newModedRenderer(t, "abc", "<html><head></head><body>hi</body></html>", store.ShareStateShared)
-	ctx := context.Background()
-
-	if err := st.SetState(ctx, 1, "abc", 1, "position", "MY-PRIVATE-BOARD"); err != nil {
-		t.Fatal(err)
-	}
-
-	tok := testTokens.MintAnonymous("abc", 1)
-	w := httptest.NewRecorder()
-	rd.ServeArtifact(w, rawRequest("/a/abc?"+rendertoken.Param+"="+tok, "abc"))
-	if w.Code != 200 {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
-	}
-	if strings.Contains(w.Body.String(), "MY-PRIVATE-BOARD") {
-		t.Fatalf("a viewer with no principal is on no board: %s", w.Body.String())
-	}
-}
 
 // The clear() fix (av-v991), asserted on the shipped bytes rather than trusted.
 // `store = {}` rebinds the local and leaves the resync writing into an object
@@ -185,7 +167,7 @@ func TestTheResyncReceiverIsShippedInTheRenderedDocument(t *testing.T) {
 		"__avStateSynced",
 		"function applyStateSync(",
 		"new StorageEvent('storage'",
-		"if (window.parent !== window && !ANONYMOUS && !VERSION_VIEW) {",
+		"if (window.parent !== window && !VERSION_VIEW) {",
 	} {
 		if !strings.Contains(doc, want) {
 			t.Fatalf("the render document must carry %q: %s", want, doc)

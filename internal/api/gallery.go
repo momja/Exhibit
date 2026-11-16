@@ -52,18 +52,8 @@ type renderURLs struct {
 	// recipient's own rows are what renders. ownedBy is the only way to make
 	// them differ, so "these URLs point at somebody else's artifact" is a
 	// statement a call site has to make out loud.
-	ownerID  int64
-	viewerID int64
-	// anonymous mints tokens that render the owner's artifact for nobody: no
-	// state inlined, no write-through (av-wmp6). It is set when the request
-	// being served is a public instance's unauthenticated visitor.
-	//
-	// The choice lives here, at the one place render URLs are minted, so that
-	// "a public visitor's frames carry no state" follows from the request
-	// rather than from every call site remembering to ask. A page that learns
-	// to serve public visitors (av-eu3v, av-epnt) inherits the property by
-	// marking the request; it cannot get the token flavour wrong separately.
-	anonymous                   bool
+	ownerID                     int64
+	viewerID                    int64
 	navigationWithoutCredential bool
 	// The callback is request-scoped like the minted viewer credential. A
 	// failed policy read selects the protective wrapper, never an open frame.
@@ -81,8 +71,7 @@ func (ro *Router) renderURLs(r *http.Request) renderURLs {
 		signer:                      ro.tokens,
 		ownerID:                     viewer,
 		viewerID:                    viewer,
-		anonymous:                   publicVisitor(r.Context()),
-		navigationWithoutCredential: publicVisitor(r.Context()) || (!ro.loginEnabled() && ro.cfg.AuthToken == ""),
+		navigationWithoutCredential: !ro.loginEnabled() && ro.cfg.AuthToken == "",
 		widgetProtected: func(artifact string) (bool, error) {
 			return ro.hasConnectionDataPolicies(r.Context(), viewer, artifact)
 		},
@@ -109,9 +98,6 @@ func (u renderURLs) ownedBy(ownerID int64) renderURLs {
 // mint signs one render-origin credential for id, as whoever this page is being
 // rendered for.
 func (u renderURLs) mint(id string) string {
-	if u.anonymous {
-		return u.signer.MintAnonymous(id, u.ownerID)
-	}
 	// MintViewer with the two principals equal encodes no principal at all, so
 	// this is byte-identical to Mint for every page that renders its own
 	// library — there is no owner/recipient branch here to get wrong.
@@ -135,7 +121,7 @@ func (u renderURLs) artifact(id string) string {
 }
 
 func (u renderURLs) policyPath(id string) (string, error) {
-	if u.documentPolicy == nil || u.anonymous {
+	if u.documentPolicy == nil {
 		return "", nil
 	}
 	policy, _, err := u.documentPolicy(id)
@@ -247,22 +233,8 @@ func (ro *Router) galleryNew(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, page)
 }
 
-// galleryDetail serves the viewer page — the one app-origin page a non-owner
-// can reach (av-awr4).
-//
-// A grant is not a link: it puts no secret in the URL, so a recipient opens the
-// artifact at the same /artifacts/:id the owner does, and there is no second
-// address and no second template. What differs is what the page *offers*, and
-// that is one narrowing (forArtifactOwnedBy) rather than a parallel render
-// path — the same shape public mode already uses to suppress edit controls from
-// request context.
-//
-// The read goes through GetArtifactReadableBy, the deny-by-default accessor
-// av-lrae added beside the owner-scoped one. It is the only route that calls it
-// today, and deliberately: widening the owner predicate itself would have
-// handed a recipient the DELETE and the body rewrite along with the read. A
-// viewer with no grant gets (nil, nil) — the 404 page, indistinguishable from
-// an artifact that never existed.
+// galleryDetail admits owners and grant recipients through the viewer accessor,
+// then narrows page controls according to artifact ownership.
 func (ro *Router) galleryDetail(w http.ResponseWriter, r *http.Request) {
 	id := urlParamID(r, "artifactID")
 	viewerID := ownerIDFromCtx(r.Context())
@@ -988,7 +960,7 @@ func newWidgetView(a *store.Artifact, urls renderURLs) widgetView {
 	}
 	if a.WidgetBlobID != "" {
 		v.URL = urls.widget(a.ID)
-		if urls.widgetProtected != nil && !urls.anonymous {
+		if urls.widgetProtected != nil {
 			protected, err := urls.widgetProtected(a.ID)
 			v.Wrapped = protected || err != nil
 		}
@@ -1129,9 +1101,6 @@ func renderDetailPage(a *store.Artifact, urls renderURLs, creds pageCredentials,
 		policy = policies[0]
 	}
 	viewerPreference := strconv.FormatInt(urls.viewerID, 10)
-	if urls.anonymous {
-		viewerPreference = "anonymous"
-	}
 	header := artifactHeader(a, creds.ReadOnly, share != nil)
 	header.Floating.RelayEnabled = creds.RelayEnabled
 	header.Floating.ConnectionProtected = policy.Protected
@@ -1141,7 +1110,7 @@ func renderDetailPage(a *store.Artifact, urls renderURLs, creds pageCredentials,
 		Share:               share,
 		RelayPolicy:         policy.Token,
 		ConnectionProtected: policy.Protected,
-		PublicNavigation:    (urls.anonymous || urls.navigationWithoutCredential) && !policy.Protected,
+		PublicNavigation:    urls.navigationWithoutCredential && !policy.Protected,
 		ID:                  a.ID,
 		Title:               a.Title,
 		FrameURL:            urls.artifact(a.ID),

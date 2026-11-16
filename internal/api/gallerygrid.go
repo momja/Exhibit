@@ -150,28 +150,26 @@ func (ro *Router) loadGalleryGrid(r *http.Request, gallery galleryDefinition, of
 			}
 		}
 	}
-	if !publicVisitor(r.Context()) {
-		ids := make([]string, len(cards))
-		for i := range cards {
-			ids[i] = cards[i].ArtifactID
+	ids := make([]string, len(cards))
+	for i := range cards {
+		ids[i] = cards[i].ArtifactID
+	}
+	preferences, err := ro.cfg.Store.ArtifactPreferences(r.Context(), store.ViewerID(ownerIDFromCtx(r.Context())), ids)
+	if err != nil {
+		return grid, err
+	}
+	for i := range cards {
+		card := &cards[i]
+		card.Starred = preferences[card.ArtifactID].Starred
+		if card.Actions.ID == "" {
+			card.Actions = galleryCardActions(card.ArtifactID, card.Title)
+			card.Actions.Items = nil
 		}
-		preferences, err := ro.cfg.Store.ArtifactPreferences(r.Context(), store.ViewerID(ownerIDFromCtx(r.Context())), ids)
-		if err != nil {
-			return grid, err
+		label, icon, value := "Star", "ph-star", "true"
+		if card.Starred {
+			label, icon, value = "Unstar", "ph-star", "false"
 		}
-		for i := range cards {
-			card := &cards[i]
-			card.Starred = preferences[card.ArtifactID].Starred
-			if card.Actions.ID == "" {
-				card.Actions = galleryCardActions(card.ArtifactID, card.Title)
-				card.Actions.Items = nil
-			}
-			label, icon, value := "Star", "ph-star", "true"
-			if card.Starred {
-				label, icon, value = "Unstar", "ph-star", "false"
-			}
-			card.Actions.Items = append([]actionMenuItem{menuEvent(label, icon, "exhibit:star", map[string]string{"artifactID": card.ArtifactID, "starred": value})}, card.Actions.Items...)
-		}
+		card.Actions.Items = append([]actionMenuItem{menuEvent(label, icon, "exhibit:star", map[string]string{"artifactID": card.ArtifactID, "starred": value})}, card.Actions.Items...)
 	}
 	grid.Cards = cards
 	return grid, nil

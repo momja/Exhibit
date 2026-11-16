@@ -28,3 +28,7 @@ Added a fifth knob the ticket did not name: PUBLIC_OWNER_ID (int, default 1).
 This ticket predates av-ep8k, which made owner_id a real query predicate — every artifact read now filters on an owner. 'The library' is therefore no longer a well-defined phrase on an instance that may hold several, and a public instance has to say whose library it publishes. Naming the owner is config, which is exactly this ticket's job; resolving an unauthenticated request TO that owner is av-wmp6's, and is deliberately not implemented here. av-wmp6 inherits a named owner rather than having to invent one.
 
 Also decided here: GET /api/settings/public 404s when public mode is off, rather than returning empty strings. An instance that has not opted into being public should not name itself to an unauthenticated stranger, and 200-with-empty-strings is already the meaningful answer for 'public, but the operator set no name' — reusing it for 'not public' would collapse two states into one body.
+
+**2026-11-16T07:14:41Z**
+
+Public mode was retired in Exh-lmor rather than completed. The public demo gallery is a separate site built from artifact exports, not an anonymous library in the core service.

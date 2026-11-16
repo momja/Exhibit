@@ -56,7 +56,7 @@ func (ro *Router) mayManageAgentGrants(r *http.Request) bool {
 	case PrincipalServiceToken:
 		return !ro.loginEnabled()
 	case PrincipalNone:
-		return !ro.loginEnabled() && (!ro.cfg.Public.Enabled || ro.matchesServiceToken(bearerToken(r)))
+		return !ro.loginEnabled()
 	default:
 		return false
 	}

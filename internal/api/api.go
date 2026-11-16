@@ -108,12 +108,6 @@ type Config struct {
 	// SessionTTL bounds how long a login lasts; zero means
 	// DefaultSessionTTL. Logout revokes sooner, server-side.
 	SessionTTL time.Duration
-	// Public opts the instance into serving a read-only gallery to anonymous
-	// visitors (av-4ac9). The zero value — a private instance — is the
-	// default, and carrying the configuration here rather than in a table is
-	// what lets the server-rendered gallery consult it with no per-request
-	// database round trip. See publicmode.go.
-	Public PublicMode
 	// Entitlements decides whether per-owner limits are in use on this
 	// instance, and what an account with none of its own gets (av-2p8z). The
 	// zero value is limits switched off: every owner resolves to unlimited,
@@ -566,11 +560,6 @@ func (ro *Router) setupRoutes() {
 		ro.Post(oauthTokenPath, ro.exchangeOAuthCode)
 	}
 
-	// The instance's public identity (av-4ac9). Registered here, outside the
-	// authenticated API group, because a visitor with no credential is
-	// precisely who needs it; a private instance answers 404 rather than
-	// naming itself. See publicmode.go for that choice.
-	ro.Get("/api/settings/public", ro.publicSettings)
 	ro.Get("/api/connections/oauth/github/callback", ro.connectionOAuthCallback)
 
 	// The agent SSE event stream. EventSource can't set headers, so the

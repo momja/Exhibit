@@ -36,7 +36,7 @@ const API_ORIGIN = "https://app.test";
 // the surrounding <script> tags. Go raw strings carry no escapes, so the first
 // backtick after the opener closes the literal; the format verbs are then
 // filled in the order render.go's Sprintf fills them.
-function shimSource({ cache = {}, anonymous = false, widget = false, versionView = false } = {}) {
+function shimSource({ cache = {}, widget = false, versionView = false } = {}) {
   const go = readFileSync(RENDER_GO, "utf8");
   const opener = "const shimTemplate = `";
   const start = go.indexOf(opener);
@@ -50,7 +50,6 @@ function shimSource({ cache = {}, anonymous = false, widget = false, versionView
     "1",                          // %d VERSION_SEQ
     JSON.stringify(API_ORIGIN),    // %q API_ORIGIN
     String(widget),                // %t WIDGET
-    String(anonymous),             // %t ANONYMOUS
     String(versionView),           // %t VERSION_VIEW
     "[]",                          // %s ALLOWED_ORIGINS
     "[]",                          // %s BLOCKED_ORIGINS
@@ -260,17 +259,6 @@ test("a sync from the wrong origin or the wrong window is ignored", async () => 
     "halves of its identity are checkable — and both are checked");
 });
 
-test("an anonymous render accepts no resync at all", async () => {
-  const { storage, fromHost, posted } = loadShim({ cache: {}, anonymous: true });
-
-  await fromHost(sync({ note: "somebody's" }));
-
-  assert.equal(storage.getItem("note"), null,
-    "a viewer with no principal has no rows to keep in step; their frame is " +
-    "rendered with none inlined and persists none either");
-  assert.deepEqual(posted.filter((m) => m.__avStateSynced), []);
-});
-
 // The honest ceiling, written down as a test so nobody reads liveness as
 // collaboration. Two people appending to one JSON blob under one key still lose
 // an item: the shim delivers the other person's whole value, and whichever
@@ -381,11 +369,11 @@ test("a version view with no host frame has nobody to tell", () => {
   assert.deepEqual(posted, []);
 });
 
-// The notice is the version view's alone. A widget and an anonymous render also
-// refuse writes, but for reasons the person looking at them has no decision to
+// The notice is the version view's alone. A widget also
+// refuses writes, but for reasons the person looking at them has no decision to
 // make about, and the ordinary render writes through.
 test("only a version view sends the notice", () => {
-  for (const opts of [{ widget: true }, { anonymous: true }, {}]) {
+  for (const opts of [{ widget: true }, {}]) {
     const { storage, posted } = loadShim({ cache: { score: "10" }, ...opts });
     storage.setItem("score", "11");
     assert.deepEqual(posted.filter((m) => m.__avVersionUnsaved), [], JSON.stringify(opts));

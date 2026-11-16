@@ -40,24 +40,7 @@ const defaultOwnerID int64 = 1
 // it further to the allowed API operations and, for Pi, a single artifact.
 // Agent principals never reach another owner’s artifacts, even via a share.
 //
-// Requests carrying none of the three are rejected, with two exceptions, both
-// below the three credentials so neither can shadow one:
-//
-//   - Public mode (av-wmp6): a public instance answers a *read* of its
-//     published library to a request that resolved no credential. GET only, and
-//     only the routes publicReadable names — never a mutation, whatever the
-//     configuration says.
-//   - No token configured: app auth is off entirely. An agent credential is
-//     still scoped, because containment is not the same question as
-//     authentication.
-//
-// The public branch sits above that last one deliberately. Both let an
-// anonymous request through, but they disagree about *whose* library it reads:
-// the pass-through leaves the owner unresolved (ownerMiddleware's default,
-// owner 1) while public mode names an owner explicitly. On an instance that is
-// both open and public with PUBLIC_OWNER_ID set to anything but 1, the
-// pass-through's answer is the wrong library — so the branch that knows the
-// owner is asked first.
+// Requests without credentials pass through only when authentication is disabled.
 func (ro *Router) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if ownerID, ok := ro.sessionUser(r); ok {
@@ -103,12 +86,6 @@ func (ro *Router) authMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		if ro.publicRead(r) {
-			ctx := withPrincipal(r.Context(), Principal{OwnerID: ro.cfg.Public.OwnerID, Kind: PrincipalPublic, ReadOnly: true})
-			next.ServeHTTP(w, r.WithContext(ctx))
-			return
-		}
-
 		if ro.cfg.AuthToken == "" && !ro.loginEnabled() {
 			next.ServeHTTP(w, r)
 			return
@@ -117,63 +94,6 @@ func (ro *Router) authMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// publicRead reports whether r is the one thing a public instance answers
-// without a credential: an anonymous read of the library it publishes.
-//
-// It is reached only after all three credentials have failed to resolve, so
-// "anonymous" here means "presented nothing this instance recognizes" — a
-// request holding a valid token or session took an earlier branch and is
-// attributed to whoever it named, public mode or not.
-func (ro *Router) publicRead(r *http.Request) bool {
-	return ro.cfg.Public.Enabled && publicReadable(r.Method, r.URL.EscapedPath())
-}
-
-// publicReadable is the entire reach of an anonymous visitor on a public
-// instance, written as a deny-by-default allowlist for the same reason
-// agentScopeAllows is: a route added to the API later must not become public
-// because nobody thought about it.
-//
-// It is exactly the library and one artifact in it:
-//
-//	GET /api/artifacts        — the published library
-//	GET /api/artifacts/{id}   — one artifact's metadata and source
-//
-// Method first, and only GET: no configuration makes a mutation anonymous, so
-// that check is the outermost one rather than a property of the paths listed.
-//
-// Everything deeper is refused, and the sub-resources are why the rule is a
-// prefix *exclusion* rather than a prefix match. `/state` is the owner's own
-// data — the thing publishing a library must not publish (the render surface
-// makes the same call for the same reason, av-wmp6). `/transcripts` is the
-// owner's conversations with an agent. `/widget` is source, not a tile; the
-// tile a public card shows comes from the render origin under its own token.
-// The rest of the API — collections, tags, shares, agent, the BYO provider key
-// — is never reached at all, and a public *page* needing tag names renders them
-// server-side rather than opening this door wider.
-func publicReadable(method, escapedPath string) bool {
-	if method != http.MethodGet {
-		return false
-	}
-	rest, ok := artifactsSubPath(escapedPath)
-	if !ok {
-		return false
-	}
-	// "" and "/" are the list route; "/{id}" is one artifact. A second
-	// separator means a sub-resource, which is not public.
-	return !strings.Contains(strings.TrimPrefix(rest, "/"), "/")
-}
-
-// artifactsSubPath is the one piece publicReadable and agentScopeAllows
-// genuinely share: both are deny-by-default allowlists over paths under
-// /api/artifacts, and both need the same first step — strip that prefix, and
-// refuse anything where what follows isn't empty or its own path segment (a
-// route that merely starts with the same characters, e.g.
-// /api/artifactsomething, is not under it). What each does with the
-// remainder differs by design — one asks "is this the list or one artifact,
-// read-only", the other "is this the session's own artifact, and one of its
-// allowlisted sub-resources" — so only this shared prefix step is factored
-// out; unifying the two policies themselves would blur two different
-// questions into one, harder-to-audit table.
 func artifactsSubPath(escapedPath string) (rest string, ok bool) {
 	rest, ok = strings.CutPrefix(escapedPath, "/api/artifacts")
 	if !ok || (rest != "" && !strings.HasPrefix(rest, "/")) {
@@ -366,22 +286,6 @@ func agentScopeAllows(scope agentscope.Scope, method, escapedPath string) bool {
 	return false
 }
 
-// ownerMiddleware supplies the single-user default owner for requests no
-// upstream credential check attributed to somebody. It never overwrites a
-// Principal already resolved upstream, which is what lets it sit under both
-// credential paths: authMiddleware for the API group, sessionGate for the
-// page group (av-syug).
-//
-// It used to also special-case a public visitor (av-wmp6) — resolving
-// PUBLIC_OWNER_ID here rather than in authMiddleware, on the theory that
-// doing so kept "may this request proceed" and "whose library does it read"
-// in the two middlewares that already asked those questions. av-o5cf
-// collapsed that: authMiddleware's public branch now resolves the owner too,
-// as one complete Principal, so this middleware is a pure backstop — the
-// single-user default, and nothing else — with no Kind of its own to decide.
-//
-// Every route that reads library data runs this, so a handler that reaches
-// ownerIDFromCtx always finds an owner that was decided rather than assumed.
 func (ro *Router) ownerMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if principalResolved(r.Context()) {

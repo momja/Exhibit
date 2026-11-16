@@ -84,60 +84,6 @@ func TestAVersionScopeIsNotAnArtifactID(t *testing.T) {
 	}
 }
 
-// av-wmp6. The anonymous claim is what a public instance mints for a visitor
-// with no credential, and the render surface subtracts state on the strength of
-// it — so it has to survive the round trip intact, and the owner beside it must
-// still be the owner (it is what authorizes the read).
-func TestAnonymousTokenVerifiesAndSaysSo(t *testing.T) {
-	s := NewRandomSigner()
-
-	c, err := s.Verify(s.MintAnonymous("artifact-1", 7), "artifact-1")
-	if err != nil {
-		t.Fatalf("a freshly minted anonymous token must verify: %v", err)
-	}
-	if c.OwnerID != 7 {
-		t.Fatalf("owner = %d, want 7", c.OwnerID)
-	}
-	if !c.Anonymous {
-		t.Fatal("an anonymous token must verify as anonymous")
-	}
-	// And it names no principal at all. The owner beside it authorizes the
-	// read; it must never become the viewer, or "render for nobody" would
-	// inline the owner's private state into a stranger's document.
-	if c.ViewerID != 0 {
-		t.Fatalf("viewer = %d, want nobody (0) on an anonymous token", c.ViewerID)
-	}
-}
-
-// The claim subtracts authority, so the interesting forgery is removing it: a
-// visitor who could turn their own anonymous token into an identified one would
-// have the owner's state inlined into their document. It is inside the MAC, so
-// neither adding nor removing it survives — and the plain token likewise cannot
-// be aged into an anonymous one, which keeps the two flavours from being
-// interchangeable in either direction.
-func TestTheAnonymousClaimCannotBeAddedOrRemoved(t *testing.T) {
-	s := NewRandomSigner()
-
-	anon := s.MintAnonymous("artifact-1", 1)
-	// Strip the claim, keeping the tag: "o=1.e=X.a=1.tag" -> "o=1.e=X.tag".
-	parts := strings.Split(anon, ".")
-	if len(parts) != 4 || parts[2] != claimAnonymous+"="+anonymousValue {
-		t.Fatalf("unexpected anonymous token shape %q", anon)
-	}
-	promoted := parts[0] + "." + parts[1] + "." + parts[3]
-	if _, err := s.Verify(promoted, "artifact-1"); err == nil {
-		t.Fatal("stripping the anonymous claim verified")
-	}
-
-	// And the other direction: appending it to an identified token.
-	plain := s.Mint("artifact-1", 1)
-	p := strings.Split(plain, ".")
-	demoted := p[0] + "." + p[1] + "." + claimAnonymous + "=" + anonymousValue + "." + p[2]
-	if _, err := s.Verify(demoted, "artifact-1"); err == nil {
-		t.Fatal("appending the anonymous claim verified")
-	}
-}
-
 // signed tags an arbitrary claims string, producing a token that genuinely is
 // this signer's. It is how the parser gets tested at all: a hand-edited token
 // dies at the MAC, so the only way to ask "what would Verify do with these
@@ -162,7 +108,7 @@ func futureExpiry() string {
 // A claim this version cannot read is one it must not act on half of — that is
 // the through-line. Without it a future version's token would verify here as
 // an ordinary identified one, which for any claim that subtracts authority (as
-// the anonymous one does) means the subtraction silently disappears.
+// the retired anonymous one did) means the subtraction silently disappears.
 func TestMalformedClaimSetsAreRejected(t *testing.T) {
 	s := NewRandomSigner()
 	exp := futureExpiry()
@@ -180,7 +126,8 @@ func TestMalformedClaimSetsAreRejected(t *testing.T) {
 		// Fail closed on the unknown, unlike JWT.
 		{"unknown key", "o=1." + exp + ".z=1"},
 		{"unknown key beside known ones", "o=1." + exp + ".p=7.w=1"},
-		// "For nobody, as user 7" has no safe reading, in either order.
+		// Legacy anonymous tokens are refused, alone or beside a principal.
+		{"retired anonymous claim", "o=1." + exp + ".a=1"},
 		{"anonymous and a principal", "o=1." + exp + ".p=7.a=1"},
 		{"a principal and anonymous", "o=1." + exp + ".a=1.p=7"},
 		// A value carrying a separator cannot have survived the split, so it
@@ -197,8 +144,7 @@ func TestMalformedClaimSetsAreRejected(t *testing.T) {
 		{"empty key", "o=1." + exp + ".=1"},
 		{"trailing separator", "o=1." + exp + "."},
 		{"non-numeric owner", "o=one." + exp},
-		// The anonymous claim has exactly one spelling, so nothing has to
-		// decide what a falsy one means.
+		// Every value of the retired claim is rejected.
 		{"anonymous with another value", "o=1." + exp + ".a=0"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -459,6 +405,7 @@ func TestMintRefusesClaimSetsVerifyWouldReject(t *testing.T) {
 		claims Claims
 	}{
 		// The a/p contradiction, refused where it is still a caller's mistake.
+		{"retired anonymous claim", Claims{OwnerID: 1, Anonymous: true}},
 		{"anonymous with a principal", Claims{OwnerID: 1, ViewerID: 7, Anonymous: true}},
 		// The share id is the one free-form value, so it is the one that can
 		// carry a separator into the encoding.
