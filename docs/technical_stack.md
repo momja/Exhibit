@@ -340,6 +340,19 @@ hand-rolled HTML escaping the old string-concatenated pages needed.)
 CodeMirror and the renderer iframe are islands of client JS inside these
 server-rendered pages.
 
+**The logo is two artworks** (Exh-bv8l). `internal/api/logo.svg` is the flat mark:
+the frame alone in a tight viewBox, with no wire, nail or shadow, and no ids. It is
+the header, sign-in, Clerk and admin mark, the app and render-origin favicon, and the
+source `web/pwa-icons` rasterizes into the PWA, maskable and link-preview icons (those
+PNGs are generated into `internal/api/assets/icons` and never committed; the maskable
+safe zone is computed from the viewBox). `internal/api/logo-hanging.svg` adds the nail,
+wire and a single down-right shadow, and only the 404 hero uses it, as an `<img>` data
+URI. `TestHangingLogoGeometry` (`internal/api/logo_test.go`) verifies that its nail, wire apex and frame
+centre share one axis and that the wire's legs land symmetrically. The wire and nail
+lighten under `prefers-color-scheme: dark`; their paint is a presentation attribute,
+because an inline `style` would outrank that rule (a test pins it). Per-artifact favicons
+(`internal/artifacticon`) are separate.
+
 Artifact viewer tabs and direct render documents share a generated SVG favicon
 from `internal/artifacticon`: an asymmetric Mondrian grid inspired by the logo,
 with up to three tag-colored panels in gallery tag order. The panels have similar
@@ -536,6 +549,23 @@ keyboard and a landscape tablet is wide and still touched. The standing rule whe
 adding a control: size it from the token, never a literal `px` — a hardcoded size
 opts it out of the bump silently, and the symptom only shows up on a phone.
 
+**Palette (Exh-plvh).** Light is a paper ground (`#f1e9d6`) and dark is dusk
+(`#14182e`). The UI accent, `--brand-blue`, is ink (cream in the dark) and fills
+every button and accent mark; the logo's pigments live in `internal/color` and
+no longer feed it. Inline text links alone use `--color-link` (slate, light blue
+in the dark): an anchor inside a sentence or note, never a button, banner
+action or text-only control, which stay ink. Slate sits only ~1.9:1 from ink, so
+colour is never the cue: every `--color-link` consumer keeps its underline and
+takes `--color-link-hover` on hover. Text-only controls with no icon or button
+shape underline on `:hover` and `:focus-visible`. Panels, dialogs, the sign-in
+box and Clerk float on `--shadow-panel`; `--shadow-card` is the tiles' ring.
+Primary hover is a perceptibly lighter ink (darker cream), and a disabled
+accent button is repainted at 3:1 or better rather than faded. Danger, warning and success
+are separate hues: success is a green kept out of the accent's role.
+`internal/api/palette_contrast_test.go` parses `tokens.css` and holds every
+text/surface pair to WCAG AA in both modes, so a changed value fails without a
+browser. Clerk panels take the same tokens through `clerk-appearance.js`.
+
 **Dark mode follows the system (av-xie4).** There is no in-app toggle: every
 app-origin page reads `prefers-color-scheme`. `tokens.css` declares
 `color-scheme: light dark` on `:root`, so native controls, scrollbars and form
@@ -543,9 +573,9 @@ fields follow, and it holds the whole dark palette in one
 `@media (prefers-color-scheme: dark)` block that redefines the same tokens. A
 page sheet takes every color from a token and never writes a literal, which is
 what makes a new component dark-ready for free; a color the palette lacks is a
-new token with a value in both places. In the dark the accent is a light blue
-with dark text on its fills (`--color-on-accent`), because no single blue
-reads both as link text on a dark panel and under white button text. The
+new token with a value in both places. In the dark the accent is cream
+with dark text on its fills (`--color-on-accent`), mirroring ink with cream
+text in the light. The
 CodeMirror bundle swaps One Dark in and out through a `Compartment` on the
 media query's `change` event, so the editor follows a live setting change
 without losing its buffer. The render origin is untouched: an artifact owns
