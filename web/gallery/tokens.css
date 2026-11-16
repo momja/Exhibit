@@ -125,9 +125,11 @@
 	 * and CodeMirror stay on their own monospace stacks. */
 	--font-sans:"Schibsted Grotesk",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
 	--font-display:Fraunces,Georgia,serif;
-	/* The Fraunces headline setting; the page title only (Exh-odyv). The
-	 * request in fontsHead pins exactly these values, so change both together. */
-	--font-headline-variation:"SOFT" 100,"WONK" 0,"opsz" 72;
+	/* Fraunces is requested as ONE pinned static instance (opsz 72, wght 600,
+	 * SOFT 100, WONK 0) in the fontsHead partial, the single source for those
+	 * settings. A static instance has no variation axes, so font-variation-
+	 * settings cannot change it. Any other Fraunces weight or setting means
+	 * widening that request. */
 
 	/* Every form control sizes itself from one of these, never a literal px:
 	 * iOS zooms in on focusing a field under 16px and does not zoom back out

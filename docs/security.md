@@ -262,12 +262,19 @@ Schibsted Grotesk and Fraunces from `fonts.googleapis.com` (stylesheet) and
 `fonts.gstatic.com` (files), so those hosts see the visitor's IP and
 User-Agent. The app origin sets no `style-src`, `font-src` or `default-src`
 policy: its only `Content-Security-Policy` headers restrict framing
-(`frame-src`, `frame-ancestors`), so no policy change was made or is needed.
-**If an app-wide CSP is ever added, it must allow those two hosts for
-`style-src` and `font-src`.** The render origin is untouched: artifact CSPs, the
-widget wrapper and share documents never name the font hosts
-(`TestBuildCSPNeverNamesGoogleFontHosts`), and the partial is never emitted on
-the render surface. `TestAppPageCSPDoesNotBlockGoogleFonts` guards the app side.
+(`frame-src` on the detail and agent pages when relay is on, `frame-ancestors`
+on OAuth consent), so no policy change was made or is needed. **If an app-wide
+CSP is ever added, it must allow those two hosts for `style-src` and
+`font-src`.** The render origin is untouched: artifact CSPs, the widget wrapper
+and share documents never name the font hosts. What the tests guarantee:
+`TestAppOriginPagesLoadBrandFonts` checks that every app-origin page, the
+sign-in, admin, connections, Clerk and OAuth pages included, carries the font
+links; `TestAppFramingCSPLeavesGoogleFontsAlone` checks that the framing CSPs
+that exist are non-empty, keep their framing directives and name no style,
+font or default source; `TestBuildCSPNeverNamesGoogleFontHosts` checks that an
+artifact CSP built from a real allowlist never names the font hosts. They do
+not check CSPs on pages that carry none, and they do not stop a future
+app-wide CSP from blocking fonts; that is this paragraph's job.
 
 ### 1.4 The app origin's session: `SameSite=Lax` is the CSRF control
 

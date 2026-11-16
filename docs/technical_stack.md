@@ -564,7 +564,11 @@ and the repo, and a missing font is a cosmetic failure, not a functional one,
 because `--font-sans` falls back to `system-ui` and `--font-display` to
 Georgia. Only the axes in use are requested: Schibsted Grotesk weights 400-800
 (the weights the gallery CSS uses) and Fraunces pinned to opsz 72, wght 600,
-SOFT 100, WONK 0. If the app's CSS starts using another weight, widen the
+SOFT 100, WONK 0. Because every Fraunces axis is pinned, Google serves a
+static instance with no variation axes: `font-variation-settings` cannot
+change it, and the `fontsHead` URL is the single source for those settings. Any
+other Fraunces weight or setting means widening that request. `.font-headline`
+sets the family, weight 600 and `font-synthesis:none`. If the app's CSS starts using another weight, widen the
 request in `fontsHead`. The app origin sets no style or font CSP, so no policy
 change was needed; the render origin, artifact CSP and widget documents never
 name the font hosts. CodeMirror and code stay monospace.
