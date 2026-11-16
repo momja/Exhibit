@@ -28,6 +28,8 @@ func TestManifestServesValidJSON(t *testing.T) {
 	assert.Equal(t, "Exhibit", m.Name)
 	assert.Equal(t, "standalone", m.Display)
 	assert.Equal(t, "/", m.StartURL)
+	assert.Equal(t, "#f1e9d6", m.ThemeColor, "theme follows the paper ground, not the logo blue")
+	assert.Equal(t, "#f1e9d6", m.BackgroundColor)
 	require.Len(t, m.Icons, 3)
 	for _, icon := range m.Icons {
 		assert.Regexp(t, `^/assets/icons/`, icon.Src)
