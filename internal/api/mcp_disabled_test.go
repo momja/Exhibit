@@ -148,7 +148,7 @@ func TestEnabledMCPPanelOffersRemoteConnectionConfiguration(t *testing.T) {
 		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 		page := w.Body.String()
 		assert.Contains(t, page, `data-mcp-url="`+r.cfg.MCPURL+`"`)
-		for _, id := range []string{"agent-grant-form", "agent-grant-token", "agent-grant-copy", "agent-grant-remote-command", "agent-grant-remote-config"} {
+		for _, id := range []string{"agent-grant-form", "agent-grant-token", "agent-grant-token-copy", "agent-grant-remote-command", "agent-grant-remote-config"} {
 			assert.Contains(t, page, `id="`+id+`"`)
 		}
 		assert.Contains(t, page, "Claude Code")

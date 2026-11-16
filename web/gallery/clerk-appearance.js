@@ -37,7 +37,7 @@ export const clerkAppearance = {
   elements: {
     navbarButtonIcon__account: phosphorIcon('user-circle'),
     navbarButtonIcon__security: phosphorIcon('shield-check'),
-    userButtonPopoverActionButtonIcon__manageAccount: phosphorIcon('gear'),
+    userButtonPopoverActionButtonIcon__manageAccount: phosphorIcon('user-gear'),
     userButtonPopoverActionButtonIcon__signOut: phosphorIcon('sign-out'),
     userButtonPopoverActionButtonIcon__signOutAll: phosphorIcon('sign-out'),
     userButtonPopoverActionButtonIcon__addAccount: phosphorIcon('plus'),

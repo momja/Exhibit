@@ -585,3 +585,16 @@ input[type=checkbox]:disabled{opacity:.55;cursor:not-allowed}
 .form-help,.modal-check small{text-wrap:pretty}
 
 @media(max-width:767px){.capability-popover-manage{min-height:44px}}
+
+/* Single-line read-only text with an inset clipboard action. */
+.copy-field{margin-top:var(--space-4);min-width:0}
+.copy-field-label{display:block;margin-bottom:var(--space-2);font-size:0.8125rem;font-weight:600}
+.copy-field-box{position:relative}
+.copy-field-input{width:100%;min-width:0;padding-right:48px;font-family:monospace;font-size:0.8125rem}
+.copy-field-action{position:absolute;right:1px;top:1px;bottom:1px;width:42px;display:flex;align-items:center;justify-content:center;border:0;border-radius:var(--radius-sm);background:transparent;color:var(--color-ink-soft);cursor:pointer;font-size:1.125rem}
+.copy-field-action:hover{color:var(--color-ink);background:var(--color-ground)}
+.copy-field-action:focus-visible{outline:2px solid var(--color-accent);outline-offset:-3px}
+.copy-field-action:disabled{cursor:wait}
+.copy-field-status{margin:0;font-size:0.8125rem;color:var(--color-ink-soft)}
+.copy-field-status:not(:empty){margin-top:var(--space-2)}
+@media(max-width:600px){.copy-field-input{min-height:46px}.copy-field-action{width:44px}.copy-field-input{padding-right:50px}}

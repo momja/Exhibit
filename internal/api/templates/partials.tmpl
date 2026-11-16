@@ -337,10 +337,7 @@
       <span class="spacer">Anyone with the link can open this artifact<small id="share-link-permissions">Visitors can view your saved data but cannot change it, in either data mode.</small></span>
     </label>
     {{if .Shares.Link}}
-    <div class="share-link-row">
-      <input type="text" id="share-link-url" class="field" readonly value="{{.Shares.Link.URL}}" aria-label="Public link">
-      <button type="button" class="btn btn-sm btn-sec" id="share-link-copy"><i class="ph ph-copy"></i> Copy</button>
-    </div>
+    {{template "copyField" .PublicLinkField}}
     {{/* Rotation earns its own control: a leaked link wants replacing, and
          toggling off then on gets there while leaving the user unsure it
          worked. One step, and it says outright what it costs. */}}
@@ -354,10 +351,7 @@
     {{if .WidgetEmbed}}
     <details class="state-how-it-works" id="share-widget-details">
       <summary><i class="ph ph-caret-right state-how-closed" aria-hidden="true"></i><i class="ph ph-caret-down state-how-open" aria-hidden="true"></i> Embed widget</summary>
-    <div class="share-link-row">
-      <input type="text" id="share-widget-embed" class="field" readonly value="{{.WidgetEmbed}}" aria-label="Shared widget embed code">
-      <button type="button" class="btn btn-sm btn-sec" id="share-widget-copy"><i class="ph ph-copy"></i> Copy</button>
-    </div>
+    {{template "copyField" .WidgetEmbedField}}
     <p class="form-help">A read-only card widget showing this artifact’s saved data.</p>
     </details>
     {{end}}

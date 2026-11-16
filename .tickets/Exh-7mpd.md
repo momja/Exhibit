@@ -1,6 +1,6 @@
 ---
 id: Exh-7mpd
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-16T06:03:50Z
@@ -15,4 +15,3 @@ Use a self-hosted Phosphor user-gear icon for Manage account, retaining gear for
 ## Acceptance Criteria
 
 Manage account displays user-gear; Settings retains gear; browser evidence verifies distinct icons.
-

@@ -888,6 +888,18 @@ type sharePanelView struct {
 	WidgetEmbed string
 }
 
+func (view sharePanelView) PublicLinkField() copyFieldView {
+	value := ""
+	if view.Shares.Link != nil {
+		value = view.Shares.Link.URL
+	}
+	return copyFieldView{ID: "share-link-url", Label: "Public link", CopyLabel: "Copy public link", Value: value, HideLabel: true}
+}
+
+func (view sharePanelView) WidgetEmbedField() copyFieldView {
+	return copyFieldView{ID: "share-widget-embed", Label: "Shared widget embed code", CopyLabel: "Copy widget embed code", Value: view.WidgetEmbed, HideLabel: true}
+}
+
 // shareBadgeView is the gallery card's sharing marker (av-6xjd, designed on
 // av-v991's 2026-08-06 note). Since av-uvc6 it renders inside the card's
 // capability cluster: Icon is a glyph in the trigger, and Label and Detail

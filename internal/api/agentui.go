@@ -58,7 +58,8 @@ type agentPageData struct {
 // Widget is the artifact's gallery tile (av-fafu), shown as a strip above the
 // live preview so a set_widget call lands somewhere visible — and so the
 // default tile is visible too, which is what "this artifact has no widget yet"
-// looks like. It carries the same stamp for the same reason.
+// looks like. It carries its own stamp for the same reason; widget-only swaps
+// leave the artifact frame and its stamp untouched.
 type agentPreviewData struct {
 	ID                  string
 	HasArtifact         bool
