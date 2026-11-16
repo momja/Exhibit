@@ -67,7 +67,8 @@ a.btn{text-decoration:none}
 
 /* --- ingest feedback: status line, scan result, snapshot report --------- */
 #status{margin-top:var(--space-4);font-size:0.8125rem;color:var(--color-ink-mid)}
-#status a{color:var(--color-link)}
+#status a{color:var(--color-link);text-decoration:underline}
+#status a:hover{color:var(--color-link-hover)}
 #scan-result{margin-top:var(--space-4);background:var(--color-subtle);border:1px solid var(--color-hairline);border-radius:var(--radius-md);padding:var(--space-5);font-size:0.8125rem;display:none}
 .scan-note{color:var(--color-muted);margin:var(--space-1) 0 var(--space-3)}
 .scan-actions{display:flex;gap:var(--space-3);margin-top:var(--space-4)}

@@ -36,17 +36,19 @@
 
 	/* brand / accent */
 	--brand-blue:#1f2a1c;
-	--brand-blue-hover:#000;
+	--brand-blue-hover:#3f503a;
 	--color-accent:var(--brand-blue);
 	--color-on-accent:#fbf7ec;            /* text and icons on an accent fill */
-	--color-accent-disabled:#bdb6a0;   /* a disabled accent button's fill */
-	--color-on-accent-disabled:#fbf7ec;
+	--color-accent-disabled:#d9d2bb;   /* a disabled accent button's fill */
+	--color-on-accent-disabled:var(--color-ink-mid);
 	--color-accent-tint:#e6e0cf;       /* selected/suggested surfaces */
 	--color-accent-tint-border:#c6bea6;
 	--color-accent-tint-strong:#dcd5c1;
 	--color-accent-tint-ink:#1f2a1c;
-	/* Inline text links only (Exh-plvh). Slate from the logo's blue; buttons and
-	 * other accent fills use the ink accent above. */
+	/* Inline text links only (Exh-plvh): an anchor inside a sentence or note.
+	 * Buttons, banner actions and text-only controls stay ink. Slate sits only
+	 * ~1.9:1 from ink, so colour is not the cue: every consumer keeps its
+	 * underline, and takes --color-link-hover on hover. */
 	--color-link:#2e5482;
 	--color-link-hover:#233f62;
 
@@ -100,8 +102,8 @@
 	--color-warn-strong:#b0700a;       /* warning icon, warning control border */
 	--color-warn-ink:#5e3d05;
 	--color-warn-ink-soft:#7a5008;
-	--color-info-tint:#e4e9ef;         /* a fact, not a problem */
-	--color-info-tint-border:#b6c2d1;
+	--color-info-tint:#e4e6e0;         /* a fact, not a problem */
+	--color-info-tint-border:#b9c0c6;
 	--color-info-ink:#23405f;
 	--color-success:#2f6a34;
 	--color-success-tint:#e6efdb;
@@ -119,8 +121,11 @@
 
 	/* elevation */
 	--shadow-header:0 1px 0 rgba(60,45,10,.12);
+	/* --shadow-card[-hover] belong to the gallery's tiles: a hairline ring and a
+	 * soft lift. Panels, dialogs and the sign-in box float on --shadow-panel. */
 	--shadow-card:0 1px 0 rgba(60,45,10,.10),0 0 0 1px rgba(60,45,10,.07);
 	--shadow-card-hover:0 3px 10px rgba(60,45,10,.14),0 0 0 1px rgba(60,45,10,.09);
+	--shadow-panel:0 8px 24px rgba(60,45,10,.14),0 1px 3px rgba(60,45,10,.10);
 	--shadow-modal:0 4px 24px rgba(40,30,5,.25);
 	--shadow-raised:0 1px 2px rgba(40,30,5,.14);
 	--shadow-sheet:0 -4px 24px rgba(40,30,5,.25); /* a bottom sheet over the page */
@@ -192,10 +197,10 @@
 @media (prefers-color-scheme:dark){
 	:root{
 		--brand-blue:#efe8d6;
-		--brand-blue-hover:#fff;
+		--brand-blue-hover:#bab29b;
 		--color-on-accent:#10142a;
 		--color-accent-disabled:#343a5e;
-		--color-on-accent-disabled:#8b88a0;
+		--color-on-accent-disabled:var(--color-ink-mid);
 		--color-accent-tint:#262b48;
 		--color-accent-tint-border:#454c78;
 		--color-accent-tint-strong:#2f355a;
@@ -239,11 +244,11 @@
 		--color-danger:#f08670;
 		--color-danger-hover:#ffa592;
 		--color-on-danger:#2a0d08;
-		--color-danger-tint:#33202e;
-		--color-danger-tint-border:#6e3b44;
+		--color-danger-tint:#2f2340;
+		--color-danger-tint-border:#6e3b4a;
 		--color-danger-ink:#ffb5a5;
-		--color-danger-soft:#2b1d2e;
-		--color-warn-tint:#2e2a2c;
+		--color-danger-soft:#2a2140;
+		--color-warn-tint:#2c2618;
 		--color-warn-tint-border:#6b5424;
 		--color-warn-strong:#f2a23a;
 		--color-warn-ink:#f5d99b;
@@ -266,6 +271,7 @@
 		--shadow-header:0 1px 0 rgba(0,0,0,.5);
 		--shadow-card:0 1px 0 rgba(0,0,0,.5),0 0 0 1px rgba(0,0,0,.25);
 		--shadow-card-hover:0 3px 10px rgba(0,0,0,.5),0 0 0 1px rgba(0,0,0,.3);
+		--shadow-panel:0 10px 30px rgba(0,0,0,.5),0 1px 3px rgba(0,0,0,.35);
 		--shadow-modal:0 6px 28px rgba(0,0,0,.6);
 		--shadow-raised:0 1px 2px rgba(0,0,0,.5);
 		--shadow-sheet:0 -6px 28px rgba(0,0,0,.6);

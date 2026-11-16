@@ -59,6 +59,20 @@ var paletteTextPairs = func() []tokenPair {
 		tokenPair{"color-success", "color-panel", 4.5},
 		tokenPair{"color-success", "color-success-tint", 4.5},
 		tokenPair{"color-note-ink", "color-note-tint", 4.5},
+		// Links on every tint a notice or note can put one on (Exh-plvh).
+		tokenPair{"color-link", "color-danger-tint", 4.5},
+		tokenPair{"color-link", "color-danger-soft", 4.5},
+		tokenPair{"color-link", "color-info-tint", 4.5},
+		tokenPair{"color-link", "color-success-tint", 4.5},
+		tokenPair{"color-link-hover", "color-danger-tint", 4.5},
+		tokenPair{"color-link-hover", "color-info-tint", 4.5},
+		tokenPair{"color-link-hover", "color-success-tint", 4.5},
+		// A disabled accent or danger button's label.
+		tokenPair{"color-on-accent-disabled", "color-accent-disabled", 3},
+		tokenPair{"color-danger-ink", "color-danger-tint", 3},
+		// Clerk's panels: input and social-button borders, and the focus ring.
+		tokenPair{"color-field-border", "color-panel", 3},
+		tokenPair{"brand-blue", "color-field", 3},
 		// Non-text: warning icon and field boundaries need 3:1.
 		tokenPair{"color-warn-strong", "color-panel", 3},
 		tokenPair{"color-warn-strong", "color-warn-tint", 3},
@@ -67,6 +81,10 @@ var paletteTextPairs = func() []tokenPair {
 	)
 	return pairs
 }()
+
+// Primary hover must be perceptible against the resting fill (the pair differs
+// by a ratio, so it is checked apart from the text pairs).
+const minHoverStep = 1.6
 
 var tokenDecl = regexp.MustCompile(`(--[a-z0-9-]+):\s*([^;]+);`)
 
@@ -135,6 +153,17 @@ func TestPaletteContrastAA(t *testing.T) {
 			if ratio < p.min {
 				t.Errorf("%s: %s on %s is %.2f:1, needs %.1f:1", mode, p.ink, p.surface, ratio, p.min)
 			}
+		}
+	}
+}
+
+func TestPrimaryHoverIsPerceptible(t *testing.T) {
+	light, dark := parseTokens(t)
+	for mode, tokens := range map[string]map[string]string{"light": light, "dark": dark} {
+		ratio := contrastRatio(resolveToken(t, tokens, "brand-blue"), resolveToken(t, tokens, "brand-blue-hover"))
+		t.Log(fmt.Sprintf("%s brand-blue vs brand-blue-hover %.2f", mode, ratio))
+		if ratio < minHoverStep {
+			t.Errorf("%s: hover fill is %.2f:1 from rest, needs %.1f:1", mode, ratio, minHoverStep)
 		}
 	}
 }
