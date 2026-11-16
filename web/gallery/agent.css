@@ -117,12 +117,25 @@ body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(-
 .question-skipped{color:var(--color-muted);font-size:13px;margin-top:8px}
 #question-load-error{font-size:12px;color:var(--color-danger-ink)}
 .thinking{align-self:flex-start;display:inline-flex;align-items:center;gap:6px;color:var(--color-muted);font-size:12.5px;font-style:italic}
-/* No prefers-reduced-motion override, on purpose (av-90ej): a stopped spinner
- * reads as a frozen turn. A 13px icon turning in place is not the sweeping
- * motion Reduce Motion exists to suppress, and the iOS activity indicator
- * keeps spinning with the setting on too. */
-.thinking-spinner{width:13px;height:13px;flex-shrink:0;animation:thinking-spin 1s linear infinite}
-@keyframes thinking-spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+/* The working indicator boils (Exh-s8yu): three baked drawings of the pencil
+ * (web/icons/boil.mjs) side by side in one SVG, a filmstrip one 256-unit cell
+ * apart, with the viewBox showing one cell. Boiling slides the strip a whole
+ * cell at a time, three steps in 375ms (8 fps). One animation has one value
+ * at any instant, so exactly one frame shows; three frames toggled by their
+ * own animations hand over at a keyframe offset that cannot be exactly 1/3,
+ * and WebKit draws the gap that leaves as a blank frame. Not boiling, the
+ * strip rests on frame 1. In SVG a CSS px is a user unit, so 768px is three
+ * cells, and every step lands on a whole cell: no frame is ever half in view.
+ *
+ * No prefers-reduced-motion override, on purpose (av-90ej): a stopped
+ * indicator reads as a frozen turn. A 13px drawing redrawn in place is not the
+ * sweeping motion Reduce Motion exists to suppress, and the iOS activity
+ * indicator keeps moving with the setting on too. Revisit if the flicker proves
+ * worse than the old rotation for someone who uses the setting. */
+.thinking .boil{width:13px;height:13px;flex-shrink:0}
+.boil{overflow:hidden}
+.is-boiling .boil-strip{animation:boil 375ms steps(3,end) infinite}
+@keyframes boil{to{transform:translateX(-768px)}}
 .composer{border-top:1px solid var(--color-hairline);padding:10px 12px;display:flex;flex-direction:column;gap:8px;min-height:0}
 /* Notices share the height budget so enlarged input and Send stay in view.
  * Their htmx targets remain independent; empty responses reserve no space. */

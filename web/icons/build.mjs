@@ -23,6 +23,7 @@ import { readFileSync, writeFileSync, copyFileSync, mkdirSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { bakeBoil, PENCIL_SIMPLE_SOURCE } from "./boil.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const src = path.join(here, "node_modules/@phosphor-icons/web/src/regular");
@@ -109,3 +110,10 @@ for (const name of maskNames) {
   const paths = entry.icon.paths.map(d => `<path d="${d}"/>`).join('');
   writeFileSync(path.join(outDir, `${name}.svg`), `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">${paths}</svg>\n`);
 }
+
+// The agent's working indicator (Exh-s8yu): a boiling pencil-simple, baked from
+// the pinned 256-unit Phosphor source (see boil.mjs). The agent page inlines it
+// into a <template>, so it takes currentColor; it ships no raster and no script.
+const boil = bakeBoil(readFileSync(PENCIL_SIMPLE_SOURCE, "utf8"));
+writeFileSync(path.join(outDir, "pencil-simple-boil.svg"), boil);
+console.log(`Baked boiling pencil-simple (${boil.length} bytes)`);

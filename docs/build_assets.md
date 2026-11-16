@@ -108,6 +108,14 @@ Subsetting needs python3 + fonttools/brotli. The Dockerfile's asset stage instal
 them (§4); a local checkout without them warns and ships the full font with the
 swap rewrite still applied, so `make assets` keeps working everywhere.
 
+The same workspace bakes the agent's boiling working indicator (Exh-s8yu):
+`web/icons/boil.mjs` redraws `@phosphor-icons/core`'s pencil-simple three times
+with seeded noise and writes `phosphor/pencil-simple-boil.svg`. Its inputs are
+pinned (`@phosphor-icons/core` and `svg-path-properties` at exact versions), so
+rerunning the build writes identical bytes. `web/icons/boil.test.mjs` holds it
+to that, compares the embedded file with a fresh bake, and keeps it within 2 KB
+gzipped; `TestIconBakeSuite` runs it under `go test`.
+
 ## 7. Why "generate, don't commit" is safe
 
 The design fails **loud**, never silent:
