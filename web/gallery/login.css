@@ -6,7 +6,7 @@
  * branding and a page title without signed-in navigation or account controls.
  */
 *{box-sizing:border-box;margin:0;padding:0}
-.login-page{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(--color-ink);min-height:100vh;display:flex;flex-direction:column}
+.login-page{font-family:var(--font-sans);background:var(--color-ground);color:var(--color-ink);min-height:100vh;display:flex;flex-direction:column}
 
 .login-content{flex:1;display:flex;align-items:center;justify-content:center;padding:var(--space-8);min-width:0}
 

@@ -995,3 +995,12 @@ func TestPrependToHeadOpensTheHead(t *testing.T) {
 		}
 	}
 }
+
+// Exh-wjqh: Google Fonts are an app-origin concern. An artifact's CSP is built
+// from its own allowlist and never names the font hosts.
+func TestBuildCSPNeverNamesGoogleFontHosts(t *testing.T) {
+	csp := buildCSP(nil, "https://app.example.com", "")
+	if strings.Contains(csp, "fonts.googleapis.com") || strings.Contains(csp, "fonts.gstatic.com") {
+		t.Fatalf("render-origin CSP must not allow Google Fonts: %s", csp)
+	}
+}

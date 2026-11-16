@@ -32,6 +32,7 @@ safety" (§12).
 | Reusable UI behavior | **Stimulus** — self-hosted ES module, Go partials own markup (§9) | explicit component initialization in vanilla JS |
 | Response compression | `chi` `middleware.Compress` — gzip, explicit type allowlist | brotli (better ratio, new dependency) |
 | Agent harness | **Pi Bolt 1.0.8 / Pi 1.4.0** (native `pi --mode rpc` sidecar per session; runtime-loaded TS tools extension; keys AES-GCM at rest; per-session scoped API credentials; `internal/mockllm` for tests) | Claude Agent SDK (heavier, vendor-tied) |
+| Fonts | **Schibsted Grotesk** (text) and **Fraunces** (one headline per page) from Google Fonts, `display=swap`, system-ui / Georgia fallbacks (§9) | Self-hosting (deliberately not done) |
 | Icons | **Phosphor Icons** — self-hosted / embedded on app origin, no CDN (§9) | Lucide / Heroicons |
 | Hosted login | Clerk Go SDK + ClerkJS / Clerk UI from the application Frontend API domain; enabled only by Clerk configuration | Replacing self-hosted login |
 | Login (optional) | Generic OIDC via discovery — `coreos/go-oidc/v3` + `golang.org/x/oauth2`, exchanged once for our own session (§10) | auth at the operator's proxy (also supported); vendor SDK (rejected) |
@@ -554,6 +555,19 @@ opaque canvas, so an artifact or widget that declares no scheme keeps a light
 background on a dark page. The widget base stylesheet therefore leaves
 `color-scheme` to the widget, and the agent's prompt asks artifacts and
 widgets to declare `light dark` themselves (`docs/widgets.md`).
+
+**Fonts: a deliberate CDN exception (Exh-wjqh).** Unlike icons and htmx, the
+brand typefaces load from Google Fonts, through the shared `fontsHead` partial
+that every app-origin page head includes (preconnect plus one stylesheet).
+Reasons: the variable font files are large, a CDN keeps them out of the image
+and the repo, and a missing font is a cosmetic failure, not a functional one,
+because `--font-sans` falls back to `system-ui` and `--font-display` to
+Georgia. Only the axes in use are requested: Schibsted Grotesk weights 400-800
+(the weights the gallery CSS uses) and Fraunces pinned to opsz 72, wght 600,
+SOFT 100, WONK 0. If the app's CSS starts using another weight, widen the
+request in `fontsHead`. The app origin sets no style or font CSP, so no policy
+change was needed; the render origin, artifact CSP and widget documents never
+name the font hosts. CodeMirror and code stay monospace.
 
 **Icons: Phosphor Icons — the required icon set for all new UI.** Standardize on
 [Phosphor Icons](https://phosphoricons.com) so every future story inherits one consistent

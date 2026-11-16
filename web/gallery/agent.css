@@ -3,7 +3,7 @@
  * tokens.css, which already supplies --brand-blue/--brand-blue-hover. */
 *{box-sizing:border-box;margin:0;padding:0}
 [hidden]{display:none!important}
-body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(--color-ink);display:flex;flex-direction:column;height:100vh}
+body{font-family:var(--font-sans);background:var(--color-ground);color:var(--color-ink);display:flex;flex-direction:column;height:100vh}
 .banner-err{background:var(--color-danger-tint);border-bottom:1px solid var(--color-danger-tint-border);color:var(--color-danger-ink);padding:8px 20px;font-size:13px}
 .layout{display:flex;flex:1;overflow:hidden}
 .chat{position:relative;width:clamp(280px,var(--agent-chat-width,460px),calc(100% - 280px));min-width:280px;flex-shrink:0;display:flex;flex-direction:column;background:var(--color-panel);border-right:1px solid var(--color-hairline)}

@@ -7,7 +7,7 @@
  * the gallery's desktop rail becomes bottom navigation on phones.
  */
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(--color-ink);min-height:100vh}
+body{font-family:var(--font-sans);background:var(--color-ground);color:var(--color-ink);min-height:100vh}
 #gallery-search-region{display:contents}
 /* Search in the app bar. It takes up to 340px and gives way first when the
  * bar runs out of room, so on a phone it fills whatever the logo and the two
