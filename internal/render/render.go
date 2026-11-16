@@ -717,11 +717,7 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 	if !widget {
 		body = injectFavicon(body, artifacticon.DataURI(a.Tags))
 	}
-	bridges := bridgeScript
-	if doc.attribution {
-		bridges = frameLocalScript + "\n  }\n"
-	}
-	out := injectPreambleWithBridges(body, a.ID, rd.cfg.AppOrigin, state, origins, widget, viewer.Anonymous, versionView, manifest, bridges, a.VersionSeq)
+	out := injectPreambleWithHostMode(body, a.ID, rd.cfg.AppOrigin, state, origins, widget, viewer.Anonymous, versionView, manifest, doc.attribution, a.VersionSeq)
 	if rd.cfg.RelayEnabled && !widget && !versionView && !viewer.Anonymous && doc.headMeta == "" {
 		out = injectRelay(out, rd.cfg.AppOrigin, a.ID, allowed)
 	}
@@ -2507,12 +2503,19 @@ const widgetHealthScript = `<script>
 // data the shim must hold before the artifact's first line runs, not a mode
 // flag.
 func injectPreamble(body, artifactID, appOrigin string, state map[string]string, origins originPolicy, widget, anonymous, versionView bool, assetManifest map[string]string, versionSeq ...int) string {
-	return injectPreambleWithBridges(body, artifactID, appOrigin, state, origins, widget, anonymous, versionView, assetManifest, bridgeScript, versionSeq...)
+	return injectPreambleWithHostMode(body, artifactID, appOrigin, state, origins, widget, anonymous, versionView, assetManifest, false, versionSeq...)
 }
 
-// injectPreambleWithBridges lets the attributed share retain local shims without
-// installing gallery capability requests for a host that does not exist.
-func injectPreambleWithBridges(body, artifactID, appOrigin string, state map[string]string, origins originPolicy, widget, anonymous, versionView bool, assetManifest map[string]string, bridges string, versionSeq ...int) string {
+// injectPreambleWithHostMode explicitly distinguishes an attributed public share
+// from an app-hosted frame. Public shares inline the owner's saved state but
+// have no authenticated viewer/host to persist through or answer capabilities.
+// Native unsupported APIs reject under browser policy; no host reply is awaited.
+func injectPreambleWithHostMode(body, artifactID, appOrigin string, state map[string]string, origins originPolicy, widget, anonymous, versionView bool, assetManifest map[string]string, noHost bool, versionSeq ...int) string {
+	bridges := bridgeScript
+	if noHost {
+		bridges = frameLocalScript + "\n  }\n"
+		anonymous = true
+	}
 	if state == nil {
 		state = map[string]string{}
 	}
@@ -2556,7 +2559,7 @@ func injectPreambleWithBridges(body, artifactID, appOrigin string, state map[str
 		// pointer-events:none, so there is nothing to point at.
 		shim += "\n" + widgetBaseCSS
 		shim += "\n" + fmt.Sprintf(widgetHealthScript, appOrigin)
-	} else {
+	} else if !noHost {
 		// The snippet element-picker (Exh-edjk) rides along with the shim: inert
 		// until the app-origin host activates it, so it costs nothing for plain
 		// renders and share views.

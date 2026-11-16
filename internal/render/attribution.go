@@ -31,6 +31,19 @@ func (rd *Renderer) attributedShare(body string, a *store.Artifact, meta string)
  }
  addEventListener('load',scheduleInitialFocus,{once:true});
  addEventListener('focus',scheduleInitialFocus,{once:true});
+ // srcdoc resolves fragment anchors against the outer share URL. Keep these
+ // scrolls inside the tool instead of navigating away or requesting an app host.
+ document.addEventListener('click',event=>{
+   const anchor=event.target.closest&&event.target.closest('a[href]');
+   if(!anchor||event.defaultPrevented||event.button!==0||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey)return;
+   const href=anchor.getAttribute('href');
+   if(!href.startsWith('#'))return;
+   event.preventDefault();
+   if(href==='#'){scrollTo(0,0);return}
+   let id;try{id=decodeURIComponent(href.slice(1))}catch{return}
+   const target=document.getElementById(id)||document.getElementsByName(id)[0];
+   if(target)target.scrollIntoView();
+ });
  </script>`)
 	mark := "data:image/svg+xml;base64," + base64.StdEncoding.EncodeToString([]byte(rd.cfg.FaviconSVG))
 	return fmt.Sprintf(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>%s</title>%s<link rel="icon" href="%s"><style>

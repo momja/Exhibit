@@ -1750,8 +1750,9 @@ framer can cover or crop the entire share. Branding is not a security seal.
 The bar is outside the artifact's viewport and reserves 36px. On child load the
 wrapper focuses the frame if focus is still on its body or the frame, restoring
 initial keyboard input without taking focus from the attribution link. Native
-Tab and Shift+Tab navigation cross the boundary; no keyboard forwarding, pointer
-handler or mutation observer runs over the tool. The product link
+Tab and Shift+Tab navigation cross the boundary; no keyboard forwarding or
+mutation observer is used. The child handles local fragment clicks so those
+scrolls stay inside the tool. The product link
 uses self navigation on direct shares. In any frame it loses href synchronously
 at parse time, becoming intentionally inert plain attribution with an explanatory
 title. Both Chromium and WebKit browser regressions exercise this behavior under
@@ -1774,7 +1775,10 @@ Enabled-share compatibility costs:
 - The child sees `about:srcdoc`, with empty `location.search` and
   `location.hash`, and `window.top === window` is false. Query/hash routing,
   URL-changing History APIs, relative URLs and top-level checks can break.
-  No URL/state bridge is installed.
+  Local fragment anchors scroll to their child target without changing the
+  share URL; external anchors attempt native child navigation, which can still
+  be refused by the enclosing frame-src policy. No
+  URL/state bridge is installed.
 - The outer viewport meta uses device width; an artifact's custom viewport
   meta (for example `width=1024`) does not control the outer mobile viewport.
 - The frame scrolls independently. Long documents remain scrollable, but
@@ -1792,7 +1796,9 @@ Enabled-share compatibility costs:
   in WebKit; Chromium rejected with NotAllowedError in both hidden and shown
   modes. These headless results do not establish real clipboard permission UX.
 - Attributed tools retain local sessionStorage and data-URL fetch shims but omit
-  gallery capability bridges: there is no host to answer them. Native clipboard
+  gallery capability bridges: an explicit no-host preamble mode prevents state
+  persistence/resync and snippet-host messaging as well. There is no host to
+  answer them. Native clipboard
   calls therefore succeed or reject under browser policy rather than waiting
   forever for a nonexistent host. No clipboard read delegation is added.
 - sessionStorage is an in-memory framed shim, lost on reload, unlike the native

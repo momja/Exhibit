@@ -101,3 +101,7 @@ measurements outside the checkout:
 ```sh
 EXHIBIT_E2E_APP_PORT=18380 EXHIBIT_E2E_RENDER_PORT=18381 npm test --prefix e2e -- --config attribution.config.ts
 ```
+
+Attribution runs use a fixed third-party embed port, 18382. They cannot run
+concurrently with another attribution run even with distinct app/render ports.
+The configurable app/render port guidance above applies to the default suite.

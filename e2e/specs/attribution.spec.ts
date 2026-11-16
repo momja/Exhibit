@@ -2,7 +2,8 @@ import { test, expect } from '../fixtures';
 import { renderOrigin } from '../environment';
 import { mkdir, writeFile } from 'node:fs/promises';
 
-const evidence = '/tmp/exhibit-review/banner/r2';
+const evidence = process.env.EXHIBIT_ATTRIBUTION_EVIDENCE || '/tmp/exhibit-review/banner/r2';
+test.beforeEach(async()=>{await mkdir(evidence,{recursive:true})});
 const body = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>
 html,body{margin:0;overflow:hidden;font:16px system-ui;color-scheme:light dark}main{height:100vh;display:grid;grid-template-rows:48px 1fr 48px;background:light-dark(#eef2f8,#151d2a);color:light-dark(#24324a,#e1e8f4)}h1{font-size:18px;margin:12px}canvas{width:100%;height:100%;min-height:0;background:light-dark(#d9e5f5,#283c58)}footer{position:fixed;bottom:0;height:48px;left:0;right:0;display:flex;align-items:center;justify-content:center;background:light-dark(#fff,#182333)}button{font:inherit;padding:6px 18px}</style></head><body><main><h1>Viewport canvas</h1><canvas aria-label="Drawing surface" onpointerdown="this.dataset.drawn='yes';this.getContext('2d').fillRect(0,0,20,20)"></canvas><footer><button onclick="this.textContent='Saved'">Save drawing</button></footer></main></body></html>`;
 
@@ -10,7 +11,6 @@ test('attribution viewport, theme, keyboard, hostile code and embed behavior', a
  test.setTimeout(120_000);
  page.on('console',msg=>console.log('browser:',msg.type(),msg.text()));
  page.on('requestfailed',req=>console.log('request failed:',req.url(),req.failure()));
- await mkdir(evidence,{recursive:true});
  const artifact = await artifacts.create(body,'Viewport canvas');
  expect((await api.patch(`/api/artifacts/${artifact.id}`,{data:{share_attribution:'show'}})).ok()).toBeTruthy();
  const response=await api.post('/api/shares',{data:{artifact_id:artifact.id}});
@@ -69,7 +69,6 @@ test('owner attribution selection persists through the server-rendered share pan
  await page.goto(`/artifacts/${artifact.id}`);
  await page.locator('#share-open').click();
  await expect(page.locator('#share-attribution')).toHaveValue('inherit');
- await mkdir(evidence,{recursive:true});
  await page.screenshot({path:`${evidence}/${info.project.name}-panel-inherit.png`});
  await page.locator('#share-attribution').selectOption('show');
  await expect(page.locator('#share-body')).toBeEnabled();
@@ -108,7 +107,6 @@ test('native framed anchors under the actual share CSP sandbox',async({page,api,
 });
 
 test('initial keyboard input, autofocus and accessible return to attribution',async({page,api,artifacts},info)=>{
- await mkdir(evidence,{recursive:true});
  const artifact=await artifacts.create(`<!doctype html><html><head><title>Keyboard tool</title></head><body><input aria-label="First input" autofocus><button>Next</button><script>window.keys=0;window.addEventListener('keydown',()=>window.keys++);</script></body></html>`);
  const {share}=await(await api.post('/api/shares',{data:{artifact_id:artifact.id}})).json();
  const results=[];
@@ -126,6 +124,10 @@ test('initial keyboard input, autofocus and accessible return to attribution',as
   if(mode==='hide'||info.project.name==='chromium')await expect(tool.locator('input')).toHaveValue('ab');
   else expect(['','ab']).toContain(await tool.locator('input').inputValue()); // WebKit suppresses cross-origin form autofocus.
   if(mode==='show'){
+   // WebKit may leave initial focus on the frame body. Reach the first
+   // field with a real Tab before testing reverse traversal to the banner.
+   if(!await tool.locator('input').evaluate(el=>el===document.activeElement))await page.keyboard.press('Tab');
+   await expect(tool.locator('input')).toBeFocused();
    // Reverse traversal reaches the parent link, then forward returns to the tool.
    await page.keyboard.press('Shift+Tab');
    await expect(page.locator('#exhibit-attribution')).toBeFocused();
@@ -210,4 +212,35 @@ test('native fullscreen and clipboard outcomes without gallery capability reques
   results.push({mode,fullscreen,clipboard});
  }
  await writeFile(`${evidence}/${info.project.name}-native-capabilities.json`,JSON.stringify(results,null,2));
+});
+
+test('hostless shares scroll local fragments, reject unsupported devices and allow native external clicks',async({page,api,artifacts},info)=>{
+ const artifact=await artifacts.create(`<!doctype html><html><head><style>body{margin:0}#space{height:2200px}#details{height:100px}</style></head><body><a href="#details">Jump to details</a><div id="space"></div><h2 id="details">Details reached</h2><a href="https://example.test/destination">External destination</a></body></html>`);
+ await api.patch(`/api/artifacts/${artifact.id}`,{data:{share_attribution:'show'}});
+ const {share}=await(await api.post('/api/shares',{data:{artifact_id:artifact.id}})).json();
+ await page.goto(`${renderOrigin}/s/${share.id}`);
+ const tool=page.frames()[1];
+ await tool.getByRole('link',{name:'Jump to details'}).click();
+ expect(tool.url()).toBe('about:srcdoc');
+ await expect(tool.getByRole('heading',{name:'Details reached'})).toBeInViewport();
+ expect(await tool.evaluate(()=>scrollY)).toBeGreaterThan(1500);
+ await page.screenshot({path:`${evidence}/${info.project.name}-fragment.png`});
+ const devices=await tool.evaluate(async()=>{
+  const media=navigator.mediaDevices?.getUserMedia({video:true}).then(()=> 'unexpected device access',e=>e.name)||Promise.resolve('unsupported');
+  const geo=new Promise(resolve=>navigator.geolocation?navigator.geolocation.getCurrentPosition(()=>resolve('unexpected device access'),e=>resolve(`denied: ${e.code}`)):resolve('unsupported'));
+  return Promise.race([Promise.all([media,geo]),new Promise(resolve=>setTimeout(()=>resolve('pending'),1500))]);
+ });
+ expect(devices).not.toBe('pending');
+ expect(JSON.stringify(devices)).not.toContain('unexpected device access');
+ const srcdoc=await page.locator('iframe').getAttribute('srcdoc');
+ expect(srcdoc).not.toContain('var clipPending');
+ expect(srcdoc).not.toContain('__avGeolocationResult');
+ expect(srcdoc).not.toContain('__avNavigate');
+ expect(srcdoc).toContain('var ANONYMOUS = true');
+ const clicks:string[]=[];page.on('console',msg=>{if(msg.text().startsWith('external-default:'))clicks.push(msg.text())});
+ await tool.evaluate(()=>document.addEventListener('click',event=>console.log('external-default:'+event.defaultPrevented)));
+ await page.route('https://example.test/**',route=>route.fulfill({contentType:'text/html',body:'<h1>External destination reached</h1>'}));
+ await tool.getByRole('link',{name:'External destination',exact:true}).click();
+ await expect.poll(()=>clicks).toContain('external-default:false');
+ await writeFile(`${evidence}/${info.project.name}-hostless.json`,JSON.stringify({devices,fragment:'child scrolled to target without leaving srcdoc',external:'click not canceled or bridged; native navigation still subject to inherited frame-src policy',externalURL:tool.url()},null,2));
 });
