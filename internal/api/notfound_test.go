@@ -58,20 +58,19 @@ func TestHTMLRoutesRenderStyled404(t *testing.T) {
 	}
 }
 
-// The mark is inlined once (header) and drawn from the data URI once (hero).
-// A second inline <svg> would duplicate every gradient/filter id on the page,
-// and the second copy's url(#…) paint would resolve against the first copy's
-// <defs> — so the artwork has exactly one inline instance.
-func TestNotFoundPageInlinesLogoOnce(t *testing.T) {
+// The header inlines the flat mark and the hero draws the hanging variant from
+// its own data URI, so the hanging artwork never lands in the page markup.
+func TestNotFoundHeroUsesHangingVariantAsImage(t *testing.T) {
 	page, err := renderNotFoundPage("/nowhere")
 	require.NoError(t, err)
 
-	assert.Equal(t, 1, strings.Count(page, `id="filter30"`),
-		"the logo's defs must appear once per document")
+	assert.Equal(t, 1, strings.Count(page, `<svg `), "only the header's flat mark is inline")
+	assert.NotContains(t, page, `class="logo-wire"`, "the wire belongs to the hanging variant, drawn as an image")
 	// html/template escapes the data URI's '+' as &#43; in the attribute, same
 	// as it already does for the favicon link — the browser decodes it back.
-	assert.Contains(t, page, `<img class="exhibit-404__frame" src="data:image/svg&#43;xml;base64,`,
-		"the hero hangs the same artwork as an image, not a second inline svg")
+	hero := strings.ReplaceAll(exhibitHangingLogoDataURI, "+", "&#43;")
+	assert.Contains(t, page, `<img class="exhibit-404__frame" src="`+hero+`"`)
+	assert.NotEqual(t, exhibitLogoDataURI, exhibitHangingLogoDataURI)
 }
 
 // The requested path is attacker-controlled URL text. It reaches the template
@@ -116,7 +115,7 @@ func TestNotFoundStylesheetCarriesTheKnock(t *testing.T) {
 	css := galleryAsset(t, r, "/assets/gallery/notfound.css")
 
 	// The pivot is the nail drawn into the mark, not the box centre.
-	assert.Contains(t, css, "transform-origin:49.7% 4.2%")
+	assert.Contains(t, css, "transform-origin:48.3% 4.2%")
 	assert.Contains(t, css, "animation:knock 2.8s ease-in-out .25s both")
 	assert.Contains(t, css, "@keyframes knock{")
 	assert.Contains(t, css, "8%{rotate:-15deg}", "struck on the left")
