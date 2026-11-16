@@ -1,6 +1,6 @@
 ---
 id: av-lh4a
-status: open
+status: closed
 deps: []
 links: [av-ghvs]
 created: 2026-08-12T02:51:46Z
@@ -24,3 +24,9 @@ Note `exhibit_state_changed` is correctly implemented and must keep reloading th
 - An artifact save and a state change both still reload the artifact frame.
 - A test covers the two stamps moving independently.
 
+
+## Notes
+
+**2026-11-16T17:48:36Z**
+
+Widget saves now select and swap only the server-rendered tile, preserving the artifact iframe; artifact/state saves still replace the pane. Chromium regression covers first/repeated widget saves, an initially unbound preview, independent stamps, and an open version viewer. Verified rebuilt assets, go vet ./..., focused AgentPreview|Widget tests and node --check.

@@ -579,13 +579,10 @@ function handleAgentEvent(ev) {
       break;
     }
     case 'exhibit_widget_saved': {
-      // set_widget landed (av-fafu). The artifact body is unchanged, so this
-      // is not an artifact save — but the pane is re-rendered by the same
-      // fragment fetch, which is what brings the new tile in. A widget shares
-      // the artifact's allowlist, so unapproved origins are already blocked
-      // rather than merely pending; say so plainly.
+      // The body is unchanged. Let htmx select and swap only the tile from
+      // the same preview partial, preserving the live artifact frame.
       if (!artifact) artifact = {id: ev.artifactId, title: 'Artifact'};
-      refreshPreview();
+      refreshPreview('widget');
       let note = 'Card widget saved. It now appears in your Gallery.';
       if (ev.unapproved && ev.unapproved.length) {
         note += ' It references ' + ev.unapproved.join(', ') + ', which are blocked until you allow them under Edit → Permissions.';
@@ -871,14 +868,14 @@ function clearPreviewNudge() {
 // the session is currently bound to.
 function previewArtifactId() { return artifact ? artifact.id : ''; }
 
-// The agent saved something — hand the pane to htmx (av-6m3e). The fragment it
-// fetches carries the title, the links, a freshly stamped iframe src, and the
-// widget tile (av-fafu), so nothing here rebuilds markup the template already
-// owns. Both save events route through here: the pane is re-rendered whole, so
-// it does not need to know which of the two documents changed.
-function refreshPreview() {
+// Both save events use the same server-rendered preview partial. A widget
+// save swaps only its strip, so the artifact's frame and stamp stay untouched.
+function refreshPreview(scope = 'artifact') {
   syncHistoryButton();
-  document.body.dispatchEvent(new CustomEvent('exhibit:artifact-saved'));
+  if (scope === 'widget' && viewingVersion()) return;
+  const event = scope === 'widget' && document.getElementById('pv-widget')
+    ? 'exhibit:widget-saved' : 'exhibit:artifact-saved';
+  document.body.dispatchEvent(new CustomEvent(event));
 }
 
 // --- History (av-y7td) -------------------------------------------------------
@@ -1069,7 +1066,8 @@ document.getElementById('pane-preview').addEventListener('click', (e) => {
 // A swap replaces the iframe, so the artifact reloads from scratch: any
 // snippet pick in flight is against a document that no longer exists. Drop the
 // mode rather than leave the button lit over a dead selection.
-document.getElementById('pane-preview').addEventListener('htmx:after:swap', () => {
+document.getElementById('pane-preview').addEventListener('htmx:after:swap', (e) => {
+  if (e.target.id !== 'pane-preview') return;
   if (snippetMode) endSnippetMode();
 });
 
@@ -1124,7 +1122,8 @@ networkPrompt.install({
 // so this runs again on each one — without it a violation raised before the
 // page noticed the new frame would be lost, which is the failure mode the
 // handshake exists to remove.
-document.getElementById('pane-preview').addEventListener('htmx:after:swap', function () {
+document.getElementById('pane-preview').addEventListener('htmx:after:swap', function (e) {
+  if (e.target.id !== 'pane-preview') return;
   networkPrompt.announceTo(previewFrame());
 });
 networkPrompt.announceTo(previewFrame());
