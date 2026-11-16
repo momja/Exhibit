@@ -1,6 +1,6 @@
 ---
 id: Exh-qq4y
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-16T06:08:32Z
@@ -16,3 +16,9 @@ Replace standalone Copy URL and Copy command buttons in Connected agents with an
 
 Shared Go partial, CSS and Stimulus controller; endpoint and Claude command use it; accessible keyboard copy with success/error feedback; responsive browser verification.
 
+
+## Notes
+
+**2026-11-16T06:13:10Z**
+
+Implemented shared copyField partial/view, shared CSS and Stimulus controller for endpoint and Claude Code fields. Other discovered copy controls (issued token, share URL, widget embed, agent messages) remain unchanged. Chromium verifies keyboard, literals, failures, replacement and six viewport/theme states; screenshots retained by browser CI artifact.

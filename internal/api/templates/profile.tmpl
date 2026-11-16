@@ -198,16 +198,8 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
 {{define "agentGrantsPanel"}}<section class="card" id="agent-grants-panel"{{if .MCPURL}} data-mcp-url="{{.MCPURL}}"{{end}} aria-labelledby="agent-grants-heading">
   <h3 class="settings-h3" id="agent-grants-heading"><i class="ph ph-robot" aria-hidden="true"></i> Connected agents</h3>
   {{if .MCPURL}}<p class="settings-copy">Connect your own agent to find, create and edit artifacts in your Gallery. Each connection stays active until you revoke it.</p>
-  <label class="settings-label" for="agent-mcp-url">MCP endpoint</label>
-  <div class="agent-grant-create">
-    <input class="field agent-grant-token" id="agent-mcp-url" value="{{.MCPURL}}" readonly spellcheck="false">
-    <button class="btn btn-sec" id="agent-mcp-url-copy" type="button"><i class="ph ph-copy" aria-hidden="true"></i> Copy URL</button>
-  </div>
-  <label class="settings-label settings-note" for="agent-mcp-command">Claude Code</label>
-  <div class="agent-grant-create">
-    <input class="field agent-grant-token" id="agent-mcp-command" value="{{.ClaudeCommand}}" readonly spellcheck="false">
-    <button class="btn btn-sec" id="agent-mcp-command-copy" type="button"><i class="ph ph-copy" aria-hidden="true"></i> Copy command</button>
-  </div>
+  {{template "copyField" .MCPURLField}}
+  {{template "copyField" .CommandField}}
   <p class="settings-copy settings-note">Then run /mcp in Claude Code, choose Authenticate, and approve the connection in your browser.</p>
   <p class="settings-copy settings-note">Other MCP clients connect to the same URL and sign in the same way.</p>
   {{else}}<p class="settings-copy">MCP is not enabled on this instance.</p>{{end}}

@@ -44,3 +44,6 @@ application.register('relay-host', RelayHostController);
 application.register('connections', ConnectionsController);
 
 application.register('artifact-stars', ArtifactStarsController);
+
+import CopyFieldController from './copy-field-controller.js';
+application.register('copy-field', CopyFieldController);

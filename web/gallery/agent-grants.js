@@ -81,8 +81,6 @@ function initializeAgentGrantsPanel() {
     const target = event.target;
     if (!target.closest) return;
     for (const [button, fieldID, label] of [
-      ['#agent-mcp-url-copy', 'agent-mcp-url', 'URL'],
-      ['#agent-mcp-command-copy', 'agent-mcp-command', 'Command'],
       ['#agent-grant-copy', 'agent-grant-token', 'Token']
     ]) {
       if (!target.closest(button)) continue;

@@ -132,3 +132,12 @@
 <div class="sr-only" id="pip-announce" role="status" aria-live="polite"></div>
 
 </header>{{end}}
+
+{{define "copyField"}}<div class="copy-field" data-controller="copy-field">
+  <label class="copy-field-label" for="{{.ID}}">{{.Label}}</label>
+  <div class="copy-field-box">
+    <input class="field copy-field-input" id="{{.ID}}" value="{{.Value}}" readonly autocomplete="off" spellcheck="false" data-copy-field-target="input" aria-describedby="{{.ID}}-status">
+    <button class="copy-field-action" type="button" aria-label="{{.CopyLabel}}" title="{{.CopyLabel}}" data-action="copy-field#copy" data-copy-field-target="button"><i class="ph ph-copy" aria-hidden="true" data-copy-field-target="icon"></i></button>
+  </div>
+  <p class="copy-field-status" id="{{.ID}}-status" role="status" data-copy-field-target="status"></p>
+</div>{{end}}

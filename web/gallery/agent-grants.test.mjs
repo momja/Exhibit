@@ -127,15 +127,10 @@ test('revocation-only panel can revoke and leave without issuing controls', asyn
 });
 
 
-test('browser connection details copy before issuing and survive token cleanup', async () => {
+test('browser connection details survive token cleanup', async () => {
   const page = await load([issued('g-1', 'exgrant_secret')]);
   const url = page.byId('agent-mcp-url').value;
   const command = page.byId('agent-mcp-command').value;
-  for (const [id, message] of [['agent-mcp-url', 'URL copied.'], ['agent-mcp-command', 'Command copied.']]) {
-    await page.click('#' + id + '-copy', page.byId(id + '-copy'));
-    assert.equal(page.byId('agent-grants-status').textContent, message);
-  }
-  assert.deepEqual(page.copied, [url, command]);
   assert.deepEqual(page.api.calls, []);
   assert.equal(page.byId('agent-grant-issued').hidden, true);
   await page.issue('fallback');
@@ -144,6 +139,4 @@ test('browser connection details copy before issuing and survive token cleanup',
   await page.dispatchOnWindow('pagehide');
   assert.equal(page.byId('agent-mcp-url').value, url);
   assert.equal(page.byId('agent-mcp-command').value, command);
-  await page.click('#agent-mcp-command-copy', page.byId('agent-mcp-command-copy'));
-  assert.deepEqual(page.copied, [url, command, command]);
 });
