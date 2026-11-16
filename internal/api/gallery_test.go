@@ -229,7 +229,7 @@ func TestGalleryHeaderHasVisualSeparation(t *testing.T) {
 	css := galleryAsset(t, r, "/assets/gallery/components.css")
 	assert.Contains(t, css, `position:sticky;top:0;z-index:20`)
 	assert.Contains(t, css, `box-shadow:var(--shadow-header)`) // grep-friendly: 'box-shadow'
-	assert.Contains(t, galleryAsset(t, r, "/assets/gallery/tokens.css"), `--shadow-header:0 1px 6px rgba(0,0,0,.07)`)
+	assert.Contains(t, galleryAsset(t, r, "/assets/gallery/tokens.css"), `--shadow-header:0 1px 0 rgba(60,45,10,.12)`)
 }
 
 // The artifact card's open affordances are the card body (click anywhere
