@@ -15,4 +15,3 @@ Use a self-hosted Phosphor user-gear icon for Manage account, retaining gear for
 ## Acceptance Criteria
 
 Manage account displays user-gear; Settings retains gear; browser evidence verifies distinct icons.
-
