@@ -21,4 +21,4 @@ Shared Go partial, CSS and Stimulus controller; endpoint and Claude command use 
 
 **2026-11-16T06:13:10Z**
 
-Implemented shared copyField partial/view, shared CSS and Stimulus controller for endpoint and Claude Code fields. Other discovered copy controls (issued token, share URL, widget embed, agent messages) remain unchanged. Chromium verifies keyboard, literals, failures, replacement and six viewport/theme states; screenshots retained by browser CI artifact.
+Implemented shared copyField partial/view, shared CSS and Stimulus controller for endpoint and Claude Code fields. Other discovered copy controls (issued token, share URL, widget embed, agent messages) remain unchanged. Chromium verifies keyboard, literals, failures, replacement and six viewport/theme states; screenshots saved under /tmp/exhibit-review/Exh-qq4y and linked from the PR through the Tailscale evidence server (CI artifact upload was unavailable with the configured GitHub workflow permissions).
