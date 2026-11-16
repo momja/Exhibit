@@ -81,7 +81,14 @@
        hx-get="/partials/agent-preview"
        hx-trigger="exhibit:artifact-saved from:body"
        hx-vals='js:{artifact: previewArtifactId()}'
-       hx-swap="innerHTML">{{template "agentPreview" .Preview}}</div>
+       hx-swap="innerHTML" hx-sync="this:queue all">{{template "agentPreview" .Preview}}</div>
+  {{/* This request source survives pane swaps. Serialize both refresh types,
+       then resolve the live tile by ID when the response arrives. */}}
+  <div hidden id="pv-widget-refresh" hx-get="/partials/agent-preview"
+       hx-trigger="exhibit:widget-saved from:body"
+       hx-vals='js:{artifact: previewArtifactId()}'
+       hx-target="#pane-preview" hx-select-oob="#pv-widget" hx-swap="none"
+       hx-sync="#pane-preview:queue all"></div>
 </div>
 
 {{/* The same runtime network-permission dialog the detail page hosts
@@ -190,11 +197,7 @@ let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
          library will show. Before any set_widget call this is the default
          tile — which is exactly the "no widget yet" state, so it needs no
          empty case of its own. */}}
-    {{if .HasArtifact}}<div class="pv-widget" id="pv-widget"
-      hx-get="/partials/agent-preview" hx-trigger="exhibit:widget-saved from:body"
-      hx-vals='js:{artifact: previewArtifactId()}'
-      hx-select="#pv-widget" hx-target="this" hx-swap="outerHTML"
-      hx-sync="this:replace">{{template "cardWidget" .Widget}}<span class="pv-widget-label">Card widget</span></div>{{end}}
+    {{if .HasArtifact}}<div class="pv-widget" id="pv-widget">{{template "cardWidget" .Widget}}<span class="pv-widget-label">Card widget</span></div>{{end}}
     <div id="frame-wrap"{{if .FramePolicyEnabled}} data-controller="relay-host" data-relay-host-artifact-id-value="{{.ID}}" data-relay-host-frame-selector-value="#pv-frame" data-relay-host-policy-value="{{.RelayPolicy}}"{{end}}>
       {{if .FramePolicyEnabled}}<template data-relay-host-target="framePolicy"><meta http-equiv="Content-Security-Policy" content="{{.RelayFramePolicy}}"></template>{{end}}
       {{if .HasArtifact}}<iframe id="pv-frame" {{if .FramePolicyEnabled}}data-relay-src{{else}}src{{end}}="{{.FrameURL}}" sandbox="allow-scripts allow-forms" allow="clipboard-read; clipboard-write"></iframe>{{else}}<div id="empty-preview"><i class="ph ph-frame-corners"></i><span>Your artifact will appear here.</span></div>{{end}}

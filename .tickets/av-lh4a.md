@@ -34,3 +34,7 @@ Widget saves now select and swap only the server-rendered tile, preserving the a
 **2026-11-16T18:10:29Z**
 
 Independent Pi review requested changes on 4335ea2e: fixed synthetic htmx event target in gallery test; historical-viewer test now counts both refresh event types after SSE acknowledgement; widget requests use this:replace independently of pane requests, with a delayed-response overlapping-save regression. Focused AgentPreview|Widget|GalleryPageScriptSuite tests (including Chromium), rebuilt assets, go vet and JS syntax checks passed. Fresh review required before merge.
+
+**2026-11-16T18:38:10Z**
+
+Second Pi review found the independent widget request queue could lose the tile when a pre-widget pane response arrived late. Replaced tile-owned requests with a persistent sibling htmx source, a shared queue-all ordering for both refresh types, and out-of-band selection of the current widget element. Added TestAgentPreviewStalePaneBeforeWidgetSaveBrowser from the reviewer reproducer, using SSE/DOM acknowledgements rather than sleeps. Earlier independent-queue rationale is superseded; fresh review remains required.
