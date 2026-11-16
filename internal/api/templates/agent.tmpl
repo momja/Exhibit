@@ -81,15 +81,16 @@
        hx-get="/partials/agent-preview"
        hx-trigger="exhibit:artifact-saved from:body"
        hx-vals='js:{artifact: previewArtifactId()}'
-       hx-swap="innerHTML" hx-sync="this:queue all">{{template "agentPreview" .Preview}}</div>
+       hx-swap="innerHTML" hx-sync="this:queue last">{{template "agentPreview" .Preview}}</div>
   {{/* This request source survives pane swaps. Serialize both refresh types,
-       then resolve the live tile by ID when the response arrives. Queue all costs
-       extra renders during bursts but prevents later writes being dropped. */}}
+       then resolve the live tile by ID when the response arrives. A queued full
+       refresh supersedes queued tile work; tile work joins an existing queued
+       refresh without displacing it. Both fetch current state when dequeued. */}}
   <div hidden id="pv-widget-refresh" hx-get="/partials/agent-preview"
        hx-trigger="exhibit:widget-saved from:body"
        hx-vals='js:{artifact: previewArtifactId()}'
        hx-target="#pane-preview" hx-select-oob="#pv-widget" hx-swap="none"
-       hx-sync="#pane-preview:queue all"></div>
+       hx-sync="#pane-preview"></div>
 </div>
 
 {{/* The same runtime network-permission dialog the detail page hosts
