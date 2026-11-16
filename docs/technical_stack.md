@@ -347,9 +347,10 @@ source `web/pwa-icons` rasterizes into the PWA, maskable and link-preview icons 
 PNGs are generated into `internal/api/assets/icons` and never committed; the maskable
 safe zone is computed from the viewBox). `internal/api/logo-hanging.svg` adds the nail,
 wire and a single down-right shadow, and only the 404 hero uses it, as an `<img>` data
-URI. `scripts/check-logo-geometry.py` verifies that its nail, wire apex and frame
+URI. `TestHangingLogoGeometry` (`internal/api/logo_test.go`) verifies that its nail, wire apex and frame
 centre share one axis and that the wire's legs land symmetrically. The wire and nail
-lighten under `prefers-color-scheme: dark`. Per-artifact favicons
+lighten under `prefers-color-scheme: dark`; their paint is a presentation attribute,
+because an inline `style` would outrank that rule (a test pins it). Per-artifact favicons
 (`internal/artifacticon`) are separate.
 
 Artifact viewer tabs and direct render documents share a generated SVG favicon

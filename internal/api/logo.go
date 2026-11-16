@@ -30,7 +30,8 @@ var exhibitLogoSVG string
 //
 // The wire and the nail are drawn in plain black on the page itself rather
 // than on the white frame, so they are what a dark ground would swallow
-// (av-xie4). They carry their color as attributes, which CSS outranks, and the
+// (av-xie4). They carry their color as presentation attributes, never inline style, which would outrank the
+// stylesheet; the
 // SVG's own <style> lightens them under prefers-color-scheme: dark. As an
 // image that follows the browser's scheme. The artwork declares no ids (no
 // gradients or filters), so it cannot clash with another copy on the page.

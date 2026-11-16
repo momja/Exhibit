@@ -43,8 +43,8 @@ body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(-
 .exhibit-404__frame{display:block;width:293px;height:auto;transform-origin:48.3% 4.2%;animation:knock 2.8s ease-in-out .25s both}
 
 /* The pivot is the nail already drawn into the mark, not the box centre: in
- * the hanging logo's own viewBox (0 0 40.316795 49.983387) the nail sits at
- * (19.459, 2.1088) -> 48.3% 4.2%. Negative angles swing the bottom of the
+ * the hanging logo's own viewBox (origin 36.08545 36.625489, size 40.316795 x
+ * 49.983387) the nail (55.54385, 38.734268) sits at offset (19.4584, 2.1088) -> 48.3% 4.2%. Negative angles swing the bottom of the
  * frame to the right, i.e. struck on the left. ease-in-out applies per
  * segment, which is what gives the swing slow extremes and a fast pass
  * through centre; the peaks decay 15 -> 9.5 -> 6.2 -> 4 -> 2.5 -> 1.4 -> 0.6

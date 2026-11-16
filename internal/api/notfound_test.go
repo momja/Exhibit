@@ -59,7 +59,7 @@ func TestHTMLRoutesRenderStyled404(t *testing.T) {
 }
 
 // The header inlines the flat mark and the hero draws the hanging variant from
-// its own data URI, so the hanging artwork never lands in the page markup.
+// its own data URI: a distinct artwork kept as an image, not a second inline copy.
 func TestNotFoundHeroUsesHangingVariantAsImage(t *testing.T) {
 	page, err := renderNotFoundPage("/nowhere")
 	require.NoError(t, err)
