@@ -433,8 +433,7 @@ type Store interface {
 	// decisions, share revocation — so a recipient would silently inherit the
 	// ability to destroy the artifact they were shown. Deny-by-default,
 	// naming only the paths a recipient may use, is the shape
-	// agentSubResources and public mode's route allowlist already take, for
-	// this reason.
+	// agentSubResources already takes for this reason.
 	//
 	// It takes a ViewerID, not an owner, and the distinct type is load-bearing:
 	// two principals now exist per request (the OWNER authorizes and may

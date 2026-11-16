@@ -21,3 +21,9 @@ Pattern: Gallery-First Hybrid (Community/Gallery-First). The root route ('/') co
 
 1. Root route '/' renders a read-only artifact gallery when the user is unauthenticated. 2. Root route '/' renders the existing upload form + gallery when the user is authenticated. 3. Admin can configure PUBLIC_INSTANCE_NAME and PUBLIC_INSTANCE_DESCRIPTION (env/config); if set, these render as a small hero/tagline above the public gallery. 4. Individual artifact pages ('/artifact/:id') are publicly readable without authentication. 5. No marketing bloat (pricing, newsletter, about brochure) is added to the app repo. 6. Authentication gating is applied only to mutating routes (upload, settings, tag edit, delete). 7. UI chrome (nav, footer) adapts: authenticated = full controls; unauthenticated = minimal chrome + login link. 8. Existing self-hosted behavior remains unchanged when public mode is not explicitly enabled/configured.
 
+
+## Notes
+
+**2026-11-16T07:14:41Z**
+
+Public mode was retired in Exh-lmor rather than completed. The public demo gallery is a separate site built from artifact exports, not an anonymous library in the core service.

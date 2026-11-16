@@ -164,7 +164,7 @@ func TestPrivateWidgetBrowserShowsSavedDataAndBlocksSelfNavigation(t *testing.T)
 	}
 	run(chromedp.Navigate(app.URL), chromedp.Poll[chromedp.Void](`widgetValue === 'PRIVATE-BALANCE-8392' && widgetReady`))
 	run(chromedp.Evaluate[chromedp.Void](`const outer=document.querySelector('.card-widget-frame');outer.addEventListener('__avresolved',()=>window.healthResolved=true);outer.contentDocument.addEventListener('securitypolicyviolation',e=>violations.push(e.violatedDirective));outer.contentDocument.querySelector('iframe').contentWindow.postMessage({command:'ready'},'*');`), chromedp.Poll[chromedp.Void](`window.healthResolved === true`))
-	for i, destination := range []string{attacker.URL, renderServer.URL + "/w/other-widget", renderServer.URL + "/w/" + id + "?t=" + ro.tokens.MintAnonymous(id, 1)} {
+	for i, destination := range []string{attacker.URL, renderServer.URL + "/w/other-widget", renderServer.URL + "/w/" + id + "?t=" + ro.tokens.Mint("wrong-widget", 1)} {
 		if i > 0 {
 			run(chromedp.Navigate(app.URL), chromedp.Poll[chromedp.Void](`widgetValue === 'PRIVATE-BALANCE-8392' && widgetReady`))
 		}

@@ -18,3 +18,9 @@ Verify that the default state (PUBLIC_MODE_ENABLED unset or false) leaves the ap
 
 1. With public mode disabled (default), unauthenticated requests to /, /api/artifacts, and artifact view routes return 401/redirect to login. 2. Authenticated user experience is unchanged: upload form present, all management controls visible, tag edit works. 3. No public-only hero or tagline appears. 4. All existing tests (if any) pass. 5. Manual smoke test of the full self-hosted flow completes successfully.
 
+
+## Notes
+
+**2026-11-16T07:14:42Z**
+
+Public mode was retired in Exh-lmor rather than completed. The public demo gallery is a separate site built from artifact exports, not an anonymous library in the core service.

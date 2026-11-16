@@ -566,26 +566,9 @@ func TestOAuthConsentRequiresPersonAndSameOrigin(t *testing.T) {
 	cfg := in.ro.cfg
 	cfg.Identity = nil
 	cfg.LocalCredential = nil
-	cfg.Public = PublicMode{Enabled: true, OwnerID: in.ownerOne}
-	public := NewRouter(cfg)
-	clientID, err := public.mintClientID(oauthClient{Name: "public test", RedirectURIs: []string{testRedirect}})
-	require.NoError(t, err)
-	form.Set("client_id", clientID)
-	for _, method := range []string{"GET", "POST"} {
-		target := "/oauth/authorize"
-		if method == "GET" {
-			target += "?" + form.Encode()
-		}
-		req := httptest.NewRequest(method, target, strings.NewReader(form.Encode()))
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		w := httptest.NewRecorder()
-		public.ServeHTTP(w, req)
-		assert.GreaterOrEqual(t, w.Code, 400, "public visitors cannot approve")
-	}
 	// No login: reaching the page identifies the operator, just as Settings does.
-	cfg.Public = PublicMode{}
 	open := NewRouter(cfg)
-	clientID, err = open.mintClientID(oauthClient{Name: "operator agent", RedirectURIs: []string{testRedirect}})
+	clientID, err := open.mintClientID(oauthClient{Name: "operator agent", RedirectURIs: []string{testRedirect}})
 	require.NoError(t, err)
 	form.Set("client_id", clientID)
 	for _, token := range []string{grant.Token, "exgrant_revoked", "exagent_unknown"} {

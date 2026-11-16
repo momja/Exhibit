@@ -2,32 +2,25 @@
  *
  * A server-rendered page authenticates its own fetches with whatever the
  * request that rendered it was entitled to — never with the process's static
- * token by default. The server decides which of three cases applies
- * (internal/api/pagecredential.go) and states it in the page's bootstrap
- * <script> as TOKEN and READ_ONLY:
+ * token by default. The server states that credential as TOKEN in the page's
+ * bootstrap <script> (internal/api/pagecredential.go):
  *
- *   - TOKEN '', READ_ONLY false — a session-authenticated browser. The session
- *     cookie is a real per-user credential the browser attaches to every
- *     same-origin request on its own, so no Authorization header is needed and
- *     none is sent. Handing the page a bearer token here would give it a
- *     second, operator-strength credential that logging out cannot revoke.
- *   - TOKEN '', READ_ONLY true — an anonymous visitor on a public instance.
- *     There is no credential, and writes are refused here rather than sent to
- *     be refused by the server.
- *   - TOKEN set, READ_ONLY false — a single-user instance with no identity
- *     provider. The static token is the only credential such an instance has,
- *     and its page visitor is the operator who holds it anyway.
+ *   - TOKEN '' — a session-authenticated browser uses its revocable cookie.
+ *     Handing it a bearer token would give it a second, operator-strength
+ *     credential that logging out cannot revoke.
+ *   - TOKEN set — on a no-login instance, the visitor is the operator and
+ *     the static token is the page's credential. When API auth is disabled,
+ *     this value is empty too.
  *
- * A fourth value, STATE_WRITABLE, rides beside them and is not a fourth case:
- * it says whether this visitor may write the artifact's own saved data, which
- * a granted recipient may do on an artifact they may not otherwise change
- * (av-v991). apiStateFetch below is where it is spent, and it is the only
- * refusal in this file that is not READ_ONLY's.
+ * READ_ONLY separately describes the page's gallery or artifact: a granted
+ * recipient may read another owner's artifact but may not change it. Writes
+ * are refused here rather than sent to be refused by the server.
+ * STATE_WRITABLE says whether this visitor may write the artifact's saved
+ * data, which a granted recipient may do even on a read-only artifact
+ * (av-v991). apiStateFetch below spends that authority.
  *
- * Page scripts therefore call apiFetch, never fetch-plus-a-hand-built header.
- * That is the point: the three cases are distinguished once, here, and a call
- * site cannot get them wrong individually. A new `'Authorization': 'Bearer ' +
- * TOKEN` anywhere else is the defect this file exists to remove.
+ * Page scripts call apiFetch, never fetch-plus-a-hand-built header, so each
+ * call site uses the same credential and local write policy.
  */
 (function() {
   // TOKEN and READ_ONLY are read at call time rather than captured at load

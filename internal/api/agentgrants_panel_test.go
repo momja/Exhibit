@@ -48,47 +48,36 @@ func agentGrantRefreshRequest(t *testing.T, page string) *http.Request {
 }
 
 func TestAgentGrantsOperatorPanelRefreshKeepsItsCredential(t *testing.T) {
-	for _, public := range []bool{false, true} {
-		t.Run(map[bool]string{false: "private", true: "public"}[public], func(t *testing.T) {
-			base := newTestRouter(t)
-			base.cfg.MCPURL = "https://agents.example.test/mcp"
-			cfg := base.cfg
-			// Quotes and markup characters prove the JSON header survives HTML
-			// escaping and still supplies exactly the configured credential.
-			cfg.AuthToken = `operator-'"<>&`
-			cfg.Public = PublicMode{Enabled: public, OwnerID: defaultOwnerID}
-			ro := NewRouter(cfg)
-			pageReq := httptest.NewRequest(http.MethodGet, "/settings", nil)
-			pageReq.Header.Set("Authorization", "Bearer "+cfg.AuthToken)
-			page := httptest.NewRecorder()
-			ro.ServeHTTP(page, pageReq)
-			require.Equal(t, http.StatusOK, page.Code, page.Body.String())
+	base := newTestRouter(t)
+	base.cfg.MCPURL = "https://agents.example.test/mcp"
+	cfg := base.cfg
+	// Quotes and markup characters prove the JSON header survives HTML
+	// escaping and still supplies exactly the configured credential.
+	cfg.AuthToken = `operator-'"<>&`
+	ro := NewRouter(cfg)
+	pageReq := httptest.NewRequest(http.MethodGet, "/settings", nil)
+	pageReq.Header.Set("Authorization", "Bearer "+cfg.AuthToken)
+	page := httptest.NewRecorder()
+	ro.ServeHTTP(page, pageReq)
+	require.Equal(t, http.StatusOK, page.Code, page.Body.String())
 
-			assert.Contains(t, page.Body.String(), "Copy token")
-			assert.NotContains(t, page.Body.String(), "go install")
-			assert.NotContains(t, page.Body.String(), `id="agent-grant-command"`)
+	assert.Contains(t, page.Body.String(), "Copy token")
+	assert.NotContains(t, page.Body.String(), "go install")
+	assert.NotContains(t, page.Body.String(), `id="agent-grant-command"`)
 
-			// Change the persisted list after loading the page, then replay
-			// the request htmx will send in response to the change event.
-			_, err := ro.cfg.Store.CreateAgentGrant(context.Background(), defaultOwnerID,
-				"New operator connection", "", "panel-test-digest")
-			require.NoError(t, err)
-			refresh := agentGrantRefreshRequest(t, page.Body.String())
-			assert.Equal(t, "Bearer "+cfg.AuthToken, refresh.Header.Get("Authorization"))
-			fragment := httptest.NewRecorder()
-			ro.ServeHTTP(fragment, refresh)
-			require.Equal(t, http.StatusOK, fragment.Code, fragment.Body.String())
-			assert.Contains(t, fragment.Body.String(), "New operator connection")
-			assert.NotContains(t, fragment.Body.String(), cfg.AuthToken)
+	// Change the persisted list after loading the page, then replay
+	// the request htmx will send in response to the change event.
+	_, err := ro.cfg.Store.CreateAgentGrant(context.Background(), defaultOwnerID,
+		"New operator connection", "", "panel-test-digest")
+	require.NoError(t, err)
+	refresh := agentGrantRefreshRequest(t, page.Body.String())
+	assert.Equal(t, "Bearer "+cfg.AuthToken, refresh.Header.Get("Authorization"))
+	fragment := httptest.NewRecorder()
+	ro.ServeHTTP(fragment, refresh)
+	require.Equal(t, http.StatusOK, fragment.Code, fragment.Body.String())
+	assert.Contains(t, fragment.Body.String(), "New operator connection")
+	assert.NotContains(t, fragment.Body.String(), cfg.AuthToken)
 
-			if public {
-				anonymous := httptest.NewRecorder()
-				ro.ServeHTTP(anonymous, httptest.NewRequest(http.MethodGet, "/partials/agent-grants", nil))
-				assert.NotEqual(t, http.StatusOK, anonymous.Code)
-				assert.NotContains(t, anonymous.Body.String(), "New operator connection")
-			}
-		})
-	}
 }
 
 func TestAgentGrantsSessionPanelRefreshUsesOnlyItsCookie(t *testing.T) {

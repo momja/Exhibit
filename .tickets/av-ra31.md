@@ -18,3 +18,9 @@ Add a small hero section above the public gallery that renders the admin-configu
 
 1. Hero renders on the public gallery when PUBLIC_INSTANCE_NAME and/or PUBLIC_INSTANCE_DESCRIPTION are set. 2. Name is rendered as an H1 or prominent heading. 3. Description is rendered as a subtitle below the name. 4. Hero is absent when config values are empty. 5. Hero is not shown on authenticated views. 6. Styling is consistent with the existing gallery's inline CSS.
 
+
+## Notes
+
+**2026-11-16T07:14:43Z**
+
+Public mode was retired in Exh-lmor rather than completed. The public demo gallery is a separate site built from artifact exports, not an anonymous library in the core service.

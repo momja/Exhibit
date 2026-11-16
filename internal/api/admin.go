@@ -92,18 +92,16 @@ func (ro *Router) adminOnly(next http.Handler) http.Handler {
 //     path outside its one artifact, so this is belt and braces; belt and
 //     braces is the correct amount for a check whose failure hands a prompt
 //     injection the user table.
-//  2. **An anonymous visitor on a public instance is never an admin** (av-wmp6).
-//     Publishing a library says nothing about who administers it.
-//  3. **The static service token is.** It is the operator's own credential and
+//  2. **The static service token is.** It is the operator's own credential and
 //     already carries full authority over every route in the API; refusing it
 //     the admin routes would mean an operator could not create the first
 //     account from anything but the CLI, while changing nothing about what they
 //     can reach.
-//  4. **A session, if the account behind it is an enabled admin.** The lookup
+//  3. **A session, if the account behind it is an enabled admin.** The lookup
 //     is per-request rather than baked into the session at login, so an admin
 //     demoted or disabled while logged in stops being one on their next
 //     request — the same property that makes logout immediate.
-//  5. **PrincipalNone: only an instance with no login at all.** This is a
+//  4. **PrincipalNone: only an instance with no login at all.** This is a
 //     property of the instance (ro.loginEnabled()), not of the Principal —
 //     PrincipalNone means "no credential resolved," which happens both for a
 //     fully open instance and, in principle, nowhere else, so the fallback
@@ -117,7 +115,7 @@ func (ro *Router) adminRequest(r *http.Request) bool {
 	ctx := r.Context()
 	p := principalFromCtx(ctx)
 	switch p.Kind {
-	case PrincipalAgentGrant, PrincipalPublic:
+	case PrincipalAgentGrant:
 		return false
 	case PrincipalServiceToken:
 		return true

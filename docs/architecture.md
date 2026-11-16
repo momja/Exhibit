@@ -127,11 +127,6 @@ The only way data changes. Full route reference: `api.md`.
   no id, requires a session (not the service token) and the typed confirmation
   phrase server-side. Refuses the last enabled admin (`ErrLastAdmin`).
 - Collection and tag CRUD.
-- `GET /api/settings/public`: instance name and description, registered outside
-  the authenticated group (av-4ac9). Values come from env on `api.Config`
-  (`PUBLIC_MODE_ENABLED`, `PUBLIC_INSTANCE_NAME`, `PUBLIC_INSTANCE_DESCRIPTION`,
-  `PUBLIC_OWNER_ID`). 404 when public mode is off.
-
 **Conditional source and widget saves** (av-n0gl): independent opaque revisions
 pair each read's bytes with its token. The version transaction checks the token
 even on unchanged saves and commits bundled source metadata atomically; refetch
@@ -158,10 +153,8 @@ handler. Handlers read bodies only via `decodeJSON`, which turns the overrun int
 write peaks near 10× its body. Listeners come from `api.NewServer` with header,
 read and idle timeouts but no write timeout (the agent SSE stream stays open).
 
-**Public mode** (av-wmp6). With `PUBLIC_MODE_ENABLED`, an uncredentialed `GET` of
-`/api/artifacts` or `/api/artifacts/:id` passes, as `PUBLIC_OWNER_ID`, and nothing
-else does. Deny-by-default list. The pass is recorded on the context so pages hide
-edit controls and mint anonymous render tokens (§3.2).
+A public demo gallery is a separate site built from artifact exports, not an
+anonymous library served by the core. Share links authorize individual artifacts.
 
 ### 3.2 Render surface
 
@@ -204,8 +197,7 @@ it safe behind the no-auth share path (§7).
   - **Network reporter** (av-kmwj): a `securitypolicyviolation` listener that posts
     blocked origins to the host. Skips directives the allowlist does not build and
     origins already allowed (a redirect, which goes to the banner instead) or
-    blocked. Once per origin per load. Framed-only; absent for widgets and anonymous
-    viewers. Policy: `security.md` §2.1.
+    blocked. Once per origin per load. Framed-only; absent for widgets. Policy: `security.md` §2.1.
   - **`data:` fetch shim** (agaf-02xs): answers `fetch(data:…)` in-frame, because
     WebKit refuses large `data:` fetches from an opaque origin. Must install before
     any artifact script.
@@ -244,7 +236,7 @@ it safe behind the no-auth share path (§7).
 - **Version view** `/a/:id/versions/:seq` (av-vw7r): an earlier body with the state
   it left behind (`Store.GetVersionView`). Its token is scoped to that version
   (`rendertoken.VersionScope`, in the MAC) and minted only for the owner;
-  `ServeVersion` also 404s an anonymous or non-owner claim with a valid signature.
+  `ServeVersion` also 404s a non-owner claim with a valid signature.
   Nothing persists: the shim's `VERSION_VIEW` flag, the host treating it as a
   different frame, and a CSP `sandbox`. The first refused write posts an empty
   `__avVersionUnsaved` notice so the page can say so (§3.5). The head is not
@@ -261,8 +253,7 @@ it safe behind the no-auth share path (§7).
   omitted when equal to `o` (`MintViewer`) and set on a recipient's frame (av-awr4).
   `s` is reserved for an anonymous link id, never a grant (av-7k7b, Exh-grj9;
   no production caller sets or reads it yet). Duplicate or unknown keys are rejected, and so
-  is a token carrying both `a` and `p`. An `anonymous` claim (av-wmp6) renders with no state
-  inlined and no write-through; it is in the MAC because it subtracts authority.
+  are legacy tokens carrying the retired `a` claim.
   A share still inlines the owner's state. `security.md` §1.3.
 
 ### 3.3 Store interface
@@ -467,8 +458,9 @@ Server-rendered `html/template` pages (`internal/api/templates/`, handlers in
 `internal/api/gallery.go`), static CSS/JS from `web/gallery/` under
 `/assets/gallery/`, per-request values in an inline bootstrap script. Page
 credentials are decided once in `pagecredential.go` and spent by
-`web/gallery/api.js`: a session browser gets no token, an anonymous visitor none plus
-a read-only flag, a no-login instance the static token (`security.md` §1.5).
+`web/gallery/api.js`: a session browser gets no embedded token; a no-login
+instance gets the static token. Read-only controls follow artifact ownership
+(`security.md` §1.5).
 
 Page routes sit in a group under `ownerMiddleware` (av-syug), fed by `sessionGate`.
 A page outside the group reads an empty library (fail closed;
@@ -1084,7 +1076,7 @@ ingest-time transform, degrades to a report, and never seeds the allowlist.
 - **Resync is the same bridge reversed** (av-v991): the host refetches state on
   `visibilitychange`, and every few seconds for a `shared` artifact (shim side:
   §3.2). If no `storage` listener ran, the host offers a reload
-  in app chrome, never automatically. Anonymous frames never resync. Merge is not
+  in app chrome, never automatically. Version snapshots never resync. Merge is not
   solved at this layer, and the UI must not imply collaborative editing.
 - **Downloads, clipboard and external links** ride host-frame bridges with
   per-artifact first-use approval (`downloads_approved`, `clipboard_approved`,

@@ -176,21 +176,16 @@ av-c5aq):
   parsed only *after* the MAC verifies.
 - **The claim set is closed and the parser is strict** (av-6axy): `o` (the
   owner, required, and what authorizes the read), `e` (expiry, required), `p`
-  (the principal whose state is inlined, absent meaning the owner), `a`
-  (anonymous), `s` (the share this render happens under). A duplicate key, an
-  unknown key, a value carrying `.` or `=`, and a token bearing both `a` and `p`
+  (the principal whose state is inlined, absent meaning the owner), `s`
+  (the share this render happens under). A duplicate key, an unknown key,
+  and a value carrying `.` or `=`
   are each rejected rather than resolved: a message this version cannot fully
   read is one it must not act on half of, and `o=1.o=2` must not mean whatever a
   last-wins reader would make of it. The version stays *inside* the MAC and off
   the wire — what a wire version buys, two verifiers side by side through a
   format rollout, the ten-minute TTL already buys.
-- **The optional `a` claim renders for nobody** (av-wmp6): a public instance
-  mints it for a visitor with no credential, and the document it authorizes
-  inlines no state and persists none. It lives *inside* the MAC because it
-  subtracts authority — as a query parameter, the viewer could delete it and be
-  handed the owner's data. It is its own key rather than `p=0` for the same
-  reason: a falsy principal is one careless "zero means unset" branch away from
-  silently promoting a nobody to the owner.
+- **The retired `a` claim is rejected**, including on correctly signed legacy
+  tokens. It cannot be minted or promoted to an owner render.
 - **Key: derived from the existing server secret** (`EXHIBIT_SECRET`, or the
   generated `secret.key`), domain-separated from the AES-GCM key that seals
   agent provider keys. One secret for an operator to manage, not two. With no
@@ -223,10 +218,8 @@ to the owner. A recipient's frame carries their own `p`. That answer is
 load-bearing — `artifact_state` is keyed by `(artifact_id, user_id, key)`
 (av-q0ub), and the token's principal *is* that `user_id`. A principal with rows
 of their own gets exactly those; a principal with none gets an empty cache,
-never somebody else's. An **anonymous** token has no principal at all, so the
-state read is skipped entirely and the shim's write-through is short-circuited
-in the same preamble — "no principal means no state, in or out" is one fact in
-one file rather than two halves that have to keep agreeing.
+never somebody else's. Tokens carrying the retired anonymous claim are rejected
+before any artifact or state is served.
 
 `/s/:shareID` is **unaffected and takes no token**: the share row *is* the
 authorization (`architecture.md` §7), which is what lets a shared link work for
@@ -278,10 +271,8 @@ for two reasons which both have to hold:
    only because **no GET route mutates**. Every `r.Get` in the API group is a
    read: list, detail, state, widget, transcripts, agent key, collections, tags.
 
-The property is "every GET is a *read*", deliberately not "every GET is
-*authenticated*". A public instance (av-4ac9) serves some of those reads with no
-credential at all, and an unauthenticated GET has no credential to abuse — so
-opening a route up does not weaken this, while making one mutate does.
+Every API GET is a read. Session and bearer credentials authorize library
+reads; per-artifact share routes authorize through their link capability.
 
 Both conditions are pinned by `internal/api/csrf_test.go`: the attribute
 directly, and the no-mutating-GET rule by walking the app mux with `chi.Walk` and
@@ -399,7 +390,7 @@ has to decide what credential to write into its bootstrap `<script>`. For as
 long as every page visitor *was* the operator, the answer was the process's
 `AUTH_TOKEN` and that was correct.
 
-Sessions (§1.4) and public mode ended that, and left a real defect behind
+Sessions (§1.4) ended that, and left a real defect behind
 (av-5imk). A logged-in user loaded a page and was handed the operator's
 full-authority service credential. Logging out deleted the session row — but not
 the token in page source they had already loaded. That token grants write
@@ -410,18 +401,17 @@ one property opaque server-side sessions were chosen to provide.
 
 The credential is therefore derived from the **request**, in one place
 (`internal/api/pagecredential.go`), and nowhere else reads `cfg.AuthToken` for
-this purpose. Three cases:
+this purpose. Two cases:
 
 | Visitor | `TOKEN` | `READ_ONLY` | Why |
 |---|---|---|---|
 | Session-authenticated browser | *empty* | `false` | The cookie is already a per-user, server-side-revocable credential, and the browser attaches it to every same-origin fetch. `authMiddleware` checks the session before anything else, so the page's calls authenticate on it alone. An embedded bearer token would be a second, stronger credential that logout cannot take back. |
-| Anonymous visitor on a public instance | *empty* | `true` | There is no credential to give someone who presented none. The page refuses writes locally rather than sending them to be refused, so it degrades to read-only instead of erroring. |
-| No identity provider configured | the static token | `false` | A single-user instance issues no sessions, so the static token is the only credential its page JS can authenticate with — and its page visitor is by construction the operator who already holds it. Nothing changes for the self-hoster. |
+| No login configured | the static token | `false` | A single-user instance issues no sessions, so the static token is the only credential its page JS can authenticate with — and its page visitor is by construction the operator who already holds it. Nothing changes for the self-hoster. |
 
-The third case is written as "no identity provider", deliberately not "no
-session". On an instance that *has* a provider, a page render that resolved no
-session is either a public visitor or a gap in `sessionGate`, and the service
-token is the right answer to neither. Falling back to it would turn every future
+The second case is written as "no login", deliberately not "no
+session". On an instance that *has* a login, a page render that resolved no
+session indicates a gap in `sessionGate`, and the service
+token must be withheld. Falling back to it would turn every future
 hole in the gate into a credential leak rather than a `401`.
 
 `READ_ONLY` is its own column and not `TOKEN == ""` because the two answer
@@ -439,7 +429,7 @@ would lock a recipient out of their own shelf.
 Two supporting pieces follow from the same decision:
 
 - **One client spends it.** `web/gallery/api.js` exposes `apiFetch`; no page
-  script builds an `Authorization` header. The three cases are distinguished
+  script builds an `Authorization` header. The two cases are distinguished
   once, so a call site cannot get them individually wrong.
 - **The SSE stream is the exception that proves it.** `EventSource` sets no
   headers, so a token has to travel in the query string — `apiEventSource`
@@ -481,7 +471,7 @@ request, through middleware, in one place:
 
 | Where | Who resolves the owner | To what |
 |---|---|---|
-| API group (`/api/*`) | `authMiddleware` | the session's user, the agent grant's `OwnerID`, or `PUBLIC_OWNER_ID` for a public visitor; `ownerMiddleware` supplies the single-user default for a token-authenticated client |
+| API group (`/api/*`) | `authMiddleware` | the session's user, the agent grant's `OwnerID`, or the single-user default for a service token |
 | Page group (`/`, `/new`, `/artifacts/…`, `/agent`, `/admin/users`, `/settings`, `/profile`, `/partials/*`) | `sessionGate` | the session's user — the same `sessionUser` lookup it already performed for §1.5, no longer discarded |
 | Page group, instance with no login | `ownerMiddleware` | the single-user default |
 
@@ -554,8 +544,7 @@ a mis-tap, not against a caller who should not be here.
   surface does not exist, and "you may not touch user 7" is byte-identical to
   "there is no user 7" — an admin acting on a missing id gets the same 404 — so
   a refusal cannot be used to enumerate the directory.
-- **Never an agent grant, never an anonymous public visitor.** Both are checked
-  first so no later branch can widen them. The service token *is* admin (it
+- **Never an agent grant.** It is checked first so no later branch can widen it. The service token *is* admin (it
   already holds full authority over every API route); a session is admin only
   while the account behind it is an enabled admin, re-read per request so a
   demotion lands on the next one.
@@ -659,12 +648,9 @@ surface refuses one that names anybody else or nobody, so a future minting call 
 cannot widen it. Every refusal is the same `404` a bad token gets, the current
 version included.
 
-**Nothing it does persists, for three independent reasons.** The anonymous render
-(§1.3) already has a shim that does not write, and its argument for putting that in
-the preamble ends "the API's auth remains the enforcement". That argument does not
-hold here, and this is the difference worth stating: the page that frames a version
-is the *owner's own*, authenticated as the owner, so a write that reached it would be
-performed. Nothing about the document's principal would refuse it. So:
+**Nothing it does persists, for three independent reasons.** The page that frames
+a version is the owner's own, authenticated as the owner, so a write that reached
+it would be performed. Nothing about the document's principal would refuse it:
 
 1. **The shim does not write** — `VERSION_VIEW` stops `persistState` and refuses a
    resync, because a snapshot is how the data *was* and a resync is the host posting
@@ -954,9 +940,7 @@ Five properties of the reporter are load-bearing:
 - **It is framed-only and never anonymous.** A top-level render and a share
   have no trusted app chrome to host a prompt, so violations there stay
   silently blocked; a widget frame omits the reporter along with the rest of
-  the capability bridges. A public instance's unauthenticated visitor cannot
-  record either answer, so they are not asked — the same reasoning that stops
-  the storage shim writing through for them (av-wmp6).
+  the capability bridges.
 - **Decisions go through `POST/DELETE /api/artifacts/:id/origins`, one origin
   at a time.** `PATCH` carries the whole allow set, and a prompt that restated
   it would clobber decisions made elsewhere since its page loaded — and could

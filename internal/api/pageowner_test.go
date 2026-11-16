@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -12,11 +11,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/momja/Exhibit/internal/auth"
-	"github.com/momja/Exhibit/internal/blob"
 	"github.com/momja/Exhibit/internal/connectors"
 	"github.com/momja/Exhibit/internal/rendertoken"
-	"github.com/momja/Exhibit/internal/secrets"
 	"github.com/momja/Exhibit/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -186,7 +182,6 @@ var appOriginGETOwnerScope = []pageOwnerRoute{
 	{route: "/assets/*", why: "embedded static assets, identical for every visitor"},
 	{route: "/manifest.json", why: "static app manifest, identical for every visitor"},
 	{route: "/favicon.ico", why: "static brand mark, identical for every visitor"},
-	{route: "/api/settings/public", why: "the instance's own name and description, deliberately readable by anyone"},
 
 	// Owner-independent by design rather than by omission.
 	{route: "/s/{shareID}", why: "the share row is the authorization (architecture.md §7); it redirects to the render origin and reads no library"},
@@ -597,35 +592,6 @@ func TestSingleUserPagesStillRenderOwnerOnesLibrary(t *testing.T) {
 	}
 }
 
-// AC#4. sessionGate now resolves an owner, and it must not shadow the one
-// public mode resolves for a visitor who presented nothing. The two answer
-// different questions and are reached on different branches: the gate never
-// runs on /api/* at all, and ownerMiddleware's "never overwrite an owner
-// resolved upstream" rule keeps them composable in either order.
-func TestAnonymousPublicVisitorStillResolvesThePublicOwner(t *testing.T) {
-	ro := newPublicLoginRouter(t, PublicMode{Enabled: true, OwnerID: otherOwner})
-
-	published := seedOwnedArtifact(t, ro, otherOwner, "published-artifact", ownerTwoTitle, ownerTwoBody, ownerTwoState)
-	private := seedOwnedArtifact(t, ro, defaultOwnerID, "private-artifact", ownerOneTitle, ownerOneBody, ownerOneState)
-
-	w := httptest.NewRecorder()
-	ro.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/artifacts", nil))
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
-	assert.Contains(t, w.Body.String(), published,
-		"an anonymous read of a public instance resolves PUBLIC_OWNER_ID, login configured or not")
-	assert.NotContains(t, w.Body.String(), private,
-		"the session default must not shadow the published owner (av-wmp6)")
-
-	// And the pages are still gated: nothing marks a *page* request as a
-	// public visitor yet, so an anonymous one is sent to log in. Opening the
-	// pages to anonymous readers is av-eu3v/av-epnt's decision to make
-	// deliberately, not one this ticket should make by accident.
-	page := httptest.NewRecorder()
-	ro.ServeHTTP(page, httptest.NewRequest(http.MethodGet, "/", nil))
-	assert.Equal(t, http.StatusFound, page.Code)
-	assert.Contains(t, page.Header().Get("Location"), "/auth/login")
-}
-
 // The two middlewares compose. sessionGate resolves the owner and the marker
 // together; ownerMiddleware, running underneath it, leaves the owner alone and
 // only supplies one when nobody upstream did.
@@ -680,36 +646,3 @@ func TestOwnerIDFromCtxFailsClosed(t *testing.T) {
 
 // newPublicLoginRouter builds an instance that is both public and has a login —
 // the configuration where the two owner-resolving paths meet.
-func newPublicLoginRouter(t *testing.T, public PublicMode) *Router {
-	t.Helper()
-
-	f, err := os.CreateTemp("", "test-pageowner-*.db")
-	require.NoError(t, err)
-	f.Close()
-	t.Cleanup(func() { os.Remove(f.Name()) })
-
-	st, err := store.OpenSQLite(f.Name())
-	require.NoError(t, err)
-	t.Cleanup(func() { st.Close() })
-
-	blobDir, err := os.MkdirTemp("", "test-pageowner-blobs-*")
-	require.NoError(t, err)
-	t.Cleanup(func() { os.RemoveAll(blobDir) })
-
-	bl, err := blob.NewFSStore(blobDir)
-	require.NoError(t, err)
-
-	box, err := secrets.Load("test-secret", "")
-	require.NoError(t, err)
-
-	return NewRouter(Config{
-		Store:        st,
-		Blob:         bl,
-		AppOrigin:    "https://app.test",
-		RenderOrigin: "https://render.test",
-		AuthToken:    "secret",
-		Secrets:      box,
-		Identity:     &stubProvider{identities: []auth.Identity{{ExternalID: "sub-1"}}},
-		Public:       public,
-	})
-}

@@ -81,8 +81,7 @@ func TestGalleryPublicLinkKeepsSpacesAvailable(t *testing.T) {
 
 func TestGallerySpacesRequireSession(t *testing.T) {
 	in := newTwoOwnerInstance(t)
-	// Public mode does not make personal gallery routes anonymous.
-	in.ro.cfg.Public = PublicMode{Enabled: true, OwnerID: in.ownerOne}
+	// Personal gallery routes require authentication.
 	for _, path := range []string{"/", "/search", "/shared", "/activity"} {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		w := httptest.NewRecorder()

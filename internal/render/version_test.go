@@ -153,8 +153,8 @@ func TestAVersionDocumentCannotPersistAnything(t *testing.T) {
 // view must never apply one, or it would show the present and call it the past.
 func TestAVersionPreambleRefusesToBeResyncedOverItsSnapshot(t *testing.T) {
 	doc := injectPreamble("<head></head>", "abc", "https://app.test",
-		map[string]string{"k": "v"}, originPolicy{}, false, false, true, nil)
-	if !strings.Contains(doc, "window.parent !== window && !ANONYMOUS && !VERSION_VIEW") {
+		map[string]string{"k": "v"}, originPolicy{}, false, true, nil)
+	if !strings.Contains(doc, "window.parent !== window && !VERSION_VIEW") {
 		t.Fatalf("the resync listener must not be installed in a version view: %s", doc)
 	}
 	// Everything else about the preamble is the artifact's own: a version runs.
@@ -208,7 +208,6 @@ func TestAVersionIsOnlyServedToItsOwner(t *testing.T) {
 
 	for name, tok := range map[string]string{
 		"a recipient (a principal other than the owner)": testTokens.MintViewer(scope, 1, 2),
-		"nobody (a public visitor)":                      testTokens.MintAnonymous(scope, 1),
 	} {
 		w := serveVersion(rd, "abc", 1, tok)
 		if w.Code != 404 || strings.Contains(w.Body.String(), "OLD-BODY") {

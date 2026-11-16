@@ -52,11 +52,6 @@ func main() {
 	}
 	logging.Configure(level)
 
-	// Public instance mode (av-4ac9): configuration only — it changes no
-	// authentication behaviour on its own. Read after logging is configured,
-	// because a malformed knob is reported rather than silently fixed up.
-	publicMode := api.PublicModeFromEnv()
-
 	// Per-owner entitlements (av-2p8z). Unset is limits switched off, which is
 	// every self-hosted instance and is byte-identical to before this existed.
 	// Switched on without a default entitlement is fatal here rather than a
@@ -114,7 +109,6 @@ func main() {
 		slog.String("render_addr", renderAddr),
 		slog.String("log_level", levelName(level)),
 		slog.Bool("debug", level <= slog.LevelDebug),
-		slog.Bool("public_mode", publicMode.Enabled),
 		slog.Int64("max_request_body_bytes", maxBodyBytes),
 	)
 	if len(embedOrigins) > 0 {
@@ -123,12 +117,6 @@ func main() {
 		// without diffing an environment file against the defaults.
 		slog.Info("third-party share embedding enabled",
 			slog.String("embed_origins", strings.Join(embedOrigins, " ")),
-		)
-	}
-	if publicMode.Enabled {
-		slog.Info("public instance mode enabled",
-			slog.String("instance_name", publicMode.Name),
-			slog.Int64("public_owner_id", publicMode.OwnerID),
 		)
 	}
 
@@ -319,7 +307,6 @@ func main() {
 		Identity:            identity,
 		LocalCredential:     localCredential,
 		LocalUsers:          localUsers > 0,
-		Public:              publicMode,
 		Entitlements:        entitlements,
 		EmbedOrigins:        embedOrigins,
 		Chromium:            browser,
