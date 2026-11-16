@@ -1,6 +1,6 @@
 ---
 id: Exh-u1t3
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-11-16T06:04:43Z
@@ -100,3 +100,7 @@ Prototype artifacts are throwaway; review images live outside the checkout.
 
 Recovery preserved existing implementation. Fixed attribution test configuration starting the app twice, pinned direct-open response digest, tested duplication policy and agent-credential refusal. Chromium layout/theme/embed and native anchor checks pass. WebKit rerun accounts for browser focus restoration across reload and shared-host load. Final evidence and exact check limitations will be recorded on PR; reviewer verdicts are not supplied by implementer.
 
+
+**2026-11-16T23:00:40Z**
+
+Recovery finalized the requested top-bar implementation, preserving newer main ticket history. Placement follows the explicit parent brief (top strip); the older three-placement spike is superseded for this implementation. Chromium and WebKit actual-CSP native-anchor evidence and 320/1280 light/dark screenshots are under /tmp/exhibit-review/banner. Independent final-head visual and code/security verdicts remain parent-owned; no implementer merge.
