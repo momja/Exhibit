@@ -1719,3 +1719,48 @@ the unused remote account is revoked or retained as durable retry work. Cleanup
 never revokes a reference already adopted by a saved connection. Account erasure
 drains pending work first; unresolved provider outcomes cannot silently discard
 the remote account's cleanup record.
+
+## Optional anonymous-share attribution
+
+`SHARE_ATTRIBUTION_ENABLED` is off by default; the owner's `share_attribution`
+choice (`inherit` / `show` / `hide`) wins. Only the live `/s/:shareID` artifact
+route consults it. Disabled responses retain their original bytes and headers;
+private renders, versions, direct opens, widget documents and OG images do not
+consult this policy. The bar reveals the serving product, no owner identity or
+new capability, and sends no telemetry.
+
+**Shared-document limit:** injecting a node or shadow root into an artifact's own
+HTML cannot make attribution hostile-artifact-proof. Artifact scripts can remove
+its host, cover it, replace the document or change layout; closed shadow roots
+and mutation observers do not change that authority. Observers also impose
+continuous work, race with code, and risk focus/pointer interference. We reject
+that mechanism. Enabled shares instead put the artifact in a separate srcdoc
+frame with `sandbox="allow-scripts allow-forms"`; the response also carries the
+same CSP sandbox and adds `frame-src 'self'` for srcdoc. The inherited CSP retains
+the artifact's origin allowlist. No allow-same-origin, allow-popups,
+allow-top-navigation or postMessage bridge is added. The child has a fresh opaque
+origin and cannot remove, restyle or cover the parent bar through DOM access.
+This also narrows currently unsandboxed top-level shares, and costs a separate
+browsing context, escaped HTML, a focus boundary and top-level API compatibility.
+It does not make arbitrary hostile HTML safe or guarantee the artifact's own
+usability: code can still blank or navigate its own frame, exhaust resources,
+mislead the viewer, or expose the data its owner chose to publish. A third-party
+framer can cover or crop the entire share. Branding is not a security seal.
+
+The bar is outside the artifact's viewport and reserves 36px; no overlay, focus
+call, pointer handler or mutation observer runs over the tool. The product link
+uses self navigation on direct shares. In any frame it loses href synchronously
+at parse time, becoming intentionally inert plain attribution with an explanatory
+title. Both Chromium and WebKit browser regressions exercise this behavior under
+the response's actual sandbox without popup/top-navigation tokens. Existing
+share disclosure, read-only state and OG snapshot behavior remain unchanged.
+
+Browser measurements (Playwright Chromium and WebKit, November 2026): native
+`target="_blank"` and `target="_top"` anchors were blocked, while a normal anchor
+navigated the embedded child and replaced the tool. This is why framed attribution
+is inert rather than a live self-navigation link. At both 320px and 1280px widths,
+in light and dark, the 720px test viewport left 684px for a scroll-locked `100vh`
+canvas tool; its bottom-fixed Save button, keyboard traversal and canvas pointer
+input remained usable. The third-party embed used an origin explicitly named in
+`EMBED_ORIGINS`. These fixtures establish compatibility for those layouts, not
+every possible artifact; owners retain the hide override.

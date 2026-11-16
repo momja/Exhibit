@@ -79,3 +79,9 @@ report the verdicts with the evidence they were based on.
 5. The robustness guarantee is stated in the epic and justified.
 6. Reviewers pass it: visual round and code/security round, findings resolved,
    screenshots attached to the epic's PR.
+
+## Notes
+
+**2026-11-16T21:02:06Z**
+
+Recovery preserved existing implementation. Fixed attribution test configuration starting the app twice, pinned direct-open response digest, tested duplication policy and agent-credential refusal. Chromium layout/theme/embed and native anchor checks pass. WebKit rerun accounts for browser focus restoration across reload and shared-host load. Final evidence and exact check limitations will be recorded on PR; reviewer verdicts are not supplied by implementer.

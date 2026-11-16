@@ -84,7 +84,8 @@ type Config struct {
 	// third-party page has business holding one. They are framed by the app
 	// origin alone whatever this holds — neither opened by an empty value nor
 	// narrowed by a populated one.
-	EmbedOrigins []string
+	EmbedOrigins            []string
+	ShareAttributionEnabled bool
 	// PreviewImagePNG is the generic link-preview card (av-rclm): Exhibit's
 	// logo at the size of a widget snapshot. It is what a share's og:image
 	// shows when there is no snapshot to show, and what /og.png serves. The
@@ -285,7 +286,7 @@ func (rd *Renderer) ServeShare(w http.ResponseWriter, r *http.Request) {
 	// only render URL a person pastes into a chat, and the only one a crawler
 	// may open with no credential.
 	rd.serveDoc(w, r, a,
-		document{blobID: a.SourceBlobID, kind: kindArtifact, headMeta: rd.previewTags(a, shareID), publicShare: true},
+		document{blobID: a.SourceBlobID, kind: kindArtifact, headMeta: rd.previewTags(a, shareID), publicShare: true, attribution: a.ShowShareAttribution(rd.cfg.ShareAttributionEnabled)},
 		rendertoken.Claims{OwnerID: a.OwnerID, ViewerID: a.OwnerID},
 		shareFrameAncestors(rd.cfg.AppOrigin, rd.cfg.EmbedOrigins))
 }
@@ -522,6 +523,7 @@ type document struct {
 	kind        docKind
 	state       map[string]string
 	publicShare bool
+	attribution bool
 	// headMeta is markup for the very top of <head>: a share's link-preview
 	// tags (av-rclm), and empty on every other route.
 	headMeta string
@@ -628,6 +630,9 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 		// frame is given.
 		csp += "; " + versionSandbox
 	}
+	if doc.attribution {
+		csp += "; frame-src 'self'; " + versionSandbox
+	}
 	w.Header().Set("Content-Security-Policy", csp)
 	// A widget's authority is a strict subset of its artifact's (av-fafu), so a
 	// tile is denied devices and location whatever the artifact holds — it renders
@@ -720,6 +725,9 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 		// Ahead of the preamble, and of any og: tags the artifact wrote for
 		// itself: a crawler reads the first, and may read no further.
 		out = prependToHead(out, doc.headMeta)
+	}
+	if doc.attribution {
+		out = rd.attributedShare(out, a, doc.headMeta)
 	}
 	slog.DebugContext(r.Context(), "rendered artifact",
 		slog.String("artifact_id", a.ID),

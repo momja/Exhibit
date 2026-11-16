@@ -81,6 +81,7 @@ Env vars, all optional except `AUTH_TOKEN`.
 | `PUBLIC_INSTANCE_DESCRIPTION` | *(unset)* | One line about it |
 | `PUBLIC_OWNER_ID` | `1` | Whose library the instance publishes — every artifact query filters on an owner, so a public instance has to name one. `1` is the owner a single-user library is already filed under |
 | `EMBED_ORIGINS` | *(unset)* | Restricts who may put a **share** in an iframe to `APP_ORIGIN` plus these. Origins separated by commas or spaces; an entry that is not an origin is a startup failure rather than a silent drop. Unset = any site may frame a share, which is what a public link is for; `/a/:id` and `/w/:id` are framed by your gallery alone either way |
+| `SHARE_ATTRIBUTION_ENABLED` | `false` | Opt-in top bar on anonymous `/s/:shareID` artifact pages. Fail-closed boolean (`true/1/yes/on` enable; unset, false or invalid values disable). Owners override per artifact with `share_attribution`: `inherit`, `show`, `hide` in the share panel or PATCH API. |
 | `CHROMIUM_CDP_URL` | *(unset)* | DevTools endpoint of a headless Chromium (`ws://chrome:9222`, or `https://`/`wss://` behind a TLS proxy) that server features share. Today it draws each share link's preview image from its widget. Unset = no browser, and every link preview shows the Exhibit logo card. A value that is not a `ws(s)://` or `http(s)://` URL is a startup failure (below) |
 | `BLOB_S3_BUCKET` | *(unset)* | Store artifact bodies in this S3-compatible bucket instead of on disk. Unset = filesystem under `DATA_DIR`, exactly as before (§7) |
 | `BLOB_S3_ENDPOINT` | AWS S3 | The bucket's API host, with an optional scheme: `http://localhost:9000`, `https://minio.example.com`, or a bare host. **Without a scheme, TLS is assumed** |
@@ -1382,3 +1383,24 @@ Everyone absent from that list is on the instance default.
 the account's own row, so there is nothing left behind and nothing to clean up
 — and someone who signs in again afterwards arrives as a new account on the
 default, not on their old allowance.
+
+### Anonymous-share attribution
+
+The optional bar uses the existing Exhibit mark and “made with exhibit”, pointing
+at the public product origin. It discloses that Exhibit serves the document,
+not its owner, instance configuration, or author identity. Owners can explicitly
+show the bar even on an instance whose default is off. Widgets and preview
+images are unchanged. Existing artifacts migrate to `inherit`.
+
+Enabled shares use a 36px top strip and a separate sandboxed srcdoc artifact
+frame below it. The tool gets its own remaining viewport: `100vh`, fixed bottom
+controls and scroll locking refer to that viewport. This costs a browsing
+context, escaped HTML bytes and an extra focus boundary; it adds no network
+request. The tool cannot access the bar's DOM. This is a compatibility change
+only for enabled shares: scripts relying on being top-level, device permissions,
+relative URLs tied to `about:srcdoc`, native popups or durable origin storage may
+behave differently. Disable the bar per artifact for such tools.
+
+The product link navigates the current document when opened directly. Inside
+any iframe it is intentionally plain text (no href, no tab stop), with a title
+explaining how to visit Exhibit. No popup or top-navigation permission is added.

@@ -95,3 +95,9 @@ do not invent a second wordmark.
 5. Documented in `docs/deployment.md` and `docs/security.md` (what it does and
    does not reveal about a share).
 
+
+## Notes
+
+**2026-11-16T21:02:06Z**
+
+Implementation uses a separate opaque-origin srcdoc child below a 36px top bar, rather than a shared-DOM node or mutation observer. Child DOM isolation protects the bar; arbitrary hostile tools can still navigate/blank themselves, exhaust resources, or mislead viewers; third-party framers can crop/cover the share. Cost: browsing context, escaped HTML bytes, extra focus boundary and top-level API compatibility; owners can hide it. Default remains off, explicit show/hide wins. Only live /s/:shareID consults attribution. Chromium native-anchor measurements show popup/top navigation blocked and self navigation replacing embedded tool, so framed attribution deliberately loses href; no sandbox permission is loosened. Evidence: /tmp/exhibit-review/banner/. Independent final-head visual and code/security reviews are parent-owned and still required; implementer does not merge.

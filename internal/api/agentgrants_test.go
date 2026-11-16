@@ -229,6 +229,12 @@ func TestLibraryGrantRefusesOtherRouteFamilies(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "A", a.Title)
 	assert.Equal(t, "own", a.ShareStateMode)
+	w = doWithToken(t, r, "PATCH", "/api/artifacts/"+id, issued.Token, map[string]string{"share_attribution": "hide", "title": "hijacked"})
+	require.Equal(t, 400, w.Code, w.Body.String())
+	a, err = r.cfg.Store.GetArtifact(context.Background(), defaultOwnerID, id)
+	require.NoError(t, err)
+	assert.Equal(t, "A", a.Title)
+	assert.Equal(t, "inherit", a.ShareAttribution)
 }
 
 func TestAgentGrantRevocationAndDigestOnlyStorage(t *testing.T) {

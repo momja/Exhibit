@@ -317,6 +317,13 @@
   <p class="share-data-note" role="note"><i class="ph ph-info" aria-hidden="true"></i><span>Sharing can expose saved results from connected accounts, but never grants account access.</span></p>
   <section class="share-col">
     <h3>Public link</h3>
+    <label for="share-attribution">Exhibit attribution</label>
+    <select id="share-attribution" class="field" aria-describedby="share-attribution-help">
+      <option value="inherit"{{if or (eq .Attribution "inherit") (eq .Attribution "")}} selected{{end}}>Instance default ({{if .AttributionDefault}}shown{{else}}hidden{{end}})</option>
+      <option value="show"{{if eq .Attribution "show"}} selected{{end}}>Show</option>
+      <option value="hide"{{if eq .Attribution "hide"}} selected{{end}}>Hide</option>
+    </select>
+    <p class="form-help" id="share-attribution-help">A “made with exhibit” bar on the public artifact page. Your choice overrides the instance default.</p>
     {{/* A toggle, not a create button, because an artifact has exactly one
          anonymous link (a partial unique index, av-lrae): on mints the row and
          shows the URL, off deletes it and the URL dies. Nothing accumulates a

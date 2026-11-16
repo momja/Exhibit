@@ -643,9 +643,11 @@ func (ro *Router) sharePanel(r *http.Request, a *store.Artifact) (sharePanelView
 		return sharePanelView{}, err
 	}
 	view := sharePanelView{
-		ArtifactID:      a.ID,
-		Shares:          newArtifactSharesView(shares, ro.shareURL),
-		StateModeShared: a.ShareStateMode == store.ShareStateShared,
+		ArtifactID:         a.ID,
+		Shares:             newArtifactSharesView(shares, ro.shareURL),
+		StateModeShared:    a.ShareStateMode == store.ShareStateShared,
+		Attribution:        a.ShareAttribution,
+		AttributionDefault: ro.cfg.ShareAttributionEnabled,
 	}
 	if view.Shares.Link != nil {
 		view.WidgetEmbed = `<iframe src="` + ro.shareWidgetURL(view.Shares.Link.ID) +
@@ -872,9 +874,11 @@ type widgetView struct {
 // offers a choice between exactly two answers and a template comparing strings
 // would be a third place the enum's spelling has to be right.
 type sharePanelView struct {
-	ArtifactID      string
-	Shares          artifactSharesView
-	StateModeShared bool
+	ArtifactID         string
+	Shares             artifactSharesView
+	StateModeShared    bool
+	Attribution        string
+	AttributionDefault bool
 	// WidgetEmbed is the ready-to-paste iframe snippet for the artifact's
 	// shared tile (av-ei5h). Empty when there is no public link, since the
 	// URL inside it would not resolve. An artifact with no widget still gets

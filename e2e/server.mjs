@@ -7,9 +7,12 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 
+const appPort = Number(process.env.EXHIBIT_E2E_APP_PORT || 18080);
+const renderPort = Number(process.env.EXHIBIT_E2E_RENDER_PORT || 18081);
+
 // Fail before touching logs or starting a process if either test port is in use.
 // The Go process also fails on bind errors, covering a race after this check.
-for (const port of [18080, 18081]) {
+for (const port of [appPort, renderPort]) {
   const probe = createServer();
   await new Promise((resolve, reject) => {
     probe.once('error', reject);
@@ -32,11 +35,12 @@ const child = spawn(binary, [], {
     PATH: dataDir,
     TZ: 'UTC',
     DATA_DIR: dataDir,
-    ADDR: '127.0.0.1:18080',
-    RENDER_ADDR: '127.0.0.1:18081',
-    APP_ORIGIN: 'http://127.0.0.1:18080',
-    RENDER_ORIGIN: 'http://127.0.0.1:18081',
+    ADDR: `127.0.0.1:${appPort}`,
+    RENDER_ADDR: `127.0.0.1:${renderPort}`,
+    APP_ORIGIN: `http://127.0.0.1:${appPort}`,
+    RENDER_ORIGIN: `http://127.0.0.1:${renderPort}`,
     AUTH_TOKEN: 'exhibit-e2e-only-token',
+    EMBED_ORIGINS: process.env.EXHIBIT_E2E_EMBED_ORIGINS || '',
   },
   stdio: ['ignore', log.fd, log.fd],
 });

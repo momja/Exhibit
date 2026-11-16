@@ -91,3 +91,13 @@ is unchanged.
 Repository branch protection and rulesets must not require **Browser regression**,
 since PRs no longer report that status. Local Playwright execution remains
 explicit through `make e2e` or `make e2e-ui`.
+
+For concurrent worktrees, set `EXHIBIT_E2E_APP_PORT` and
+`EXHIBIT_E2E_RENDER_PORT` to a distinct pair in the test command. The attribution
+suite uses both Chromium and WebKit (`playwright install --with-deps chromium
+webkit`), an explicit third-party embed origin, and writes review images and
+measurements outside the checkout:
+
+```sh
+EXHIBIT_E2E_APP_PORT=18380 EXHIBIT_E2E_RENDER_PORT=18381 npm test --prefix e2e -- --config attribution.config.ts
+```

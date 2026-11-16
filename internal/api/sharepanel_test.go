@@ -506,3 +506,32 @@ func patchArtifactStatus(t *testing.T, ro *Router, artifactID, body string) int 
 	ro.ServeHTTP(w, req)
 	return w.Code
 }
+
+func TestShareAttributionPatchValidation(t *testing.T) {
+	ro := newTestRouter(t)
+	id := seedShareableArtifact(t, ro, "Attribution")
+	for _, mode := range []string{"inherit", "show", "hide"} {
+		assert.Equal(t, http.StatusOK, patchArtifactStatus(t, ro, id, `{"share_attribution":"`+mode+`"}`))
+		a, err := ro.cfg.Store.GetArtifact(context.Background(), 1, id)
+		require.NoError(t, err)
+		assert.Equal(t, mode, a.ShareAttribution)
+	}
+	for _, bad := range []string{`""`, `"invalid"`, `true`, `1`, `null`, `[]`} {
+		assert.Equal(t, http.StatusBadRequest, patchArtifactStatus(t, ro, id, `{"share_attribution":`+bad+`}`))
+	}
+	a, err := ro.cfg.Store.GetArtifact(context.Background(), 1, id)
+	require.NoError(t, err)
+	for _, bad := range []any{"", "invalid", true, 1, nil} {
+		require.Error(t, ro.cfg.Store.UpdateArtifact(context.Background(), 1, id, map[string]any{"share_attribution": bad}))
+	}
+	b, err := ro.cfg.Store.GetArtifact(context.Background(), 1, id)
+	require.NoError(t, err)
+	assert.Equal(t, a.ShareAttribution, b.ShareAttribution)
+}
+
+func TestShareAttributionEnvironmentFailsClosed(t *testing.T) {
+	for _, raw := range []string{"", "false", "off", "typo", "true", "yes", "1"} {
+		t.Setenv("SHARE_ATTRIBUTION_ENABLED", raw)
+		assert.Equal(t, raw == "true" || raw == "yes" || raw == "1", ShareAttributionFromEnv(), raw)
+	}
+}

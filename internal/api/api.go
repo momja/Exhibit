@@ -127,7 +127,8 @@ type Config struct {
 	// It is carried here only to reach the render surface, which is where the
 	// shares-only decision is argued: see render.Config.EmbedOrigins. Read
 	// from the environment by EmbedOriginsFromEnv (embedorigins.go).
-	EmbedOrigins []string
+	EmbedOrigins            []string
+	ShareAttributionEnabled bool
 	// Chromium is the operator's headless browser, shared by every server
 	// feature that needs one; link previews of shares (av-rclm) are the first.
 	// nil — no CHROMIUM_CDP_URL — means there is none, and each feature falls
@@ -793,7 +794,8 @@ func (ro *Router) RenderHandler() http.Handler {
 		FaviconSVG: exhibitLogoSVG,
 		// Empty on every instance that has not asked to restrict framing,
 		// which leaves a share's frame-ancestors open (av-q3iy).
-		EmbedOrigins: ro.cfg.EmbedOrigins,
+		EmbedOrigins:            ro.cfg.EmbedOrigins,
+		ShareAttributionEnabled: ro.cfg.ShareAttributionEnabled,
 		// Link previews (av-rclm): the logo card every preview falls back to,
 		// and the browser that draws a live share's widget, if any.
 		PreviewImagePNG: previewImagePNG(),
