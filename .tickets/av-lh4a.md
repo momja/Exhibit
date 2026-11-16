@@ -30,3 +30,7 @@ Note `exhibit_state_changed` is correctly implemented and must keep reloading th
 **2026-11-16T17:48:36Z**
 
 Widget saves now select and swap only the server-rendered tile, preserving the artifact iframe; artifact/state saves still replace the pane. Chromium regression covers first/repeated widget saves, an initially unbound preview, independent stamps, and an open version viewer. Verified rebuilt assets, go vet ./..., focused AgentPreview|Widget tests and node --check.
+
+**2026-11-16T18:10:29Z**
+
+Independent Pi review requested changes on 4335ea2e: fixed synthetic htmx event target in gallery test; historical-viewer test now counts both refresh event types after SSE acknowledgement; widget requests use this:replace independently of pane requests, with a delayed-response overlapping-save regression. Focused AgentPreview|Widget|GalleryPageScriptSuite tests (including Chromium), rebuilt assets, go vet and JS syntax checks passed. Fresh review required before merge.

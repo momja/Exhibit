@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -36,7 +37,20 @@ func testAgentPreviewSaves(t *testing.T, bound bool) {
 	defer cancel()
 
 	handler, id, events := markdownBrowserFixture(t)
-	srv := httptest.NewServer(handler)
+	// Hold one preview response to exercise overlapping widget/artifact saves.
+	var holdNext atomic.Bool
+	held, release := make(chan struct{}, 1), make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/partials/agent-preview" && holdNext.CompareAndSwap(true, false) {
+			held <- struct{}{}
+			select {
+			case <-release:
+			case <-r.Context().Done():
+				return
+			}
+		}
+		handler.ServeHTTP(w, r)
+	}))
 	defer func() { cancel(); srv.CloseClientConnections(); srv.Close() }()
 	run := func(actions ...chromedp.Action[chromedp.Void]) {
 		t.Helper()
@@ -98,14 +112,29 @@ func testAgentPreviewSaves(t *testing.T, bound bool) {
 		check(`new URL(document.getElementById('pv-frame').src).searchParams.get('r') !== new URL(oldFrameSrc).searchParams.get('r')`)
 		remember()
 	}
+	// A queued widget refresh must never displace a pending artifact refresh.
+	remember()
+	holdNext.Store(true)
+	emit("exhibit_widget_saved")
+	select {
+	case <-held:
+	case <-ctx.Done():
+		t.Fatal("widget request did not start")
+	}
+	run(chromedp.Evaluate[chromedp.Void](`window.messageCount = document.querySelectorAll('.msg').length;`))
+	emit("exhibit_widget_saved")
+	emit("exhibit_artifact_saved")
+	run(chromedp.Poll[chromedp.Void](`document.querySelectorAll('.msg').length >= messageCount + 2`))
+	close(release)
+	run(chromedp.Poll[chromedp.Void](`document.getElementById('pv-frame') && document.getElementById('pv-frame').src !== oldFrameSrc`))
 	// Use the actual server-rendered historical viewer, then await the SSE
 	// notification to ensure widget saves were processed without displacing it.
 	run(chromedp.Evaluate[chromedp.Void](fmt.Sprintf(`htmx.ajax('GET', '/partials/version-viewer?artifact=%s&seq=1', {target:'#pane-preview', swap:'innerHTML'});`, id)),
 		chromedp.Poll[chromedp.Void](`document.getElementById('version-viewer') !== null`),
-		chromedp.Evaluate[chromedp.Void](`window.oldViewer = document.getElementById('version-viewer'); window.messageCount = document.querySelectorAll('.msg').length;`))
+		chromedp.Evaluate[chromedp.Void](`window.oldViewer = document.getElementById('version-viewer'); window.messageCount = document.querySelectorAll('.msg').length; window.previewRefreshes = 0; for (const name of ['exhibit:artifact-saved', 'exhibit:widget-saved']) document.body.addEventListener(name, () => window.previewRefreshes++);`))
 	emit("exhibit_widget_saved")
 	run(chromedp.Poll[chromedp.Void](`document.querySelectorAll('.msg').length > messageCount`))
-	check(`document.getElementById('version-viewer') === oldViewer && !document.getElementById('pv-frame')`)
+	check(`previewRefreshes === 0 && document.getElementById('version-viewer') === oldViewer && !document.getElementById('pv-frame')`)
 	emit("exhibit_artifact_saved")
 	run(chromedp.Poll[chromedp.Void](`document.getElementById('pv-frame') !== null && !document.getElementById('version-viewer')`))
 	if dir := os.Getenv("AGENT_PREVIEW_SCREENSHOT_DIR"); dir != "" {

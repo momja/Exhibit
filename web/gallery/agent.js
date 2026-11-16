@@ -1067,6 +1067,7 @@ document.getElementById('pane-preview').addEventListener('click', (e) => {
 // snippet pick in flight is against a document that no longer exists. Drop the
 // mode rather than leave the button lit over a dead selection.
 document.getElementById('pane-preview').addEventListener('htmx:after:swap', (e) => {
+  // Nested tile swaps preserve the artifact document and need no pane reset.
   if (e.target.id !== 'pane-preview') return;
   if (snippetMode) endSnippetMode();
 });
@@ -1123,6 +1124,7 @@ networkPrompt.install({
 // page noticed the new frame would be lost, which is the failure mode the
 // handshake exists to remove.
 document.getElementById('pane-preview').addEventListener('htmx:after:swap', function (e) {
+  // Nested tile swaps preserve the artifact document and need no pane reset.
   if (e.target.id !== 'pane-preview') return;
   networkPrompt.announceTo(previewFrame());
 });

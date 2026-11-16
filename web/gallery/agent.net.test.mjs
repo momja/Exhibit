@@ -128,7 +128,7 @@ test("the host announces itself to each swapped-in preview frame", async () => {
   // htmx replaces the frame on every agent save, so the handshake has to run
   // again — a violation raised before the page noticed the new frame would
   // otherwise be lost, which is the failure the handshake exists to remove.
-  page.byId("pane-preview").dispatchEvent({ type: "htmx:after:swap" });
+  page.byId("pane-preview").dispatchEvent({ type: "htmx:after:swap", target: page.byId("pane-preview") });
 
   assert.ok(frame.contentWindow.posted.some((m) => m.__avHostReady === true),
     "each new preview frame must be told the host is listening");
