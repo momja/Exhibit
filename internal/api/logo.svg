@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="36.3 47.04 38.5 38" role="img" aria-label="Exhibit logo" class="logo" focusable="false">
-<rect style="fill:#ffffff;stroke:#000000;stroke-width:1.00649;stroke-linecap:round" width="37.476799" height="36.98209" x="36.80545" y="47.547268"/>
-<rect style="fill:#23559e;stroke:#000000;stroke-width:1.99229;stroke-linecap:round;paint-order:stroke markers fill" width="12.447359" height="16.068565" x="61.341995" y="67.967896"/>
-<path style="fill:#de281d;stroke:#000000;stroke-width:1.98523;stroke-linecap:round;paint-order:stroke markers fill" d="M 60.383501,72.781407 H 37.290736 V 48.036637 H 60.383501 V 52.82273 H 45.481485 v 4.270925 h 13.829928 v 4.786094 H 45.481485 v 6.115565 h 14.902016 z"/>
-<rect style="fill:#fae317" width="23.057453" height="10.245288" x="37.318401" y="73.774017"/>
+<rect style="fill:#f6efdc;stroke:#1f2a1c;stroke-width:1.00649;stroke-linecap:round" width="37.476799" height="36.98209" x="36.80545" y="47.547268"/>
+<rect style="fill:#2f6fc4;stroke:#1f2a1c;stroke-width:1.99229;stroke-linecap:round;paint-order:stroke markers fill" width="12.447359" height="16.068565" x="61.341995" y="67.967896"/>
+<path style="fill:#d9432b;stroke:#1f2a1c;stroke-width:1.98523;stroke-linecap:round;paint-order:stroke markers fill" d="M 60.383501,72.781407 H 37.290736 V 48.036637 H 60.383501 V 52.82273 H 45.481485 v 4.270925 h 13.829928 v 4.786094 H 45.481485 v 6.115565 h 14.902016 z"/>
+<rect style="fill:#f2b63c" width="23.057453" height="10.245288" x="37.318401" y="73.774017"/>
 </svg>

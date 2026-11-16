@@ -25,11 +25,11 @@ const [, , VIEWBOX_WIDTH, VIEWBOX_HEIGHT] = svg
   .split(/\s+/)
   .map(Number);
 
-const BACKGROUND = "#ffffff"; // matches the logo's own white card + the manifest's background_color
+const BACKGROUND = "#f1e9d6"; // paper: tokens.css --color-ground, and the manifest's background_color/theme_color
 
 // Plain (non-maskable) icons: the flat mark centred on a square canvas at its
 // native aspect ratio. The viewBox is tight to the frame, so the mark takes 80%
-// of the canvas and leaves a margin of white around it.
+// of the canvas and leaves a margin of paper around it.
 async function renderIcon(size, fileName) {
   const inner = Math.round(size * 0.8);
   const mark = await sharp(svg)
@@ -75,7 +75,7 @@ async function renderMaskableIcon(size, fileName, safeFraction = 0.8) {
 // link that does not resolve to a live share. The same size as a widget
 // snapshot (ImageWidth x ImageHeight in internal/ogsnap), so a preview card
 // keeps its shape whichever image it gets; the ground is tokens.css's
-// --color-ground, which the logo's white card reads against.
+// --color-ground (paper), which the logo's cream card reads against.
 async function renderPreviewCard(width, height, fileName) {
   const logoHeight = Math.round(height * 0.6);
   const logo = await sharp(svg)
@@ -84,7 +84,7 @@ async function renderPreviewCard(width, height, fileName) {
     .toBuffer();
 
   await sharp({
-    create: { width, height, channels: 4, background: "#f0f0f0" },
+    create: { width, height, channels: 4, background: BACKGROUND },
   })
     .composite([{ input: logo, gravity: "center" }])
     .png()

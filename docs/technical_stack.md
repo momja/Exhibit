@@ -353,11 +353,23 @@ lighten under `prefers-color-scheme: dark`; their paint is a presentation attrib
 because an inline `style` would outrank that rule (a test pins it). Per-artifact favicons
 (`internal/artifacticon`) are separate.
 
+**Logo pigments (Exh-d5ku).** Both artworks are painted in the hero painting's
+pigments, named in `internal/color/brand.go`: blue `#2f6fc4`, red `#d9432b`, yellow
+`#f2b63c`, the cream cell `#f6efdc`, and ink `#1f2a1c` for the frame and strokes.
+`TestLogoArtworkUsesBrandPigments` holds the SVGs to those constants. The flat mark
+needs no dark-mode lightening: on dusk the ink frame sinks into the ground, but the
+pigment blocks and the cream cell still define the edge. The hanging wire and nail
+sit on the bare page, so they keep their lighter dark-mode paint. The manifest's
+`theme_color` and `background_color` and the PWA/OG canvases take paper
+(`#f1e9d6`), the ground the app opens on, because a manifest cannot follow the
+colour scheme; the old logo blue is no longer a surface colour anywhere.
+
 Artifact viewer tabs and direct render documents share a generated SVG favicon
 from `internal/artifacticon`: an asymmetric Mondrian grid inspired by the logo,
 with up to three tag-colored panels in gallery tag order. The panels have similar
-areas, with one smaller panel always white. Untagged artifacts use Exhibit’s red,
-blue, and yellow; unused tag panels stay white. Render-time icon links replace
+areas, with one smaller panel always white. Untagged artifacts use the logo pigments
+(red, blue, yellow) on an ink ground; unused tag panels and the fixed panel use the
+logo's cream. Render-time icon links replace
 stored favicon links without changing the saved source; widgets retain their
 existing rendering. Other app pages and the automatic `/favicon.ico` routes keep
 the full Exhibit logo.

@@ -34,13 +34,13 @@ func TestTagMosaic(t *testing.T) {
 	for count := 1; count <= len(tags); count++ {
 		rects := iconRectangles(t, tags[:count])
 		for i, panel := range rects[1:4] {
-			want := "#fff"
+			want := color.BrandWhite
 			if i < count {
 				want = color.Normalize(tags[i].Color)
 			}
 			require.Equal(t, want, panel.Fill)
 		}
-		require.Equal(t, "#fff", rects[4].Fill, "retain the white brand panel")
+		require.Equal(t, color.BrandWhite, rects[4].Fill, "retain the white brand panel")
 	}
 }
 

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/momja/Exhibit/internal/color"
 )
 
 // webManifestIcon is one entry of the web app manifest's "icons" array
@@ -30,10 +29,11 @@ type webManifest struct {
 	StartURL        string            `json:"start_url"`
 }
 
-// manifestBackgroundColor matches the white card the logo's own artwork sits
-// on (logo.svg) so the manifest's background_color agrees with the icons
-// it's paired with.
-const manifestBackgroundColor = "#ffffff"
+// manifestPaper is the light-mode page ground (tokens.css --color-ground). A
+// manifest cannot follow prefers-color-scheme, so the splash background, the
+// icons' canvas (web/pwa-icons) and the browser chrome's theme_color all take
+// the paper the app opens on, not the old logo blue (Exh-d5ku).
+const manifestPaper = "#f1e9d6"
 
 var exhibitManifest = webManifest{
 	Name:      "Exhibit",
@@ -43,8 +43,8 @@ var exhibitManifest = webManifest{
 		{Src: "/assets/icons/icon-512.png", Sizes: "512x512", Type: "image/png", Purpose: "any"},
 		{Src: "/assets/icons/icon-512-maskable.png", Sizes: "512x512", Type: "image/png", Purpose: "maskable"},
 	},
-	ThemeColor:      color.BrandBlue,
-	BackgroundColor: manifestBackgroundColor,
+	ThemeColor:      manifestPaper,
+	BackgroundColor: manifestPaper,
 	Display:         "standalone",
 	StartURL:        "/",
 }
