@@ -11,6 +11,8 @@ import (
 // The account panel lists only the current owner's durable connections.
 // Newly issued grant tokens are never part of a page or fragment response.
 type agentGrantsPanelView struct {
+	MCPURLField    copyFieldView
+	CommandField   copyFieldView
 	MCPURL         string
 	ClaudeCommand  string
 	RefreshHeaders string
@@ -52,6 +54,8 @@ func (ro *Router) agentGrantsPanel(r *http.Request) (*agentGrantsPanelView, erro
 		// Keep operator-configured URLs literal even with shell metacharacters.
 		view.ClaudeCommand = "claude mcp add --transport http exhibit '" + strings.ReplaceAll(view.MCPURL, "'", "'\\''") + "'"
 	}
+	view.MCPURLField = copyFieldView{ID: "agent-mcp-url", Label: "MCP endpoint", CopyLabel: "Copy URL", Value: view.MCPURL}
+	view.CommandField = copyFieldView{ID: "agent-mcp-command", Label: "Claude Code", CopyLabel: "Copy command", Value: view.ClaudeCommand}
 	for _, grant := range grants {
 		row := agentGrantRowView{
 			ID: grant.ID, Label: grant.Label, Client: grant.Client,
@@ -95,4 +99,8 @@ func (ro *Router) agentGrantsPanelPartial(w http.ResponseWriter, r *http.Request
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	fmt.Fprint(w, fragment)
+}
+
+func (view agentGrantsPanelView) TokenField() copyFieldView {
+	return copyFieldView{ID: "agent-grant-token", Label: "Token", CopyLabel: "Copy token"}
 }

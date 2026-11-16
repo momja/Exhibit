@@ -1,6 +1,6 @@
 ---
 id: Exh-7y0c
-status: in_progress
+status: open
 deps: []
 links: []
 created: 2026-11-16T06:04:05Z
