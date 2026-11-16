@@ -1,6 +1,6 @@
 ---
 id: Exh-sez0
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-11-02T15:59:54Z
@@ -25,3 +25,9 @@ In custom connection setup the user chooses the destination origin. A tool or a 
 
 Tests for each recognized format and a mismatch; browser test of the warning on desktop and phone; screenshots updated.
 
+
+## Notes
+
+**2026-11-16T07:35:39Z**
+
+Implemented on feature/Exh-sez0/credential-origin-warning. Recognized formats (Anthropic, OpenAI, GitHub, Stripe, Slack, GitLab, Hugging Face, npm, Google) are compared against the chosen origin's registrable domain (publicsuffix) at the single create path in connectors.Service.Create, so the API cannot skip the check; a mismatch is a 409 credential_origin_mismatch carrying the credential label and both origins, and the same request with confirm_origin_mismatch succeeds. The connect form names the destination host as the origin is typed and renders the warning plus a 'Send to <host> anyway' confirmation in server-rendered markup. Basic credentials are exempt because they are not key-shaped. Reconnect was left alone: it cannot change the origin, which is the field this warning is about.

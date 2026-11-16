@@ -3,7 +3,7 @@ import { apiFetch, viewerFetch } from './api-module.js';
 
 export default class extends Controller {
   static values = { artifactId: String, returnUrl: String };
-  static targets = ['provider', 'fields', 'createForm', 'createError', 'createButton', 'feedback'];
+  static targets = ['provider', 'fields', 'createForm', 'createError', 'createButton', 'feedback', 'destination', 'destinationHost', 'createWarning', 'createWarningText', 'confirmButton'];
 
   connect() { this.active = true; if (this.hasProviderTarget) this.providerChanged(); }
 
@@ -22,16 +22,35 @@ export default class extends Controller {
   }
 
   basicURLChanged() {
-    if (this.providerTarget.value !== 'basic') return;
+    if (this.providerTarget.value !== 'basic') { this.destinationChanged(); return; }
     const fields = this.createFormTarget.elements;
     const usingURL = fields.access_url.value !== '';
     for (const name of ['origin', 'username', 'password']) fields[name].disabled = usingURL;
+    this.destinationChanged();
+  }
+
+  // Name the destination in the form itself, before the credential is pasted.
+  // The credential is only ever sent to one host, and a person deciding whether
+  // to trust this setup should see which host that is without submitting.
+  destinationChanged() {
+    if (!this.hasDestinationTarget) return;
+    const fields = this.createFormTarget.elements;
+    const raw = fields.access_url?.value || fields.origin?.value || '';
+    const host = hostOf(raw);
+    this.destinationTarget.hidden = host === '';
+    this.destinationHostTarget.textContent = host;
   }
 
   async request(path, options = {}) {
     const response = await viewerFetch(path, options);
-    const data = response.status === 204 ? null : await response.json();
-    if (!response.ok) throw new Error(data?.error || 'The change could not be saved.');
+    const data = response.status === 204 ? null : await response.json().catch(() => null);
+    if (!response.ok) {
+      const error = new Error(data?.error || 'The change could not be saved.');
+      // Answerable refusals carry a code and the details the copy needs; the
+      // callers that care read them, everything else sees the message alone.
+      if (data && typeof data === 'object') Object.assign(error, { code: data.code, details: data });
+      throw error;
+    }
     return data;
   }
 
@@ -53,6 +72,7 @@ export default class extends Controller {
 
   async create(event) {
     await this.action(event, async () => {
+      this.clearCreateWarning();
       this.createErrorTarget.textContent = '';
       const data = Object.fromEntries(new FormData(this.createFormTarget));
       const [recipe, vendorProvider] = data.recipe.split(':');
@@ -75,10 +95,45 @@ export default class extends Controller {
           const result = await this.connectVendor(data, vendorWindow);
           this.setupFinished(result.connection.id);
         } else {
-          const connection = await this.request('/api/connections', { method: 'POST', body: JSON.stringify(data) });
-          this.setupFinished(connection.id);
+          await this.saveNative(data, false);
         }
       } catch (error) { vendorWindow?.close(); this.createErrorTarget.textContent = error.message; }
+    });
+  }
+
+  // The destination warning is a decision, not a failure: saving the same form
+  // again with the person's confirmation is the only way past it.
+  async saveNative(data, confirmed) {
+    try {
+      const connection = await this.request('/api/connections', { method: 'POST', body: JSON.stringify(confirmed ? { ...data, confirm_origin_mismatch: true } : data) });
+      this.setupFinished(connection.id);
+    } catch (error) {
+      if (error.code !== 'credential_origin_mismatch' || confirmed) throw error;
+      this.pendingCreate = data;
+      this.showCreateWarning(error.details);
+    }
+  }
+
+  showCreateWarning(details) {
+    const destination = hostOf(details.origin) || details.origin;
+    const expected = hostOf(details.expected_origin) || details.expected_origin;
+    this.createWarningTextTarget.textContent = 'This looks like a ' + (details.credential || 'credential') +
+      ', which normally goes to ' + expected + '. Saving it here sends it to ' + destination + ' instead.';
+    this.confirmButtonTarget.textContent = 'Send to ' + destination + ' anyway';
+    this.createWarningTarget.hidden = false;
+    this.createWarningTarget.scrollIntoView({ block: 'nearest' });
+  }
+
+  clearCreateWarning() {
+    if (this.hasCreateWarningTarget) this.createWarningTarget.hidden = true;
+    this.pendingCreate = null;
+  }
+
+  confirmCreate(event) {
+    this.action(event, async () => {
+      const data = this.pendingCreate;
+      this.clearCreateWarning();
+      if (data) await this.saveNative(data, true);
     });
   }
 
@@ -214,4 +269,15 @@ export default class extends Controller {
   }
 
   artifactPath(suffix) { return '/api/artifacts/' + encodeURIComponent(this.artifactIdValue) + suffix; }
+}
+
+// hostOf is the host an origin or credential URL names, for display only. It
+// never leaves the browser, and it strips any credentials a pasted Basic URL
+// carries rather than echoing them into the page.
+function hostOf(value) {
+  try {
+    return new URL(value).host.toLowerCase();
+  } catch {
+    return '';
+  }
 }

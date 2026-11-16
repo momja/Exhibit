@@ -160,6 +160,12 @@ type CreateRequest struct {
 	CacheMinutes       int    `json:"cache_minutes,omitempty"`
 	VendorProvider     string `json:"vendor_provider,omitempty"`
 	VendorConnectionID string `json:"vendor_connection_id,omitempty"`
+	// ConfirmOriginMismatch records that the person saw the destination
+	// warning and chose to save a credential whose well-known format belongs
+	// to another service anyway (Exh-sez0). It is explicit per request, so no
+	// API caller can pass it by accident, and the warning never disappears
+	// silently.
+	ConfirmOriginMismatch bool `json:"confirm_origin_mismatch,omitempty"`
 }
 
 type recipe struct {
@@ -256,6 +262,13 @@ func (s *Service) Create(ctx context.Context, ownerID int64, in CreateRequest, l
 		}
 		if (provider != "basic" && c.Value == "") || (provider == "basic" && c.Password == "") {
 			return nil, fmt.Errorf("%w: credential is required", ErrInvalid)
+		}
+		// The destination is the person's to choose, but a credential whose
+		// issuer is public knowledge should not travel somewhere else by
+		// accident. Basic credentials are not key-shaped, so only the
+		// single-secret recipes are checked.
+		if err := credentialDestinationCheck(c.Value, r.Origins, in.ConfirmOriginMismatch); err != nil {
+			return nil, err
 		}
 	case "vendor", "nango", "composio":
 		if !s.cfg.VendorEnabled {
