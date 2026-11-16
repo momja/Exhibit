@@ -243,9 +243,9 @@ See docs/security.md §1.4.`
 // entirely reasonable at review time.
 //
 // Note the property is "every GET is a *read*", not "every GET is
-// *authenticated*". Public mode (av-4ac9) serves some of these reads with no
-// credential at all, and an unauthenticated GET has nothing to forge; opening a
-// route up must not fail this test, while making one mutate must.
+// *authenticated*". Login and share routes can answer without a session, and
+// an unauthenticated GET has nothing to forge; opening a route up must not
+// fail this test, while making one mutate must.
 func TestNoAppOriginGETRouteMutates(t *testing.T) {
 	declared := map[string]getRoute{}
 	for _, row := range appOriginGETRoutes {

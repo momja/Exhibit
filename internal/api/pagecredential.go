@@ -46,15 +46,13 @@ type pageCredentials struct {
 func (ro *Router) pageCredentials(r *http.Request) pageCredentials {
 	ctx := r.Context()
 	p := principalFromCtx(ctx)
-	readOnly := p.ReadOnly
 	return pageCredentials{
 		Clerk:              ro.clerkView(r),
 		Token:              ro.pageToken(ctx),
 		RelayEnabled:       ro.cfg.Relay.Enabled,
 		ConnectionsEnabled: ro.cfg.Connections != nil,
-		ReadOnly:           readOnly,
 		// Match the state API: unresolved requests on a login-enabled instance cannot write.
-		StateWritable: !readOnly && (!ro.loginEnabled() || p.Kind != PrincipalNone),
+		StateWritable: !ro.loginEnabled() || p.Kind != PrincipalNone,
 	}
 }
 

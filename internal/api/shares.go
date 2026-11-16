@@ -108,10 +108,6 @@ const (
 const maxBulkRecipients = 100
 
 func (ro *Router) createShare(w http.ResponseWriter, r *http.Request) {
-	if principalFromCtx(r.Context()).ReadOnly {
-		writeError(w, http.StatusForbidden, "read-only visitor may not mutate")
-		return
-	}
 	var req createShareRequest
 	if !decodeJSON(w, r, &req) {
 		return
@@ -411,10 +407,6 @@ func shareRecipientLabel(u *store.User) string {
 }
 
 func (ro *Router) deleteShare(w http.ResponseWriter, r *http.Request) {
-	if principalFromCtx(r.Context()).ReadOnly {
-		writeError(w, http.StatusForbidden, "read-only visitor may not mutate")
-		return
-	}
 	id := chi.URLParam(r, "shareID")
 
 	ownerID := ownerIDFromCtx(r.Context())
@@ -440,10 +432,6 @@ func (ro *Router) deleteShare(w http.ResponseWriter, r *http.Request) {
 // deleteGrant names the recipient in a query parameter, never a path segment.
 // The store keeps the owner predicate in the DELETE itself.
 func (ro *Router) deleteGrant(w http.ResponseWriter, r *http.Request) {
-	if principalFromCtx(r.Context()).ReadOnly {
-		writeError(w, http.StatusForbidden, "read-only visitor may not mutate")
-		return
-	}
 	recipients := r.URL.Query()["recipient"]
 	if len(recipients) != 1 {
 		writeError(w, http.StatusBadRequest, "one recipient is required")

@@ -246,15 +246,6 @@ func (ro *Router) deleteAccount(w http.ResponseWriter, r *http.Request) {
 			"account deletion acts on the signed-in account, and this request has none")
 		return
 	}
-	// Redundant today — the only read-only principal is the anonymous public
-	// visitor, which is not a session and was refused above — but every
-	// mutating handler in this package asks, and the most destructive one is
-	// the wrong place to be the exception. av-7k7b's read-only *session* is
-	// the case that would make it load-bearing.
-	if principalFromCtx(ctx).ReadOnly {
-		writeError(w, http.StatusForbidden, "read-only visitor may not mutate")
-		return
-	}
 
 	var req deleteAccountRequest
 	if !decodeJSON(w, r, &req) {

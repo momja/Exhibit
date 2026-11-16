@@ -47,9 +47,6 @@ type listAgentGrantsResponse struct {
 // time. (agentScopeAllows already refuses it; this says so again here.)
 func (ro *Router) mayManageAgentGrants(r *http.Request) bool {
 	p := principalFromCtx(r.Context())
-	if p.ReadOnly {
-		return false
-	}
 	switch p.Kind {
 	case PrincipalSession:
 		return true

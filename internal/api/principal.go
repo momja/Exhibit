@@ -54,8 +54,6 @@ type Principal struct {
 	// for a later guess (av-syug AC#6 — see ownerIDFromCtx).
 	OwnerID int64
 	Kind    PrincipalKind
-	// ReadOnly says this principal may not mutate, whatever route it reaches.
-	ReadOnly bool
 	// Grant is the scoped credential this request authenticated with, non-nil
 	// only when Kind is PrincipalAgentGrant.
 	Grant *agentscope.Grant

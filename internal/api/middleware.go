@@ -80,7 +80,7 @@ func (ro *Router) authMiddleware(next http.Handler) http.Handler {
 		}
 
 		// A revoked or unknown persisted credential never degrades to anonymous
-		// access, even on an open or public instance.
+		// access, even on an auth-disabled instance.
 		if agentscope.IsPersistedToken(token) {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -94,6 +94,9 @@ func (ro *Router) authMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// artifactsSubPath returns the suffix of an escaped artifact API path, including
+// its leading slash when nonempty. The segment boundary rejects lookalike route
+// prefixes; keeping escapes intact lets agentScopeAllows reject encoded separators.
 func artifactsSubPath(escapedPath string) (rest string, ok bool) {
 	rest, ok = strings.CutPrefix(escapedPath, "/api/artifacts")
 	if !ok || (rest != "" && !strings.HasPrefix(rest, "/")) {
@@ -286,6 +289,11 @@ func agentScopeAllows(scope agentscope.Scope, method, escapedPath string) bool {
 	return false
 }
 
+// ownerMiddleware supplies the single-user default owner for requests no
+// upstream credential check attributed to somebody. It preserves a Principal
+// already resolved by authMiddleware for the API or sessionGate for pages.
+// Every route reading library data runs this backstop so handlers never have
+// to guess whose library to use.
 func (ro *Router) ownerMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if principalResolved(r.Context()) {

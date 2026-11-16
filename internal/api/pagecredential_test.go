@@ -383,12 +383,6 @@ func TestPageCredentialsPerVisitor(t *testing.T) {
 		withLocal.pageCredentials(req(session)),
 		"local login, session-authenticated: the cookie is the credential")
 
-	// ReadOnly follows the resolved principal, including read-only sessions.
-	readOnlySession := withPrincipal(context.Background(), Principal{Kind: PrincipalSession, ReadOnly: true})
-	assert.Equal(t, pageCredentials{ReadOnly: true},
-		withIdentity.pageCredentials(req(readOnlySession)),
-		"session-authenticated but read-only: no token (the cookie is the credential), and ReadOnly must still be honored")
-
 	// StateWritable is not ReadOnly inverted, and this is where the two part
 	// company (av-v991). A visitor writes an artifact's saved data when they
 	// have a principal to write it as; unresolved login requests are refused
@@ -485,6 +479,6 @@ func TestANonOwnerKeepsTheStateWriteAndLosesEverythingElse(t *testing.T) {
 
 	// And the removal only ever removes: a visitor who could not write state
 	// before does not acquire it by looking at their own library.
-	anonymous := pageCredentials{ReadOnly: true}
-	assert.False(t, anonymous.forArtifactOwnedBy(7, 7).StateWritable)
+	readOnly := pageCredentials{ReadOnly: true}
+	assert.False(t, readOnly.forArtifactOwnedBy(7, 7).StateWritable)
 }
