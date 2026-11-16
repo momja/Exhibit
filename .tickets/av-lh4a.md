@@ -38,3 +38,7 @@ Independent Pi review requested changes on 4335ea2e: fixed synthetic htmx event 
 **2026-11-16T18:38:10Z**
 
 Second Pi review found the independent widget request queue could lose the tile when a pre-widget pane response arrived late. Replaced tile-owned requests with a persistent sibling htmx source, a shared queue-all ordering for both refresh types, and out-of-band selection of the current widget element. Added TestAgentPreviewStalePaneBeforeWidgetSaveBrowser from the reviewer reproducer, using SSE/DOM acknowledgements rather than sleeps. Earlier independent-queue rationale is superseded; fresh review remains required.
+
+**2026-11-16T19:02:31Z**
+
+Third review requested stronger concurrency tests. Stale-pane test now records before:request on the persistent widget source and after:swap on the pane, asserting no widget request starts before the held pane swaps and exact pane-then-widget ordering. Held-widget test now queues artifact before widget so queue-last cannot hide a lost artifact refresh. All four mutations fail: own queue, queue-last, removed viewer guard, old widget-to-artifact fallback (/tmp/av-lh4a-mut4-*.log). Removed obsolete pane event guards and reverted their fixture change; clarified queue-all render tradeoff. Non-blocking limitation accepted: widget-only refresh cannot display non-tile 404/500 fragments if the artifact disappears; normal artifact refresh still owns pane error UI. Shell screenshots are supported by DOM assertions, not byte-transfer measurement.

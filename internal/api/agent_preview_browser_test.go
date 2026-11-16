@@ -122,8 +122,8 @@ func testAgentPreviewSaves(t *testing.T, bound bool) {
 		t.Fatal("widget request did not start")
 	}
 	run(chromedp.Evaluate[chromedp.Void](`window.messageCount = document.querySelectorAll('.msg').length;`))
-	emit("exhibit_widget_saved")
 	emit("exhibit_artifact_saved")
+	emit("exhibit_widget_saved")
 	run(chromedp.Poll[chromedp.Void](`document.querySelectorAll('.msg').length >= messageCount + 2`))
 	close(release)
 	run(chromedp.Poll[chromedp.Void](`document.getElementById('pv-frame') && document.getElementById('pv-frame').src !== oldFrameSrc`))

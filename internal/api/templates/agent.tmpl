@@ -73,7 +73,7 @@
        aria-label="Resize agent chat" aria-orientation="vertical" aria-controls="pane-chat"
        aria-valuemin="280" aria-valuenow="460"></div>
   {{/* The pane's contents are a server-rendered fragment (agentPreview), and
-       every agent save re-fetches it: the artifact-saved hook fires the
+       artifact and state saves re-fetch it: the artifact-saved hook fires the
        exhibit:artifact-saved event on <body>, htmx GETs the fragment for the
        session's current artifact, and swaps it in. The wiring lives here, in
        markup, so agent.js never rebuilds markup the template already owns. */}}
@@ -83,7 +83,8 @@
        hx-vals='js:{artifact: previewArtifactId()}'
        hx-swap="innerHTML" hx-sync="this:queue all">{{template "agentPreview" .Preview}}</div>
   {{/* This request source survives pane swaps. Serialize both refresh types,
-       then resolve the live tile by ID when the response arrives. */}}
+       then resolve the live tile by ID when the response arrives. Queue all costs
+       extra renders during bursts but prevents later writes being dropped. */}}
   <div hidden id="pv-widget-refresh" hx-get="/partials/agent-preview"
        hx-trigger="exhibit:widget-saved from:body"
        hx-vals='js:{artifact: previewArtifactId()}'

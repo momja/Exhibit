@@ -1066,9 +1066,7 @@ document.getElementById('pane-preview').addEventListener('click', (e) => {
 // A swap replaces the iframe, so the artifact reloads from scratch: any
 // snippet pick in flight is against a document that no longer exists. Drop the
 // mode rather than leave the button lit over a dead selection.
-document.getElementById('pane-preview').addEventListener('htmx:after:swap', (e) => {
-  // Nested tile swaps preserve the artifact document and need no pane reset.
-  if (e.target.id !== 'pane-preview') return;
+document.getElementById('pane-preview').addEventListener('htmx:after:swap', () => {
   if (snippetMode) endSnippetMode();
 });
 
@@ -1123,9 +1121,7 @@ networkPrompt.install({
 // so this runs again on each one — without it a violation raised before the
 // page noticed the new frame would be lost, which is the failure mode the
 // handshake exists to remove.
-document.getElementById('pane-preview').addEventListener('htmx:after:swap', function (e) {
-  // Nested tile swaps preserve the artifact document and need no pane reset.
-  if (e.target.id !== 'pane-preview') return;
+document.getElementById('pane-preview').addEventListener('htmx:after:swap', function () {
   networkPrompt.announceTo(previewFrame());
 });
 networkPrompt.announceTo(previewFrame());
