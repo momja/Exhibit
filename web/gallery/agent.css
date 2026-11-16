@@ -76,7 +76,7 @@ body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(-
 .msg.assistant table{display:block;max-width:100%;overflow-x:auto;border-collapse:collapse}
 .msg.assistant :is(th,td){border:1px solid var(--color-border);padding:6px 10px;text-align:left;min-width:90px}
 .msg.assistant th{background:var(--color-ground);font-weight:600}
-.msg.assistant a{color:var(--brand-blue);text-decoration:underline;text-underline-offset:2px}
+.msg.assistant a{color:var(--color-link);text-decoration:underline;text-underline-offset:2px}
 .msg.assistant a:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px}
 .msg.assistant input[type="checkbox"]{margin-right:6px}
 .msg.assistant hr{border:0;border-top:1px solid var(--color-border)}

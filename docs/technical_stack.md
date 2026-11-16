@@ -536,6 +536,16 @@ keyboard and a landscape tablet is wide and still touched. The standing rule whe
 adding a control: size it from the token, never a literal `px` — a hardcoded size
 opts it out of the bump silently, and the symptom only shows up on a phone.
 
+**Palette (Exh-plvh).** Light is a paper ground (`#f1e9d6`) and dark is dusk
+(`#14182e`). The UI accent, `--brand-blue`, is ink (cream in the dark) and fills
+every button and accent mark; the logo's pigments live in `internal/color` and
+no longer feed it. Inline text links alone use `--color-link` (slate, light blue
+in the dark), so a link never reads as a button. Danger, warning and success
+are separate hues: success is a green kept out of the accent's role.
+`internal/api/palette_contrast_test.go` parses `tokens.css` and holds every
+text/surface pair to WCAG AA in both modes, so a changed value fails without a
+browser. Clerk panels take the same tokens through `clerk-appearance.js`.
+
 **Dark mode follows the system (av-xie4).** There is no in-app toggle: every
 app-origin page reads `prefers-color-scheme`. `tokens.css` declares
 `color-scheme: light dark` on `:root`, so native controls, scrollbars and form

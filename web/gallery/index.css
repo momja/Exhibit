@@ -46,7 +46,7 @@ main{padding:var(--page-top) var(--page-gutter)}
 /* Cards use the shared surface language. Keep overflow visible so action
  * menus and capability popovers can extend beyond their card. */
 .card{position:relative;display:flex;flex-direction:column;padding:0;border:1px solid var(--color-card-border);border-radius:var(--radius-lg);box-shadow:var(--shadow-card);cursor:pointer}
-.card:hover,.card:focus-within{border-color:var(--brand-blue);box-shadow:0 0 0 1px var(--brand-blue)}
+.card:hover,.card:focus-within{box-shadow:var(--shadow-card-hover)}
 .card .card-widget{margin:0;border-radius:calc(var(--radius-lg) - 1px) calc(var(--radius-lg) - 1px) 0 0;border-bottom-color:var(--color-hairline)}
 
 /* One title line keeps metadata compact. Fade the trailing edge rather than
@@ -95,7 +95,8 @@ main{padding:var(--page-top) var(--page-gutter)}
 }
 
 .empty{color:var(--color-muted);font-size:0.875rem;padding:20px 0}
-.empty a{color:var(--brand-blue)}
+.empty a{color:var(--color-link)}
+.empty a:hover{color:var(--color-link-hover)}
 
 /* A first artifact deserves more than a missing-results message. The welcome
  * spans the grid and uses the shared palette in both color schemes. */
