@@ -134,7 +134,7 @@ func TestAgentGrantsBrowserConnectionInstructionsBeforeIssuing(t *testing.T) {
 				assert.Equal(t, endpoint, fields["agent-mcp-url"])
 				assert.Equal(t, "claude mcp add --transport http exhibit '"+strings.ReplaceAll(endpoint, "'", "'\\''")+"'", fields["agent-mcp-command"])
 				for _, text := range []string{
-					`id="agent-mcp-url-copy"`, `id="agent-mcp-command-copy"`,
+					`aria-label="Copy URL"`, `aria-label="Copy command"`, `data-controller="copy-field"`,
 					"Then run /mcp in Claude Code, choose Authenticate, and approve the connection in your browser.",
 					"Other MCP clients connect to the same URL and sign in the same way.",
 					"Use a token instead", "No agents connected yet.",

@@ -14,10 +14,8 @@ const paths = (api) => api.calls.map((c) => c.method + ' ' + c.path);
 async function loadShare({ link = '', stateMode = 'own', responses = [] } = {}) {
   const api = recordingApi(responses);
   const events = [];
-  const copied = [];
   const page = loadPageScript([], {
     ID: 'unused-page-global', apiFetch: api.apiFetch, CustomEvent,
-    navigator: { clipboard: { writeText: async (text) => { copied.push(text); } } }
   }, {
     'share-panel': { open: true },
     'share-add-input': { value: '' },
@@ -121,7 +119,7 @@ async function loadShare({ link = '', stateMode = 'own', responses = [] } = {}) 
     return prevented;
   };
   await page.loadModule(SHARE_JS);
-  return { ...page, panel, api, events, copied, controls, people, click, mode, linkOn, names, enter, submit,
+  return { ...page, panel, api, events, controls, people, click, mode, linkOn, names, enter, submit,
     composition, revoke, refresh, refreshError, settle };
 }
 
@@ -326,25 +324,6 @@ test('Done closes without replaying changes or keeping unsent names for the next
   assert.equal(page.byId('share-add-input').value, '');
   assert.equal(page.byId('share-state-shared').checked, true);
   assert.deepEqual(paths(page.api), ['PATCH /api/artifacts/' + ID]);
-});
-
-test('both copy controls work when their Phosphor icon is clicked', async () => {
-  const page = await loadShare({ link: 'public' });
-  await page.click('share-link-copy', true);
-  await page.click('share-widget-copy', true);
-  assert.deepEqual(page.copied, ['http://render.test/s/public', '<iframe src="example"></iframe>']);
-});
-
-test('HTTP origins without a clipboard API offer manual copying', async () => {
-  const page = await loadShare({ link: 'public' });
-  page.window.navigator.clipboard = undefined;
-  await page.click('share-link-copy');
-  assert.equal(page.byId('share-link-url').selected, true);
-  assert.match(page.byId('share-status').textContent, /Select the link and copy it/);
-  await page.click('share-widget-copy');
-  assert.equal(page.byId('share-widget-embed').selected, true);
-  assert.match(page.byId('share-status').textContent, /Select the embed code and copy it/);
-  assert.deepEqual(page.api.calls, []);
 });
 
 // A deleted artifact returns a server-rendered notice instead of editor fields.

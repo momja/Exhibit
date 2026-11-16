@@ -80,20 +80,6 @@ function initializeAgentGrantsPanel() {
   panel.addEventListener('click', function(event) {
     const target = event.target;
     if (!target.closest) return;
-    for (const [button, fieldID, label] of [
-      ['#agent-mcp-url-copy', 'agent-mcp-url', 'URL'],
-      ['#agent-mcp-command-copy', 'agent-mcp-command', 'Command'],
-      ['#agent-grant-copy', 'agent-grant-token', 'Token']
-    ]) {
-      if (!target.closest(button)) continue;
-      const field = byId(fieldID);
-      field.select();
-      const fallback = 'Select the ' + label.toLowerCase() + ' and copy it.';
-      if (!navigator.clipboard) return status(fallback);
-      return navigator.clipboard.writeText(field.value)
-        .then(() => status(label + ' copied.'))
-        .catch(() => status(fallback));
-    }
     if (target.closest('#agent-grant-dismiss')) {
       forgetToken();
       status('');

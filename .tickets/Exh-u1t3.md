@@ -1,6 +1,6 @@
 ---
 id: Exh-u1t3
-status: in_progress
+status: open
 deps: []
 links: []
 created: 2026-11-16T06:04:43Z
@@ -8,74 +8,89 @@ type: task
 priority: 2
 assignee: Max Omdal
 parent: Exh-38vu
-tags: [ui, render, security, shares]
+tags: [spike, ui, render, security, design]
 ---
-# Top banner on share pages: build the default, and let reviewers judge it
+# Spike: how to display the "Made with Exhibit" attribution on a share page
 
-The display question is **decided**: a bar across the top of the share page,
-the exhibit mark at icon size, the words "made with exhibit", linked to
-`https://exhibit.dizzard.net`. Build that, and let reviewer subagents judge the
-result instead of the product owner — iterate against their verdicts until they
-pass.
+Decide how an attribution line is displayed on `/s/:shareID`, before anything
+in the epic is built. The share document is not a page we own in the ordinary
+sense: it is the artifact's own stored HTML, rewritten at render time and served
+under an opaque-origin sandbox. "Add a div at the bottom" has security, layout
+and embed consequences, and this spike is where they get settled.
 
-The rest of this ticket is what makes that default safe to ship. The share
-document is not a page we own in the ordinary sense: it is the artifact's own
-stored HTML, rewritten at render time and served under an opaque-origin sandbox.
-A banner has security, layout and embed consequences, and they still have to be
-answered — just not by choosing a placement.
+## The constraints that make it a real question
 
-## The decided default
+- **We can only inject server-side.** The body is a stored blob; the render path
+  composes the document (`serveDoc` / `injectPreamble` / `headMeta` in
+  `internal/render/render.go`, tags from `internal/render/opengraph.go`). Any
+  badge is markup we prepend/append here, not something the share route's HTML
+  can rely on a script to add.
+- **Artifact code lives in the same document.** The sandbox is
+  `sandbox allow-scripts allow-forms` over an opaque origin, so the artifact's
+  own script shares the DOM and can remove, reorder, restyle or cover anything
+  we inject. Decide what we actually promise: "layout-safe and honest" versus
+  "cannot be removed by a hostile artifact" — the second needs a mechanism
+  (re-asserted shadow root, closed shadow DOM plus MutationObserver, or chrome
+  that is structurally outside the artifact's reach) and that mechanism is much
+  more expensive. Say which one we are buying and why.
+- **A share can be framed by a third party.** `EMBED_ORIGINS` exists so anyone
+  may iframe a share. Inside a frame, the sandbox omits `allow-popups` and
+  `allow-top-navigation`, and share pages deliberately have no capability
+  bridges — so an attribution link inside a framed share **cannot open a new
+  tab**. The options are: no-op in frames, mediate through the parent (there is
+  no host to mediate), self-navigate the frame (rude and usually refused by the
+  destination), or extend the share sandbox with `allow-popups` +
+  `allow-popups-to-escape-sandbox` (a deliberate loosening of the share
+  security model). This is the crux: measure it in a browser, do not reason it
+  out on paper.
+- **The artifact may be full-viewport.** Canvas tools, `100vh` layouts,
+  `position:fixed` UIs, scroll-locked documents, drag surfaces. A fixed corner
+  badge can overlap real controls; a reserved strip changes the artifact's
+  viewport and can break a tool that measures the window. It must not capture
+  focus, intercept pointer events over the tool, or sit on top of an artifact's
+  own bottom bar.
+- **Not our frame.** `/a/:id`, `/w/:id`, version views, widget documents and
+  direct-open pages are framed by our own gallery, which already carries the
+  brand. The spike confirms (with a test) that none of them gain the badge.
 
-- **Placement:** a full-width strip above the artifact, at the top of the page.
-- **Content:** the Exhibit mark at icon size, then the text "made with exhibit".
-- **Target:** `https://exhibit.dizzard.net` (absolute, hardcoded as the public
-  product origin for this feature; make it a single named constant, not a
-  string sprinkled through templates).
-- **Copy case:** lower case as written above. Do not title-case it.
-- **Only on `/s/:shareID`.** Never `/a/:id`, `/w/:id`, version views, widget
-  documents or direct-open pages — those are framed by our own gallery, which
-  already carries the brand.
+## Prototype and evaluate, at minimum
 
-## Still open — resolve with evidence, not preference
+1. **Fixed corner badge** (bottom-right or bottom-left), minimal mark + "Made
+   with Exhibit", click behavior per the embed answer above.
+2. **Reserved bottom strip** outside the artifact's layout viewport (or a
+   compensating CSS variable), for documents that scroll normally.
+3. **Injected chrome the artifact cannot reach** — the expensive option, if 1
+   and 2 both fail on real tools.
 
-- **Framed shares.** Inside a third-party iframe under `EMBED_ORIGINS` the
-  sandbox omits `allow-popups` and `allow-top-navigation`, and share pages have
-  no capability bridges, so a link there may not open. Measure what actually
-  happens in Chromium and WebKit and pick one: link is live, link is inert in
-  frames, or the sandbox is loosened with a written justification. Do not
-  silently ship a link that does nothing.
-- **Top strip and viewport assumptions.** A top strip reduces the artifact's
-  viewport. Verify a `100vh` layout, a full-bleed canvas tool, and a
-  scroll-locked document still work. If a strip breaks them, the fallback is a
-  fixed-position overlay with reserved space agreed by CSS rather than a
-  permanent layout shift — but measure before diverging from "top banner".
-- **Robustness.** The artifact's script shares the document and can remove or
-  cover anything we inject. State plainly what the guarantee is (layout-safe and
-  honest vs. hostile-artifact-proof) and how much it costs. A rejected
-  mutation-observing shadow-root mechanism is an acceptable answer if it is
-  written down.
-- **Interaction.** It must not capture focus, swallow pointer events over the
-  tool, or sit on top of the artifact's own chrome.
+For each: a full-viewport canvas tool, a scroll-heavy document tool, and a tool
+with its own bottom-fixed UI. Screenshots at 320 and 1280, light and dark, plus
+one shot inside a third-party iframe. Record what breaks.
 
-## How it is judged
+Also settle: does it show on the share only (recommended) or also on the widget
+snapshot that becomes `og:image` (it must not turn the picture into a logo card);
+does the owner's *hide* choice apply to embeds; and whether the badge should be
+dismissible (if it can be dismissed it is not attribution, so probably not).
 
-Subagent reviewers, not the owner, decide whether the banner ships. Run at least
-two independent rounds — a visual round (screenshots at 320 px and 1280 px,
-light and dark, plus one inside a third-party iframe) and a code/security round
-against `docs/security.md`'s render surface rules. Each round is a fresh
-delegated task carrying the previous round's findings. Iterate until both pass;
-report the verdicts with the evidence they were based on.
+## Deliverable
+
+A short report under `docs/reviews/<ticket>/` with the comparison, the browser
+evidence for the framed-link question, a recommendation, the proposed env flag
+and artifact column names, the exact injection point in `internal/render`, and
+implementation tickets filed under Exh-38vu with one of them clearly the first.
+Prototype artifacts are throwaway; review images live outside the checkout.
 
 ## Acceptance criteria
 
-1. The banner renders on `/s/:shareID` as decided: top strip, icon-size mark,
-   "made with exhibit", linking to `https://exhibit.dizzard.net`.
-2. `/a/:id`, `/w/:id`, version views, widget documents and direct-open pages are
-   byte-identical to today, pinned by test.
-3. The framed-share behaviour is measured in a real browser and matches what the
-   ticket says it does.
-4. A `100vh` tool, a canvas tool and a bottom-fixed-chrome tool are all still
-   usable with the banner present; no focus or pointer theft.
-5. The robustness guarantee is stated in the epic and justified.
-6. Reviewers pass it: visual round and code/security round, findings resolved,
-   screenshots attached to the epic's PR.
+1. At least three placements compared with screenshots and a named
+   recommendation.
+2. The framed-share link question is answered with measured browser evidence,
+   and the answer is either "works without changing the sandbox" or a written
+   proposal to change it with its security cost.
+3. The robustness guarantee is stated plainly, including what a hostile artifact
+   can still do, and how much that costs.
+4. Confirms no change to `/a/:id`, `/w/:id`, version views, widgets, direct
+   open, or `og:image`.
+5. Names the flag, the column and its tri-state semantics, and the injection
+   site (file + function) for implementation.
+6. Implementation tickets filed under the epic, ordered.
+
