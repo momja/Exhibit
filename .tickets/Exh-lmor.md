@@ -122,3 +122,7 @@ Deleted the flag/API bypass instead of using the freeze escape hatch: no server-
 **2026-11-16T23:01:14Z**
 
 Recovery merged origin/main and retained ticket history, including restoring this task file after an unrelated main commit deleted it. Removed the obsolete public-mode operator-panel test case. Isolated grant revocation/credential refresh/retirement regressions pass; prior package timeout occurred during SQLite fixture migration at cumulative deadline, not a proven per-test deadlock. Build and go vet pass. golangci-lint unavailable. Auth-disabled compatibility remains unchanged and needs explicit acceptance of the literal every-configuration AC exception. Parent owns fresh independent final-head review and all merge decisions; this implementer does not merge.
+
+**2026-11-16T23:09:07Z**
+
+CI identified one remaining obsolete public-only OAuth fixture after cfg.Public removal. Removed that fixture only; authenticated bearer rejection, cross-origin rejection, agent refusal and existing no-login operator approval/exchange tests are preserved. Focused TestOAuthConsentRequiresPersonAndSameOrigin passes after the fix. Previous broad local short run was stopped when this concrete CI failure arrived and is incomplete, not a pass. Final-head review must be renewed after this test cleanup.
