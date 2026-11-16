@@ -11,10 +11,8 @@ const paths = (api) => api.calls.map((call) => call.method + ' ' + call.path);
 async function load(responses = []) {
   const api = recordingApi(responses);
   const events = [];
-  const copied = [];
   const page = loadPageScript([], {
     apiFetch: api.apiFetch,
-    navigator: { clipboard: { writeText: async (text) => { copied.push(text); } } }
   }, {
     'agent-grants-panel': { dataset: { mcpUrl: 'https://agents.example.test/mcp' } },
     'agent-grant-issued': { hidden: true },
@@ -34,14 +32,13 @@ async function load(responses = []) {
     closest: (query) => query === selector ? element : null
   } });
   const revoke = (grantId) => click('[data-action="revoke-agent-grant"]', { dataset: { grantId } });
-  const copy = () => click('#agent-grant-copy', page.byId('agent-grant-copy'));
   const dismiss = () => click('#agent-grant-dismiss', page.byId('agent-grant-dismiss'));
   const refresh = () => panel.dispatchEvent({ type: 'htmx:after:swap', target: page.byId('agent-grants-body') });
   await page.loadModule(SCRIPT);
-  return { ...page, api, events, copied, panel, controls, issue, revoke, copy, click, dismiss, refresh };
+  return { ...page, api, events, panel, controls, issue, revoke, click, dismiss, refresh };
 }
 
-test('issue displays and copies the secret, keeping it through server list refresh', async () => {
+test('issue displays the secret, keeping it through server list refresh', async () => {
   const page = await load([issued('g-1', 'exgrant_secret')]);
   await page.issue('  Claude Code  ');
   assert.deepEqual(paths(page.api), ['POST /api/agent-grants']);
@@ -55,9 +52,6 @@ test('issue displays and copies the secret, keeping it through server list refre
   await page.refresh();
   assert.equal(page.byId('agent-grant-label').disabled, false);
   assert.equal(page.byId('agent-grant-token').value, 'exgrant_secret');
-  await page.copy();
-  assert.deepEqual(page.copied, ['exgrant_secret']);
-  assert.equal(page.byId('agent-grants-status').textContent, 'Token copied.');
 });
 
 test('dismissing and leaving the page erase the secret', async () => {

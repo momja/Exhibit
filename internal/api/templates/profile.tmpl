@@ -221,11 +221,7 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
   <div class="agent-grant-issued" id="agent-grant-issued" hidden>
     <h4 class="settings-h4">Your connection token</h4>
     <p class="settings-copy">Copy this token now and keep it private. Exhibit cannot show it again.</p>
-    <label class="settings-label" for="agent-grant-token">Token</label>
-    <div class="agent-grant-create">
-      <input class="field agent-grant-token" id="agent-grant-token" readonly autocomplete="off" spellcheck="false">
-      <button class="btn btn-sec" id="agent-grant-copy" type="button"><i class="ph ph-copy" aria-hidden="true"></i> Copy token</button>
-    </div>
+    {{template "copyField" .TokenField}}
     <p class="settings-copy settings-note">Add the remote connection to Claude Code:</p>
     <pre class="agent-grant-command"><code id="agent-grant-remote-command"></code></pre>
     <p class="settings-copy settings-note">Or configure another client as a remote MCP server:</p>

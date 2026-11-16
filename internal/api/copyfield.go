@@ -7,4 +7,5 @@ type copyFieldView struct {
 	Label     string
 	CopyLabel string
 	Value     string
+	HideLabel bool
 }

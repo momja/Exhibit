@@ -872,10 +872,14 @@ not collide or leave a fringe. The color-picker working-copy behavior is unchang
 
 Render `{{template "copyField" .Field}}` with a `copyFieldView` containing a
 unique `ID`, visible `Label`, accessible `CopyLabel` (for example, "Copy URL"),
-and literal `Value`. Include shared components CSS and `componentScripts`.
+and literal `Value`. Set `HideLabel` when adjacent context already names the field;
+the label remains available to assistive technology. Include shared components CSS
+and `componentScripts`.
 The read-only single-line field keeps long values horizontally scrollable and
 places a Phosphor copy icon inside its right edge. Its `copy-field` controller
 copies the current input value, announces success with a temporary check icon,
 and selects the text with manual-copy guidance if clipboard access fails.
 Each instance owns its feedback and cleans up on removal; htmx-inserted fields
-connect automatically. Connected agents uses it for MCP endpoint and Claude Code.
+connect automatically. Connected agents uses it for MCP endpoint, Claude Code,
+and the newly issued token; sharing uses it for public links and widget embed code.
+Token values remain browser-only and are cleared by the issuing feature.

@@ -174,19 +174,6 @@ function initializeSharePanel() {
     }
   });
 
-  function copyField(id, what) {
-    const field = byId(id);
-    if (!field) return;
-    field.select();
-    if (!navigator.clipboard) {
-      status('Select the ' + what.toLowerCase() + ' and copy it.');
-      return;
-    }
-    return navigator.clipboard.writeText(field.value)
-      .then(() => status('✓ ' + what + ' copied'))
-      .catch(() => status('Select the ' + what.toLowerCase() + ' and copy it.'));
-  }
-
   panel.addEventListener('click', function(e) {
     if (dialog.pending || needsRefresh) return;
     const target = e.target;
@@ -205,8 +192,6 @@ function initializeSharePanel() {
         saved.linkID = data.share.id;
       }, 'Could not replace the link. Try again.');
     }
-    if (button.id === 'share-link-copy') return copyField('share-link-url', 'Link');
-    if (button.id === 'share-widget-copy') return copyField('share-widget-embed', 'Embed code');
   });
 
   // htmx 4 exposes response metadata under detail.ctx and uses colon-separated

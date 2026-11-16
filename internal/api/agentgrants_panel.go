@@ -100,3 +100,7 @@ func (ro *Router) agentGrantsPanelPartial(w http.ResponseWriter, r *http.Request
 	w.Header().Set("Cache-Control", "no-store")
 	fmt.Fprint(w, fragment)
 }
+
+func (view agentGrantsPanelView) TokenField() copyFieldView {
+	return copyFieldView{ID: "agent-grant-token", Label: "Token", CopyLabel: "Copy token"}
+}
