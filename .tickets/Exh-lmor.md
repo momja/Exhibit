@@ -1,6 +1,6 @@
 ---
 id: Exh-lmor
-status: in_progress
+status: closed
 deps: []
 links: [Exh-38vu]
 created: 2026-11-16T06:42:36Z
@@ -118,3 +118,7 @@ correct the docs and the four tickets.
 **2026-11-16T07:14:44Z**
 
 Deleted the flag/API bypass instead of using the freeze escape hatch: no server-side reader was identified. Preserved envBool in env.go and artifactsSubPath for agentScopeAllows. Legacy anonymous render claim is rejected (including signed tokens) instead of silently becoming an owner render. Auth-disabled no-token/no-login pass-through remains the existing separate policy; 401 regression covers token-only and login-enabled configurations, including retired env values. This is a literal every-configuration AC limitation for independent review, not a retained public-mode API.
+
+**2026-11-16T23:01:14Z**
+
+Recovery merged origin/main and retained ticket history, including restoring this task file after an unrelated main commit deleted it. Removed the obsolete public-mode operator-panel test case. Isolated grant revocation/credential refresh/retirement regressions pass; prior package timeout occurred during SQLite fixture migration at cumulative deadline, not a proven per-test deadlock. Build and go vet pass. golangci-lint unavailable. Auth-disabled compatibility remains unchanged and needs explicit acceptance of the literal every-configuration AC exception. Parent owns fresh independent final-head review and all merge decisions; this implementer does not merge.
