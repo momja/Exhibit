@@ -1611,8 +1611,17 @@ same bearer for ordinary API requests. Core verification failure refuses access;
 an outage is `503`, never cached permission. Without `MCP_URL` the core offers
 no new connections, grants or OAuth endpoints; existing grants remain listable
 and revocable. Taking the endpoint offline also requires stopping the satellite.
-The core never serves `/mcp`. See `deployment.md` for the optional service and
-proxy routing.
+The core does not implement MCP transport. On Fly, an optional app-host proxy
+forwards only `/mcp` and the two protected-resource metadata paths to the
+loopback satellite; render-host dispatch takes precedence. Browser cookies are
+stripped and bearer verification still happens for every request. With the
+app-host endpoint, the satellite accepts the app origin as its browser Origin;
+passing that check alone grants no access. The Fly satellite shares the core's
+machine, OS identity and mounted volume: its filtered environment is hygiene,
+not an OS isolation boundary. Compose can run it separately without that volume.
+The proxy wraps the core router, so core access logging, body-limit middleware
+and common response headers do not cover forwarded responses. The satellite
+enforces its own body limit. See `deployment.md` for routing and configuration.
 
 ## 6. Residual risk
 

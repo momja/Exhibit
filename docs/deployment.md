@@ -984,6 +984,10 @@ Fly process groups create separate machines, incompatible with this loopback
 proxy. `SINGLE_LISTENER=1` dispatches render first, then the app-host MCP paths
 via `MCP_PROXY_URL`; all remaining app routes stay on the core.
 The satellite binds `127.0.0.1:8090` and calls `http://127.0.0.1:8080`.
+Forwarded requests bypass core router access logging, body-limit middleware and
+common response headers; the satellite enforces `MAX_REQUEST_BODY_BYTES` itself.
+The supervisor allows five seconds for shutdown before killing its children,
+matching Fly's default kill timeout; a slower core shutdown can be cut short.
 
 For a live rollout, an authorized operator must inspect existing Fly URL
 secrets (which override `[env]`) and remove/update any stale `APP_ORIGIN`,
@@ -1006,7 +1010,9 @@ claude mcp add --transport http exhibit https://exhibit.dizzard.net/mcp
 Complete browser approval, call one library tool, and confirm Settings still
 lists and revokes an existing grant. Stored grants are unchanged; clients using
 the old address need re-adding with the stable endpoint. Pending OAuth codes
-are ephemeral and must be requested again after restart. Repository tests do
+are ephemeral and must be requested again after restart. Fly auto-stop also
+discards in-memory MCP sessions, so clients must initialize a fresh session after
+a cold start. Repository tests do
 not establish live DNS, TLS, redirect or clean-client acceptance.
 
 #### Configure and start it
