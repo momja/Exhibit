@@ -43,10 +43,14 @@ page route and no moderation surface in the core.
 
 ## Scope
 
-If it is decided to *keep* the API for a server-side reader instead, stop and
-rewrite this ticket as "freeze as API-only": keep items 4 and 5, delete
+This ticket deletes the flag. The sentence below is **not a second task**: it is
+the escape hatch, so nobody has to re-derive the smaller option if a server-side
+reader turns up in review and argues for keeping the anonymous API. Delete the
+API too, and that argument never arises.
+
+If that does happen, freeze instead of deleting: keep items 4 and 5 below, delete
 everything else, retire the name/description vars and the settings route, and
-correct the docs and the four tickets. The default is removal.
+correct the docs and the four tickets.
 
 **Code to delete**
 
@@ -92,9 +96,12 @@ correct the docs and the four tickets. The default is removal.
 - Add a note to av-ec0t, av-4ac9, av-wmp6, av-7oyy, av-eu3v, av-epnt, av-n8v5,
   av-ra31 stating that public mode was retired in this ticket rather than
   completed, and that the gallery is a separate site.
-- Coordinate with Exh-fkla (in progress): its draft isolation must stay correct
-  with no public principal at all — drafts remain private because reads are
-  owner-scoped, not because a public filter excludes them.
+- **One coordination check, not a dependency.** Exh-fkla is in progress and its
+  acceptance criteria mention filtering drafts out of public-mode lists. Nothing
+  needs to happen *to* that ticket: with no public principal, drafts stay private
+  because reads are owner-scoped, not because a public filter excludes them.
+  Re-read its ACs after the deletion and, if the wording now describes something
+  that no longer exists, note it there and move on.
 
 ## Acceptance criteria
 
