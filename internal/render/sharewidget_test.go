@@ -217,7 +217,7 @@ func TestShareWidgetServesTheDefaultTileWithoutWidget(t *testing.T) {
 		}
 	}
 	csp := w.Header().Get("Content-Security-Policy")
-	if !strings.HasPrefix(csp, "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors") {
+	if !strings.HasPrefix(csp, "default-src 'none'; style-src 'unsafe-inline'; img-src data:; frame-ancestors") {
 		t.Errorf("the tile permits inline style and nothing else, got %q", csp)
 	}
 	if strings.Contains(csp, "api.example.com") {
