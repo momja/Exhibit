@@ -65,7 +65,7 @@ export const clerkAppearance = {
     footerActionLink: { color: 'var(--color-link)', fontWeight: 500, '&:hover': { color: 'var(--color-link-hover)' } },
     formFieldAction: { color: 'var(--color-link)', '&:hover': { color: 'var(--color-link-hover)' } },
     formResendCodeLink: { color: 'var(--color-link)' },
-    identityPreviewEditButton: { color: 'var(--color-link)' },
+    identityPreviewEditButton: { color: 'var(--brand-blue)' },
     userButtonPopoverCard: { borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-modal)', border: '1px solid var(--color-border)' },
   },
 };
