@@ -20,3 +20,7 @@ PREMISE NO LONGER HOLDS — do not action as written. As of av-e0yj and av-hrtv 
 **2026-11-16T07:11:42Z**
 
 Closed as obsolete: the premise no longer holds. internal/mockllm is the in-process backbone of the agent test suites (internal/api/agent_pipeline_test.go, agent_write_test.go, agent_guardrail_pipeline_test.go mount its Handler()), so stripping it would delete the only coverage of agent scope enforcement and the saved-event path. The test suite is the reason to keep it, regardless of whether cmd/mockllm is still useful as a standalone binary.
+
+**2026-11-17T16:30:00Z**
+
+Closed as obsolete: the premise no longer holds. internal/mockllm is the in-process backbone of the agent test suites (internal/api/agent_pipeline_test.go, agent_write_test.go, agent_guardrail_pipeline_test.go mount its Handler()), so stripping it would delete the only coverage of agent scope enforcement and the saved-event path. The test suite is the reason to keep it, regardless of whether cmd/mockllm is still useful as a standalone binary.

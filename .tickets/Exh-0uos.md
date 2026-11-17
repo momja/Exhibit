@@ -16,3 +16,7 @@ assignee: Max Omdal
 **2026-11-16T07:11:43Z**
 
 Closed as won't do. A separate tk extension for half-formed ideas adds a second place to look for work; the same scratchpad fits in ordinary tickets (or a note) without new tooling.
+
+**2026-11-17T16:30:00Z**
+
+Closed as won't do. A separate tk extension for half-formed ideas adds a second place to look for work; the same scratchpad fits in ordinary tickets (or a note) without new tooling.
