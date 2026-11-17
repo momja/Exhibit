@@ -1095,7 +1095,11 @@ ingest-time transform, degrades to a report, and never seeds the allowlist.
   registry, never by a CSP-governed fetch. The link bridge runs after the
   download-href check, so `blob:`/`data:` anchors stay downloads. Native paste is
   unaffected. Forms are governed by `form-action` (§3.2), not the link bridge.
-  Framed-only.
+  Framed-only. Attributed anonymous shares instead have a URL-only local
+  wrapper handler: persisted link approval, an authoritative unprotected-data
+  result, exact child source/opaque origin, and browser activation permit
+  same-context navigation. It has no app credential or first-use approval and
+  never navigates an embedding host. See `security.md`'s attribution boundary.
 - **Camera, microphone and location are gates, not bridges** (av-mv3k, av-f446).
   The frame cannot get a device, and a position would spend the app origin's
   permission. The host prompts, records the approval, and opens the top-level render,

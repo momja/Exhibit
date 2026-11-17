@@ -610,9 +610,11 @@ the table above.
 open default cheap. It is worth being precise about what it defends, because it
 is easy to credit it with more:
 
-- The render preamble's every `postMessage` targets `APP_ORIGIN`, never `'*'`.
-  A page on another origin therefore receives nothing from the shim however it
-  framed the document — and in the same stroke a share embedded elsewhere
+- Gallery state/capability preamble messages target `APP_ORIGIN`, never `'*'`.
+  Attributed public shares have a separate URL-only message to their own opaque
+  wrapper (see Optional anonymous-share attribution below), never the embedding host.
+  A page on another origin therefore receives no state/capability messages
+  however it framed the document — and in the same stroke a share embedded elsewhere
   cannot *save* state, because its write-through is addressed to a parent that
   is not the framer. State on such a page is read-at-render and dies with the
   frame.
@@ -1197,7 +1199,8 @@ is allowed; anything that produces egress or bypasses a user decision is not.**
   - This adds gesture convenience, not capability: right-click → "Open link in
     new tab" already reaches the same URL from browser chrome, which the
     sandbox does not govern. Like downloads, the bridge installs only when a
-    host frame exists; top-level renders and share pages navigate natively.
+    host frame exists; top-level renders and shares without attribution navigate
+    natively. Attributed public shares use the narrower same-context handler described below.
 - **Camera and microphone** — approved per device, per artifact
   (`camera_approved`, `microphone_approved`), and **decided but not delivered
   in the frame**, as location is below. Here both halves of that sentence are
@@ -1728,8 +1731,8 @@ the remote account's cleanup record.
 choice (`inherit` / `show` / `hide`) wins. Only the live `/s/:shareID` artifact
 route consults it. Disabled responses retain their original bytes and headers;
 private renders, versions, direct opens, widget documents and OG images do not
-consult this policy. The bar reveals the serving product, no owner identity or
-new capability, and sends no telemetry.
+consult this policy. The bar reveals the serving product, no owner identity,
+and sends no telemetry.
 
 **Shared-document limit:** injecting a node or shadow root into an artifact's own
 HTML cannot make attribution hostile-artifact-proof. Artifact scripts can remove
@@ -1740,7 +1743,9 @@ that mechanism. Enabled shares instead put the artifact in a separate srcdoc
 frame with `sandbox="allow-scripts allow-forms"`; the response also carries the
 same CSP sandbox, without adding a `frame-src` directive. The inherited CSP retains
 the artifact's origin allowlist. No allow-same-origin, allow-popups,
-allow-top-navigation or postMessage bridge is added. The child has a fresh opaque
+allow-top-navigation is added. No Gallery capability bridge is installed. The
+local public-navigation handler below cannot use app credentials, approve
+permissions, or call the API. The child has a fresh opaque
 origin and cannot remove, restyle or cover the parent bar through DOM access.
 This also narrows currently unsandboxed top-level shares, and costs a separate
 browsing context, escaped HTML, a focus boundary and top-level API compatibility.
@@ -1779,17 +1784,51 @@ it no longer controls the tab title. Server preview metadata is emitted once,
 at the very top of the outer head, ahead of artifact content. Hidden shares
 retain their previous bytes and head ordering.
 
+**Public wrapper navigation boundary.** The server installs the wrapper's
+URL-only listener only for live public shares with persisted `links_approved`
+and a successful authoritative `DocumentPolicy` result reporting no protected
+connection data. Missing resolvers, errors and retained connection provenance
+fail closed for navigation. Credentialed renders, version/widget routes and
+Gallery hosts never gain this handler. Policy authority is not serialized.
+This is a local public handler, an explicit exception to the former no-host
+attribution design; it is not the authenticated Gallery navigation bridge.
+The owner setting and data eligibility are a render-time snapshot; revocation
+requires a new render and cannot recall already-published public bytes.
+
+The listener requires the exact tool WindowProxy as `event.source`, opaque
+`event.origin === "null"`, the expected message shape, and live browser
+`navigator.userActivation.isActive` in the wrapper. It accepts only bounded
+HTTP(S) URLs without username/password and navigates only its own context.
+The injected anchor helper additionally requires a trusted, unmodified primary
+click. That helper is not a security boundary: artifact code can send a different
+URL while activation is live. Approval authorizes artifact navigation during
+that activation; it does not attest a particular anchor or destination.
+Activation can remain live after an earlier gesture and across navigation,
+particularly in Chromium; no claim of one click per request is made.
+
+As with the existing uncredentialed/unprotected Gallery exemption, no authenticated
+`navigation-check` authority is invented for shares. Destinations and redirects
+are ordinary uncredentialed browser navigation, not relay requests or
+credential-injected fetches. The destination's own framing rules may refuse an
+embedded destination. This does not grant arbitrary child frames, popups,
+embedding-host navigation, same-origin access, devices, downloads or modals;
+CSP, the sandbox tokens and all Gallery policy checks stay unchanged.
+
 Enabled-share compatibility costs:
 
 - The child sees `about:srcdoc`, with empty `location.search` and
   `location.hash`, and `window.top === window` is false. Query/hash routing,
   URL-changing History APIs, relative URLs and top-level checks can break.
   Local fragment anchors scroll to their child target without changing the
-  share URL. External anchors are refused by the share's own CSP:
-  absent `frame-src`, `default-src 'none'` blocks external child navigation.
-  Chromium replaces the tool frame with `chrome-error://chromewebdata/`
-  (reload to recover the tool); WebKit stays on `about:srcdoc` with a silent
-  no-op. No external-navigation permission or URL/state bridge is installed.
+  share URL. Approved HTTP(S) anchors use the local wrapper navigation path
+  above; their destination replaces the share context, rather than the tool's
+  child frame. An embedded share replaces only its own iframe, never the
+  embedding page. `target="_blank"` also uses this same context: no popup is
+  permitted. Without persisted `links_approved`, the click is canceled locally
+  and the tool remains usable; a public share cannot offer app first-use approval.
+  Hidden shares retain native navigation, including their existing behavior
+  when `links_approved` is false. The setting previously governed Gallery
+  mediation, not native top-level navigation. No disabled-share bytes change.
 - The outer viewport meta uses device width; an artifact's custom viewport
   meta (for example `width=1024`) does not control the outer mobile viewport.
 - The frame scrolls independently. Long documents remain scrollable, but

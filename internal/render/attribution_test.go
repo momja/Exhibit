@@ -77,3 +77,36 @@ func TestAttributedShareMetadataAndTitles(t *testing.T) {
 	require.Contains(t, body, html.EscapeString("<title>Tool title</title>"))
 	require.NotContains(t, body, "<script>alert('x')</script>")
 }
+
+// Public navigation must not borrow a credentialed host's authority.
+func TestPublicShareNavigationEligibility(t *testing.T) {
+	for _, tc := range []struct {
+		name                          string
+		approved, configured, private bool
+		policyErr                     error
+		allowed                       bool
+	}{
+		{name: "approved public", approved: true, configured: true, allowed: true},
+		{name: "unapproved", configured: true},
+		{name: "missing resolver", approved: true},
+		{name: "retained connection data", approved: true, configured: true, private: true},
+		{name: "resolver failure", approved: true, configured: true, policyErr: fmt.Errorf("unavailable")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rd, st := newTestRenderer(t, "nav", "<p>Tool</p>")
+			require.NoError(t, st.UpdateArtifact(context.Background(), 1, "nav", map[string]any{"share_attribution": "show", "links_approved": tc.approved}))
+			link, err := st.CreateAnonymousLink(context.Background(), 1, "nav")
+			require.NoError(t, err)
+			if tc.configured {
+				rd.cfg.DocumentPolicy = func(context.Context, int64, string) (string, bool, error) { return "", tc.private, tc.policyErr }
+			}
+			got := serveShare(t, rd, link.ID)
+			require.Equal(t, 200, got.Code)
+			require.Equal(t, tc.allowed, strings.Contains(got.Body.String(), "const tool=document.querySelector('iframe')"))
+			require.NotContains(t, got.Header().Get("Content-Security-Policy"), "frame-src")
+			if tc.policyErr == nil {
+				require.NotContains(t, serve(t, rd, "nav"), "exhibitPublicNavigate")
+			}
+		})
+	}
+}

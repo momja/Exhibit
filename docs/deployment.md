@@ -1403,10 +1403,27 @@ API URL changes, relative URLs and top-level checks can break. The outer
 device-width viewport meta overrides the artifact's viewport meta. Long tools
 scroll in the child, but printing/Save as PDF can truncate to the visible frame
 (round-one Chromium: nine pages hidden, one page shown). sessionStorage uses an
-in-memory shim and is lost on reload. External tool links are refused by the
-share's CSP (`frame-src` falls back to `default-src 'none'`). Chromium replaces
-the tool frame with `chrome-error://chromewebdata/` until reload; WebKit stays
-on `about:srcdoc` with a silent no-op. No external-navigation permission is added.
+in-memory shim and is lost on reload. HTTP(S) tool links work when the owner has
+persisted `links_approved` and the server confirms no protected connection data.
+A local wrapper handler uses browser activation and validates the exact child
+source, opaque origin and credential-free destination; it has no app credentials
+or approval API. The destination replaces the share context (only the share's
+iframe in an embed), including for `target="_blank"`; it never opens a popup or
+navigates the embedding page. Destination framing restrictions still apply.
+Without approval, or when data eligibility cannot be confirmed, HTTP(S) clicks
+are canceled and the tool remains intact. Public shares offer no first-use
+approval; owners change the existing External links setting in Exhibit.
+Hidden shares retain native navigation, including links when that setting is
+false; attribution does not rewrite their previous bytes or behavior.
+
+Approval permits an artifact to request any validated HTTP(S) destination while
+browser activation is live; it does not prove a particular anchor was clicked.
+Activation may survive an earlier gesture/navigation. The persisted setting and
+data eligibility are checked at render time; reopening reflects changes.
+Credentialed/connected-data navigation keeps its existing app checks, and no
+policy authority is exposed to this local handler. No sandbox token, frame-src
+allowance, Gallery capability host or other permission is added. See the
+[public wrapper boundary](security.md#optional-anonymous-share-attribution).
 
 On direct shares only, frame focus on load restores initial keyboard input
 without moving focus away from an already-focused bar link. Chromium also restores form autofocus; WebKit

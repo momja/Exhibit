@@ -228,7 +228,7 @@ test('native fullscreen succeeds and ungranted clipboard follows engine policy w
  await writeFile(`${evidence}/${info.project.name}-native-capabilities.json`,JSON.stringify(results,null,2));
 });
 
-test('hostless shares scroll fragments, reject devices and refuse external navigation under CSP',async({page,api,artifacts},info)=>{
+test('unapproved public shares retain the tool when links are refused and have no Gallery bridges',async({page,api,artifacts},info)=>{
  const artifact=await artifacts.create(`<!doctype html><html><head><style>body{margin:0}#space{height:2200px}#details{height:100px}</style></head><body><a href="#details">Jump to details</a><div id="space"></div><h2 id="details">Details reached</h2><a href="https://example.test/destination">External destination</a></body></html>`);
  await api.patch(`/api/artifacts/${artifact.id}`,{data:{share_attribution:'show'}});
  const {share}=await(await api.post('/api/shares',{data:{artifact_id:artifact.id}})).json();
@@ -255,14 +255,11 @@ test('hostless shares scroll fragments, reject devices and refuse external navig
  await tool.evaluate(()=>document.addEventListener('click',event=>console.log('external-default:'+event.defaultPrevented)));
  await page.route('https://example.test/**',route=>route.fulfill({contentType:'text/html',body:'<h1>External destination reached</h1>'}));
  await tool.getByRole('link',{name:'External destination',exact:true}).click();
- await expect.poll(()=>clicks).toContain('external-default:false');
- if(info.project.name==='chromium')await expect.poll(()=>tool.url()).toBe('chrome-error://chromewebdata/');
- else {
-  expect(tool.url()).toBe('about:srcdoc');
-  await expect(tool.getByRole('heading',{name:'Details reached'})).toBeVisible();
- }
+ await expect.poll(()=>clicks).toContain('external-default:true');
+ expect(tool.url()).toBe('about:srcdoc');
+ await expect(tool.getByRole('heading',{name:'Details reached'})).toBeVisible();
  await expect(page.locator('#exhibit-attribution')).toBeVisible();
- await writeFile(`${evidence}/${info.project.name}-hostless.json`,JSON.stringify({devices,fragment:'child scrolled to target without leaving srcdoc',external:'uncanceled native click refused by default-src fallback: Chromium error frame, WebKit stays in srcdoc',externalURL:tool.url()},null,2));
+ await writeFile(`${evidence}/${info.project.name}-hostless.json`,JSON.stringify({devices,fragment:'child scrolled to target without leaving srcdoc',external:'unapproved HTTP(S) click refused locally without losing the tool',externalURL:tool.url()},null,2));
 });
 
 
@@ -370,4 +367,132 @@ test('confirm shows a dismissible dialog hidden but silently returns false shown
   }
  }finally{page.off('dialog',dismiss)}
  await writeFile(`${evidence}/${info.project.name}-confirm.json`,JSON.stringify(results,null,2));
+});
+// RED-capable actual share navigation, not a synthetic sandbox replacement.
+test('approved artifact link reaches its destination with attribution',async({page,api,artifacts})=>{
+ for(const markup of ['<a href="https://example.test/destination">Allowed external link</a>','<svg width="300" height="80"><a href="https://example.test/destination"><rect width="290" height="70" fill="lightblue"/><text x="5" y="40">Allowed external link</text></a></svg>']){
+  const artifact=await artifacts.create(markup);
+  expect((await api.patch(`/api/artifacts/${artifact.id}`,{data:{share_attribution:'show',links_approved:true}})).ok()).toBeTruthy();
+  const {share}=await(await api.post('/api/shares',{data:{artifact_id:artifact.id}})).json();
+  await page.route('https://example.test/**',r=>r.fulfill({contentType:'text/html',body:'<h1>External destination reached</h1>'}));
+  await page.goto(`${renderOrigin}/s/${share.id}`);
+  await (await childFrame(page)).locator('a[href]').click();
+  await expect(page.getByRole('heading',{name:'External destination reached'})).toBeVisible({timeout:2000});
+ }
+});
+
+test('public navigation matrix preserves host and measures baseline target semantics',async({page,context,api,artifacts},info)=>{
+ test.setTimeout(120000);
+ const artifact=await artifacts.create('<h1>Tool alive</h1><a id="out" href="https://example.test/destination">Go outside</a><a href="#end">Fragment</a><div style="height:1200px"></div><h2 id="end">End</h2>');
+ const {share}=await(await api.post('/api/shares',{data:{artifact_id:artifact.id}})).json();
+ const shareURL=`${renderOrigin}/s/${share.id}`;
+ await context.route('https://example.test/**',r=>r.fulfill({contentType:'text/html',body:'<h1>External destination reached</h1>'}));
+ const results=[];
+ for(const mode of ['hide','show'])for(const approved of [false,true])for(const embedded of [false,true])for(const target of ['_self','_blank']){
+  expect((await api.patch(`/api/artifacts/${artifact.id}`,{data:{share_attribution:mode,links_approved:approved}})).ok()).toBeTruthy();
+  await page.goto(embedded?'http://127.0.0.1:18382/?src='+encodeURIComponent(shareURL):shareURL);
+  const wrapper=embedded?await childFrame(page):page.mainFrame();
+  const tool=mode==='show'?await childFrame(wrapper):wrapper;
+  const anchor=tool.locator('#out');await anchor.evaluate((el,t)=>el.setAttribute('target',t),target);
+  let popup:any=null;const popupListener=(p:any)=>{popup=p};context.on('page',popupListener);
+  await anchor.click();
+  await page.waitForTimeout(250);
+  context.off('page',popupListener);
+  const wrapperURL=wrapper.url();
+  const destination=await wrapper.getByRole('heading',{name:'External destination reached'}).count();
+  results.push({mode,approved,embedded,target,wrapperURL,toolURL:tool.isDetached()?'detached':tool.url(),popup:!!popup,destination});
+  if(mode==='show'&&approved){expect(destination).toBe(1);expect(wrapperURL).toBe('https://example.test/destination')}
+  if(mode==='show')expect(popup).toBeNull();
+  if(mode==='hide'&&!embedded&&target==='_self')expect(destination).toBe(1);
+  // Chromium exposes the baseline popup; headless WebKit already suppresses it.
+  if(mode==='hide'&&!embedded&&target==='_blank'&&info.project.name==='chromium')expect(popup).not.toBeNull();
+  if(mode==='show'&&!approved){expect(destination).toBe(0);expect(tool.url()).toBe('about:srcdoc');await expect(tool.getByRole('heading',{name:'Tool alive'})).toBeVisible();expect(popup).toBeNull()}
+  if(embedded)expect(page.url()).toContain('127.0.0.1:18382/');
+  if(popup)await popup.close();
+ }
+ await writeFile(`${evidence}/${info.project.name}-navigation-matrix.json`,JSON.stringify(results,null,2));
+});
+
+test('public navigation rejects forged source and unsafe destinations',async({page,api,artifacts},info)=>{
+ const artifact=await artifacts.create('<h1>Tool alive</h1><button id="send">Send</button><a href="#end">Fragment</a><div style="height:1200px"></div><h2 id="end">End</h2>');
+ await api.patch(`/api/artifacts/${artifact.id}`,{data:{share_attribution:'show',links_approved:true}});
+ const {share}=await(await api.post('/api/shares',{data:{artifact_id:artifact.id}})).json();
+ const url=`${renderOrigin}/s/${share.id}`;const results=[];
+ for(const destination of ['javascript:alert(1)','data:text/html,bad','https://user:password@example.test/path']){
+  await page.goto(url);const tool=await childFrame(page);
+  await tool.locator('#send').evaluate((el,url)=>el.addEventListener('click',()=>parent.postMessage({exhibitPublicNavigate:true,url},'*')),destination);
+  await tool.locator('#send').click();
+  await page.waitForTimeout(100);expect(page.url()).toBe(url);await expect(tool.getByRole('heading',{name:'Tool alive'})).toBeVisible();
+  results.push({destination,rejected:true});
+ }
+ await page.goto(url);
+ await page.evaluate(()=>{const b=document.createElement('button');b.textContent='Forged source';b.onclick=()=>window.postMessage({exhibitPublicNavigate:true,url:'https://example.test/forged'},'*');document.body.append(b)});
+ await page.getByRole('button',{name:'Forged source'}).click();await page.waitForTimeout(100);expect(page.url()).toBe(url);
+ await page.evaluate(()=>{const b=document.createElement('button');b.textContent='Wrong origin';b.onclick=()=>window.dispatchEvent(new MessageEvent('message',{source:document.querySelector('iframe')!.contentWindow,origin:'https://untrusted.test',data:{exhibitPublicNavigate:true,url:'https://example.test/forged'}}));document.body.append(b)});
+ await page.getByRole('button',{name:'Wrong origin'}).click();await page.waitForTimeout(100);expect(page.url()).toBe(url);
+ const tool=await childFrame(page);await tool.getByRole('link',{name:'Fragment'}).click();await expect(tool.getByRole('heading',{name:'End',exact:true})).toBeInViewport();expect(page.url()).toBe(url);
+ await writeFile(`${evidence}/${info.project.name}-navigation-rejections.json`,JSON.stringify({results,forgedSourceRejected:true,wrongOriginRejected:true,fragment:'scrolled'},null,2));
+});
+
+
+test('fresh public context rejects an exact-child request without browser activation',async({browser,api,artifacts},info)=>{
+ const artifact=await artifacts.create(`<h1>Tool alive</h1><script>
+ addEventListener('load',()=>{
+  console.log('unactivated-child:'+JSON.stringify({active:navigator.userActivation.isActive,ever:navigator.userActivation.hasBeenActive}));
+  parent.postMessage({exhibitPublicNavigate:true,url:'https://example.test/unactivated'},'*');
+  setTimeout(()=>console.log('unactivated-complete'),250);
+ });
+ </script>`);
+ await api.patch(`/api/artifacts/${artifact.id}`,{data:{share_attribution:'show',links_approved:true}});
+ const {share}=await(await api.post('/api/shares',{data:{artifact_id:artifact.id}})).json();
+ const context=await browser.newContext();
+ try{
+  // evaluate/locator internals can grant automation activation. Collect browser
+  // load-time observations before any evaluation, selector or interaction.
+  await context.addInitScript(()=>{
+   if(self===top)addEventListener('load',()=>console.log('unactivated-wrapper:'+JSON.stringify({active:navigator.userActivation.isActive,ever:navigator.userActivation.hasBeenActive})));
+  });
+  const page=await context.newPage();const url=`${renderOrigin}/s/${share.id}`;
+  const observations:Record<string,unknown>={};let complete=false;
+  page.on('console',msg=>{
+   const text=msg.text();
+   if(text.startsWith('unactivated-child:'))observations.child=JSON.parse(text.slice('unactivated-child:'.length));
+   if(text.startsWith('unactivated-wrapper:'))observations.wrapper=JSON.parse(text.slice('unactivated-wrapper:'.length));
+   if(text==='unactivated-complete')complete=true;
+  });
+  await page.goto(url);
+  await expect.poll(()=>complete).toBe(true);
+  expect(observations).toEqual({child:{active:false,ever:false},wrapper:{active:false,ever:false}});
+  expect(page.url()).toBe(url);
+  // Now demonstrate the test-harness pitfall after the rejection is established:
+  // evaluation itself can grant activation, so it cannot measure its absence.
+  const afterAutomationEvaluation=await page.evaluate(()=>({active:navigator.userActivation.isActive,ever:navigator.userActivation.hasBeenActive}));
+  await expect((await childFrame(page)).getByRole('heading',{name:'Tool alive'})).toBeVisible();
+  await writeFile(`${evidence}/${info.project.name}-no-activation.json`,JSON.stringify({observations,rejected:true,afterAutomationEvaluation},null,2));
+ }finally{await context.close()}
+});
+
+test('approved public child can spend real activation on a URL message without anchor attestation',async({page,api,artifacts},info)=>{
+ const artifact=await artifacts.create(`<button onclick="parent.postMessage({exhibitPublicNavigate:true,url:'http://127.0.0.1:18382/navigation-redirect'},'*')">Visit destination</button>`);
+ await api.patch(`/api/artifacts/${artifact.id}`,{data:{share_attribution:'show',links_approved:true}});
+ const {share}=await(await api.post('/api/shares',{data:{artifact_id:artifact.id}})).json();
+
+ await page.goto(`${renderOrigin}/s/${share.id}`);
+ await (await childFrame(page)).getByRole('button',{name:'Visit destination'}).click();
+ await expect(page.getByRole('heading',{name:'External destination reached'})).toBeVisible();
+ expect(page.url()).toBe('http://127.0.0.1:18382/navigation-destination');
+ await writeFile(`${evidence}/${info.project.name}-activated-message.json`,JSON.stringify({destination:page.url(),guarantee:'approved artifact plus real browser activation; no claim of exact anchor attestation',redirect:'ordinary uncredentialed browser navigation'},null,2));
+});
+
+test('another opaque frame cannot navigate an embedded public wrapper even with activation',async({page,api,artifacts},info)=>{
+ const artifact=await artifacts.create('<h1>Tool alive</h1>');
+ await api.patch(`/api/artifacts/${artifact.id}`,{data:{share_attribution:'show',links_approved:true}});
+ const {share}=await(await api.post('/api/shares',{data:{artifact_id:artifact.id}})).json();
+ const url=`${renderOrigin}/s/${share.id}`;
+ await page.goto('http://127.0.0.1:18382/?src='+encodeURIComponent(url));
+ const wrapper=await childFrame(page);await expect((await childFrame(wrapper)).getByRole('heading',{name:'Tool alive'})).toBeVisible();
+ await page.evaluate(()=>{const f=document.createElement('iframe');f.title='Untrusted sender';f.setAttribute('sandbox','allow-scripts');f.srcdoc=`<button onclick="parent.frames[0].postMessage({exhibitPublicNavigate:true,url:'https://example.test/forged'},'*')">Send forged request</button>`;document.body.append(f)});
+ await page.frameLocator('iframe[title="Untrusted sender"]').getByRole('button').click();
+ await page.waitForTimeout(200);expect(wrapper.url()).toBe(url);await expect((await childFrame(wrapper)).getByRole('heading',{name:'Tool alive'})).toBeVisible();
+ await writeFile(`${evidence}/${info.project.name}-other-frame.json`,JSON.stringify({rejected:true,wrapper:wrapper.url(),host:page.url()},null,2));
 });

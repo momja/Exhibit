@@ -14,8 +14,44 @@ const ExhibitProductOrigin = "https://exhibit.dizzard.net"
 
 // attributedShare gives viewport-based tools their own reduced viewport. srcdoc
 // inherits the response CSP; the child also has an explicit opaque sandbox.
-// Artifact code never shares the bar's DOM. No message bridge is installed.
-func (rd *Renderer) attributedShare(body string, a *store.Artifact, meta string) string {
+// Artifact code never shares the bar's DOM. Eligible public shares may request
+// same-context navigation; the wrapper has no app credentials or capabilities.
+func (rd *Renderer) attributedShare(body string, a *store.Artifact, meta string, navigationAllowed bool) string {
+	navigation := ""
+	if navigationAllowed {
+		navigation = `<script>
+ // Only the approved child may spend live browser activation to navigate this
+ // public share context. This grants no app API, popup or embedding-host authority.
+ const tool=document.querySelector('iframe');
+ addEventListener('message',event=>{
+   if(event.source!==tool.contentWindow||event.origin!=='null')return;
+   const data=event.data;
+   if(!data||data.exhibitPublicNavigate!==true||typeof data.url!=='string')return;
+   if(!navigator.userActivation||!navigator.userActivation.isActive)return;
+   if(data.url.length>8192||data.url.trim()!==data.url)return;
+   let destination;try{destination=new URL(data.url)}catch{return}
+   if(!['https:','http:'].includes(destination.protocol)||!destination.hostname||destination.username||destination.password)return;
+   location.assign(destination.href);
+ });
+ </script>`
+	}
+	// Always cancel HTTP(S) child navigation: without persisted approval it is
+	// refused locally; with approval the wrapper can navigate the share context.
+	body = prependToHead(body, fmt.Sprintf(`<script>
+ document.addEventListener('click',event=>{
+   const anchor=event.target.closest&&event.target.closest('a[href]');
+   if(!anchor||anchor.hasAttribute('download')||event.defaultPrevented||event.button!==0)return;
+   const raw=anchor.getAttribute('href');
+   if(raw.startsWith('#'))return;
+   let destination;try{destination=new URL(raw,document.baseURI)}catch{return}
+   if(!['https:','http:'].includes(destination.protocol))return;
+   event.preventDefault();
+   if(!%t||!event.isTrusted||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey||destination.username||destination.password)return;
+   // The wrapper is opaque; '*' addresses only its WindowProxy, not the host.
+   parent.postMessage({exhibitPublicNavigate:true,url:destination.href},'*');
+ },true);
+ </script>`, navigationAllowed))
+
 	// Opaque cross-origin frames do not consistently honor native autofocus.
 	// Wait until the wrapper has focused the child, and never reclaim focus if
 	// the viewer has already reached the attribution link.
@@ -57,5 +93,5 @@ func (rd *Renderer) attributedShare(body string, a *store.Artifact, meta string)
  @media(prefers-color-scheme:dark){:root{background:#17191e;color:#c8cdd5}header{background:#202329;border-color:#363b44}a:focus-visible{outline-color:#8ab4f8}}
  </style></head><body><header aria-label="Exhibit attribution"><a id="exhibit-attribution" href="%s" rel="noreferrer"><img src="%s" alt="">made with exhibit</a></header><iframe title="%s" sandbox="allow-scripts allow-forms" allow="fullscreen *; clipboard-write *" onload="if(window.top===window&&(document.activeElement===document.body||document.activeElement===this)){this.focus()}" srcdoc="%s"></iframe><script>
  if(window.self!==window.top){const a=document.getElementById('exhibit-attribution');a.removeAttribute('href');a.title='Exhibit attribution — open the share directly to visit Exhibit';}
- </script></body></html>`, meta, html.EscapeString(a.Title), artifacticon.DataURI(a.Tags), ExhibitProductOrigin, mark, html.EscapeString(a.Title), html.EscapeString(body))
+ </script>%s</body></html>`, meta, html.EscapeString(a.Title), artifacticon.DataURI(a.Tags), ExhibitProductOrigin, mark, html.EscapeString(a.Title), html.EscapeString(body), navigation)
 }

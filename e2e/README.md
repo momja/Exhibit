@@ -115,3 +115,12 @@ regressions compare hidden and shown modes in both engines; the negative
 download observation is bounded to 1.5 seconds. The Chromium clipboard permission
 grant case alone skips WebKit because that Playwright grant is unsupported;
 WebKit's native clipboard write behavior has its own two-mode assertion.
+
+Navigation coverage compares persisted link approval on/off, attribution
+shown/hidden, direct/third-party embeds and `_self`/`_blank` in both engines.
+Fresh-context tests prove activation is false before rejecting forged child
+requests; reusing a page after a click is not an activation reset in Chromium.
+Other cases reject credential-bearing/unsafe URLs and unrelated opaque frames,
+and explicitly establish that an approved child can request a URL during live
+activation without attesting a particular anchor. `_blank` becomes same-context
+for shown shares, while hidden shares keep native behavior.

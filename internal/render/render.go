@@ -727,7 +727,15 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 		out = prependToHead(out, doc.headMeta)
 	}
 	if doc.attribution {
-		out = rd.attributedShare(out, a, doc.headMeta)
+		// Public shares have no principal or navigation-check authority. Only
+		// unprotected data may use the local wrapper, and only with the owner's
+		// persisted link approval. Missing/failed policy resolution fails closed.
+		navigationAllowed := false
+		if doc.publicShare && a.LinksApproved && rd.cfg.DocumentPolicy != nil {
+			_, privateData, policyErr := rd.cfg.DocumentPolicy(r.Context(), a.OwnerID, a.ID)
+			navigationAllowed = policyErr == nil && !privateData
+		}
+		out = rd.attributedShare(out, a, doc.headMeta, navigationAllowed)
 	}
 	slog.DebugContext(r.Context(), "rendered artifact",
 		slog.String("artifact_id", a.ID),
