@@ -46,7 +46,7 @@ const appEditorTheme = EditorView.theme({
   '.cm-panels': { backgroundColor: 'var(--color-panel)', color: 'var(--color-ink)', flexShrink: '0' },
   '.cm-panels.cm-panels-top': { borderBottom: '1px solid var(--color-border)' },
   '.cm-panels.cm-panels-bottom': { borderTop: '1px solid var(--color-border)' },
-  '.cm-panel': { fontFamily: 'system-ui, sans-serif', fontSize: '.875rem', lineHeight: '1.4', padding: '10px' },
+  '.cm-panel': { fontFamily: 'var(--font-sans)', fontSize: '.875rem', lineHeight: '1.4', padding: '10px' },
   '.cm-panel:not(.cm-search)': { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px' },
   '.cm-panel input, .cm-panel button': { fontFamily: 'inherit' },
   '.cm-panel .cm-textfield, .cm-panel .cm-button, .cm-panel button[name=close], .cm-panel .cm-dialog-close': {
@@ -81,7 +81,7 @@ const appEditorTheme = EditorView.theme({
   '&.cm-editor[data-search-open=true]': { height: 'auto', minHeight: '400px', maxHeight: 'none' },
   '&.cm-editor[data-search-open=true] > .cm-scroller': { height: '240px', maxHeight: '320px', flexGrow: '1' },
   '.cm-scroller': { minHeight: '120px' },
-  '.cm-tooltip': { backgroundColor: 'var(--color-panel)', color: 'var(--color-ink)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-card-hover)', fontFamily: 'system-ui, sans-serif', fontSize: '.875rem', maxWidth: 'calc(100vw - 32px)' },
+  '.cm-tooltip': { backgroundColor: 'var(--color-panel)', color: 'var(--color-ink)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-card-hover)', fontFamily: 'var(--font-sans)', fontSize: '.875rem', maxWidth: 'calc(100vw - 32px)' },
   '.cm-tooltip .cm-tooltip-arrow:before': { borderTopColor: 'var(--color-border)', borderBottomColor: 'var(--color-border)' },
   '.cm-tooltip .cm-tooltip-arrow:after': { borderTopColor: 'var(--color-panel)', borderBottomColor: 'var(--color-panel)' },
   '.cm-tooltip.cm-tooltip-autocomplete > ul': { borderRadius: 'inherit', fontFamily: 'inherit', minWidth: '180px', maxWidth: 'calc(100vw - 32px)', maxHeight: '240px' },

@@ -6,13 +6,13 @@
  * branding and a page title without signed-in navigation or account controls.
  */
 *{box-sizing:border-box;margin:0;padding:0}
-.login-page{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(--color-ink);min-height:100vh;display:flex;flex-direction:column}
+.login-page{background:var(--color-ground);color:var(--color-ink);min-height:100vh;display:flex;flex-direction:column}
 
 .login-content{flex:1;display:flex;align-items:center;justify-content:center;padding:var(--space-8);min-width:0}
 
 /* min-width:0 so a long error message wraps inside the card instead of
  * widening it past the max. */
-.login{width:100%;min-width:0;max-width:380px;background:var(--color-panel);border-radius:var(--radius-lg);box-shadow:var(--shadow-card);padding:32px var(--space-8) var(--space-8);display:flex;flex-direction:column;align-items:center}
+.login{width:100%;min-width:0;max-width:380px;background:var(--color-panel);border-radius:var(--radius-lg);box-shadow:var(--shadow-panel);padding:32px var(--space-8) var(--space-8);display:flex;flex-direction:column;align-items:center}
 
 .login-sub{margin-top:var(--space-2);font-size:14px;color:var(--color-muted)}
 
