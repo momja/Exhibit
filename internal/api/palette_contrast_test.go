@@ -221,8 +221,8 @@ func TestTilePaletteKeepsTextContrast(t *testing.T) {
 		for _, hue := range tile.Palette {
 			ratio := contrastRatio(hslToLinearRGB(float64(hue), inkS, inkL), hslToLinearRGB(float64(hue), fillS, fillL))
 			t.Log(fmt.Sprintf("%s hue %d monogram %.2f", mode, hue, ratio))
-			if ratio < 4.5 {
-				t.Errorf("%s: monogram on hue %d is %.2f:1, needs 4.5:1", mode, hue, ratio)
+			if ratio < 4.8 { // AA plus headroom for rendering variance
+				t.Errorf("%s: monogram on hue %d is %.2f:1, needs 4.8:1", mode, hue, ratio)
 			}
 		}
 	}
