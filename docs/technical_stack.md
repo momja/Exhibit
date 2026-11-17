@@ -590,6 +590,16 @@ request in `fontsHead`. The app origin sets no style or font CSP, so no policy
 change was needed; the render origin, artifact CSP and widget documents never
 name the font hosts. CodeMirror and code stay monospace.
 
+**One headline per page (Exh-odyv).** Each app page carries exactly one
+`.font-headline` element, on its natural top heading and never on a decorative
+one: the gallery tabs' `h1.gallery-heading` (inside `#gallery-content`, so a
+space switch swaps it), the edit title, the Settings, admin and Add-to-Gallery
+lede headings, the 404 headline and the detail pill's `pip-info-title`. A page
+rule must not set `font-weight` or `font-variation-settings` on it. Gallery
+cards have no outline: the tile is full-bleed inside `--radius-lg` with only
+`--shadow-card` (a hairline ring and a soft lift, both modes) around it, and
+buttons take `--radius-md`.
+
 **Icons: Phosphor Icons — the required icon set for all new UI.** Standardize on
 [Phosphor Icons](https://phosphoricons.com) so every future story inherits one consistent
 icon vocabulary without re-deciding. Load it **self-hosted on the app origin, never from a

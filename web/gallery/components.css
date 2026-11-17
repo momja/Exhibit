@@ -159,7 +159,7 @@ body.pip-dragging .pip-grip{cursor:grabbing}
 .pip-popup[hidden]{display:none}
 @keyframes pip-pop{from{opacity:0;scale:.96}}
 .pip-menu{min-width:236px;font-size:0.8125rem}
-.pip-info-title{margin:0;padding:6px 10px 0;font-size:0.9375rem;font-weight:600;line-height:1.4;overflow-wrap:anywhere}
+.pip-info-title{margin:0;padding:6px 10px 0;font-size:1.0625rem;line-height:1.4;overflow-wrap:anywhere}
 .pip-info-meta{padding:6px 10px 0;color:var(--color-muted);font-size:var(--text-helper);line-height:var(--line-helper)}
 /* The receipt is the shared capabilityPopover partial, which is a hidden
    hover popover elsewhere; here it is the card's body, always shown. */

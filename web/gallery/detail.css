@@ -19,7 +19,7 @@ body[data-pip-corner^=t] .pip-notices{top:auto;bottom:0}
 .pip-status{padding:8px 14px;font-size:13px;border-radius:var(--radius-lg);background:var(--color-panel);color:var(--color-ink-soft);
   border:1px solid var(--color-hairline-strong);box-shadow:0 6px 20px rgba(0,0,0,.16);overflow-wrap:anywhere}
 .pip-status:empty{display:none}
-.pip-status button{margin-left:6px;padding:2px 10px;font:inherit;border:1px solid var(--color-border);border-radius:5px;background:var(--color-panel);color:var(--brand-blue);cursor:pointer}
+.pip-status button{margin-left:6px;padding:2px 10px;font:inherit;border:1px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-panel);color:var(--brand-blue);cursor:pointer}
 /* The banner family (.banner, .banner-warn, .banner-info and their parts) is in
  * components.css: the version viewer on the chat and edit pages draws the same
  * warning, and one definition is how they stay alike. Here a banner is a
