@@ -22,6 +22,7 @@ test('attribution viewport, theme, keyboard, hostile code and embed behavior', a
   await page.setViewportSize({width,height:720}); await page.emulateMedia({colorScheme});
   const response=await page.goto(url); const csp=response!.headers()['content-security-policy'];
   expect(csp).toContain('sandbox allow-scripts allow-forms');
+ expect(csp).not.toContain('frame-src');
   expect(csp).not.toContain('allow-popups'); expect(csp).not.toContain('allow-top-navigation');
   const tool=page.frameLocator('iframe');
   await expect(tool.getByRole('button')).toBeVisible();
@@ -91,6 +92,7 @@ test('native framed anchors under the actual share CSP sandbox',async({page,api,
  const headers=(await api.get(`${renderOrigin}/s/${share.id}`)).headers();
  const csp=headers['content-security-policy'];
  expect(csp).toContain('sandbox allow-scripts allow-forms');
+ expect(csp).not.toContain('frame-src');
  await page.route(`${renderOrigin}/native-anchor`,r=>r.fulfill({headers:{'content-security-policy':csp,'content-type':'text/html'},body:`<a href="https://exhibit.dizzard.net/native" target="_blank">popup</a><a href="https://exhibit.dizzard.net/native" target="_top">top</a><a href="https://exhibit.dizzard.net/native">self</a>`}));
  await page.route('https://exhibit.dizzard.net/**',r=>r.fulfill({contentType:'text/html',body:'<title>Native destination</title>'}));
  const messages:string[]=[];page.on('console',msg=>messages.push(msg.text()));
@@ -187,7 +189,7 @@ test('scroll-heavy tool and light narrow/short embeds remain usable',async({page
  }
 });
 
-test('native fullscreen and clipboard outcomes without gallery capability requests',async({page,api,artifacts},info)=>{
+test('native fullscreen succeeds and ungranted clipboard follows engine policy without a bridge',async({page,api,artifacts},info)=>{
  const artifact=await artifacts.create(`<button id="full" onclick="document.documentElement.requestFullscreen().then(()=>this.dataset.result='ok',e=>this.dataset.result=e.name+': '+e.message)">Fullscreen</button><button id="clip" onclick="navigator.clipboard.writeText('Attribution test').then(()=>this.dataset.result='ok',e=>this.dataset.result=e.name+': '+e.message)">Copy</button><script>window.messages=[];addEventListener('message',e=>window.messages.push(e.data));</script>`);
  const {share}=await(await api.post('/api/shares',{data:{artifact_id:artifact.id}})).json();
  const results=[];
@@ -204,17 +206,19 @@ test('native fullscreen and clipboard outcomes without gallery capability reques
   await tool.locator('#full').click();
   await expect(tool.locator('#full')).toHaveAttribute('data-result',/.+/);
   const fullscreen=await tool.locator('#full').getAttribute('data-result');
-  if(info.project.name==='chromium')expect(fullscreen).toBe('ok');
+  expect(fullscreen).toBe('ok');
   await tool.evaluate(async()=>{if(document.fullscreenElement)await document.exitFullscreen()});
   await tool.locator('#clip').click();
   await expect(tool.locator('#clip')).toHaveAttribute('data-result',/.+/);
   const clipboard=await tool.locator('#clip').getAttribute('data-result');
+  if(info.project.name==='webkit')expect(clipboard).toBe('ok');
+  else expect(clipboard).toMatch(/^NotAllowedError:/);
   results.push({mode,fullscreen,clipboard});
  }
  await writeFile(`${evidence}/${info.project.name}-native-capabilities.json`,JSON.stringify(results,null,2));
 });
 
-test('hostless shares scroll local fragments, reject unsupported devices and allow native external clicks',async({page,api,artifacts},info)=>{
+test('hostless shares scroll fragments, reject devices and refuse external navigation under CSP',async({page,api,artifacts},info)=>{
  const artifact=await artifacts.create(`<!doctype html><html><head><style>body{margin:0}#space{height:2200px}#details{height:100px}</style></head><body><a href="#details">Jump to details</a><div id="space"></div><h2 id="details">Details reached</h2><a href="https://example.test/destination">External destination</a></body></html>`);
  await api.patch(`/api/artifacts/${artifact.id}`,{data:{share_attribution:'show'}});
  const {share}=await(await api.post('/api/shares',{data:{artifact_id:artifact.id}})).json();
@@ -242,5 +246,64 @@ test('hostless shares scroll local fragments, reject unsupported devices and all
  await page.route('https://example.test/**',route=>route.fulfill({contentType:'text/html',body:'<h1>External destination reached</h1>'}));
  await tool.getByRole('link',{name:'External destination',exact:true}).click();
  await expect.poll(()=>clicks).toContain('external-default:false');
- await writeFile(`${evidence}/${info.project.name}-hostless.json`,JSON.stringify({devices,fragment:'child scrolled to target without leaving srcdoc',external:'click not canceled or bridged; native navigation still subject to inherited frame-src policy',externalURL:tool.url()},null,2));
+ if(info.project.name==='chromium')await expect.poll(()=>tool.url()).toBe('chrome-error://chromewebdata/');
+ else {
+  expect(tool.url()).toBe('about:srcdoc');
+  await expect(tool.getByRole('heading',{name:'Details reached'})).toBeVisible();
+ }
+ await expect(page.locator('#exhibit-attribution')).toBeVisible();
+ await writeFile(`${evidence}/${info.project.name}-hostless.json`,JSON.stringify({devices,fragment:'child scrolled to target without leaving srcdoc',external:'uncanceled native click refused by default-src fallback: Chromium error frame, WebKit stays in srcdoc',externalURL:tool.url()},null,2));
+});
+
+
+test('Chromium origin clipboard grant works directly but does not grant the opaque attributed child',async({page,context,api,artifacts},info)=>{
+ test.skip(info.project.name!=='chromium','WebKit clipboard success in both modes is asserted in the native capability test; Playwright grants are Chromium-specific.');
+ await context.grantPermissions(['clipboard-read','clipboard-write'],{origin:renderOrigin});
+ const artifact=await artifacts.create(`<button onclick="navigator.clipboard.writeText('Attribution test').then(()=>this.dataset.result='ok',e=>this.dataset.result=e.name)">Copy</button>`);
+ const {share}=await(await api.post('/api/shares',{data:{artifact_id:artifact.id}})).json();
+ const results=[];
+ for(const mode of ['hide','show']){
+  await api.patch(`/api/artifacts/${artifact.id}`,{data:{share_attribution:mode}});
+  await page.goto(`${renderOrigin}/s/${share.id}`);
+  const tool=mode==='show'?page.frames()[1]:page.mainFrame();
+  await tool.getByRole('button').click();
+  await expect(tool.getByRole('button')).toHaveAttribute('data-result',mode==='hide'?'ok':'NotAllowedError');
+  if(mode==='hide')expect(await tool.evaluate(()=>navigator.clipboard.readText())).toBe('Attribution test');
+  results.push({mode,result:await tool.getByRole('button').getAttribute('data-result')});
+ }
+ await writeFile(`${evidence}/chromium-granted-clipboard.json`,JSON.stringify(results,null,2));
+});
+
+test('embedded attribution preserves unfocused host and active host typing on load',async({page,api,artifacts},info)=>{
+ const artifact=await artifacts.create(`<input aria-label="Tool input" autofocus><script>window.keys=0;addEventListener('keydown',()=>window.keys++);</script>`);
+ await api.patch(`/api/artifacts/${artifact.id}`,{data:{share_attribution:'show'}});
+ const {share}=await(await api.post('/api/shares',{data:{artifact_id:artifact.id}})).json();
+ const url=`${renderOrigin}/s/${share.id}`;
+ const results=[];
+ for(const typing of [false,true]){
+  await page.goto('http://127.0.0.1:18382/');
+  // Hold the share request until the host focus state is established.
+  let release!:()=>void;
+  const ready=new Promise<void>(resolve=>{release=resolve});
+  await page.route(url,async route=>{await ready;await route.continue()});
+  await page.evaluate(({url,typing})=>{
+   document.body.innerHTML='<input aria-label="Host input"><iframe title="Shared tool"></iframe>';
+   if(typing)(document.querySelector('input') as HTMLInputElement).focus();
+   document.querySelector('iframe')!.src=url;
+  },{url,typing});
+  if(typing)await page.keyboard.type('before');
+  release();
+  const tool=page.frameLocator('iframe').frameLocator('iframe');
+  await expect(tool.getByRole('textbox')).toBeVisible();
+  // Allow onload + animation-frame autofocus attempts to settle.
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(()=>document.activeElement?.tagName)).toBe(typing?'INPUT':'BODY');
+  await page.keyboard.type('after');
+  if(typing)await expect(page.getByRole('textbox',{name:'Host input'})).toHaveValue('beforeafter');
+  expect(await page.frames()[2].evaluate(()=>(window as any).keys)).toBe(0);
+  results.push({typing,active:await page.evaluate(()=>document.activeElement?.tagName)});
+  await page.screenshot({path:`${evidence}/${info.project.name}-host-focus-${typing}.png`});
+  await page.unroute(url);
+ }
+ await writeFile(`${evidence}/${info.project.name}-host-focus.json`,JSON.stringify(results,null,2));
 });

@@ -55,7 +55,7 @@ func (rd *Renderer) attributedShare(body string, a *store.Artifact, meta string)
  a[href]:hover{text-decoration:underline}a:focus-visible{outline:2px solid #2463c5;outline-offset:1px}
  img{width:16px;height:20px;object-fit:contain}iframe{display:block;border:0;width:100%%;height:100%%;min-height:0}
  @media(prefers-color-scheme:dark){:root{background:#17191e;color:#c8cdd5}header{background:#202329;border-color:#363b44}a:focus-visible{outline-color:#8ab4f8}}
- </style></head><body><header aria-label="Exhibit attribution"><a id="exhibit-attribution" href="%s" rel="noreferrer"><img src="%s" alt="">made with exhibit</a></header><iframe title="%s" sandbox="allow-scripts allow-forms" allow="fullscreen *; clipboard-write *" allowfullscreen onload="if(document.activeElement===document.body||document.activeElement===this){this.focus()}" srcdoc="%s"></iframe><script>
+ </style></head><body><header aria-label="Exhibit attribution"><a id="exhibit-attribution" href="%s" rel="noreferrer"><img src="%s" alt="">made with exhibit</a></header><iframe title="%s" sandbox="allow-scripts allow-forms" allow="fullscreen *; clipboard-write *" onload="if(window.top===window&&(document.activeElement===document.body||document.activeElement===this)){this.focus()}" srcdoc="%s"></iframe><script>
  if(window.self!==window.top){const a=document.getElementById('exhibit-attribution');a.removeAttribute('href');a.title='Exhibit attribution — open the share directly to visit Exhibit';}
  </script></body></html>`, html.EscapeString(a.Title), meta, artifacticon.DataURI(a.Tags), ExhibitProductOrigin, mark, html.EscapeString(a.Title), html.EscapeString(body))
 }

@@ -1736,7 +1736,7 @@ and mutation observers do not change that authority. Observers also impose
 continuous work, race with code, and risk focus/pointer interference. We reject
 that mechanism. Enabled shares instead put the artifact in a separate srcdoc
 frame with `sandbox="allow-scripts allow-forms"`; the response also carries the
-same CSP sandbox and adds `frame-src 'self'` for srcdoc. The inherited CSP retains
+same CSP sandbox, without adding a `frame-src` directive. The inherited CSP retains
 the artifact's origin allowlist. No allow-same-origin, allow-popups,
 allow-top-navigation or postMessage bridge is added. The child has a fresh opaque
 origin and cannot remove, restyle or cover the parent bar through DOM access.
@@ -1748,8 +1748,9 @@ mislead the viewer, or expose the data its owner chose to publish. A third-party
 framer can cover or crop the entire share. Branding is not a security seal.
 
 The bar is outside the artifact's viewport and reserves 36px. On child load the
-wrapper focuses the frame if focus is still on its body or the frame, restoring
-initial keyboard input without taking focus from the attribution link. Native
+wrapper focuses the frame only on direct shares (`window.top === window`), if
+focus is still on its body or the frame, restoring initial keyboard input without taking focus from the attribution link. Embedded
+shares wait for viewer interaction and do not move host-page focus on load. Native
 Tab and Shift+Tab navigation cross the boundary; no keyboard forwarding or
 mutation observer is used. The child handles local fragment clicks so those
 scrolls stay inside the tool. The product link
@@ -1776,9 +1777,11 @@ Enabled-share compatibility costs:
   `location.hash`, and `window.top === window` is false. Query/hash routing,
   URL-changing History APIs, relative URLs and top-level checks can break.
   Local fragment anchors scroll to their child target without changing the
-  share URL; external anchors attempt native child navigation, which can still
-  be refused by the enclosing frame-src policy. No
-  URL/state bridge is installed.
+  share URL. External anchors are refused by the share's own CSP:
+  absent `frame-src`, `default-src 'none'` blocks external child navigation.
+  Chromium replaces the tool frame with `chrome-error://chromewebdata/`
+  (reload to recover the tool); WebKit stays on `about:srcdoc` with a silent
+  no-op. No external-navigation permission or URL/state bridge is installed.
 - The outer viewport meta uses device width; an artifact's custom viewport
   meta (for example `width=1024`) does not control the outer mobile viewport.
 - The frame scrolls independently. Long documents remain scrollable, but
@@ -1787,14 +1790,18 @@ Enabled-share compatibility costs:
   fixture with explicit page breaks measures eleven versus one. We do not
   attempt cross-origin frame resizing for printing.
 - Fullscreen and clipboard write are explicitly delegated only to the tool
-  (`allow="fullscreen *; clipboard-write *"`, plus `allowfullscreen`). The
+  (`allow="fullscreen *; clipboard-write *"`). The
   wildcard is necessary for the opaque child origin, and is limited to these
   two features; device/location policy and the sandbox are unchanged.
   Browser policy, user activation, enclosing embed policy and permissions still
   apply. After explicit opaque-origin delegation, the regression fixture
   restored fullscreen in both Chromium and WebKit. Clipboard write succeeded
-  in WebKit; Chromium rejected with NotAllowedError in both hidden and shown
-  modes. These headless results do not establish real clipboard permission UX.
+  in WebKit in both modes. Without an origin permission grant, Chromium rejected
+  in both hidden and shown modes; with `clipboard-read`/`clipboard-write` granted
+  to the share origin, the hidden direct share writes and reads back successfully,
+  while the attributed opaque child still rejects with `NotAllowedError`.
+  Explicit delegation does not carry that grant to the opaque child. These
+  headless results do not establish real-device clipboard permission UX.
 - Attributed tools retain local sessionStorage and data-URL fetch shims but omit
   gallery capability bridges: an explicit no-host preamble mode prevents state
   persistence/resync and snippet-host messaging as well. There is no host to
@@ -1805,7 +1812,8 @@ Enabled-share compatibility costs:
   top-level share's sessionStorage. Origin storage, popups, downloads and device
   APIs retain the opaque sandbox's limitations.
 - The original wrapper lost initial keyboard input and autofocus until a click.
-  Frame focus on load fixes window handlers. The child attempts autofocus
+  Direct-share frame focus on load fixes window handlers; embeds wait for
+  interaction. The child attempts autofocus
   after focus settles; Chromium restores it, but WebKit suppresses cross-origin
   form autofocus. Fields remain reachable with Tab. Both outcomes and native
   cross-boundary traversal are regression-tested. There is still an extra focus

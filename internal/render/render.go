@@ -631,7 +631,7 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 		csp += "; " + versionSandbox
 	}
 	if doc.attribution {
-		csp += "; frame-src 'self'; " + versionSandbox
+		csp += "; " + versionSandbox
 	}
 	w.Header().Set("Content-Security-Policy", csp)
 	// A widget's authority is a strict subset of its artifact's (av-fafu), so a

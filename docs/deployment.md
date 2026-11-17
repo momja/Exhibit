@@ -1403,18 +1403,25 @@ API URL changes, relative URLs and top-level checks can break. The outer
 device-width viewport meta overrides the artifact's viewport meta. Long tools
 scroll in the child, but printing/Save as PDF can truncate to the visible frame
 (round-one Chromium: nine pages hidden, one page shown). sessionStorage uses an
-in-memory shim and is lost on reload.
+in-memory shim and is lost on reload. External tool links are refused by the
+share's CSP (`frame-src` falls back to `default-src 'none'`). Chromium replaces
+the tool frame with `chrome-error://chromewebdata/` until reload; WebKit stays
+on `about:srcdoc` with a silent no-op. No external-navigation permission is added.
 
-Frame focus on load restores initial keyboard input without moving focus away
-from an already-focused bar link. Chromium also restores form autofocus; WebKit
+On direct shares only, frame focus on load restores initial keyboard input
+without moving focus away from an already-focused bar link. Chromium also restores form autofocus; WebKit
 suppresses cross-origin form autofocus, so use Tab to reach fields. Native Tab
-traversal still crosses the frame.
+traversal still crosses the frame. Embedded shares wait for viewer interaction
+and do not transfer host-page focus on load.
 Fullscreen and clipboard write have explicit delegation within the unchanged
 opaque sandbox, but browser policy, permissions and embedding ancestors can
 still refuse them. The updated fixture restores fullscreen in both engines;
-clipboard succeeds in WebKit and rejects in Chromium in both hidden and shown
-modes. Real clipboard permission UX remains unmeasured. The child retains local storage
-and fetch shims, without gallery capability bridges. Device access, origin
+clipboard succeeds in WebKit in both modes. Chromium without an origin grant
+rejects in both modes. With clipboard read/write permission granted to the share
+origin, Chromium direct (hidden) shares write and read back successfully, but
+attributed shares still reject with `NotAllowedError`: the grant does not carry
+to the opaque child. Real-device clipboard permission UX remains unmeasured.
+The child retains local storage and fetch shims, without gallery capability bridges. Device access, origin
 storage, downloads and popups still face sandbox restrictions. Playwright WebKit
 does not establish iOS Safari toolbar or permission behavior; a non-scrolling
 outer page can keep mobile browser chrome expanded. Disable the bar per artifact

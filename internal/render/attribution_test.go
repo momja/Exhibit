@@ -28,6 +28,7 @@ func TestShareAttributionOwnerChoiceAndLegacyBytes(t *testing.T) {
 				require.Contains(t, got.Body.String(), `id="exhibit-attribution" href="`+ExhibitProductOrigin+`"`)
 				require.Contains(t, got.Body.String(), `sandbox="allow-scripts allow-forms" allow="fullscreen *; clipboard-write *"`)
 				require.Contains(t, got.Header().Get("Content-Security-Policy"), versionSandbox)
+				require.NotContains(t, got.Header().Get("Content-Security-Policy"), "frame-src")
 			} else {
 				require.Equal(t, baseline.Body.String(), got.Body.String())
 				require.Equal(t, baseline.Header(), got.Header())
