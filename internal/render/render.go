@@ -393,7 +393,7 @@ func (rd *Renderer) ServeShareWidget(w http.ResponseWriter, r *http.Request) {
 // serveDefaultTile serves the monogram tile for an artifact with no widget
 // (av-cp7j). It is a static document of our own making: no artifact bytes, no
 // state, no preamble and no script, so its CSP permits inline style and
-// nothing else. That is narrower than any widget render, which is the right
+// the grain's data: image, nothing else. That is narrower than any widget render, which is the right
 // direction for a document that exists to say "nothing to show here". Only
 // framing follows the caller, since this stands in for a real widget on
 // whatever page embeds it.
@@ -401,6 +401,7 @@ func (rd *Renderer) serveDefaultTile(w http.ResponseWriter, a *store.Artifact, f
 	w.Header().Set("Content-Security-Policy", strings.Join([]string{
 		"default-src 'none'",
 		"style-src 'unsafe-inline'",
+		"img-src data:", // the grain, an inlined SVG: no egress
 		strings.Join(append([]string{"frame-ancestors"}, frameAncestors...), " "),
 	}, "; "))
 	w.Header().Set("Permissions-Policy", buildPermissionsPolicy(devicePolicy{}))
