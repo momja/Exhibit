@@ -204,12 +204,20 @@ var appOriginGETRoutes = []getRoute{
 	// when a login is configured. Each is safe for its own reason, not by the
 	// rule above.
 	//
-	// /auth/login mutates only on an instance with no local credential, where
-	// it redirects into the provider flow; with one it renders the login page
-	// and mints nothing (av-q30x). Declared by its worst case.
+	// /auth/login mints login state only on an instance with no local
+	// credential, where it redirects into the provider flow; with one it
+	// renders the login page (av-q30x). Declared by its worst case. Every
+	// rendered sign-in page also sets the constant descent marker (Exh-vsw0).
 	{route: "/auth/login", mutates: true,
 		why: "mints short-lived state/verifier cookies before any session exists; " +
-			"forging it starts a login the attacker cannot finish"},
+			"forging it starts a login the attacker cannot finish. The exhibit_descent_seen " +
+			"marker it sets is a constant that only decides whether the sign-in art animates"},
+	// Hosted (Clerk) mode only.
+	{route: "/auth/signup", mutates: true,
+		why: "is the hosted sign-up page, /auth/login's Clerk twin: it holds no session " +
+			"and sets only the constant exhibit_descent_seen marker, which decides whether " +
+			"the sign-in art animates and nothing else"},
+	{route: "/auth/clerk/ready"},
 	{route: "/auth/sso", mutates: true,
 		why: "is /auth/login's provider redirect split out for the login page's SSO button, " +
 			"and mints the same pre-session state/verifier cookies — a forged one starts a " +
@@ -267,9 +275,14 @@ func TestNoAppOriginGETRouteMutates(t *testing.T) {
 	plain = NewRouter(cfg)
 	withIdentity, _ := newIdentityTestRouter(t, &stubProvider{})
 	withLocal, _ := newLocalLoginRouter(t)
+	clerkCfg := newTestRouter(t).cfg
+	clerkCfg.Clerk = hostedLoginStub{}
+	clerkCfg.ClerkPublishableKey = "pk_test_example"
+	clerkCfg.ClerkFrontendAPI = "https://example.clerk.accounts.dev"
+	withClerk := NewRouter(clerkCfg)
 
 	seen := map[string]bool{}
-	for _, ro := range []*Router{plain, withIdentity, withLocal} {
+	for _, ro := range []*Router{plain, withIdentity, withLocal, withClerk} {
 		require.NoError(t, chi.Walk(ro.Mux, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
 			// A route registered in both configurations is walked twice; one
 			// verdict per route is enough.

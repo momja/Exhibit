@@ -75,3 +75,42 @@ func TestLoginDescentCookieSecureFollowsOrigin(t *testing.T) {
 	require.NotNil(t, c)
 	assert.True(t, c.Secure)
 }
+
+// Hosted mode (Exh-vsw0): Clerk's sign-out lands on GET /auth/logout, which
+// clears the marker and plays nothing, while the sign-in and sign-up pages set
+// the same constant marker the local page does. These are the GET routes the
+// CSRF table declares as mutating (csrf_test.go), so their writes are pinned
+// here: the marker and nothing else, with the session cookie's attributes.
+func TestHostedDescentCookieOnlyTouchesTheMarker(t *testing.T) {
+	cfg := newTestRouter(t).cfg
+	cfg.Clerk = hostedLoginStub{}
+	cfg.ClerkPublishableKey = "pk_test_example"
+	cfg.ClerkFrontendAPI = "https://example.clerk.accounts.dev"
+	ro := NewRouter(cfg)
+
+	get := func(path string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		ro.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
+		return w
+	}
+	for _, path := range []string{"/auth/login", "/auth/signup"} {
+		w := get(path)
+		require.Equal(t, 200, w.Code, path)
+		assert.Contains(t, w.Body.String(), "login-descend", path)
+		cookies := cookiesFrom(w)
+		require.Len(t, cookies, 1, "%s sets the marker and nothing else", path)
+		c := cookies[descentCookieName]
+		require.NotNil(t, c, path)
+		assert.Equal(t, "1", c.Value)
+		assert.True(t, c.HttpOnly)
+		assert.Equal(t, http.SameSiteLaxMode, c.SameSite)
+		assert.Empty(t, c.Domain)
+	}
+
+	out := get("/auth/logout")
+	require.Equal(t, 200, out.Code)
+	assert.NotContains(t, out.Body.String(), "login-descend")
+	cookies := cookiesFrom(out)
+	require.Len(t, cookies, 1, "hosted sign-out clears the marker and nothing else")
+	assert.Less(t, cookies[descentCookieName].MaxAge, 0)
+}
