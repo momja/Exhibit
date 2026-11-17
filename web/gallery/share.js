@@ -13,6 +13,7 @@ function initializeSharePanel() {
   const byId = (id) => panel.querySelector('#' + id);
   const readSaved = () => ({
     mode: byId('share-state-mode').dataset.savedMode,
+    attribution: byId('share-attribution').value,
     linkID: byId('share-link-toggle').dataset.shareId || ''
   });
   let saved = readSaved();
@@ -28,6 +29,7 @@ function initializeSharePanel() {
   }
 
   function restoreFields() {
+    byId('share-attribution').value = saved.attribution;
     byId('share-state-own').checked = saved.mode === 'own';
     byId('share-state-shared').checked = saved.mode === 'shared';
     byId('share-link-toggle').checked = !!saved.linkID;
@@ -148,6 +150,14 @@ function initializeSharePanel() {
     if (dialog.pending || needsRefresh) {
       restoreFields();
       return;
+    }
+    if (e.target.id === 'share-attribution') {
+      const mode = e.target.value;
+      if (!['inherit', 'show', 'hide'].includes(mode) || mode === saved.attribution) return;
+      return mutate(async () => {
+        await request('/api/artifacts/' + encodeURIComponent(artifactID), { method: 'PATCH', body: JSON.stringify({ share_attribution: mode }) });
+        saved.attribution = mode;
+      }, 'Could not change attribution. Your previous setting is restored; try again.');
     }
     if (e.target.id === 'share-link-toggle') {
       const enabled = !!e.target.checked;

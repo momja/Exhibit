@@ -81,6 +81,7 @@ Env vars, all optional except `AUTH_TOKEN`.
 | `PUBLIC_INSTANCE_DESCRIPTION` | *(unset)* | One line about it |
 | `PUBLIC_OWNER_ID` | `1` | Whose library the instance publishes — every artifact query filters on an owner, so a public instance has to name one. `1` is the owner a single-user library is already filed under |
 | `EMBED_ORIGINS` | *(unset)* | Restricts who may put a **share** in an iframe to `APP_ORIGIN` plus these. Origins separated by commas or spaces; an entry that is not an origin is a startup failure rather than a silent drop. Unset = any site may frame a share, which is what a public link is for; `/a/:id` and `/w/:id` are framed by your gallery alone either way |
+| `SHARE_ATTRIBUTION_ENABLED` | `false` | Opt-in top bar on anonymous `/s/:shareID` artifact pages. Fail-closed boolean (`true/1/yes/on` enable; unset, false or invalid values disable). Owners override per artifact with `share_attribution`: `inherit`, `show`, `hide` in the share panel or PATCH API. |
 | `CHROMIUM_CDP_URL` | *(unset)* | DevTools endpoint of a headless Chromium (`ws://chrome:9222`, or `https://`/`wss://` behind a TLS proxy) that server features share. Today it draws each share link's preview image from its widget. Unset = no browser, and every link preview shows the Exhibit logo card. A value that is not a `ws(s)://` or `http(s)://` URL is a startup failure (below) |
 | `BLOB_S3_BUCKET` | *(unset)* | Store artifact bodies in this S3-compatible bucket instead of on disk. Unset = filesystem under `DATA_DIR`, exactly as before (§7) |
 | `BLOB_S3_ENDPOINT` | AWS S3 | The bucket's API host, with an optional scheme: `http://localhost:9000`, `https://minio.example.com`, or a bare host. **Without a scheme, TLS is assumed** |
@@ -1382,3 +1383,78 @@ Everyone absent from that list is on the instance default.
 the account's own row, so there is nothing left behind and nothing to clean up
 — and someone who signs in again afterwards arrives as a new account on the
 default, not on their old allowance.
+
+### Anonymous-share attribution
+
+The optional bar uses the existing Exhibit mark and “made with exhibit”, pointing
+at the public product origin. It discloses that Exhibit serves the document,
+not its owner, instance configuration, or author identity. Owners can explicitly
+show the bar even on an instance whose default is off. Widgets and preview
+images are unchanged. Existing artifacts migrate to `inherit`.
+
+Enabled shares use a 36px top strip and a separate sandboxed srcdoc artifact
+frame below it. The tool gets its own remaining viewport: `100vh`, fixed bottom
+controls and scroll locking refer to that viewport. This costs a browsing
+context, escaped HTML bytes and an extra focus boundary; it adds no network
+request. The tool cannot access the bar's DOM. This is a compatibility change
+only for enabled shares. The tool sees `about:srcdoc` with empty URL query and
+hash, and `window.top === window` becomes false; query/hash routing, History
+API URL changes, relative URLs and top-level checks can break. The outer
+device-width viewport meta overrides the artifact's viewport meta. Long tools
+scroll in the child, but printing/Save as PDF can truncate to the visible frame
+(round-one Chromium: nine pages hidden, one page shown). sessionStorage uses an
+in-memory shim and is lost on reload. HTTP(S) tool links work when the owner has
+persisted `links_approved` and the server confirms no protected connection data.
+A local wrapper handler uses browser activation and validates the exact child
+source, opaque origin and credential-free destination; it has no app credentials
+or approval API. The destination replaces the share context (only the share's
+iframe in an embed), including for `target="_blank"`; it never opens a popup or
+navigates the embedding page. Destination framing restrictions still apply.
+Without approval, or when data eligibility cannot be confirmed, HTTP(S) clicks
+are canceled and the tool remains intact. Public shares offer no first-use
+approval; owners change the existing External links setting in Exhibit.
+Hidden shares retain native navigation, including links when that setting is
+false; attribution does not rewrite their previous bytes or behavior.
+
+Approval permits an artifact to request any validated HTTP(S) destination while
+browser activation is live; it does not prove a particular anchor was clicked.
+Activation may survive an earlier gesture/navigation. The persisted setting and
+data eligibility are checked at render time; reopening reflects changes.
+Credentialed/connected-data navigation keeps its existing app checks, and no
+policy authority is exposed to this local handler. No sandbox token, frame-src
+allowance, Gallery capability host or other permission is added. See the
+[public wrapper boundary](security.md#optional-anonymous-share-attribution).
+
+On direct shares only, frame focus on load restores initial keyboard input
+without moving focus away from an already-focused bar link. Chromium also restores form autofocus; WebKit
+suppresses cross-origin form autofocus, so use Tab to reach fields. Native Tab
+traversal still crosses the frame. Embedded shares wait for viewer interaction
+and do not transfer host-page focus on load.
+Fullscreen and clipboard write have explicit delegation within the unchanged
+opaque sandbox, but browser policy, permissions and embedding ancestors can
+still refuse them. The updated fixture restores fullscreen in both engines;
+clipboard succeeds in WebKit in both modes. Chromium without an origin grant
+rejects in both modes. With clipboard read/write permission granted to the share
+origin, Chromium direct (hidden) shares write and read back successfully, but
+attributed shares still reject with `NotAllowedError`: the grant does not carry
+to the opaque child. Real-device clipboard permission UX remains unmeasured.
+The child retains local storage and fetch shims, without gallery capability bridges. Device access, origin
+storage and popups still face sandbox restrictions. Downloads and modal dialogs
+are explicit compatibility losses: in Chromium and WebKit a hidden top-level
+share downloads a data-URL `<a download>` file; the shown share produces no
+download. A hidden share shows `confirm()` and returns false when dismissed;
+a shown share silently returns false without showing a dialog, which may cancel
+a tool action. Neither `allow-downloads` nor `allow-modals` is added, and shares
+have no host download bridge. Other omitted tokens limit pointer lock,
+orientation lock and presentation; those APIs were not measured. The tab title
+uses the escaped artifact record title; the tool's own HTML title remains inside
+the child. Preview metadata appears once at the top of the outer head. Playwright WebKit
+does not establish iOS Safari toolbar or permission behavior; a non-scrolling
+outer page can keep mobile browser chrome expanded. Disable the bar per artifact
+for tools needing full top-level compatibility. See
+[security compatibility costs](security.md#optional-anonymous-share-attribution)
+for the measured limits.
+
+The product link navigates the current document when opened directly. Inside
+any iframe it is intentionally plain text (no href, no tab stop), with a title
+explaining how to visit Exhibit. No popup or top-navigation permission is added.

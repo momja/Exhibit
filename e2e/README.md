@@ -91,3 +91,44 @@ is unchanged.
 Repository branch protection and rulesets must not require **Browser regression**,
 since PRs no longer report that status. Local Playwright execution remains
 explicit through `make e2e` or `make e2e-ui`.
+
+For concurrent worktrees, set `EXHIBIT_E2E_APP_PORT` and
+`EXHIBIT_E2E_RENDER_PORT` to a distinct pair in the test command. The attribution
+suite uses both Chromium and WebKit (`playwright install --with-deps chromium
+webkit`), an explicit third-party embed origin, and writes review images and
+measurements outside the checkout:
+
+```sh
+EXHIBIT_E2E_APP_PORT=18380 EXHIBIT_E2E_RENDER_PORT=18381 npm test --prefix e2e -- --config attribution.config.ts
+```
+
+Attribution runs use a fixed third-party embed port, 18382. They cannot run
+concurrently with another attribution run even with distinct app/render ports.
+The configurable app/render port guidance above applies to the default suite.
+
+
+The dedicated attribution suite is local-only evidence. The default Playwright
+config excludes it, and neither **Go and Node tests** nor post-merge
+**Browser regression** runs that dedicated two-engine config. Passing Go/Node
+CI does not establish attribution browser coverage. Its download and confirm
+regressions compare hidden and shown modes in both engines; the negative
+download observation is bounded to 1.5 seconds. The Chromium clipboard permission
+grant case alone skips WebKit because that Playwright grant is unsupported;
+WebKit's native clipboard write behavior has its own two-mode assertion.
+
+Navigation coverage compares persisted link approval on/off, attribution
+shown/hidden, direct/third-party embeds and `_self`/`_blank` in both engines.
+Fresh-context tests prove activation is false before rejecting forged child
+requests; reusing a page after a click is not an activation reset in Chromium.
+Other cases reject credential-bearing/unsafe URLs and unrelated opaque frames,
+and explicitly establish that an approved child can request a URL during live
+activation without attesting a particular anchor. `_blank` becomes same-context
+for shown shares, while hidden shares keep native behavior.
+
+Click-order regressions cover inline preventDefault/return false, document/window
+bubble cancellation, handlers installed during a click, ordinary propagation
+stops, canceled immediate stops, and deferred positive navigation in both engines.
+Painted SVG anchors exercise href, xlink:href, href precedence and fragments.
+Modifier/untrusted/credential-bearing clicks are refused while subsequent real
+approved clicks still navigate. Tail delivery can be suppressed by artifact code;
+those bypasses retain native sandbox/CSP behavior, as documented in security.md.

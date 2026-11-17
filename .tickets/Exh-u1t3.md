@@ -1,6 +1,6 @@
 ---
 id: Exh-u1t3
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-11-16T06:04:43Z
@@ -94,3 +94,29 @@ Prototype artifacts are throwaway; review images live outside the checkout.
    site (file + function) for implementation.
 6. Implementation tickets filed under the epic, ordered.
 
+## Notes
+
+**2026-11-16T21:02:06Z**
+
+Recovery preserved existing implementation. Fixed attribution test configuration starting the app twice, pinned direct-open response digest, tested duplication policy and agent-credential refusal. Chromium layout/theme/embed and native anchor checks pass. WebKit rerun accounts for browser focus restoration across reload and shared-host load. Final evidence and exact check limitations will be recorded on PR; reviewer verdicts are not supplied by implementer.
+
+
+**2026-11-16T23:00:40Z**
+
+Recovery finalized the requested top-bar implementation, preserving newer main ticket history. Placement follows the explicit parent brief (top strip); the older three-placement spike is superseded for this implementation. Chromium and WebKit actual-CSP native-anchor evidence and 320/1280 light/dark screenshots are under /tmp/exhibit-review/banner. Independent final-head visual and code/security verdicts remain parent-owned; no implementer merge.
+
+
+**2026-11-17 — Pi visual R3 bounded response**
+
+F1: removed only attributed `frame-src 'self'`, retaining default CSP and sandbox; renderer/browser assertions require no frame-src. F2: documents distinguish ungranted Chromium denial in both modes from origin-granted direct success/readback versus attributed NotAllowedError; WebKit writes in both modes. Focused browser assertions cover these outcomes without a bridge. F3/F5: external-link test now asserts CSP refusal (Chromium error frame, WebKit srcdoc no-op) and docs state tool loss until reload in Chromium. F4: load focus runs only for direct shares; both engines preserve an unfocused host and active host typing. Direct unclicked keyboard/Chromium autofocus, banner traversal, legacy byte pins and default-off policy remain covered. Redundant allowfullscreen removed; existing allow delegation remains.
+
+Verification: isolated harness ports 18880/18881/18882, 17 browser passes plus one explicit Chromium-only grant test skipped on WebKit (all original 14 pass); full renderer package, focused API attribution/share tests, scoped vet, build and 17 Node share tests pass. Logs/evidence: /tmp/exhibit-review/banner/r4/. Initial browser run accidentally used old binary before build completed; interrupted log retained, not counted as passing. Full-suite prior Pi/reconciliation failures, timeouts and interrupted runs remain limitations, not passes. No new-head CI result or independent review approval claimed. Both fresh final-SHA reviews remain parent-owned. GitHub browser still signed out, so images remain local and unattached. No merge/deploy/main changes.
+
+
+**2026-11-17 — Security R3 bounded implementation follow-up**
+
+B2/H1(a): retained exactly allow-scripts allow-forms. Both-engine regressions now compare hidden data-URL download success against shown no-download (bounded 1.5s observation), and hidden confirm dialog dismissed false against shown silent false/no dialog. Security/deployment docs explicitly describe lost exports and confirmation-gated actions, and distinguish unmeasured pointer lock/orientation/presentation limits. This follows the written no-allow-downloads/no-host policy and the authorized engineering choice; no sandbox tokens or bridges added.
+
+N1: server preview metadata emitted once at top of outer head for shown shares; hidden bytes remain pinned. Escaping test covers hostile artifact-record title, iframe name and retained tool HTML title. N3: frame lookups now resolve the owning iframe/parent; fixed embed port remains documented and isolated test copy uses 18980/18981/18982. Attribution browser suite is explicitly local-only, excluded from Go/Node CI and default browser CI.
+
+Verification: build, complete renderer including unchanged goldens, focused API, scoped vet, 17 Node tests pass; dedicated Chromium/WebKit 21 pass / 1 existing Chromium-only clipboard-grant skip. Full lint exists and reports repository baseline findings; diff lint reports 0 new issues. Logs and screenshots: /tmp/exhibit-review/banner/r5/. Prior full manual suite failed/incomplete; no full-suite pass or new-head CI pass claimed. Screenshots local, GitHub upload remains blocked by signed-out browser. H2 external-link refusal remains an unresolved independent-review product decision; Chromium error frame/WebKit no-op behavior, docs and tests preserved. No human approval or reviewer PASS claimed; parent owns fresh final-SHA reviews and CI watch. No merge/deploy/main changes.

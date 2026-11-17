@@ -20,6 +20,7 @@ async function loadShare({ link = '', stateMode = 'own', responses = [] } = {}) 
     'share-panel': { open: true },
     'share-add-input': { value: '' },
     'share-link-toggle': { dataset: link ? { shareId: link } : {}, checked: !!link },
+    'share-attribution': { value: 'inherit' },
     'share-state-mode': { dataset: { savedMode: stateMode } },
     'share-state-own': { checked: stateMode === 'own' },
     'share-state-shared': { checked: stateMode === 'shared' },

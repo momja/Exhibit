@@ -125,7 +125,8 @@ type Artifact struct {
 	//
 	// The owner's share panel writes it through PATCH (av-6xjd); what the
 	// value *means* at render time is av-v991's.
-	ShareStateMode string `json:"share_state_mode"`
+	ShareStateMode   string `json:"share_state_mode"`
+	ShareAttribution string `json:"share_attribution"`
 	// ShareGrantCount and SharePublicLink are the artifact's sharing state as
 	// the gallery card reads it (av-6xjd) — how many accounts hold a grant,
 	// and whether its one anonymous link exists.
@@ -920,4 +921,19 @@ type Store interface {
 	// ErrNotFound when there is no such account. sqlite_account.go says what
 	// it deletes and what the schema's cascades delete for it.
 	DeleteAccount(ctx context.Context, userID int64) ([]string, error)
+}
+
+// ValidShareAttribution validates the owner-controlled anonymous-share branding policy.
+func ValidShareAttribution(v string) bool { return v == "inherit" || v == "show" || v == "hide" }
+
+// ShowShareAttribution gives an explicit owner choice precedence over the instance default.
+func (a *Artifact) ShowShareAttribution(instance bool) bool {
+	switch a.ShareAttribution {
+	case "show":
+		return true
+	case "hide":
+		return false
+	default:
+		return instance
+	}
 }

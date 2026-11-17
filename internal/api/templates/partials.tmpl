@@ -329,6 +329,13 @@
       <input type="checkbox" id="share-link-toggle" aria-describedby="share-link-permissions"{{if .Shares.Link}} checked data-share-id="{{.Shares.Link.ID}}"{{end}}>
       <span class="spacer">Anyone with the link can open this artifact<small id="share-link-permissions">Visitors can view your saved data but cannot change it, in either data mode.</small></span>
     </label>
+    <label for="share-attribution">Exhibit attribution</label>
+    <select id="share-attribution" class="field" aria-describedby="share-attribution-help">
+      <option value="inherit"{{if or (eq .Attribution "inherit") (eq .Attribution "")}} selected{{end}}>Instance default ({{if .AttributionDefault}}shown{{else}}hidden{{end}})</option>
+      <option value="show"{{if eq .Attribution "show"}} selected{{end}}>Show</option>
+      <option value="hide"{{if eq .Attribution "hide"}} selected{{end}}>Hide</option>
+    </select>
+    <p class="form-help" id="share-attribution-help">Only affects the public /s/ link. Embedded shares show plain attribution text instead of a link. Your choice overrides the instance default.</p>
     {{if .Shares.Link}}
     {{template "copyField" .PublicLinkField}}
     {{/* Rotation earns its own control: a leaked link wants replacing, and
