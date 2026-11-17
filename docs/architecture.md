@@ -989,16 +989,30 @@ OAuth consent page keeps the plain card (`.login-painted` scopes the art).
 **Sign-in descent** (Exh-vsw0): on a visit the server marks, the scenery moves
 for 3.6s (`cubic-bezier(.5,0,.15,1)`) as a camera coming down out of the sky.
 The page is scriptless except for that visit's one external module
-(`login-descent.js`, no inline script). The body carries `.login-descend`, and
-the sky/clouds/hill `<picture>`s sit inert inside a `<template>` in
-`.login-layers-stage` (AVIF then WebP, `srcset`/`sizes` choosing the width), so
-nothing downloads until the module asks. The module returns at once under
-`prefers-reduced-motion: reduce`; otherwise it clones the layers in, waits for
-every `decode()`, and only then adds `.login-descent-go`, which is what the CSS
-animates (`login-descent.css`, all inside `no-preference`). If the layers are not
-ready within 1.5s (3s for hosted sign-in, below) it removes them and the page
-stays on the static composite: scenery arriving mid-animation or after it would
-be worse than none. Without JS the visitor also sees the composite. The once-only
+(`login-descent.js`, no inline script) and a `<noscript><style>`. The body
+carries `.login-descend`, and the sky/clouds/hill `<picture>`s sit inert inside a
+`<template>` in `.login-layers-stage` (AVIF then WebP, `srcset`/`sizes` choosing
+the width), so nothing downloads until the module asks.
+
+*Starts on the sky, not the finished picture.* On such a visit the composite is
+`opacity:0` and the scene shows its plain sky colour, so the descent does not
+read as a rewind. The composite is revealed (a 300ms crossfade, via
+`.login-descent-skip`) when the run is skipped, immediately under
+`prefers-reduced-motion: reduce` (a CSS media rule, independent of the module),
+without JS (the `<noscript>` style), and, should the module never arrive, by a
+delayed CSS animation at 3.2s. Non-animating visits are unchanged: composite
+first paint, no script. Opacity changes nothing in layout, so there is no shift,
+and the form is in place and focused from the first frame in every case.
+
+*Gated on decoded layers.* The module returns to the composite path under
+reduced motion; otherwise it clones the layers in, waits for every `decode()`,
+and only then adds `.login-descent-go`, which is what the CSS animates
+(`login-descent.css`, inside `no-preference`; outside it the layers are
+`display:none`). Past 1.5s (3s for hosted sign-in, below) it gives up: scenery
+arriving mid-animation or after it would be worse than none. Giving up, or
+reduced motion turning on at any point (a `change` listener), is permanent: the
+layers are removed, the composite is shown, and nothing restarts. The listeners
+and the pending Clerk wait are released with an `AbortController`. The once-only
 cookie is already spent on a skipped run; that is the accepted trade-off. A
 repeat visit loads no script and no layer art.
 
@@ -1007,13 +1021,13 @@ units) and end at rest, which is the production placement (sky at y=-832, clouds
 and hill at 0) over a frame sized and positioned as the composite's
 `object-fit: cover; object-position: 78% 50%` would draw it (phones: the
 960x2080 crop at (1540,192), bottom-aligned, same mask). The scene is a size
-container so the frame is plain `cqw`/`cqh` arithmetic. The composite is never
-hidden, faded or toggled: the opaque sky covers it, and the layers fade in over
-300ms at the start. Nothing above the text changes state when the motion ends
-(the layers keep `will-change: transform`), so text anti-aliasing and the panel
-shadow are identical across the end of the animation (measured on the natural
-timeline). Only `.login-scene` moves: the form is in the first paint, keeps
-focus, is never faded, and the grain and shade stay fixed above the art.
+container so the frame is plain `cqw`/`cqh` arithmetic. The layers fade in over
+300ms at the start and cover the (invisible) composite. Nothing above the text
+changes state when the motion ends (the layers keep `will-change: transform`),
+so text anti-aliasing and the panel shadow are identical across the end of the
+animation (measured on the natural timeline). Only `.login-scene` moves: the
+form never moves, fades or loses focus, and the grain and shade stay fixed above
+the art.
 
 Hosted sign-in sets `data-descent-after="clerk"`: the module waits for
 `exhibit:clerk-loaded` (dispatched by `clerk-client.js` after `Clerk.load`) before
