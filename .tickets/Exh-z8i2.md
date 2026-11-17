@@ -24,3 +24,7 @@ Default tiles and monograms use palette hues with grain in light and dark; widge
 **2026-11-17T03:04:41Z**
 
 Palette hues 8,40,96,136,214,231 (tile.Palette). Monogram contrast AA: light min 6.42, dark min 4.53 (TestTilePaletteKeepsTextContrast). Grain sits under the opaque plate so it cannot lower contrast; hidden in forced-colors. Standalone share tile CSP gained img-src data:.
+
+**2026-11-17T07:16:06Z**
+
+Round 1: hues now 8 (red), 40 (yellow), 96 (olive), 165 (teal), 214 (blue), 290 (plum), all >=30deg apart. Face dE76 between neighbours in hue order (red-yellow-olive-teal-blue-plum-red): light 13.6, 14.6, 15.3, 18.9, 19.0, 22.4; dark 23.2, 26.9, 26.1, 35.7, 31.2, 41.0. Monogram contrast: light min 6.42, dark min 5.12 (dark plate 34% 32%, ink 60% 90%); test floor 4.8. Share-tile document tokens now tested against tokens.css. Browser CSP-violation load of the share tile not added (exact CSP string asserted instead).

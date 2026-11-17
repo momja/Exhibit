@@ -217,8 +217,8 @@ func TestShareWidgetServesTheDefaultTileWithoutWidget(t *testing.T) {
 		}
 	}
 	csp := w.Header().Get("Content-Security-Policy")
-	if !strings.HasPrefix(csp, "default-src 'none'; style-src 'unsafe-inline'; img-src data:; frame-ancestors") {
-		t.Errorf("the tile permits inline style and nothing else, got %q", csp)
+	if !strings.HasPrefix(csp, "default-src 'none'; style-src 'unsafe-inline'; img-src data:; frame-ancestors") || strings.Count(csp, "img-src") != 1 {
+		t.Errorf("the tile permits inline style and the grain's data: image only, got %q", csp)
 	}
 	if strings.Contains(csp, "api.example.com") {
 		t.Errorf("a static tile needs none of the artifact's allowlist, got %q", csp)
