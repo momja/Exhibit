@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/chromedp/cdproto/emulation"
+	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 	"github.com/momja/Exhibit/internal/chromium"
 	"github.com/momja/Exhibit/internal/chromium/chromiumtest"
@@ -54,10 +55,11 @@ func TestLoginDescentBrowser(t *testing.T) {
 				time.Sleep(500 * time.Millisecond)
 				require.True(t, eval(`document.getAnimations().length === 0`), "no motion")
 				require.True(t, eval(layers+` === 0`), "no layer art is downloaded")
-				require.True(t, eval(`getComputedStyle(document.querySelector('.login-scene-composite')).visibility === 'visible'`), "the composite is the page")
+				require.True(t, eval(`getComputedStyle(document.querySelector('.login-scene-composite')).opacity === '1'`), "the composite is the page")
 				return
 			}
 			require.NoError(t, chromedp.Do(ctx, chromedp.Poll[chromedp.Void](layers+` >= 3`, chromedp.WithPollingTimeout(10*time.Second))))
+			require.True(t, eval(`getComputedStyle(document.querySelector('.login-scene-composite')).opacity === '0'`), "an animating visit does not start on the finished picture")
 			// Jump to the end of every animation, as the timeline would.
 			require.NoError(t, chromedp.Do(ctx, chromedp.Poll[chromedp.Void](`document.body.classList.contains('login-descent-go')`, chromedp.WithPollingTimeout(5*time.Second))), "the animation starts once the layers are decoded")
 			require.True(t, eval(`document.getAnimations().forEach(a => a.finish()) || true`))
@@ -71,7 +73,6 @@ func TestLoginDescentBrowser(t *testing.T) {
 				const near = (a, b) => Math.abs(a - b) < .6;
 				return near(r.x, want.x) && near(r.y, want.y) && near(r.width, want.w) && near(r.height, want.h) && near(sky.y, want.y - 832 * s) && near(sky.height, 2272 * s);
 			})()`), "layers end exactly on the composite's placement")
-			require.True(t, eval(`getComputedStyle(document.querySelector('.login-scene-composite')).visibility === 'visible'`), "the composite is never hidden")
 			after, err := chromedp.Run(ctx, chromedp.Evaluate[string](formRect))
 			require.NoError(t, err)
 			require.Equal(t, before, after, "the form never moved")
@@ -99,9 +100,47 @@ func TestLoginDescentSkippedWhenLayersAreLate(t *testing.T) {
 	defer cancel()
 	ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(app.URL+"/auth/login"), chromedp.WaitVisible(chromedp.CSS(`#username`))))
+	_, err = chromedp.Call(ctx, emulation.SetEmulatedMedia, emulation.SetEmulatedMediaParams{Features: []*emulation.MediaFeature{{Name: "prefers-reduced-motion", Value: "no-preference"}}})
+	require.NoError(t, err)
+	// Do not wait for load: it waits for the layers this test holds back.
+	_, err = chromedp.Call(ctx, page.Navigate, page.NavigateParams{URL: app.URL + "/auth/login"})
+	require.NoError(t, err)
+	require.NoError(t, chromedp.Do(ctx, chromedp.Poll[chromedp.Void](`document.querySelector('#username')`, chromedp.WithPollingTimeout(5*time.Second))))
+	ok, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`getComputedStyle(document.querySelector('.login-scene-composite')).opacity === '0' && !document.body.classList.contains('login-descent-skip')`))
+	require.NoError(t, err)
+	require.True(t, ok, "the visit starts on the plain sky while the layers are awaited")
 	time.Sleep(2500 * time.Millisecond)
-	ok, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`!document.body.classList.contains('login-descent-go') && document.querySelectorAll('.login-layers-stage img').length === 0 && document.getAnimations().length === 0`))
+	ok, err = chromedp.Run(ctx, chromedp.Evaluate[bool](`getComputedStyle(document.querySelector('.login-scene-composite')).opacity === '1' && !document.body.classList.contains('login-descent-go') && document.querySelectorAll('.login-layers-stage img').length === 0 && document.getAnimations().filter(a => a.animationName.startsWith('login-descent')).length === 0`))
 	require.NoError(t, err)
 	require.True(t, ok)
+}
+
+// Reduced motion switched on mid-run cancels the descent for good: the layers
+// go, the composite is shown, and switching back does not restart anything.
+func TestLoginDescentCancelledByReducedMotionMidRun(t *testing.T) {
+	ro, _ := newLocalLoginRouter(t)
+	app := httptest.NewServer(ro)
+	defer app.Close()
+	ro.cfg.AppOrigin = app.URL
+	browser, err := chromium.New(chromiumtest.Start(t))
+	require.NoError(t, err)
+	ctx, cancel, err := browser.Tab(context.Background())
+	require.NoError(t, err)
+	defer cancel()
+	ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	motion := func(value string) {
+		_, err := chromedp.Call(ctx, emulation.SetEmulatedMedia, emulation.SetEmulatedMediaParams{Features: []*emulation.MediaFeature{{Name: "prefers-reduced-motion", Value: value}}})
+		require.NoError(t, err)
+	}
+	motion("no-preference")
+	require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(app.URL+"/auth/login"), chromedp.WaitVisible(chromedp.CSS(`#username`))))
+	require.NoError(t, chromedp.Do(ctx, chromedp.Poll[chromedp.Void](`document.body.classList.contains('login-descent-go')`, chromedp.WithPollingTimeout(5*time.Second))))
+	motion("reduce")
+	require.NoError(t, chromedp.Do(ctx, chromedp.Poll[chromedp.Void](`document.querySelectorAll('.login-layers-stage img').length === 0 && document.body.classList.contains('login-descent-skip')`, chromedp.WithPollingTimeout(5*time.Second))))
+	motion("no-preference")
+	time.Sleep(500 * time.Millisecond)
+	ok, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`!document.body.classList.contains('login-descent-go') && document.querySelectorAll('.login-layers-stage img').length === 0 && getComputedStyle(document.querySelector('.login-scene-composite')).opacity === '1' && document.getAnimations().filter(a => a.animationName.startsWith('login-descent')).length === 0`))
+	require.NoError(t, err)
+	require.True(t, ok, "a cancelled descent never restarts")
 }
