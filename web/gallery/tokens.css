@@ -272,9 +272,9 @@
 
 		--tile-face-top:38% 30%;
 		--tile-face-bottom:36% 20%;
-		--tile-mono-fill:34% 34%;
+		--tile-mono-fill:34% 32%;
 		--tile-mono-shadow:40% 8% / .5;
-		--tile-mono-ink:60% 88%;
+		--tile-mono-ink:60% 90%;
 		--grain-opacity:.4;
 
 		--shadow-header:0 1px 0 rgba(0,0,0,.5);
