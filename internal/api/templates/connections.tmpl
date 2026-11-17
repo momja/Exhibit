@@ -82,7 +82,7 @@
 {{else}}<button class="btn" type="button" data-action="connections#reconnect" data-connection-id="{{.Reconnect.ID}}" data-connection-kind="{{.Reconnect.Kind}}" data-provider="{{.Reconnect.Provider}}" data-connection-name="{{.Reconnect.Name}}">Continue to {{.Reconnect.Provider}}</button>{{end}}
 <a href="{{.BaseURL}}">Cancel</a>
 {{else}}
-{{if .SetupProviders}}<form class="connect-form" data-connections-target="createForm" data-action="submit->connections#create">
+{{if .SetupProviders}}<form class="connect-form" data-connections-target="createForm" data-action="submit->connections#create input->connections#formEdited change->connections#formEdited">
 <label for="connection-kind">{{if .Advanced}}Connection type{{else}}Service{{end}}</label><select id="connection-kind" name="recipe" data-action="change->connections#providerChanged" data-connections-target="provider">{{range .SetupProviders}}<option value="{{.ID}}"{{if eq $.SelectedProvider .ID}} selected{{end}}>{{.Name}}</option>{{end}}</select>
 <label for="connection-name">Account label</label><input id="connection-name" name="name" placeholder="My account" required maxlength="100" autocomplete="off">
 {{if and .Advanced .CustomEnabled}}<div data-connections-target="fields" data-recipes="api-key bearer basic"><label for="connection-origin">API origin (scheme and host)</label><input type="url" id="connection-origin" name="origin" placeholder="https://api.example.com" data-action="input->connections#destinationChanged"><p class="connect-destination" data-connections-target="destination" hidden>Credential is sent only to <strong data-connections-target="destinationHost"></strong></p><p class="field-help">A scheme and host only — no path, query or credentials.</p></div>

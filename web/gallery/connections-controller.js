@@ -32,13 +32,27 @@ export default class extends Controller {
   // Name the destination in the form itself, before the credential is pasted.
   // The credential is only ever sent to one host, and a person deciding whether
   // to trust this setup should see which host that is without submitting.
+  // Read the recipe that is active now: a Basic access_url keeps its value when
+  // the person switches to another recipe, but that field is disabled and is
+  // not part of what the next submit sends.
   destinationChanged() {
     if (!this.hasDestinationTarget) return;
     const fields = this.createFormTarget.elements;
-    const raw = fields.access_url?.value || fields.origin?.value || '';
+    const recipe = this.providerTarget.value.split(':')[0];
+    let raw = '';
+    if (recipe === 'basic') raw = fields.access_url?.value || fields.origin?.value || '';
+    else if (recipe === 'api-key' || recipe === 'bearer') raw = fields.origin?.value || '';
     const host = hostOf(raw);
     this.destinationTarget.hidden = host === '';
     this.destinationHostTarget.textContent = host;
+  }
+
+  // A warning is about the values that were submitted. Once any field changes,
+  // those values are no longer on screen, so the old confirmation cannot stand:
+  // hide it and make the person submit the form again.
+  formEdited() {
+    this.formRevision = (this.formRevision || 0) + 1;
+    this.clearCreateWarning();
   }
 
   async request(path, options = {}) {
@@ -73,6 +87,7 @@ export default class extends Controller {
   async create(event) {
     await this.action(event, async () => {
       this.clearCreateWarning();
+      const revision = this.formRevision || 0;
       this.createErrorTarget.textContent = '';
       const data = Object.fromEntries(new FormData(this.createFormTarget));
       const [recipe, vendorProvider] = data.recipe.split(':');
@@ -95,7 +110,7 @@ export default class extends Controller {
           const result = await this.connectVendor(data, vendorWindow);
           this.setupFinished(result.connection.id);
         } else {
-          await this.saveNative(data, false);
+          await this.saveNative(data, { revision });
         }
       } catch (error) { vendorWindow?.close(); this.createErrorTarget.textContent = error.message; }
     });
@@ -103,13 +118,16 @@ export default class extends Controller {
 
   // The destination warning is a decision, not a failure: saving the same form
   // again with the person's confirmation is the only way past it.
-  async saveNative(data, confirmed) {
+  async saveNative(data, { confirmed = false, revision = this.formRevision || 0 } = {}) {
     try {
       const connection = await this.request('/api/connections', { method: 'POST', body: JSON.stringify(confirmed ? { ...data, confirm_origin_mismatch: true } : data) });
       this.setupFinished(connection.id);
     } catch (error) {
       if (error.code !== 'credential_origin_mismatch' || confirmed) throw error;
-      this.pendingCreate = data;
+      // The answer describes the form as it was at submit time. If the person
+      // edited it while the request was in flight, that warning is obsolete.
+      if (revision !== (this.formRevision || 0)) return;
+      this.pendingCreate = { data, revision };
       this.showCreateWarning(error.details);
     }
   }
@@ -131,9 +149,9 @@ export default class extends Controller {
 
   confirmCreate(event) {
     this.action(event, async () => {
-      const data = this.pendingCreate;
+      const pending = this.pendingCreate;
       this.clearCreateWarning();
-      if (data) await this.saveNative(data, true);
+      if (pending) await this.saveNative(pending.data, { confirmed: true, revision: pending.revision });
     });
   }
 

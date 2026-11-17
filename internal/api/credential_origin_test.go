@@ -78,6 +78,9 @@ func TestConnectionSetupNamesTheDestinationAndReservesTheWarning(t *testing.T) {
 	assert.Contains(t, page, `data-connections-target="destination"`)
 	assert.Contains(t, page, `data-connections-target="destinationHost"`)
 	assert.Contains(t, page, `data-action="input->connections#destinationChanged"`)
+	// Every field edit invalidates the warning: the form captures input and
+	// change events so a confirmation cannot outlive the values it described.
+	assert.Contains(t, page, `input->connections#formEdited change->connections#formEdited`)
 	assert.Contains(t, page, `data-connections-target="createWarningText"`)
 	assert.Contains(t, page, `data-action="connections#confirmCreate"`)
 	assert.Contains(t, page, "Credential is sent only to")

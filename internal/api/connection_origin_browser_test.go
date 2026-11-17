@@ -43,11 +43,11 @@ func TestConnectionDestinationWarningBrowser(t *testing.T) {
 	ctx, cancel = context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 
-	run := func(actions ...chromedp.Action[chromedp.Void]) {
+	run := func(t *testing.T, actions ...chromedp.Action[chromedp.Void]) {
 		t.Helper()
 		require.NoError(t, chromedp.Do(ctx, actions...))
 	}
-	check := func(expression string) {
+	check := func(t *testing.T, expression string) {
 		t.Helper()
 		ok, err := chromedp.Run(ctx, chromedp.Evaluate[bool](expression))
 		require.NoError(t, err)
@@ -56,7 +56,7 @@ func TestConnectionDestinationWarningBrowser(t *testing.T) {
 	// A full navigation destroys the execution context under an in-flight
 	// evaluation, which is not a failure of the page: re-evaluate until the new
 	// document answers.
-	waitFor := func(expression string, budget time.Duration) {
+	waitFor := func(t *testing.T, expression string, budget time.Duration) {
 		t.Helper()
 		deadline := time.Now().Add(budget)
 		for {
@@ -72,7 +72,7 @@ func TestConnectionDestinationWarningBrowser(t *testing.T) {
 			time.Sleep(150 * time.Millisecond)
 		}
 	}
-	capture := func(name string) {
+	capture := func(t *testing.T, name string) {
 		t.Helper()
 		dir := os.Getenv("CONNECTION_ORIGIN_SCREENSHOT_DIR")
 		if dir == "" {
@@ -98,32 +98,71 @@ func TestConnectionDestinationWarningBrowser(t *testing.T) {
 		t.Run(fmt.Sprint(width), func(t *testing.T) {
 			_, err := chromedp.Call(ctx, emulation.SetDeviceMetricsOverride, emulation.SetDeviceMetricsOverrideParams{Width: width, Height: 900, DeviceScaleFactor: 1})
 			require.NoError(t, err)
-			run(chromedp.Navigate(app.URL+"/connections?advanced=1"),
+			run(t, chromedp.Navigate(app.URL+"/connections?advanced=1"),
 				chromedp.Poll[chromedp.Void](`document.querySelector('[data-connections-target="createForm"]')`))
 
-			// Choose the bearer recipe, which is the single-secret shape.
-			run(chromedp.Evaluate[chromedp.Void](`{const kind=document.getElementById('connection-kind');kind.value='bearer';kind.dispatchEvent(new Event('change',{bubbles:true}))}`))
-			run(chromedp.SendKeys(chromedp.CSS(`#connection-name`), "Anthropic account"))
-			run(chromedp.SendKeys(chromedp.CSS(`#connection-origin`), "https://api-openai.co"))
-			// The destination is named before anything is pasted.
-			check(`document.querySelector('[data-connections-target="destinationHost"]').textContent === 'api-openai.co' && !document.querySelector('[data-connections-target="destination"]').hidden`)
-			run(chromedp.SendKeys(chromedp.CSS(`#connection-secret`), "sk-ant-api03-not-a-real-key"))
-			run(chromedp.Click(chromedp.CSS(`.connect-submit`)))
+			// A Basic credential URL stays in the DOM when the person switches
+			// to bearer, but it is disabled and is not the submitted destination.
+			run(t, chromedp.Evaluate[chromedp.Void](`{const kind=document.getElementById('connection-kind');kind.value='basic';kind.dispatchEvent(new Event('change',{bubbles:true}))}`))
+			run(t, chromedp.SendKeys(chromedp.CSS(`#connection-access-url`), "https://basic-user:basic-pass@basic.example.test/base"))
+			check(t, `document.querySelector('[data-connections-target="destinationHost"]').textContent === 'basic.example.test'`)
+			run(t, chromedp.Evaluate[chromedp.Void](`{const kind=document.getElementById('connection-kind');kind.value='bearer';kind.dispatchEvent(new Event('change',{bubbles:true}))}`))
+			check(t, `(() => {
+   const destination = document.querySelector('[data-connections-target="destination"]');
+   const access = document.getElementById('connection-access-url');
+   return access.disabled && destination.hidden;
+  })()`)
+			run(t, chromedp.SendKeys(chromedp.CSS(`#connection-origin`), "https://api-openai.co"))
+			// The destination is named before anything is pasted, from the
+			// recipe that will actually submit.
+			check(t, `document.querySelector('[data-connections-target="destinationHost"]').textContent === 'api-openai.co' && !document.querySelector('[data-connections-target="destination"]').hidden`)
+			run(t, chromedp.SendKeys(chromedp.CSS(`#connection-name`), "Anthropic account"))
+			run(t, chromedp.SendKeys(chromedp.CSS(`#connection-secret`), "sk-ant-api03-not-a-real-key"))
+			run(t, chromedp.Click(chromedp.CSS(`.connect-submit`)))
 
-			waitFor(`!document.querySelector('[data-connections-target="createWarning"]').hidden`, 10*time.Second)
-			check(`(() => {
+			waitFor(t, `!document.querySelector('[data-connections-target="createWarning"]').hidden`, 10*time.Second)
+			check(t, `(() => {
    const text = document.querySelector('[data-connections-target="createWarningText"]').textContent;
    const button = document.querySelector('[data-connections-target="confirmButton"]').textContent;
    return text.includes('Anthropic API key') && text.includes('api.anthropic.com') && text.includes('api-openai.co') && button.includes('api-openai.co');
   })()`)
 			// It is a decision, not a dead end: the form is still there to edit.
-			check(`!!document.getElementById('connection-origin')`)
-			capture(fmt.Sprintf("warning-%d.png", width))
+			check(t, `!!document.getElementById('connection-origin')`)
+			capture(t, fmt.Sprintf("warning-%d.png", width))
 
-			run(chromedp.Click(chromedp.CSS(`[data-connections-target="confirmButton"]`)))
-			waitFor(`location.search.includes('connected=1') && document.readyState === 'complete' && document.body.textContent.includes('Anthropic account')`, 15*time.Second)
-			check(`document.body.textContent.includes('Anthropic account')`)
-			capture(fmt.Sprintf("saved-%d.png", width))
+			// Editing after the warning drops it. A confirmation describes the
+			// values that were submitted, so it cannot survive a change.
+			run(t, chromedp.Evaluate[chromedp.Void](`{const origin=document.getElementById('connection-origin');origin.value='https://api-anthropic.example';origin.dispatchEvent(new Event('input',{bubbles:true}))}`))
+			waitFor(t, `document.querySelector('[data-connections-target="createWarning"]').hidden`, 5*time.Second)
+			// A recipe change is the form's change event and invalidates too.
+			run(t, chromedp.Evaluate[chromedp.Void](`{const kind=document.getElementById('connection-kind');kind.value='basic';kind.dispatchEvent(new Event('change',{bubbles:true}))}`))
+			waitFor(t, `document.querySelector('[data-connections-target="createWarning"]').hidden`, 5*time.Second)
+			run(t, chromedp.Evaluate[chromedp.Void](`{const kind=document.getElementById('connection-kind');kind.value='bearer';kind.dispatchEvent(new Event('change',{bubbles:true}))}`))
+			waitFor(t, `document.querySelector('[data-connections-target="createWarning"]').hidden`, 5*time.Second)
+			// Switching back restores the fields bearer submits, and leaves the
+			// Basic credential URL disabled rather than sending it.
+			check(t, `(() => {
+   const form = document.querySelector('[data-connections-target="createForm"]');
+   return form.elements.recipe.value === 'bearer' && !form.elements.origin.disabled &&
+     form.elements.origin.value === 'https://api-anthropic.example' &&
+     !form.elements.secret.disabled && form.elements.secret.value.length > 0 &&
+     form.elements.access_url.disabled;
+  })()`)
+			// Only a fresh normal submission may warn again, and it warns about
+			// the destination now on screen.
+			run(t, chromedp.Click(chromedp.CSS(`.connect-submit`)))
+			waitFor(t, `!document.querySelector('[data-connections-target="createWarning"]').hidden`, 10*time.Second)
+			check(t, `(() => {
+   const text = document.querySelector('[data-connections-target="createWarningText"]').textContent;
+   const button = document.querySelector('[data-connections-target="confirmButton"]').textContent;
+   return text.includes('api.anthropic.com') && text.includes('api-anthropic.example') && button.includes('api-anthropic.example');
+  })()`)
+			capture(t, fmt.Sprintf("warning-edited-%d.png", width))
+
+			run(t, chromedp.Click(chromedp.CSS(`[data-connections-target="confirmButton"]`)))
+			waitFor(t, `location.search.includes('connected=1') && document.readyState === 'complete' && document.body.textContent.includes('Anthropic account')`, 15*time.Second)
+			check(t, `document.body.textContent.includes('Anthropic account')`)
+			capture(t, fmt.Sprintf("saved-%d.png", width))
 		})
 	}
 }
