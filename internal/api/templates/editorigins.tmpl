@@ -13,7 +13,7 @@
   <div id="unapproved-rows">
     {{range .Unapproved}}<div class="allowlist-row text-action-row" data-origin="{{.}}">
       <code title="{{.}}">{{.}}</code>
-      <button type="button" class="btn btn-sec icon-btn row-action" data-action="allow" aria-label="Allow {{.}}" title="Allow site"><i class="ph ph-plus" aria-hidden="true"></i></button>
+      <button type="button" class="btn btn-sec icon-btn row-action" data-action="allow" aria-label="Allow {{.}}" title="Allow site"><i class="ph ph-check" aria-hidden="true"></i></button>
     </div>{{end}}
   </div>
   {{end}}
@@ -33,7 +33,7 @@
            trap: a blocked origin never prompts on its own. */}}
       <div class="origin-block-actions">
         <button type="button" class="btn btn-sm btn-sec" data-action="forget" aria-label="Ask again for {{.}}">Ask again</button>
-        <button type="button" class="btn btn-sec icon-btn row-action" data-action="allow" aria-label="Allow {{.}}" title="Allow site"><i class="ph ph-plus" aria-hidden="true"></i></button>
+        <button type="button" class="btn btn-sec icon-btn row-action" data-action="allow" aria-label="Allow {{.}}" title="Allow site"><i class="ph ph-check" aria-hidden="true"></i></button>
       </div>
     </div>{{end}}
   </div>

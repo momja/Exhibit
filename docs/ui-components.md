@@ -895,7 +895,7 @@ Compose `.btn.icon-btn.row-action` for compact actions with a recognizable
 icon. Supply an accessible name, include the affected item when there are
 repeated controls, and use a short `title` for the mouse tooltip. The shared
 button style provides a 44px target on narrow or coarse-pointer displays.
-Add uses a plus or person-plus icon. Both removing a site and revoking
+Add uses a plus or person-plus icon. Allow uses a checkmark. Removing a site and revoking
 access use an X. Keep words visible when an icon would leave a
 distinct outcome unclear, such as asking again about a blocked site.
 
