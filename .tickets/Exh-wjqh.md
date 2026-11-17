@@ -32,3 +32,7 @@ Fonts via shared fontsHead partial. Schibsted wght 400..800; Fraunces pinned ops
 **2026-11-16T17:01:25Z**
 
 Round 1 fixes: Clerk/CodeMirror/connections use --font-sans; Fraunces is a pinned static instance so font-variation-settings removed (fontsHead URL is the single source); body font-family consolidated in components.css; tests cover all pages.
+
+**2026-11-17T16:25:30Z**
+
+Decision change (user override of 'no self-hosting'): fonts are now self-hosted via web/fonts (fontsource OFL packages, Fraunces static instance 72/600/100/0 via fontTools instancer). Reason: security audit - Google stylesheet is render-blocking (85s blank pages on black-holed networks) and sends visitor IP/hostname to Google (GDPR).
