@@ -431,7 +431,7 @@ type loginPageData struct {
 // safeNext — it is rendered into a hidden field and posted straight back.
 func (ro *Router) renderLogin(w http.ResponseWriter, r *http.Request, status int, next, username, errMsg string) {
 	data := loginPageData{
-		Header:   authPageHeader("Sign in"),
+		Header:   paintedAuthHeader("Sign in"),
 		Favicon:  template.URL(exhibitLogoDataURI),
 		Next:     next,
 		Username: username,
@@ -471,7 +471,7 @@ func (ro *Router) failLogin(w http.ResponseWriter, msg string, attrs ...slog.Att
 		message = "This account cannot sign in. Contact the person who manages this Exhibit instance."
 	}
 	page, err := renderPage("loginFailure", loginPageData{
-		Header: authPageHeader("Sign-in failed"), Favicon: template.URL(exhibitLogoDataURI), Error: message,
+		Header: paintedAuthHeader("Sign-in failed"), Favicon: template.URL(exhibitLogoDataURI), Error: message,
 	})
 	if err != nil {
 		slog.Error("render sign-in failure", slog.String("err", err.Error()))

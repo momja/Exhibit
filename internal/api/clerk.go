@@ -70,7 +70,7 @@ func (ro *Router) renderClerkLogin(w http.ResponseWriter, r *http.Request, mode 
 		Clerk   *clerkView
 		Mode    string
 		Next    string
-	}{authPageHeader(title), template.URL(exhibitLogoDataURI), ro.clerkView(r), mode, next})
+	}{paintedAuthHeader(title), template.URL(exhibitLogoDataURI), ro.clerkView(r), mode, next})
 	if err != nil {
 		serverError(w, r, "Clerk login render", err)
 		return

@@ -78,6 +78,10 @@ export const clerkAuthAppearance = {
   },
   elements: {
     rootBox: { width: '100%', maxWidth: '100%' },
-    cardBox: { width: '100%', maxWidth: '100%' },
+    cardBox: { width: '100%', maxWidth: '100%', background: 'transparent', boxShadow: 'none', border: 'none', borderRadius: 0 },
+    // The sign-in box (login.css .login-clerk) is the one card; Clerk's own is
+    // flattened inside it (Exh-90b2).
+    card: { background: 'transparent', boxShadow: 'none', padding: 0 },
+    footer: { background: 'transparent', backgroundImage: 'none' },
   },
 };

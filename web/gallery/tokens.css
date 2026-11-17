@@ -127,6 +127,14 @@
 	--grain-url:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='.6 .6 .6 0 -.4 .6 .6 .6 0 -.4 .6 .6 .6 0 -.4 0 0 0 0 1'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
 	--grain-opacity:.55;
 
+	/* Painted sign-in (Exh-90b2). Text that sits directly on the painting, the
+	 * scrim that keeps it legible, and the sky the phone layout fades the
+	 * painting into (sampled from the top of the portrait crop). */
+	--color-on-painting:#fbf7ec;
+	--painting-scrim:rgba(11,42,90,.72);
+	--painting-sky-top:#2f78dc;
+	--painting-sky-bottom:#4f8fd4;
+
 	/* elevation */
 	--shadow-header:0 1px 0 rgba(60,45,10,.12);
 	/* --shadow-card[-hover] belong to the gallery's tiles: a hairline ring and a
@@ -287,6 +295,9 @@
 		--tile-mono-shadow:40% 8% / .5;
 		--tile-mono-ink:60% 88%;
 		--grain-opacity:.4;
+		--painting-scrim:rgba(8,10,30,.68);
+		--painting-sky-top:#18235c;
+		--painting-sky-bottom:#2a2f6a;
 
 		--shadow-header:0 1px 0 rgba(0,0,0,.5);
 		--shadow-card:0 1px 0 rgba(0,0,0,.5),0 0 0 1px rgba(0,0,0,.25);
