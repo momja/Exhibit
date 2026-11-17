@@ -18,7 +18,7 @@ func TestDuplicateArtifactOptionsAndIndependentMetadata(t *testing.T) {
 				seedOwnerAccounts(t, s)
 				ctx := context.Background()
 				require.NoError(t, s.PutArtifact(ctx, &Artifact{ID: "source", OwnerID: alice, Title: "Original", SourceBlobID: "body", WidgetBlobID: "widget", SourceURL: "https://example.com/tool", Tier: Tier2, DownloadsApproved: true, ClipboardApproved: true, LinksApproved: true, CameraApproved: true, MicrophoneApproved: true, GeolocationApproved: true, NetworkAllowlist: []string{"https://allowed.example"}}))
-				require.NoError(t, s.UpdateArtifact(ctx, alice, "source", map[string]any{"share_state_mode": ShareStateShared}))
+				require.NoError(t, s.UpdateArtifact(ctx, alice, "source", map[string]any{"share_state_mode": ShareStateShared, "share_attribution": "hide"}))
 				require.NoError(t, s.SetOriginDecision(ctx, alice, "source", "https://blocked.example", DecisionBlock, "user"))
 				require.NoError(t, s.SetState(ctx, OwnerID(alice), "source", ViewerID(alice), "mine", "owner data"))
 				require.NoError(t, s.SetState(ctx, OwnerID(alice), "source", ViewerID(bob), "private", "viewer data"))
@@ -69,6 +69,7 @@ func TestDuplicateArtifactOptionsAndIndependentMetadata(t *testing.T) {
 				shares, err := s.ListArtifactShares(ctx, alice, "copy")
 				require.NoError(t, err)
 				if copyShares {
+					assert.Equal(t, "hide", a.ShareAttribution)
 					require.Len(t, shares, 2)
 					assert.Equal(t, ShareStateShared, a.ShareStateMode)
 					assert.True(t, a.SharePublicLink)
@@ -81,6 +82,7 @@ func TestDuplicateArtifactOptionsAndIndependentMetadata(t *testing.T) {
 					assert.Equal(t, recipient, *shares[1].RecipientID)
 				} else {
 					assert.Empty(t, shares)
+					assert.Equal(t, "inherit", a.ShareAttribution)
 					assert.Equal(t, ShareStateOwn, a.ShareStateMode)
 					assert.False(t, a.SharePublicLink)
 					assert.Zero(t, a.ShareGrantCount)

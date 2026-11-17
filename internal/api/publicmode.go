@@ -154,3 +154,6 @@ func (ro *Router) publicSettings(w http.ResponseWriter, r *http.Request) {
 		Description: ro.cfg.Public.Description,
 	})
 }
+
+// ShareAttributionFromEnv is opt-in and uses the common fail-closed boolean parser.
+func ShareAttributionFromEnv() bool { return envBool("SHARE_ATTRIBUTION_ENABLED") }

@@ -611,6 +611,17 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 	// reason the approval flags are: the store refuses it too, and a rule held
 	// in one layer alone is a rule the other layer can later be given a way
 	// around.
+	if v, ok := updates["share_attribution"]; ok {
+		if principalFromCtx(r.Context()).Kind == PrincipalAgentGrant {
+			writeError(w, http.StatusBadRequest, "share_attribution is set by the owner")
+			return
+		}
+		mode, isString := v.(string)
+		if !isString || !store.ValidShareAttribution(mode) {
+			writeError(w, http.StatusBadRequest, "share_attribution must be inherit, show or hide")
+			return
+		}
+	}
 	if v, ok := updates["share_state_mode"]; ok {
 		mode, isString := v.(string)
 		if !isString || !store.ValidShareStateMode(mode) {
