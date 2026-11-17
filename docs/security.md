@@ -260,10 +260,20 @@ redirect is the risky half.
 **Third-party fonts on the app origin (Exh-wjqh).** App-origin pages load
 Schibsted Grotesk and Fraunces from `fonts.googleapis.com` (stylesheet) and
 `fonts.gstatic.com` (files), so those hosts see the visitor's IP and
-User-Agent. The app origin sets no `style-src`, `font-src` or `default-src`
-policy: its only `Content-Security-Policy` headers restrict framing
-(`frame-src` on the detail and agent pages when relay is on, `frame-ancestors`
-on OAuth consent), so no policy change was made or is needed. **If an app-wide
+User-Agent, and font requests (CORS fetches) carry the app origin in their
+`Origin` header. The stylesheet link sets `referrerpolicy="no-referrer"`, so no
+`Referer` reaches Google and the page's path and query (search terms, artifact
+ids, OAuth `redirect_uri` and `state`) never can, whatever default policy the
+browser runs with. The stylesheet is render-blocking: a host that fails fast
+costs only the typeface, but a network that silently drops packets to Google
+holds every app page blank, and its scripts unrun, until the connection times
+out (85 s measured in headless Chromium on Linux). No app page carries a
+`style-src`, `font-src` or `default-src` policy: the pages' only
+`Content-Security-Policy` headers restrict framing (`frame-src` on the detail
+and agent pages when relay is on, `frame-ancestors` on OAuth consent). The
+widget wrapper documents on the app origin (`gallerywidgets.go`) do carry
+`default-src 'none'`, but they include no `fontsHead` and load no fonts. So no
+policy change was made or is needed. **If an app-wide
 CSP is ever added, it must allow those two hosts for `style-src` and
 `font-src`.** The render origin is untouched: artifact CSPs, the widget wrapper
 and share documents never name the font hosts. What the tests guarantee:
