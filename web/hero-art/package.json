@@ -1,0 +1,9 @@
+{
+  "name": "exhibit-hero-art",
+  "private": true,
+  "type": "module",
+  "description": "Copies the committed responsive hero paintings to internal/api/assets/hero-art for same-origin serving, verifying each against images/manifest.json. No dependencies: the images are encoded by design_files/brand-refresh/tools/hero-export.",
+  "scripts": {
+    "build": "node build.mjs"
+  }
+}
