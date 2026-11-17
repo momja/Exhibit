@@ -24,11 +24,11 @@ import (
 // every test server is, and it is Chromium's protection rather than ours: an
 // operator's browser may not apply it, so code under test must stand without it.
 //
-// The Google Fonts hosts the app's pages link to (Exh-wjqh) never resolve.
-// Tests must not depend on the internet: a font that arrived mid-test would
-// swap in and re-lay out the page under a running assertion, so every run
-// takes the same system-font fallback path, and fails at once instead of
-// waiting on a network round trip.
+// The Google Fonts hosts never resolve. The app self-hosts its fonts
+// (Exh-wjqh), and TestNoAppOriginMarkupReferencesGoogleFonts keeps it that way;
+// this is the second guard: a page that linked them again would get a fast
+// failure and the system-font fallback here, never a test that depends on the
+// internet or waits on a network round trip.
 func Start(t *testing.T, flags ...string) string {
 	t.Helper()
 	if testing.Short() {
