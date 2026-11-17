@@ -1,4 +1,4 @@
-// Rasterizes the Exhibit logo (internal/api/logo.svg — the exact SVG
+// Rasterizes the flat Exhibit mark (internal/api/logo.svg — the exact SVG
 // internal/api/logo.go embeds and inlines as the favicon/header mark) into
 // the PNG sizes the web app manifest and iOS home-screen tags need
 // (av-emh4). One source, two consumers: the Go binary and this build step
@@ -17,18 +17,27 @@ mkdirSync(outDir, { recursive: true });
 
 const svg = readFileSync(svgPath);
 
-// The logo's own viewBox (internal/api/logo.svg), used to keep the maskable
-// variant's aspect ratio in sync with the artwork without hand-copying it.
-const VIEWBOX_WIDTH = 40.316795;
-const VIEWBOX_HEIGHT = 49.983387;
+// The flat mark's own viewBox, read from the artwork so the maskable variant's
+// aspect ratio can never drift from it.
+const [, , VIEWBOX_WIDTH, VIEWBOX_HEIGHT] = svg
+  .toString()
+  .match(/viewBox="([^"]+)"/)[1]
+  .split(/\s+/)
+  .map(Number);
 
-const BACKGROUND = "#ffffff"; // matches the logo's own white card + the manifest's background_color
+const BACKGROUND = "#f1e9d6"; // paper: tokens.css --color-ground, and the manifest's background_color/theme_color
 
-// Plain (non-maskable) icons: the logo letterboxed onto a square canvas at
-// its native aspect ratio, same look as the existing favicon.
+// Plain (non-maskable) icons: the flat mark centred on a square canvas at its
+// native aspect ratio. The viewBox is tight to the frame, so the mark takes 80%
+// of the canvas and leaves a margin of paper around it.
 async function renderIcon(size, fileName) {
-  await sharp(svg)
-    .resize(size, size, { fit: "contain", background: BACKGROUND })
+  const inner = Math.round(size * 0.8);
+  const mark = await sharp(svg)
+    .resize(inner, inner, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .png()
+    .toBuffer();
+  await sharp({ create: { width: size, height: size, channels: 4, background: BACKGROUND } })
+    .composite([{ input: mark, gravity: "center" }])
     .png()
     .toFile(path.join(outDir, fileName));
 }
@@ -66,7 +75,7 @@ async function renderMaskableIcon(size, fileName, safeFraction = 0.8) {
 // link that does not resolve to a live share. The same size as a widget
 // snapshot (ImageWidth x ImageHeight in internal/ogsnap), so a preview card
 // keeps its shape whichever image it gets; the ground is tokens.css's
-// --color-ground, which the logo's white card reads against.
+// --color-ground (paper), which the logo's cream card reads against.
 async function renderPreviewCard(width, height, fileName) {
   const logoHeight = Math.round(height * 0.6);
   const logo = await sharp(svg)
@@ -75,7 +84,7 @@ async function renderPreviewCard(width, height, fileName) {
     .toBuffer();
 
   await sharp({
-    create: { width, height, channels: 4, background: "#f0f0f0" },
+    create: { width, height, channels: 4, background: BACKGROUND },
   })
     .composite([{ input: logo, gravity: "center" }])
     .png()
