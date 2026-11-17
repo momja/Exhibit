@@ -1,0 +1,12 @@
+{
+  "name": "artifact-viewer-fonts",
+  "private": true,
+  "description": "Vendors the brand typefaces (Schibsted Grotesk, Fraunces; both SIL OFL) into internal/api/assets/fonts (see `make assets`), so the app serves them from its own origin, never a third-party CDN. Fraunces is instanced to a static file with fontTools. Node is a build-time-only dependency; python3 + fonttools/brotli are required.",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "@fontsource-variable/fraunces": "5.2.9",
+    "@fontsource-variable/schibsted-grotesk": "5.2.8"
+  }
+}
