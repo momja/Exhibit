@@ -52,7 +52,7 @@ func (rd *Renderer) attributedShare(body string, a *store.Artifact, meta string)
  body{display:grid;grid-template-rows:36px minmax(0,1fr)}
  header{display:flex;align-items:center;justify-content:center;border-bottom:1px solid #e2e5e9;background:#f8f9fb}
  a{display:inline-flex;gap:7px;align-items:center;color:inherit;text-decoration:none;padding:4px 8px;border-radius:4px}
- a[href]:hover{text-decoration:underline}a:focus-visible{outline:2px solid #2463c5;outline-offset:1px}
+ a[href]{text-decoration:underline;text-underline-offset:2px}a:focus-visible{outline:2px solid #2463c5;outline-offset:1px}
  img{width:16px;height:20px;object-fit:contain}iframe{display:block;border:0;width:100%%;height:100%%;min-height:0}
  @media(prefers-color-scheme:dark){:root{background:#17191e;color:#c8cdd5}header{background:#202329;border-color:#363b44}a:focus-visible{outline-color:#8ab4f8}}
  </style></head><body><header aria-label="Exhibit attribution"><a id="exhibit-attribution" href="%s" rel="noreferrer"><img src="%s" alt="">made with exhibit</a></header><iframe title="%s" sandbox="allow-scripts allow-forms" allow="fullscreen *; clipboard-write *" onload="if(window.top===window&&(document.activeElement===document.body||document.activeElement===this)){this.focus()}" srcdoc="%s"></iframe><script>

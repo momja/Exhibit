@@ -37,6 +37,7 @@ test('attribution viewport, theme, keyboard, hostile code and embed behavior', a
   // WebKit can restore focus inside the tool on reload. The bar must never
   // acquire it automatically; explicitly start a keyboard traversal at the link.
   await expect(page.getByRole('link',{name:'made with exhibit'})).not.toBeFocused();
+  await expect(page.getByRole('link',{name:'made with exhibit'})).toHaveCSS('text-decoration-line','underline');
   await page.getByRole('link',{name:'made with exhibit'}).focus();
   await expect(page.getByRole('link',{name:'made with exhibit'})).toBeFocused();
   await page.screenshot({path:`${evidence}/${info.project.name}-focus-${width}-${colorScheme}.png`});
@@ -63,6 +64,7 @@ test('attribution viewport, theme, keyboard, hostile code and embed behavior', a
  const shareFrame=page.frameLocator('iframe');
  const inert=shareFrame.locator('#exhibit-attribution');
  await expect(inert).not.toHaveAttribute('href');
+ await expect(inert).toHaveCSS('text-decoration-line','none');
  await inert.click(); expect(page.url()).toBe(embedURL);
  await expect(shareFrame.frameLocator('iframe').getByRole('button')).toBeVisible();
  await page.screenshot({path:`${evidence}/${info.project.name}-third-party.png`});
