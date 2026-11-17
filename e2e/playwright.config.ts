@@ -3,6 +3,7 @@ import { appOrigin } from './environment';
 
 export default defineConfig({
   testDir: './specs',
+  testIgnore: 'attribution.spec.ts',
   fullyParallel: false,
   workers: 1,
   retries: 0,

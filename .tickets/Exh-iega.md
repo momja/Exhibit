@@ -1,6 +1,6 @@
 ---
 id: Exh-iega
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-16T04:06:35Z
@@ -19,4 +19,3 @@ Keep main-worktree and direct-push restrictions. Allow GitHub PR merges only wit
 ## Acceptance Criteria
 
 AGENTS.md retains isolated branch/worktree development and no direct push/local merge to main; GitHub merge exception requires explicit user task authorization plus final-head independent PASS and passing required checks; reviewer is separate from author and blocking findings must be resolved; task-level authorization includes review delegation; no new workflow docs, templates, or ticket eligibility mechanism; ticket is committed on main then closed on implementation branch; PR is opened for human review without merging.
-

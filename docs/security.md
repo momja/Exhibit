@@ -610,9 +610,11 @@ the table above.
 open default cheap. It is worth being precise about what it defends, because it
 is easy to credit it with more:
 
-- The render preamble's every `postMessage` targets `APP_ORIGIN`, never `'*'`.
-  A page on another origin therefore receives nothing from the shim however it
-  framed the document — and in the same stroke a share embedded elsewhere
+- Gallery state/capability preamble messages target `APP_ORIGIN`, never `'*'`.
+  Attributed public shares have a separate URL-only message to their own opaque
+  wrapper (see Optional anonymous-share attribution below), never the embedding host.
+  A page on another origin therefore receives no state/capability messages
+  however it framed the document — and in the same stroke a share embedded elsewhere
   cannot *save* state, because its write-through is addressed to a parent that
   is not the framer. State on such a page is read-at-render and dies with the
   frame.
@@ -1165,8 +1167,10 @@ is allowed; anything that produces egress or bypasses a user decision is not.**
     directly on the render origin ("Open in new tab") is a top-level page, not
     a sandboxed frame, so downloads work there natively — the user has
     explicitly navigated to the tool, and the per-artifact CSP still applies
-    via the response header. Share pages get no bridge: opened top-level they
+    via the response header. Share pages get no bridge: without attribution, opened top-level they
     behave the same way; there is no authenticated host to mediate for them.
+    Enabled attribution adds a sandboxed child and blocks native downloads too
+    (see the attribution compatibility costs below).
 - **External links** — the sandbox omits `allow-popups`, so a `target="_blank"`
   anchor is dropped on click and a plain anchor would navigate the iframe
   itself, replacing the artifact with an external page that usually refuses
@@ -1195,7 +1199,8 @@ is allowed; anything that produces egress or bypasses a user decision is not.**
   - This adds gesture convenience, not capability: right-click → "Open link in
     new tab" already reaches the same URL from browser chrome, which the
     sandbox does not govern. Like downloads, the bridge installs only when a
-    host frame exists; top-level renders and share pages navigate natively.
+    host frame exists; top-level renders and shares without attribution navigate
+    natively. Attributed public shares use the narrower same-context handler described below.
 - **Camera and microphone** — approved per device, per artifact
   (`camera_approved`, `microphone_approved`), and **decided but not delivered
   in the frame**, as location is below. Here both halves of that sentence are
@@ -1719,3 +1724,183 @@ the unused remote account is revoked or retained as durable retry work. Cleanup
 never revokes a reference already adopted by a saved connection. Account erasure
 drains pending work first; unresolved provider outcomes cannot silently discard
 the remote account's cleanup record.
+
+## Optional anonymous-share attribution
+
+`SHARE_ATTRIBUTION_ENABLED` is off by default; the owner's `share_attribution`
+choice (`inherit` / `show` / `hide`) wins. Only the live `/s/:shareID` artifact
+route consults it. Disabled responses retain their original bytes and headers;
+private renders, versions, direct opens, widget documents and OG images do not
+consult this policy. The bar reveals the serving product, no owner identity,
+and sends no telemetry.
+
+**Shared-document limit:** injecting a node or shadow root into an artifact's own
+HTML cannot make attribution hostile-artifact-proof. Artifact scripts can remove
+its host, cover it, replace the document or change layout; closed shadow roots
+and mutation observers do not change that authority. Observers also impose
+continuous work, race with code, and risk focus/pointer interference. We reject
+that mechanism. Enabled shares instead put the artifact in a separate srcdoc
+frame with `sandbox="allow-scripts allow-forms"`; the response also carries the
+same CSP sandbox, without adding a `frame-src` directive. The inherited CSP retains
+the artifact's origin allowlist. No allow-same-origin, allow-popups,
+allow-top-navigation is added. No Gallery capability bridge is installed. The
+local public-navigation handler below cannot use app credentials, approve
+permissions, or call the API. The child has a fresh opaque
+origin and cannot remove, restyle or cover the parent bar through DOM access.
+This also narrows currently unsandboxed top-level shares, and costs a separate
+browsing context, escaped HTML, a focus boundary and top-level API compatibility.
+It does not make arbitrary hostile HTML safe or guarantee the artifact's own
+usability: code can still blank or navigate its own frame, exhaust resources,
+mislead the viewer, or expose the data its owner chose to publish. A third-party
+framer can cover or crop the entire share. Branding is not a security seal.
+
+The bar is outside the artifact's viewport and reserves 36px. On child load the
+wrapper focuses the frame only on direct shares (`window.top === window`), if
+focus is still on its body or the frame, restoring initial keyboard input without taking focus from the attribution link. Embedded
+shares wait for viewer interaction and do not move host-page focus on load. Native
+Tab and Shift+Tab navigation cross the boundary; no keyboard forwarding or
+mutation observer is used. The child handles local fragment clicks so those
+scrolls stay inside the tool. The product link
+uses self navigation on direct shares. In any frame it loses href synchronously
+at parse time, becoming intentionally inert plain attribution with an explanatory
+title. Both Chromium and WebKit browser regressions exercise this behavior under
+the response's actual sandbox without popup/top-navigation tokens. Existing
+share disclosure, read-only state and OG snapshot behavior remain unchanged.
+
+Browser measurements (Playwright Chromium and WebKit, November 2026): native
+`target="_blank"` and `target="_top"` anchors were blocked, while a normal anchor
+navigated the embedded child and replaced the tool. This is why framed attribution
+is inert rather than a live self-navigation link. At both 320px and 1280px widths,
+in light and dark, the 720px test viewport left 684px for a scroll-locked `100vh`
+canvas tool; its bottom-fixed Save button, keyboard traversal and canvas pointer
+input remained usable. The third-party embed used an origin explicitly named in
+`EMBED_ORIGINS`. These fixtures establish compatibility for those layouts, not
+every possible artifact; owners retain the hide override.
+
+
+The wrapper uses the artifact record's title for the tab and iframe accessible
+name, with HTML escaping. The tool keeps its own HTML `<title>` inside the child;
+it no longer controls the tab title. Server preview metadata is emitted once,
+at the very top of the outer head, ahead of artifact content. Hidden shares
+retain their previous bytes and head ordering.
+
+**Public wrapper navigation boundary.** The server installs the wrapper's
+URL-only listener only for live public shares with persisted `links_approved`
+and a successful authoritative `DocumentPolicy` result reporting no protected
+connection data. Missing resolvers, errors and retained connection provenance
+fail closed for navigation. Credentialed renders, version/widget routes and
+Gallery hosts never gain this handler. Policy authority is not serialized.
+This is a local public handler, an explicit exception to the former no-host
+attribution design; it is not the authenticated Gallery navigation bridge.
+The owner setting and data eligibility are a render-time snapshot; revocation
+requires a new render and cannot recall already-published public bytes.
+
+The listener requires the exact tool WindowProxy as `event.source`, opaque
+`event.origin === "null"`, the expected message shape, and live browser
+`navigator.userActivation.isActive` in the wrapper. It accepts only bounded
+HTTP(S) URLs without username/password and navigates only its own context.
+The injected anchor helper additionally requires a trusted, unmodified primary
+click. HTML/SVG `href` takes precedence over SVG `xlink:href`, including local
+fragments. For eligible links, one-click tail listeners let synchronous target,
+document and window handlers run before inspecting `defaultPrevented`. They
+also honor inline `return false` and ordinary `stopPropagation`. Only then does
+the helper prevent native child navigation and, if not artifact-canceled, queue
+a wrapper request in the next task. It does not patch `Event.prototype` or
+mistake its own cancellation for an artifact decision. Both browser engines
+retain live activation through that task in the measured regressions.
+
+Artifact code can suppress delivery to these temporary tails (for example,
+`stopImmediatePropagation` without canceling the default, or stopping capture
+before the target). Such events bypass mediation; native child navigation
+remains subject to the unchanged CSP and can be refused. In-tool actions should
+call `preventDefault`; canceled events produce no wrapper navigation even when
+propagation stops. This is not universal interception of hostile event code.
+That helper is not a security boundary: artifact code can send a different
+URL while activation is live. Approval authorizes artifact navigation during
+that activation; it does not attest a particular anchor or destination.
+Activation can remain live after an earlier gesture and across navigation,
+particularly in Chromium; no claim of one click per request is made.
+
+As with the existing uncredentialed/unprotected Gallery exemption, no authenticated
+`navigation-check` authority is invented for shares. Destinations and redirects
+are ordinary uncredentialed browser navigation, not relay requests or
+credential-injected fetches. The destination's own framing rules may refuse an
+embedded destination. This does not grant arbitrary child frames, popups,
+embedding-host navigation, same-origin access, devices, downloads or modals;
+CSP, the sandbox tokens and all Gallery policy checks stay unchanged.
+
+Enabled-share compatibility costs:
+
+- The child sees `about:srcdoc`, with empty `location.search` and
+  `location.hash`, and `window.top === window` is false. Query/hash routing,
+  URL-changing History APIs, relative URLs and top-level checks can break.
+  Local fragment anchors scroll to their child target without changing the
+  share URL. Approved HTTP(S) anchors use the local wrapper navigation path
+  above; their destination replaces the share context, rather than the tool's
+  child frame. An embedded share replaces only its own iframe, never the
+  embedding page. `target="_blank"` also uses this same context: no popup is
+  permitted. Without persisted `links_approved`, the click is canceled locally
+  and the tool remains usable; a public share cannot offer app first-use approval.
+  Hidden shares retain native navigation, including their existing behavior
+  when `links_approved` is false. The setting previously governed Gallery
+  mediation, not native top-level navigation. No disabled-share bytes change.
+- The outer viewport meta uses device width; an artifact's custom viewport
+  meta (for example `width=1024`) does not control the outer mobile viewport.
+- The frame scrolls independently. Long documents remain scrollable, but
+  printing/Save as PDF can truncate to the visible frame. Round-one Chromium
+  measured nine pages without attribution versus one with it; the regression
+  fixture with explicit page breaks measures eleven versus one. We do not
+  attempt cross-origin frame resizing for printing.
+- Fullscreen and clipboard write are explicitly delegated only to the tool
+  (`allow="fullscreen *; clipboard-write *"`). The
+  wildcard is necessary for the opaque child origin, and is limited to these
+  two features; device/location policy and the sandbox are unchanged.
+  Browser policy, user activation, enclosing embed policy and permissions still
+  apply. After explicit opaque-origin delegation, the regression fixture
+  restored fullscreen in both Chromium and WebKit. Clipboard write succeeded
+  in WebKit in both modes. Without an origin permission grant, Chromium rejected
+  in both hidden and shown modes; with `clipboard-read`/`clipboard-write` granted
+  to the share origin, the hidden direct share writes and reads back successfully,
+  while the attributed opaque child still rejects with `NotAllowedError`.
+  Explicit delegation does not carry that grant to the opaque child. These
+  headless results do not establish real-device clipboard permission UX.
+- Attributed tools retain local sessionStorage and data-URL fetch shims but omit
+  gallery capability bridges: an explicit no-host preamble mode prevents state
+  persistence/resync and snippet-host messaging as well. There is no host to
+  answer them. Native clipboard
+  calls therefore succeed or reject under browser policy rather than waiting
+  forever for a nonexistent host. No clipboard read delegation is added.
+- Downloads are a measured regression: in both Chromium and WebKit a hidden,
+  top-level share downloads `hello.txt` from an `<a download href="data:…">`;
+  the same click with attribution shown produces no download. The child keeps
+  exactly `allow-scripts allow-forms`, with no `allow-downloads` and no host
+  download bridge. This accepts the loss consistently with the download policy
+  above; tools that export files need Hide.
+- Modal dialogs are also removed: in both engines the hidden share shows
+  `confirm('sure?')` and returns `false` after dismissal; the attributed share
+  shows no dialog and silently returns `false`. A tool that gates an action on
+  confirmation may therefore cancel that action without explaining why.
+  `allow-modals` remains absent. The same sandbox restricts `alert`, `prompt`
+  and `beforeunload` dialogs; those other modal APIs were not measured here.
+- Audit of other omitted sandbox allowances: same-origin storage, popups,
+  escaping popups, and top navigation remain restricted; no storage-access or
+  custom-protocol navigation allowance is added. Pointer lock, orientation lock
+  and presentation are limited by the omitted `allow-pointer-lock`,
+  `allow-orientation-lock` and `allow-presentation` tokens. These three APIs
+  were not measured: the browser fixtures do not establish their exact failure
+  behavior or broad sandbox compatibility.
+- sessionStorage is an in-memory framed shim, lost on reload, unlike the native
+  top-level share's sessionStorage. Origin storage and device APIs remain
+  subject to the opaque sandbox's restrictions.
+- The original wrapper lost initial keyboard input and autofocus until a click.
+  Direct-share frame focus on load fixes window handlers; embeds wait for
+  interaction. The child attempts autofocus
+  after focus settles; Chromium restores it, but WebKit suppresses cross-origin
+  form autofocus. Fields remain reachable with Tab. Both outcomes and native
+  cross-boundary traversal are regression-tested. There is still an extra focus
+  boundary, a browsing context and escaped HTML overhead.
+- Playwright WebKit is not iOS Safari. Mobile toolbar collapse and real-device
+  clipboard permission UX remain unmeasured. The non-scrolling outer page may
+  keep mobile browser chrome expanded. Short embeds lose the same 36px.
+
+Owners should select Hide for tools needing full top-level compatibility.

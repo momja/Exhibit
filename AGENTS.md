@@ -17,7 +17,12 @@ This file provides instructions and context for AI coding agents working on this
 ## Version Control
 - Always keep the main worktree clean and on `main`. The only exception is creation/modification of tickets. Those may be committed directly to main.
 - **Never** develop on the `main` branch. Use the standard branch names `feature/{id}/{description}` or `bug/{id}/{description}` where `id` is the ticket ID.
-- **Never** merge directly to `main` and **Never** push main. You can push all non-release branches. If working on multiple dependent issues, create a merge branch separate from `main`.
+- **Never** merge locally into `main` or push `main`. You can push all non-release branches. If working on multiple dependent issues, create a merge branch separate from `main`.
+- **Autonomous PR merge exception:** for a small, well-defined change or bug fix, merge through GitHub only when the user explicitly authorizes autonomous completion through merge for that task. Otherwise, open the PR for human review and leave it unmerged.
+  - That authorization includes delegating an independent review to a fresh agent that did not implement the change. The reviewer must assess the final diff against the task requirements, repository instructions, verification evidence, and eligibility for autonomous merge.
+  - Before merging, record the reviewer's explicit `PASS` and reviewed commit SHA on the PR, resolve every blocking finding, and obtain a new review after any subsequent change to the PR head. The author cannot override a blocking review objection.
+  - Verify the approved SHA is still the PR head, relevant verification and required CI checks pass for that revision, GitHub permits the merge, and no human review objection remains unresolved. Respect branch protections without bypasses.
+  - If scope grows beyond the authorized task, qualification evidence is missing, or a material disagreement remains unresolved, ask the user for the specific decision needed. After a permitted merge, verify it succeeded and report the PR and verification results.
 
 ## Ticket System
 This project uses a CLI ticket system for task management. Run `tk help` when you need to use it.
