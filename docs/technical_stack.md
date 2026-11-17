@@ -32,6 +32,7 @@ safety" (§12).
 | Reusable UI behavior | **Stimulus** — self-hosted ES module, Go partials own markup (§9) | explicit component initialization in vanilla JS |
 | Response compression | `chi` `middleware.Compress` — gzip, explicit type allowlist | brotli (better ratio, new dependency) |
 | Agent harness | **Pi Bolt 1.0.8 / Pi 1.4.0** (native `pi --mode rpc` sidecar per session; runtime-loaded TS tools extension; keys AES-GCM at rest; per-session scoped API credentials; `internal/mockllm` for tests) | Claude Agent SDK (heavier, vendor-tied) |
+| Fonts | **Schibsted Grotesk** (text) and **Fraunces** (one headline per page) from Google Fonts, `display=swap`, system-ui / Georgia fallbacks (§9) | Self-hosting (deliberately not done) |
 | Icons | **Phosphor Icons** — self-hosted / embedded on app origin, no CDN (§9) | Lucide / Heroicons |
 | Hosted login | Clerk Go SDK + ClerkJS / Clerk UI from the application Frontend API domain; enabled only by Clerk configuration | Replacing self-hosted login |
 | Login (optional) | Generic OIDC via discovery — `coreos/go-oidc/v3` + `golang.org/x/oauth2`, exchanged once for our own session (§10) | auth at the operator's proxy (also supported); vendor SDK (rejected) |
@@ -536,6 +537,23 @@ keyboard and a landscape tablet is wide and still touched. The standing rule whe
 adding a control: size it from the token, never a literal `px` — a hardcoded size
 opts it out of the bump silently, and the symptom only shows up on a phone.
 
+**Palette (Exh-plvh).** Light is a paper ground (`#f1e9d6`) and dark is dusk
+(`#14182e`). The UI accent, `--brand-blue`, is ink (cream in the dark) and fills
+every button and accent mark; the logo's pigments live in `internal/color` and
+no longer feed it. Inline text links alone use `--color-link` (slate, light blue
+in the dark): an anchor inside a sentence or note, never a button, banner
+action or text-only control, which stay ink. Slate sits only ~1.9:1 from ink, so
+colour is never the cue: every `--color-link` consumer keeps its underline and
+takes `--color-link-hover` on hover. Text-only controls with no icon or button
+shape underline on `:hover` and `:focus-visible`. Panels, dialogs, the sign-in
+box and Clerk float on `--shadow-panel`; `--shadow-card` is the tiles' ring.
+Primary hover is a perceptibly lighter ink (darker cream), and a disabled
+accent button is repainted at 3:1 or better rather than faded. Danger, warning and success
+are separate hues: success is a green kept out of the accent's role.
+`internal/api/palette_contrast_test.go` parses `tokens.css` and holds every
+text/surface pair to WCAG AA in both modes, so a changed value fails without a
+browser. Clerk panels take the same tokens through `clerk-appearance.js`.
+
 **Dark mode follows the system (av-xie4).** There is no in-app toggle: every
 app-origin page reads `prefers-color-scheme`. `tokens.css` declares
 `color-scheme: light dark` on `:root`, so native controls, scrollbars and form
@@ -543,9 +561,9 @@ fields follow, and it holds the whole dark palette in one
 `@media (prefers-color-scheme: dark)` block that redefines the same tokens. A
 page sheet takes every color from a token and never writes a literal, which is
 what makes a new component dark-ready for free; a color the palette lacks is a
-new token with a value in both places. In the dark the accent is a light blue
-with dark text on its fills (`--color-on-accent`), because no single blue
-reads both as link text on a dark panel and under white button text. The
+new token with a value in both places. In the dark the accent is cream
+with dark text on its fills (`--color-on-accent`), mirroring ink with cream
+text in the light. The
 CodeMirror bundle swaps One Dark in and out through a `Compartment` on the
 media query's `change` event, so the editor follows a live setting change
 without losing its buffer. The render origin is untouched: an artifact owns
@@ -554,6 +572,23 @@ opaque canvas, so an artifact or widget that declares no scheme keeps a light
 background on a dark page. The widget base stylesheet therefore leaves
 `color-scheme` to the widget, and the agent's prompt asks artifacts and
 widgets to declare `light dark` themselves (`docs/widgets.md`).
+
+**Fonts: a deliberate CDN exception (Exh-wjqh).** Unlike icons and htmx, the
+brand typefaces load from Google Fonts, through the shared `fontsHead` partial
+that every app-origin page head includes (preconnect plus one stylesheet).
+Reasons: the variable font files are large, a CDN keeps them out of the image
+and the repo, and a missing font is a cosmetic failure, not a functional one,
+because `--font-sans` falls back to `system-ui` and `--font-display` to
+Georgia. Only the axes in use are requested: Schibsted Grotesk weights 400-800
+(the weights the gallery CSS uses) and Fraunces pinned to opsz 72, wght 600,
+SOFT 100, WONK 0. Because every Fraunces axis is pinned, Google serves a
+static instance with no variation axes: `font-variation-settings` cannot
+change it, and the `fontsHead` URL is the single source for those settings. Any
+other Fraunces weight or setting means widening that request. `.font-headline`
+sets the family, weight 600 and `font-synthesis:none`. If the app's CSS starts using another weight, widen the
+request in `fontsHead`. The app origin sets no style or font CSP, so no policy
+change was needed; the render origin, artifact CSP and widget documents never
+name the font hosts. CodeMirror and code stay monospace.
 
 **Icons: Phosphor Icons — the required icon set for all new UI.** Standardize on
 [Phosphor Icons](https://phosphoricons.com) so every future story inherits one consistent
