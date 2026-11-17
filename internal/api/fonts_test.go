@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -33,9 +34,18 @@ func TestAppOriginPagesLoadBrandFonts(t *testing.T) {
 			assert.Contains(t, body, `<link rel="preconnect" href="https://fonts.googleapis.com">`)
 			assert.Contains(t, body, `<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>`)
 			assert.Contains(t, body, "family=Fraunces:opsz,wght,SOFT,WONK@72,600,100,0&family=Schibsted+Grotesk:wght@400..800&display=swap")
+			// The stylesheet is the one request that could carry a Referer to
+			// Google; it must carry none, whatever the browser's default policy.
+			sheets := googleFontStylesheets.FindAllString(body, -1)
+			require.Len(t, sheets, 1, "one Google Fonts stylesheet")
+			assert.Contains(t, sheets[0], ` referrerpolicy="no-referrer"`)
 		})
 	}
 }
+
+// googleFontStylesheets matches every stylesheet link to the Google Fonts
+// stylesheet host, whatever its attribute order.
+var googleFontStylesheets = regexp.MustCompile(`<link [^>]*rel="stylesheet"[^>]*fonts\.googleapis\.com[^>]*>|<link [^>]*fonts\.googleapis\.com[^>]*rel="stylesheet"[^>]*>`)
 
 // The app origin's only Content-Security-Policy headers restrict framing.
 // With relay on, the detail and agent pages carry one; it must be there, name
