@@ -26,11 +26,16 @@
      single source for those settings: every axis is pinned, so Google serves a
      static instance and font-variation-settings could not change it. Any
      other Fraunces weight or setting means widening this request. display=swap with
-     system fallbacks keeps text readable when the hosts are blocked.
-     App-origin pages only, never the render surface. */}}
+     system fallbacks keeps text readable when the hosts fail fast; the
+     stylesheet is still render-blocking, so a network that silently drops
+     packets to them holds the page blank until the connection times out
+     (security.md §1.3). referrerpolicy="no-referrer" keeps the page's path and
+     query (search terms, artifact ids, OAuth parameters) from Google whatever
+     the browser's default policy is. App-origin pages only, never the render
+     surface. */}}
 {{define "fontsHead"}}<link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@72,600,100,0&family=Schibsted+Grotesk:wght@400..800&display=swap">{{end}}
+<link rel="stylesheet" referrerpolicy="no-referrer" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@72,600,100,0&family=Schibsted+Grotesk:wght@400..800&display=swap">{{end}}
 
 {{/* tagDots renders a gallery card's tags as color alone (av-uvc6): one dot
      per tag, in the card's single meta row beside the title. The name is not
