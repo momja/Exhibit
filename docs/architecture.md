@@ -987,26 +987,38 @@ reserves it, so a short screen scrolls rather than covering the figure. The
 OAuth consent page keeps the plain card (`.login-painted` scopes the art).
 
 **Sign-in descent** (Exh-vsw0): on a visit the server marks, the scenery moves
-for 3.6s (`cubic-bezier(.5,0,.15,1)`) as a camera coming down out of the sky;
-the page is still scriptless. Three empty `.login-layer` divs (sky, clouds,
-hill) are emitted inside `.login-layers` only when the body carries
-`.login-descend` (`login-descent.css`). Their images are CSS backgrounds
-(`image-set()`, AVIF then WebP, one of three widths by viewport and pixel ratio)
-declared inside `@media (prefers-reduced-motion: no-preference)`, so a
-reduced-motion visitor and every repeat visit download none of them and see the
-composite, unmoved. The layers start 832/1216/1600 units lower (sky, clouds,
-hill, in 2560-wide units) and end at rest, which is the production placement
-(sky at y=-832, clouds and hill at 0) over a frame sized and positioned as the
-composite's `object-fit: cover; object-position: 78% 50%` would draw it (phones:
-the 960x2080 crop at (1540,192), bottom-aligned, same mask). The scene is a
-size container so the frame is plain `cqw`/`cqh` arithmetic. While it moves the
-composite is `visibility:hidden`; it reappears under the layers when they settle
-(a CSS animation delayed by the duration), so a layer that failed to load still
-leaves the final picture. The layers stay on top at rest, so nothing is swapped
-and nothing shifts. Only `.login-scene` moves: the form is in the first paint,
-keeps focus, is never faded, and the grain and the shade stay fixed above the
-art. The page may start moving before the layers arrive; what is seen meanwhile
-is the flat sky colour, which is what the first frame mostly is anyway.
+for 3.6s (`cubic-bezier(.5,0,.15,1)`) as a camera coming down out of the sky.
+The page is scriptless except for that visit's one external module
+(`login-descent.js`, no inline script). The body carries `.login-descend`, and
+the sky/clouds/hill `<picture>`s sit inert inside a `<template>` in
+`.login-layers-stage` (AVIF then WebP, `srcset`/`sizes` choosing the width), so
+nothing downloads until the module asks. The module returns at once under
+`prefers-reduced-motion: reduce`; otherwise it clones the layers in, waits for
+every `decode()`, and only then adds `.login-descent-go`, which is what the CSS
+animates (`login-descent.css`, all inside `no-preference`). If the layers are not
+ready within 1.5s (3s for hosted sign-in, below) it removes them and the page
+stays on the static composite: scenery arriving mid-animation or after it would
+be worse than none. Without JS the visitor also sees the composite. The once-only
+cookie is already spent on a skipped run; that is the accepted trade-off. A
+repeat visit loads no script and no layer art.
+
+The layers start 832/1216/1600 units lower (sky, clouds, hill, in 2560-wide
+units) and end at rest, which is the production placement (sky at y=-832, clouds
+and hill at 0) over a frame sized and positioned as the composite's
+`object-fit: cover; object-position: 78% 50%` would draw it (phones: the
+960x2080 crop at (1540,192), bottom-aligned, same mask). The scene is a size
+container so the frame is plain `cqw`/`cqh` arithmetic. The composite is never
+hidden, faded or toggled: the opaque sky covers it, and the layers fade in over
+300ms at the start. Nothing above the text changes state when the motion ends
+(the layers keep `will-change: transform`), so text anti-aliasing and the panel
+shadow are identical across the end of the animation (measured on the natural
+timeline). Only `.login-scene` moves: the form is in the first paint, keeps
+focus, is never faded, and the grain and shade stay fixed above the art.
+
+Hosted sign-in sets `data-descent-after="clerk"`: the module waits for
+`exhibit:clerk-loaded` (dispatched by `clerk-client.js` after `Clerk.load`) before
+cloning the layers, so the scenery never competes with Clerk's scripts, and the
+overall deadline is 3s.
 
 *Once per sign-out.* `playsDescent` (`internal/api/auth.go`) adds `.login-descend`
 only when the `exhibit_descent_seen` cookie is absent, and sets it in the same
