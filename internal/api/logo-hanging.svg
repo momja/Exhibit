@@ -1,11 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="36.08545 36.625489 40.316795 49.983387" role="img" aria-label="Exhibit logo" class="logo" focusable="false">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="35.8 36.625489 40.9 49.983387" role="img" aria-label="Exhibit logo" class="logo" focusable="false">
 <style>@media (prefers-color-scheme:dark){.logo-wire{stroke:#b4bac4}.logo-nail{fill:#b4bac4}}</style>
 <g class="logo-shadow" fill="#000000" fill-opacity="0.5">
 <rect width="37.476799" height="36.98209" x="38.20545" y="48.907268"/>
 <circle cx="56.94385" cy="40.094268" r="2.1087794"/>
 </g>
-<path class="logo-wire" d="M 50.34385,47.044 55.54385,39.98 60.74385,47.044" fill="none" stroke="#1f2a1c" stroke-width="1.00649" stroke-linecap="round" stroke-linejoin="round"/>
-<rect style="fill:#f6efdc;stroke:#1f2a1c;stroke-width:1.00649;stroke-linecap:round" width="37.476799" height="36.98209" x="36.80545" y="47.547268"/>
+<path class="logo-wire" d="M 50.34385,46.797268 55.54385,39.98 60.74385,46.797268" fill="none" stroke="#1f2a1c" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<rect style="fill:#f6efdc;stroke:#1f2a1c;stroke-width:1.5;stroke-linecap:round" width="37.476799" height="36.98209" x="36.80545" y="47.547268"/>
 <rect style="fill:#2f6fc4;stroke:#1f2a1c;stroke-width:1.99229;stroke-linecap:round;paint-order:stroke markers fill" width="12.447359" height="16.068565" x="61.341995" y="67.967896"/>
 <path style="fill:#d9432b;stroke:#1f2a1c;stroke-width:1.98523;stroke-linecap:round;paint-order:stroke markers fill" d="M 60.383501,72.781407 H 37.290736 V 48.036637 H 60.383501 V 52.82273 H 45.481485 v 4.270925 h 13.829928 v 4.786094 H 45.481485 v 6.115565 h 14.902016 z"/>
 <rect style="fill:#f2b63c" width="23.057453" height="10.245288" x="37.318401" y="73.774017"/>

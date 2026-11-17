@@ -62,18 +62,20 @@ func TestLogoWireAndNailPaintIsNotInlineStyle(t *testing.T) {
 // shadow are the only other colors.
 func TestLogoArtworkUsesBrandPigments(t *testing.T) {
 	hex := regexp.MustCompile(`#[0-9a-fA-F]{6}`)
-	allowed := map[string]bool{
-		color.BrandBlue: true, color.BrandRed: true, color.BrandYellow: true,
-		color.BrandWhite: true, color.BrandInk: true,
-		"#b4bac4": true, "#000000": true,
-	}
+	pigments := []string{color.BrandBlue, color.BrandRed, color.BrandYellow, color.BrandWhite, color.BrandInk}
+	// Only the hanging mark has a wire (lightened in dark mode) and a shadow.
+	extras := map[string][]string{"flat": nil, "hanging": {"#b4bac4", "#000000"}}
 	for name, svg := range map[string]string{"flat": exhibitLogoSVG, "hanging": exhibitHangingLogoSVG} {
+		allowed := map[string]bool{}
+		for _, c := range append(append([]string{}, pigments...), extras[name]...) {
+			allowed[c] = true
+		}
 		seen := map[string]bool{}
 		for _, h := range hex.FindAllString(svg, -1) {
 			assert.True(t, allowed[h], "%s: unexpected colour %s", name, h)
 			seen[h] = true
 		}
-		for _, want := range []string{color.BrandBlue, color.BrandRed, color.BrandYellow, color.BrandWhite, color.BrandInk} {
+		for _, want := range pigments {
 			assert.True(t, seen[want], "%s: missing pigment %s", name, want)
 		}
 	}
