@@ -978,8 +978,8 @@ tagline sit directly on the sky: a feathered shade (`--painting-shade`, a
 radial gradient in the scene's `::after`, no visible edge) keeps cream text
 above 3:1 over any part of the sky, so contrast does not depend on which
 pixels, or later which animated layer, are behind it. The headline is large
-text, and the tagline and wordmark are sized as large text too (19px/20px
-semibold or bold). The box is
+text, and the tagline and wordmark are sized as large text too (19px and 20px at weight 700,
+the WCAG bold threshold; 600 would count as normal text and need 4.5:1). The box is
 the ordinary `.login` card; for Clerk, `.login-clerk` is the box and Clerk's own
 card is flattened inside it (`clerkAuthAppearance`, plus `.cl-*` rules). On
 phones the painting owns a band at the bottom of the page and the content

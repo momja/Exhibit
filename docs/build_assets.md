@@ -147,3 +147,20 @@ The design fails **loud**, never silent:
 So the only way to get a server binary is to have run the asset build immediately
 before it, against the current source — exactly the guarantee committing the output was
 meant to give, without the committed output.
+
+## 8. The brand fonts
+
+The fonts workspace (`web/fonts`) vendors Schibsted Grotesk and Fraunces (both SIL OFL)
+from the exact-pinned `@fontsource-variable/*` packages (`package.json` plus the
+lockfile's integrity hashes) into `internal/api/assets/fonts/`, with the licence files
+beside them. Schibsted Grotesk is one variable woff2 narrowed to wght 400-800 by
+fontTools' instancer. Fraunces is a **static** upright instance pinned at opsz 72,
+wght 600, SOFT 100, WONK 0: it has no variation axes and is a fraction of the variable
+file. `fonts.css` declares the `@font-face`s with `font-display: swap` and relative
+`url()`s, which resolve inside the versioned `/assets/v/<build>/` tree; the shared
+`fontsHead` partial links it. Changing the headline weight or any axis means editing
+`build.mjs`, the single source for those settings.
+
+The instancing needs python3 + fonttools/brotli. Unlike the icon subset there is no
+fallback (the full variable Fraunces is about ten times larger), so a missing toolchain
+fails the build with an install hint. The Dockerfile's asset stage already installs them.

@@ -72,7 +72,7 @@
 .login-intro{max-width:34rem}
 .login-headline em{font-style:italic;font-weight:inherit}
 .login-headline{font-size:clamp(44px,6.4vw,92px);line-height:.95;letter-spacing:-.02em;color:var(--color-on-painting);text-shadow:0 2px 18px var(--painting-text-shadow);text-wrap:balance}
-.login-tagline{margin-top:14px;max-width:26ch;font-size:1.1875rem;font-weight:600;line-height:1.35;color:var(--color-on-painting);text-shadow:0 1px 8px var(--painting-text-shadow)}
+.login-tagline{margin-top:14px;max-width:26ch;font-size:1.1875rem;font-weight:700;line-height:1.35;color:var(--color-on-painting);text-shadow:0 1px 8px var(--painting-text-shadow)}
 .login-painted .login{max-width:340px;align-items:stretch;padding:22px 24px 24px}
 .login-painted .login-sub{margin:0;font-weight:700;color:var(--color-ink)}
 .login-painted .login-form{margin-top:14px}
