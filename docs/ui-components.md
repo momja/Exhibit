@@ -365,7 +365,11 @@ visibility, duplication and edit-return behavior; disconnect releases their
 observers, listeners and timers. `event-scope.js` groups explicit listener
 cleanup, including listeners on a stable ancestor. Pending mutations may
 finish on the server after disconnect, but their callbacks cannot refresh or
-focus a different space. The new destination always reloads its data.
+focus a different space. Returning to an unfiltered tab reuses its recent
+server-rendered fragment and restores the position of a visible card or
+activity item. A single htmx request refreshes the tab in the background.
+The refresh waits while the reader is interacting or if the incoming layout
+cannot keep the visible item at the same viewport position.
 
 The `filter-sheet` controller lives on the shell so header triggers and the
 content dialog share a scope. Its targets may disappear when a space has no

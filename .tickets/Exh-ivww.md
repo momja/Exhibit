@@ -1,6 +1,6 @@
 ---
 id: Exh-ivww
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-17T05:16:56Z
@@ -44,3 +44,7 @@ The widget frame now ships inside a <template> and gallery-widgets.js clones it 
 The pending state marks the tab aria-current at click time and dims the outgoing results (after 150 ms, so a fast switch never flickers); a failed switch restores it. Only deliberate tab clicks anticipate: history traversal and retries keep the old behaviour.
 
 Caching is rejected rather than pending: galleryspaces_browser_test.go asserts that a share granted on the server appears on the next visit, and an eight-second fragment cache makes it appear up to eight seconds late. It is built on its own branch so the trade can be felt; two browser tests fail there on purpose.
+
+**2026-11-17T20:22:39Z**
+
+Accepted cached revisits with one background refresh. Each unfiltered tab remembers its scroll position, including loaded pages. Refreshes preserve the viewport anchor before paint and wait if there is no safe swap. Chromium checks every animation frame of a refresh that inserts and removes cards above the reader, plus a shorter response and a response arriving after navigation.
