@@ -257,35 +257,6 @@ the credential-bearing URL is the render URL, which is governed by the response
 that actually becomes the document. Setting it on the redirect would imply the
 redirect is the risky half.
 
-**Third-party fonts on the app origin (Exh-wjqh).** App-origin pages load
-Schibsted Grotesk and Fraunces from `fonts.googleapis.com` (stylesheet) and
-`fonts.gstatic.com` (files), so those hosts see the visitor's IP and
-User-Agent, and font requests (CORS fetches) carry the app origin in their
-`Origin` header. The stylesheet link sets `referrerpolicy="no-referrer"`, so no
-`Referer` reaches Google and the page's path and query (search terms, artifact
-ids, OAuth `redirect_uri` and `state`) never can, whatever default policy the
-browser runs with. The stylesheet is render-blocking: a host that fails fast
-costs only the typeface, but a network that silently drops packets to Google
-holds every app page blank, and its scripts unrun, until the connection times
-out (85 s measured in headless Chromium on Linux). No app page carries a
-`style-src`, `font-src` or `default-src` policy: the pages' only
-`Content-Security-Policy` headers restrict framing (`frame-src` on the detail
-and agent pages when relay is on, `frame-ancestors` on OAuth consent). The
-widget wrapper documents on the app origin (`gallerywidgets.go`) do carry
-`default-src 'none'`, but they include no `fontsHead` and load no fonts. So no
-policy change was made or is needed. **If an app-wide
-CSP is ever added, it must allow those two hosts for `style-src` and
-`font-src`.** The render origin is untouched: artifact CSPs, the widget wrapper
-and share documents never name the font hosts. What the tests guarantee:
-`TestAppOriginPagesLoadBrandFonts` checks that every app-origin page, the
-sign-in, admin, connections, Clerk and OAuth pages included, carries the font
-links; `TestAppFramingCSPLeavesGoogleFontsAlone` checks that the framing CSPs
-that exist are non-empty, keep their framing directives and name no style,
-font or default source; `TestBuildCSPNeverNamesGoogleFontHosts` checks that an
-artifact CSP built from a real allowlist never names the font hosts. They do
-not check CSPs on pages that carry none, and they do not stop a future
-app-wide CSP from blocking fonts; that is this paragraph's job.
-
 ### 1.4 The app origin's session: `SameSite=Lax` is the CSRF control
 
 The session cookie (av-30rj) is an **ambient** credential: the browser attaches
