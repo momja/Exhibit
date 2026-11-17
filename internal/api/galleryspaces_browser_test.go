@@ -61,8 +61,8 @@ func TestGallerySpacesBrowser(t *testing.T) {
 			checkSpaceLayout := func() {
 				check(`(() => {
  const heading = document.querySelector('main h1');
- return !document.querySelector('.gallery-overview') && !document.querySelector('.gallery-title') && Boolean(heading?.classList.contains('sr-only')) && heading.textContent.trim().length > 0;
-})()`, "the destination is named only for assistive technology")
+ return !document.querySelector('.gallery-overview') && !document.querySelector('.gallery-title') && Boolean(heading?.classList.contains('font-headline')) && !heading.classList.contains('sr-only') && heading.textContent.trim().length > 0;
+})()`, "the destination is named by the visible page headline")
 				if viewport.phone {
 					return
 				}

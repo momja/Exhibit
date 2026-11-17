@@ -58,3 +58,28 @@ func TestAppFramingCSPLeavesGoogleFontsAlone(t *testing.T) {
 		assert.False(t, strings.Contains(csp, "fonts.g"), path)
 	}
 }
+
+// Exh-odyv: one Fraunces headline per page, on the page's natural heading.
+func TestEachPageHasOneHeadline(t *testing.T) {
+	r := newTestRouter(t)
+	id := createTestArtifact(t, r, "Headline check")
+
+	pages := map[string]string{
+		"starred":   "/",
+		"search":    "/search",
+		"shared":    "/shared",
+		"activity":  "/activity",
+		"detail":    "/artifacts/" + id,
+		"edit":      "/artifacts/" + id + "/edit",
+		"settings":  "/settings",
+		"new":       "/new",
+		"not found": "/artifacts/does-not-exist",
+	}
+	for name, path := range pages {
+		t.Run(name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
+			assert.Equal(t, 1, strings.Count(w.Body.String(), "font-headline"), "%s should carry one headline", name)
+		})
+	}
+}

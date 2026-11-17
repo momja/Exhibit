@@ -78,7 +78,7 @@ body{background:var(--color-ground);color:var(--color-ink);min-height:100vh}
 .exhibit-404__eyebrow{font-family:monospace;font-size:13px;font-weight:700;letter-spacing:.18em;color:var(--brand-blue)}
 /* max-width, not a <br>: the headline is meant to break after "hanging", and
  * a measure does that without hard-coding the break into the markup. */
-.exhibit-404__headline{max-width:520px;font-size:56px;font-weight:800;letter-spacing:-.035em;line-height:58px;color:var(--color-ink)}
+.exhibit-404__headline{max-width:520px;font-size:56px;letter-spacing:-.02em;line-height:60px;color:var(--color-ink)}
 .exhibit-404__body{max-width:472px;font-size:17px;line-height:28px;color:var(--nf-body)}
 .exhibit-404__path{display:inline-flex;align-items:center;gap:10px;max-width:100%;background:var(--color-panel);border:1px solid var(--color-hairline);border-radius:var(--radius-md);padding:9px 12px}
 .exhibit-404__path-label{flex:0 0 auto;font-size:12px;font-weight:600;letter-spacing:.08em;color:var(--nf-muted)}

@@ -45,11 +45,11 @@ main{padding:var(--page-top) var(--page-gutter)}
 
 /* Cards use the shared surface language. Keep overflow visible so action
  * menus and capability popovers can extend beyond their card. */
-.card{position:relative;display:flex;flex-direction:column;padding:0;border:1px solid var(--color-card-border);border-radius:var(--radius-lg);box-shadow:var(--shadow-card);cursor:pointer}
+.card{position:relative;display:flex;flex-direction:column;padding:0;border:0;border-radius:var(--radius-lg);box-shadow:var(--shadow-card);cursor:pointer}
 .card:hover,.card:focus-within{box-shadow:var(--shadow-card-hover)}
 /* Keyboard focus is not hover: it adds an ink (cream in dark) ring. */
 .card:has(:focus-visible){box-shadow:var(--shadow-card-hover),0 0 0 2px var(--brand-blue)}
-.card .card-widget{margin:0;border-radius:calc(var(--radius-lg) - 1px) calc(var(--radius-lg) - 1px) 0 0;border-bottom-color:var(--color-hairline)}
+.card .card-widget{margin:0;border-radius:var(--radius-lg) var(--radius-lg) 0 0;border-bottom-color:var(--color-hairline)}
 
 /* One title line keeps metadata compact. Fade the trailing edge rather than
  * adding an ellipsis; the full title remains available in the link tooltip. */
@@ -263,6 +263,7 @@ main{padding:var(--page-top) var(--page-gutter)}
 
 /* Search owns its form at every width. It lives in the swapped page so the
  * header and account island stay stable between destinations. */
+.gallery-heading{font-size:var(--page-title-size);line-height:1.25;letter-spacing:-.01em;margin:0 0 var(--space-6);overflow-wrap:anywhere}
 .gallery-page-search{margin-bottom:16px;max-width:640px}
 .gallery-page-search .search-row{width:100%}
 @media (max-width:767px){
