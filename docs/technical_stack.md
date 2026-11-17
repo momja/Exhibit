@@ -604,7 +604,10 @@ that every app-origin page head includes (preconnect plus one stylesheet).
 Reasons: the variable font files are large, a CDN keeps them out of the image
 and the repo, and a missing font is a cosmetic failure, not a functional one,
 because `--font-sans` falls back to `system-ui` and `--font-display` to
-Georgia. Only the axes in use are requested: Schibsted Grotesk weights 400-800
+Georgia. That holds when the hosts fail fast (DNS failure, refused
+connection); the stylesheet is render-blocking, so a network that silently
+drops packets to them leaves every page blank until the connection times out
+(`security.md` §1.3). Only the axes in use are requested: Schibsted Grotesk weights 400-800
 (the weights the gallery CSS uses) and Fraunces pinned to opsz 72, wght 600,
 SOFT 100, WONK 0, as two static instances (upright and italic, the italic
 for the sign-in headline's "small", Exh-90b2; browsers fetch its file only
