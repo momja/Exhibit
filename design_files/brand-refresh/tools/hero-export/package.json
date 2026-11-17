@@ -1,0 +1,13 @@
+{
+  "name": "exhibit-hero-art-export",
+  "private": true,
+  "type": "module",
+  "description": "Regenerates web/hero-art/images from the lossless masters in design_files/brand-refresh/production. A manual design-time tool: it is outside web/ so the asset build never installs sharp for it.",
+  "scripts": {
+    "export": "MALLOC_ARENA_MAX=2 node export.mjs",
+    "check": "MALLOC_ARENA_MAX=2 node export.mjs --check"
+  },
+  "devDependencies": {
+    "sharp": "0.35.3"
+  }
+}
