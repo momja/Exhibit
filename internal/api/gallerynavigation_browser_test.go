@@ -235,10 +235,15 @@ func TestGallerySpaceNavigationRacesBrowser(t *testing.T) {
 	// if the first request finishes reading its body afterwards.
 	run(`hold(url=>url==='/shared','body');document.querySelector('.gallery-spaces a[href="/shared"]').click()`)
 	poll(`typeof release === 'function'`)
+	// The tab bar answers the click while the content is still in flight: the
+	// destination is marked current and the outgoing results step back. Without
+	// this the click produces no visible change at all until the response
+	// lands, which is most of what made a switch feel slow.
+	check(`document.querySelector('.gallery-spaces a[href="/shared"]').getAttribute('aria-current') === 'page' && document.querySelector('#gallery-shell').hasAttribute('data-gallery-pending') && document.querySelector('[data-gallery-results]') !== null`)
 	visit("/search")
 	run(`release();window.fetch=nativeFetch`)
 	poll(`released`)
-	check(`location.pathname === '/search' && document.querySelector('[data-gallery-search]').getAttribute('hx-get') === '/partials/gallery-grid/search'`)
+	check(`location.pathname === '/search' && document.querySelector('[data-gallery-search]').getAttribute('hx-get') === '/partials/gallery-grid/search' && !document.querySelector('#gallery-shell').hasAttribute('data-gallery-pending')`)
 	// Back interrupts an outstanding space request and restores the old URL
 	// through the same region, without replacing the header.
 	run(`hold(url=>url==='/shared','body');document.querySelector('.gallery-spaces a[href="/shared"]').click()`)

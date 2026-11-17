@@ -10,6 +10,45 @@ const spacePaths = new Set(['/', '/search', '/shared', '/shared-by-me', '/activi
 export default class extends Controller {
   static targets = ['space'];
 
+  get spaceElement() {
+    return this.hasSpaceTarget ? this.spaceTarget : null;
+  }
+
+  // The tab that was clicked is inside the region the response replaces, so its
+  // aria-current cannot move until that response lands. Answer the click now:
+  // point at the destination and dim what is still on screen. Content still
+  // waits for the server — this only stops the tab bar from looking dead.
+  markPending(link) {
+    if (!link) return;
+    for (const other of this.spaceLinks()) other.removeAttribute('aria-current');
+    link.setAttribute('aria-current', 'page');
+    this.element.setAttribute('data-gallery-pending', '');
+    this.spaceElement?.setAttribute('aria-busy', 'true');
+  }
+
+  // The response arrived and its markup is in place: its own aria-current is
+  // authoritative, so only the shell's pending flag is cleared here.
+  clearPending() {
+    this.element.removeAttribute('data-gallery-pending');
+    this.spaceElement?.removeAttribute('aria-busy');
+  }
+
+  // The swap was refused, so the old region is still what is displayed — and
+  // this controller took its aria-current away. Put it back where the URL that
+  // is still on screen says it belongs.
+  restorePendingLink() {
+    if (!this.element.hasAttribute('data-gallery-pending')) return;
+    const showing = new URL(this.currentURL, location.href).pathname;
+    for (const link of this.spaceLinks()) {
+      if (new URL(link.getAttribute('href'), location.href).pathname === showing) link.setAttribute('aria-current', 'page');
+      else link.removeAttribute('aria-current');
+    }
+  }
+
+  spaceLinks() {
+    return this.element.querySelectorAll('[data-gallery-space-link]');
+  }
+
   spaceTargetConnected() {
     this.gallery?.disconnect();
     this.gallery = initializeGallery(this.element);
@@ -60,6 +99,10 @@ export default class extends Controller {
       ctx.request.headers['HX-Target'] = 'div#gallery-content';
       this.leave();
       this.element.querySelector('[data-gallery-navigation-error]').hidden = true;
+      // Only a deliberate tab click anticipates a destination. History
+      // traversal, retries and programmatic navigation get no optimistic
+      // state: the browser has already moved the URL for those.
+      if (ctx.sourceElement.matches?.('[data-gallery-space-link]')) this.markPending(ctx.sourceElement);
     } else if (this.navigating) {
       event.preventDefault();
       return;
@@ -94,8 +137,11 @@ export default class extends Controller {
       // History traversal moves the URL before fetching. Keep the previous
       // coherent view and URL on failure, with a notice for an explicit retry.
       history.replaceState(history.state, '', this.currentURL);
+      this.restorePendingLink();
+      this.clearPending();
       this.element.querySelector('[data-gallery-navigation-error]').hidden = false;
     } else {
+      this.clearPending();
       this.currentURL = location.pathname + location.search;
       window.scrollTo(0, 0);
       // A Search-tab click (including the / shortcut) carries its focus intent
