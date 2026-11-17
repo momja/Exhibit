@@ -83,3 +83,10 @@ func TestEachPageHasOneHeadline(t *testing.T) {
 		})
 	}
 }
+
+// Exh-odyv: gallery cards have no border, so forced-colors mode (which drops
+// shadows) must draw their edge as an outline.
+func TestGalleryCardKeepsEdgeInForcedColors(t *testing.T) {
+	css := galleryAsset(t, newTestRouter(t), "/assets/gallery/index.css")
+	assert.Contains(t, css, "@media (forced-colors:active){.card{outline:1px solid CanvasText;outline-offset:-1px}")
+}

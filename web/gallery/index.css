@@ -49,6 +49,8 @@ main{padding:var(--page-top) var(--page-gutter)}
 .card:hover,.card:focus-within{box-shadow:var(--shadow-card-hover)}
 /* Keyboard focus is not hover: it adds an ink (cream in dark) ring. */
 .card:has(:focus-visible){box-shadow:var(--shadow-card-hover),0 0 0 2px var(--brand-blue)}
+/* Cards have no border, only a shadow, and forced colors drops shadows: draw the edge (and the focus ring) as an outline, which does not move layout. */
+@media (forced-colors:active){.card{outline:1px solid CanvasText;outline-offset:-1px}.card:has(:focus-visible){outline:2px solid Highlight}}
 .card .card-widget{margin:0;border-radius:var(--radius-lg) var(--radius-lg) 0 0;border-bottom-color:var(--color-hairline)}
 
 /* One title line keeps metadata compact. Fade the trailing edge rather than
