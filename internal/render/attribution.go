@@ -35,20 +35,52 @@ func (rd *Renderer) attributedShare(body string, a *store.Artifact, meta string,
  });
  </script>`
 	}
-	// Always cancel HTTP(S) child navigation: without persisted approval it is
-	// refused locally; with approval the wrapper can navigate the share context.
+	// Let synchronous artifact handlers cancel before preventing native child
+	// navigation. Register each bubble tail from the preceding target's tail,
+	// so later document/window handlers (including ones added below) run first.
 	body = prependToHead(body, fmt.Sprintf(`<script>
  document.addEventListener('click',event=>{
-   const anchor=event.target.closest&&event.target.closest('a[href]');
+   const anchor=event.target.closest&&event.target.closest('a');
    if(!anchor||anchor.hasAttribute('download')||event.defaultPrevented||event.button!==0)return;
-   const raw=anchor.getAttribute('href');
-   if(raw.startsWith('#'))return;
+   const raw=anchor.getAttribute('href')??anchor.getAttributeNS('http://www.w3.org/1999/xlink','href');
+   if(raw===null||raw.startsWith('#'))return;
    let destination;try{destination=new URL(raw,document.baseURI)}catch{return}
    if(!['https:','http:'].includes(destination.protocol))return;
-   event.preventDefault();
-   if(!%t||!event.isTrusted||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey||destination.username||destination.password)return;
-   // The wrapper is opaque; '*' addresses only its WindowProxy, not the host.
-   parent.postMessage({exhibitPublicNavigate:true,url:destination.href},'*');
+   if(!%t||!event.isTrusted||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey||destination.username||destination.password){event.preventDefault();return}
+   const path=event.composedPath();
+   const removals=[];
+   const cleanup=()=>{for(const remove of removals)remove()};
+   // These listeners belong to this event, not a reentrant click. A task also
+   // removes tails skipped by stopImmediatePropagation or early capture stops.
+   const listen=(node,callback,capture=false)=>{
+     const listener=observed=>{
+       if(observed!==event)return;
+       node.removeEventListener('click',listener,capture);
+       callback();
+     };
+     node.addEventListener('click',listener,capture);
+     removals.push(()=>node.removeEventListener('click',listener,capture));
+   };
+   const finish=()=>{
+     const canceled=event.defaultPrevented;
+     event.preventDefault();
+     cleanup();
+     if(!canceled)setTimeout(()=>{
+       // The wrapper independently checks activation and this exact child.
+       parent.postMessage({exhibitPublicNavigate:true,url:destination.href},'*');
+     },0);
+   };
+   const bubbleTail=index=>listen(path[index],()=>{
+     if(event.cancelBubble||index===path.length-1)finish();
+     else bubbleTail(index+1);
+   });
+   // The target capture tail runs after existing target capture handlers and
+   // appends its bubble tail after any handlers they installed for this click.
+   listen(event.target,()=>{
+     if(event.cancelBubble)finish();
+     else bubbleTail(path.indexOf(event.target));
+   },true);
+   setTimeout(cleanup,0);
  },true);
  </script>`, navigationAllowed))
 
@@ -70,10 +102,10 @@ func (rd *Renderer) attributedShare(body string, a *store.Artifact, meta string,
  // srcdoc resolves fragment anchors against the outer share URL. Keep these
  // scrolls inside the tool instead of navigating away or requesting an app host.
  document.addEventListener('click',event=>{
-   const anchor=event.target.closest&&event.target.closest('a[href]');
+   const anchor=event.target.closest&&event.target.closest('a');
    if(!anchor||event.defaultPrevented||event.button!==0||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey)return;
-   const href=anchor.getAttribute('href');
-   if(!href.startsWith('#'))return;
+   const href=anchor.getAttribute('href')??anchor.getAttributeNS('http://www.w3.org/1999/xlink','href');
+   if(href===null||!href.startsWith('#'))return;
    event.preventDefault();
    if(href==='#'){scrollTo(0,0);return}
    let id;try{id=decodeURIComponent(href.slice(1))}catch{return}

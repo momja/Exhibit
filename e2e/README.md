@@ -124,3 +124,11 @@ Other cases reject credential-bearing/unsafe URLs and unrelated opaque frames,
 and explicitly establish that an approved child can request a URL during live
 activation without attesting a particular anchor. `_blank` becomes same-context
 for shown shares, while hidden shares keep native behavior.
+
+Click-order regressions cover inline preventDefault/return false, document/window
+bubble cancellation, handlers installed during a click, ordinary propagation
+stops, canceled immediate stops, and deferred positive navigation in both engines.
+Painted SVG anchors exercise href, xlink:href, href precedence and fragments.
+Modifier/untrusted/credential-bearing clicks are refused while subsequent real
+approved clicks still navigate. Tail delivery can be suppressed by artifact code;
+those bypasses retain native sandbox/CSP behavior, as documented in security.md.

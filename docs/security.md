@@ -1800,7 +1800,22 @@ The listener requires the exact tool WindowProxy as `event.source`, opaque
 `navigator.userActivation.isActive` in the wrapper. It accepts only bounded
 HTTP(S) URLs without username/password and navigates only its own context.
 The injected anchor helper additionally requires a trusted, unmodified primary
-click. That helper is not a security boundary: artifact code can send a different
+click. HTML/SVG `href` takes precedence over SVG `xlink:href`, including local
+fragments. For eligible links, one-click tail listeners let synchronous target,
+document and window handlers run before inspecting `defaultPrevented`. They
+also honor inline `return false` and ordinary `stopPropagation`. Only then does
+the helper prevent native child navigation and, if not artifact-canceled, queue
+a wrapper request in the next task. It does not patch `Event.prototype` or
+mistake its own cancellation for an artifact decision. Both browser engines
+retain live activation through that task in the measured regressions.
+
+Artifact code can suppress delivery to these temporary tails (for example,
+`stopImmediatePropagation` without canceling the default, or stopping capture
+before the target). Such events bypass mediation; native child navigation
+remains subject to the unchanged CSP and can be refused. In-tool actions should
+call `preventDefault`; canceled events produce no wrapper navigation even when
+propagation stops. This is not universal interception of hostile event code.
+That helper is not a security boundary: artifact code can send a different
 URL while activation is live. Approval authorizes artifact navigation during
 that activation; it does not attest a particular anchor or destination.
 Activation can remain live after an earlier gesture and across navigation,

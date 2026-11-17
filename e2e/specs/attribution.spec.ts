@@ -496,3 +496,75 @@ test('another opaque frame cannot navigate an embedded public wrapper even with 
  await page.waitForTimeout(200);expect(wrapper.url()).toBe(url);await expect((await childFrame(wrapper)).getByRole('heading',{name:'Tool alive'})).toBeVisible();
  await writeFile(`${evidence}/${info.project.name}-other-frame.json`,JSON.stringify({rejected:true,wrapper:wrapper.url(),host:page.url()},null,2));
 });
+
+for(const cancellation of ['inline','return-false','document','window','target-stop','document-stop','immediate-stop']){
+ test(`artifact click cancellation ${cancellation} keeps its in-tool action`,async({page,api,artifacts})=>{
+  const inline=cancellation==='inline'?"event.preventDefault();showPanel()":cancellation==='return-false'?"showPanel();return false":cancellation==='target-stop'?"event.preventDefault();event.stopPropagation();showPanel()":cancellation==='immediate-stop'?"event.preventDefault();event.stopImmediatePropagation();showPanel()":'';
+  const listener=cancellation==='document'||cancellation==='document-stop'||cancellation==='window'?`${cancellation==='window'?'window':'document'}.addEventListener('click',event=>{event.preventDefault();${cancellation==='document-stop'?'event.stopPropagation();':''}showPanel()});`:'';
+  const artifact=await artifacts.create(`<a href="https://example.test/destination" onclick="${inline}">Show panel</a><p id="panel" hidden>Panel open</p><script>function showPanel(){document.getElementById('panel').hidden=false}${listener}</script>`);
+  await api.patch(`/api/artifacts/${artifact.id}`,{data:{share_attribution:'show',links_approved:true}});
+  const {share}=await(await api.post('/api/shares',{data:{artifact_id:artifact.id}})).json();
+  await page.route('https://example.test/**',r=>r.fulfill({contentType:'text/html',body:'<h1>Unexpected navigation</h1>'}));
+  const url=`${renderOrigin}/s/${share.id}`;
+  await page.goto(url);const tool=await childFrame(page);
+  await tool.getByRole('link',{name:'Show panel'}).click();
+  // Wait beyond the deferred navigation task, not only the synchronous panel mutation.
+  await page.waitForTimeout(150);
+  expect(page.url()).toBe(url);
+  await expect(tool.getByText('Panel open',{exact:true})).toBeVisible();
+ });
+}
+
+test('approved SVG xlink anchors and href precedence reach the destination',async({page,api,artifacts})=>{
+ for(const attributes of ['xlink:href="https://example.test/destination"','href="https://example.test/destination" xlink:href="https://example.test/wrong"']){
+  const artifact=await artifacts.create(`<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="300" height="80"><a ${attributes}><rect width="290" height="70" fill="lightblue"/><text x="5" y="40">SVG destination</text></a></svg>`);
+  await api.patch(`/api/artifacts/${artifact.id}`,{data:{share_attribution:'show',links_approved:true}});
+  const {share}=await(await api.post('/api/shares',{data:{artifact_id:artifact.id}})).json();
+  await page.route('https://example.test/**',r=>r.fulfill({contentType:'text/html',body:'<h1>SVG destination reached</h1>'}));
+  await page.goto(`${renderOrigin}/s/${share.id}`);
+  await (await childFrame(page)).locator('a').click();
+  await expect(page.getByRole('heading',{name:'SVG destination reached'})).toBeVisible({timeout:2000});
+  expect(page.url()).toBe('https://example.test/destination');
+ }
+});
+
+for(const behavior of ['stop-propagation','late-window-cancel','target-installs-document-cancel']){
+ test(`approved click ${behavior} follows final artifact cancellation`,async({page,api,artifacts},info)=>{
+  const inline=behavior==='stop-propagation'?'event.stopPropagation()':behavior==='target-installs-document-cancel'?"document.addEventListener('click',cancelLink,{once:true})":'';
+  const script=behavior==='late-window-cancel'?"document.addEventListener('click',()=>window.addEventListener('click',cancelLink,{once:true}))":'';
+  const artifact=await artifacts.create(`<a href="https://example.test/destination" onclick="${inline}">Artifact link</a><p id="panel" hidden>Panel open</p><script>function cancelLink(event){event.preventDefault();document.getElementById('panel').hidden=false}${script}</script>`);
+  await api.patch(`/api/artifacts/${artifact.id}`,{data:{share_attribution:'show',links_approved:true}});
+  const {share}=await(await api.post('/api/shares',{data:{artifact_id:artifact.id}})).json();
+  await page.route('https://example.test/**',r=>r.fulfill({contentType:'text/html',body:'<h1>External destination reached</h1>'}));
+  const url=`${renderOrigin}/s/${share.id}`;await page.goto(url);const tool=await childFrame(page);
+  await tool.getByRole('link',{name:'Artifact link'}).click();
+  if(behavior==='stop-propagation')await expect(page.getByRole('heading',{name:'External destination reached'})).toBeVisible();
+  else {await page.waitForTimeout(150);expect(page.url()).toBe(url);await expect(tool.getByText('Panel open',{exact:true})).toBeVisible()}
+  await writeFile(`${evidence}/${info.project.name}-${behavior}.json`,JSON.stringify({behavior,destination:page.url()},null,2));
+ });
+}
+
+test('SVG fragments use either href form and href masks xlink destinations',async({page,api,artifacts})=>{
+ for(const attributes of ['xlink:href="#details"','href="#details" xlink:href="https://example.test/wrong"']){
+  const artifact=await artifacts.create(`<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="300" height="80"><a ${attributes}><rect width="290" height="70" fill="lightblue"/></a></svg><div style="height:1800px"></div><h2 id="details">Details reached</h2>`);
+  await api.patch(`/api/artifacts/${artifact.id}`,{data:{share_attribution:'show',links_approved:true}});
+  const {share}=await(await api.post('/api/shares',{data:{artifact_id:artifact.id}})).json();
+  const url=`${renderOrigin}/s/${share.id}`;await page.goto(url);const tool=await childFrame(page);
+  await tool.locator('a').click();await expect(tool.getByRole('heading',{name:'Details reached'})).toBeInViewport();
+  expect(page.url()).toBe(url);expect(tool.url()).toBe('about:srcdoc');
+ }
+});
+
+test('modified untrusted and credential-bearing anchor clicks cannot navigate the public wrapper',async({page,api,artifacts})=>{
+ const artifact=await artifacts.create('<a id="normal" href="https://example.test/destination">Ordinary link</a><a id="credentials" href="https://user:password@example.test/destination">Credential link</a>');
+ await api.patch(`/api/artifacts/${artifact.id}`,{data:{share_attribution:'show',links_approved:true}});
+ const {share}=await(await api.post('/api/shares',{data:{artifact_id:artifact.id}})).json();
+ const url=`${renderOrigin}/s/${share.id}`;await page.goto(url);const tool=await childFrame(page);
+ for(const modifier of ['Control','Meta','Alt','Shift'] as const){await tool.locator('#normal').click({modifiers:[modifier]});await page.waitForTimeout(100);expect(page.url()).toBe(url)}
+ await tool.locator('#normal').evaluate(el=>(el as HTMLAnchorElement).click());
+ await tool.locator('#credentials').click();await page.waitForTimeout(150);expect(page.url()).toBe(url);expect(tool.url()).toBe('about:srcdoc');
+ expect(page.context().pages()).toHaveLength(1);
+ // A subsequent real ordinary click must still work; refusal is not blanket.
+ await page.route('https://example.test/**',r=>r.fulfill({contentType:'text/html',body:'<h1>External destination reached</h1>'}));
+ await tool.locator('#normal').click();await expect(page.getByRole('heading',{name:'External destination reached'})).toBeVisible();
+});
