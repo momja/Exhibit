@@ -606,7 +606,9 @@ and the repo, and a missing font is a cosmetic failure, not a functional one,
 because `--font-sans` falls back to `system-ui` and `--font-display` to
 Georgia. Only the axes in use are requested: Schibsted Grotesk weights 400-800
 (the weights the gallery CSS uses) and Fraunces pinned to opsz 72, wght 600,
-SOFT 100, WONK 0. Because every Fraunces axis is pinned, Google serves a
+SOFT 100, WONK 0, as two static instances (upright and italic, the italic
+for the sign-in headline's "small", Exh-90b2; browsers fetch its file only
+where italic text renders). Because every Fraunces axis is pinned, Google serves a
 static instance with no variation axes: `font-variation-settings` cannot
 change it, and the `fontsHead` URL is the single source for those settings. Any
 other Fraunces weight or setting means widening that request. `.font-headline`

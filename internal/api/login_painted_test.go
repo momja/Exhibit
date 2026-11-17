@@ -22,7 +22,7 @@ func TestLoginPageIsPainted(t *testing.T) {
 	page := w.Body.String()
 
 	assert.Contains(t, page, `class="login-page login-painted"`)
-	assert.Contains(t, page, `A shelf for small tools.`)
+	assert.Contains(t, page, `A shelf for <em>small</em> tools.`)
 	assert.Contains(t, page, `class="login-wordmark"`)
 	assert.Contains(t, page, `<picture class="login-scene-composite">`)
 	assert.Regexp(t, `<img class="login-scene-image"[^>]* width="2560" height="1440"`, page)

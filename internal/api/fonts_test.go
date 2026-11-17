@@ -32,7 +32,7 @@ func TestAppOriginPagesLoadBrandFonts(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			assert.Contains(t, body, `<link rel="preconnect" href="https://fonts.googleapis.com">`)
 			assert.Contains(t, body, `<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>`)
-			assert.Contains(t, body, "family=Fraunces:opsz,wght,SOFT,WONK@72,600,100,0&family=Schibsted+Grotesk:wght@400..800&display=swap")
+			assert.Contains(t, body, "family=Fraunces:ital,opsz,wght,SOFT,WONK@0,72,600,100,0;1,72,600,100,0&family=Schibsted+Grotesk:wght@400..800&display=swap")
 		})
 	}
 }

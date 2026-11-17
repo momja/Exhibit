@@ -24,7 +24,9 @@
      deliberately come from a CDN, unlike icons and htmx, which are
      self-hosted (technical_stack.md §1). Only the axes and weights in use are
      requested: Schibsted Grotesk 400-800 (the weights the app's CSS uses) and
-     Fraunces pinned to opsz 72, weight 600, SOFT 100, WONK 0. This URL is the
+     Fraunces pinned to opsz 72, weight 600, SOFT 100, WONK 0, as two static
+     instances: upright, and italic (Exh-90b2, the sign-in headline's "small";
+     the italic file downloads only where italic text renders). This URL is the
      single source for those settings: every axis is pinned, so Google serves a
      static instance and font-variation-settings could not change it. Any
      other Fraunces weight or setting means widening this request. display=swap with
@@ -32,7 +34,7 @@
      App-origin pages only, never the render surface. */}}
 {{define "fontsHead"}}<link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@72,600,100,0&family=Schibsted+Grotesk:wght@400..800&display=swap">{{end}}
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT,WONK@0,72,600,100,0;1,72,600,100,0&family=Schibsted+Grotesk:wght@400..800&display=swap">{{end}}
 
 {{/* tagDots renders a gallery card's tags as color alone (av-uvc6): one dot
      per tag, in the card's single meta row beside the title. The name is not
