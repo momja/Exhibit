@@ -825,6 +825,14 @@ The deliberate outcome: in production it's one small image and one process by de
 with safety and richness added as opt-in Compose profiles — matching the spec's promise
 that the easy path and the serious path share almost all of the same system.
 
+One workspace commits its encoded output: `web/hero-art/images/` holds the responsive
+sign-in hero paintings (WebP/AVIF) and a manifest. `design_files/` is dockerignored and
+the Node stage has neither the lossless masters nor the matting dependencies, so the
+build cannot re-encode them; `web/hero-art/build.mjs` copies the files and fails when
+any size differs from the manifest. The encoder (`sharp`) lives outside `web/` in
+`design_files/brand-refresh/tools/hero-export`, whose `npm run check` guards against
+byte drift. See `build_assets.md`.
+
 The Node-built assets (CodeMirror bundle, Phosphor Icons, htmx) are generated into
 `internal/api/assets/` at build time and **not** committed to git. See `build_assets.md`
 for the workspace layout, the `scripts/build-assets.sh` entrypoint, and how the
