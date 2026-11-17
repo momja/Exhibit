@@ -5,6 +5,8 @@ import (
 	"html/template"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/momja/Exhibit/internal/connectors"
@@ -31,6 +33,8 @@ func TestManifestServesValidJSON(t *testing.T) {
 	assert.Equal(t, "Exhibit", m.Name)
 	assert.Equal(t, "standalone", m.Display)
 	assert.Equal(t, "/", m.StartURL)
+	assert.Equal(t, "#f1e9d6", m.ThemeColor, "theme follows the paper ground, not the logo blue")
+	assert.Equal(t, "#f1e9d6", m.BackgroundColor)
 	require.Len(t, m.Icons, 3)
 	for _, icon := range m.Icons {
 		assert.Regexp(t, `^/assets/icons/`, icon.Src)
@@ -130,4 +134,27 @@ func TestAppOriginPagesCarryPWAHeadTags(t *testing.T) {
 			assert.Contains(t, body, `<meta name="apple-mobile-web-app-title" content="Exhibit">`)
 		})
 	}
+}
+
+// Paper and dusk are written in four places that cannot import each other:
+// tokens.css, the manifest, the pwaHead theme-color metas and the icon build.
+// They are all pinned to the --color-ground tokens here (Exh-d5ku).
+func TestPaperAndDuskFollowGroundTokens(t *testing.T) {
+	light, dark := parseTokens(t)
+	paper, dusk := light["--color-ground"], dark["--color-ground"]
+	require.NotEmpty(t, paper)
+	require.NotEmpty(t, dusk)
+
+	assert.Equal(t, paper, manifestPaper)
+	assert.Equal(t, paper, exhibitManifest.ThemeColor)
+	assert.Equal(t, paper, exhibitManifest.BackgroundColor)
+
+	var out strings.Builder
+	require.NoError(t, pageTemplates.ExecuteTemplate(&out, "pwaHead", nil))
+	assert.Contains(t, out.String(), `<meta name="theme-color" media="(prefers-color-scheme: light)" content="`+paper+`">`)
+	assert.Contains(t, out.String(), `<meta name="theme-color" media="(prefers-color-scheme: dark)" content="`+dusk+`">`)
+
+	build, err := os.ReadFile("../../web/pwa-icons/build.mjs")
+	require.NoError(t, err)
+	assert.Contains(t, string(build), `BACKGROUND = "`+paper+`"`)
 }

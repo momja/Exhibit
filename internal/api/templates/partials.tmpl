@@ -13,6 +13,8 @@
      document (internal/render) — artifacts are visitor-authored files and
      own their own <head> (architecture.md §1). */}}
 {{define "pwaHead"}}<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f1e9d6">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#14182e">
 <link rel="apple-touch-icon" href="{{asset "icons/apple-touch-icon-180.png"}}">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
