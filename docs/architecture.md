@@ -972,9 +972,8 @@ the hosted Clerk page) is the brand's front door. `loginScene` renders a fixed
 (day, or dusk under `prefers-color-scheme: dark`; the portrait crop at 600px
 and below; AVIF before WebP; explicit dimensions) from `/assets/hero-art/`, and
 the shared `.grain` layer over it. Only the active mode and one width download.
-The sky/clouds/hill layers are not loaded here: Exh-vsw0 adds them as further
-children of `.login-scene` above the composite, so the form (`.login-content`,
-a sibling of the stage) is never restructured or moved. The headline and
+The sky/clouds/hill layers belong to the descent (below), so the form
+(`.login-content`, a sibling of the stage) is never restructured or moved. The headline and
 tagline sit directly on the sky: a feathered shade (`--painting-shade`, a
 radial gradient in the scene's `::after`, no visible edge) keeps cream text
 above 3:1 over any part of the sky, so contrast does not depend on which
@@ -986,6 +985,38 @@ card is flattened inside it (`clerkAuthAppearance`, plus `.cl-*` rules). On
 phones the painting owns a band at the bottom of the page and the content
 reserves it, so a short screen scrolls rather than covering the figure. The
 OAuth consent page keeps the plain card (`.login-painted` scopes the art).
+
+**Sign-in descent** (Exh-vsw0): on a visit the server marks, the scenery moves
+for 3.6s (`cubic-bezier(.5,0,.15,1)`) as a camera coming down out of the sky;
+the page is still scriptless. Three empty `.login-layer` divs (sky, clouds,
+hill) are emitted inside `.login-layers` only when the body carries
+`.login-descend` (`login-descent.css`). Their images are CSS backgrounds
+(`image-set()`, AVIF then WebP, one of three widths by viewport and pixel ratio)
+declared inside `@media (prefers-reduced-motion: no-preference)`, so a
+reduced-motion visitor and every repeat visit download none of them and see the
+composite, unmoved. The layers start 832/1216/1600 units lower (sky, clouds,
+hill, in 2560-wide units) and end at rest, which is the production placement
+(sky at y=-832, clouds and hill at 0) over a frame sized and positioned as the
+composite's `object-fit: cover; object-position: 78% 50%` would draw it (phones:
+the 960x2080 crop at (1540,192), bottom-aligned, same mask). The scene is a
+size container so the frame is plain `cqw`/`cqh` arithmetic. While it moves the
+composite is `visibility:hidden`; it reappears under the layers when they settle
+(a CSS animation delayed by the duration), so a layer that failed to load still
+leaves the final picture. The layers stay on top at rest, so nothing is swapped
+and nothing shifts. Only `.login-scene` moves: the form is in the first paint,
+keeps focus, is never faded, and the grain and the shade stay fixed above the
+art. The page may start moving before the layers arrive; what is seen meanwhile
+is the flat sky colour, which is what the first frame mostly is anyway.
+
+*Once per sign-out.* `playsDescent` (`internal/api/auth.go`) adds `.login-descend`
+only when the `exhibit_descent_seen` cookie is absent, and sets it in the same
+response, so a reload, a rejected password or a second tab shows the final
+frame. The cookie's value is the constant `1`: host-only, `HttpOnly`,
+`SameSite=Lax`, `Secure` with `APP_ORIGIN`, one year. `POST /auth/logout` clears
+it. Hosted Clerk sets `afterSignOutUrl` to `/auth/logout`, so a sign-out from the
+account menu passes through the server, which clears it (that page redirects to
+`/auth/login` and neither plays nor spends the animation). Sessions that merely
+expire do not replay it.
 
 ### 3.8a Administration (av-utap)
 
