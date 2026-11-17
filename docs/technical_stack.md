@@ -32,7 +32,7 @@ safety" (§12).
 | Reusable UI behavior | **Stimulus** — self-hosted ES module, Go partials own markup (§9) | explicit component initialization in vanilla JS |
 | Response compression | `chi` `middleware.Compress` — gzip, explicit type allowlist | brotli (better ratio, new dependency) |
 | Agent harness | **Pi Bolt 1.0.8 / Pi 1.4.0** (native `pi --mode rpc` sidecar per session; runtime-loaded TS tools extension; keys AES-GCM at rest; per-session scoped API credentials; `internal/mockllm` for tests) | Claude Agent SDK (heavier, vendor-tied) |
-| Fonts | **Schibsted Grotesk** (text) and **Fraunces** (one headline per page) from Google Fonts, `display=swap`, system-ui / Georgia fallbacks (§9) | Self-hosting (deliberately not done) |
+| Fonts | **Schibsted Grotesk** (text) and **Fraunces** (one headline per page), SIL OFL, self-hosted from the app origin by `web/fonts` (woff2, Fraunces a static instance), `display=swap`, system-ui / Georgia fallbacks (§9) | Google Fonts CDN (rejected, see §9) |
 | Icons | **Phosphor Icons** — self-hosted / embedded on app origin, no CDN (§9) | Lucide / Heroicons |
 | Hosted login | Clerk Go SDK + ClerkJS / Clerk UI from the application Frontend API domain; enabled only by Clerk configuration | Replacing self-hosted login |
 | Login (optional) | Generic OIDC via discovery — `coreos/go-oidc/v3` + `golang.org/x/oauth2`, exchanged once for our own session (§10) | auth at the operator's proxy (also supported); vendor SDK (rejected) |
@@ -573,25 +573,25 @@ background on a dark page. The widget base stylesheet therefore leaves
 `color-scheme` to the widget, and the agent's prompt asks artifacts and
 widgets to declare `light dark` themselves (`docs/widgets.md`).
 
-**Fonts: a deliberate CDN exception (Exh-wjqh).** Unlike icons and htmx, the
-brand typefaces load from Google Fonts, through the shared `fontsHead` partial
-that every app-origin page head includes (preconnect plus one stylesheet).
-Reasons: the variable font files are large, a CDN keeps them out of the image
-and the repo, and a missing font is a cosmetic failure, not a functional one,
-because `--font-sans` falls back to `system-ui` and `--font-display` to
-Georgia. That holds when the hosts fail fast (DNS failure, refused
-connection); the stylesheet is render-blocking, so a network that silently
-drops packets to them leaves every page blank until the connection times out
-(`security.md` §1.3). Only the axes in use are requested: Schibsted Grotesk weights 400-800
-(the weights the gallery CSS uses) and Fraunces pinned to opsz 72, wght 600,
-SOFT 100, WONK 0. Because every Fraunces axis is pinned, Google serves a
-static instance with no variation axes: `font-variation-settings` cannot
-change it, and the `fontsHead` URL is the single source for those settings. Any
-other Fraunces weight or setting means widening that request. `.font-headline`
-sets the family, weight 600 and `font-synthesis:none`. If the app's CSS starts using another weight, widen the
-request in `fontsHead`. The app origin sets no style or font CSP, so no policy
-change was needed; the render origin, artifact CSP and widget documents never
-name the font hosts. CodeMirror and code stay monospace.
+**Fonts: self-hosted, like icons and htmx (Exh-wjqh).** The brand typefaces
+are vendored by the `web/fonts` asset workspace from exact-pinned
+`@fontsource-variable` packages (lockfile integrity; SIL OFL, licence files
+shipped beside the fonts) into `assets/fonts`, and loaded through the shared
+`fontsHead` partial that every app-origin page head includes (a preload of the
+text face plus `fonts.css`, served at a versioned asset URL). The first
+version loaded them from Google Fonts and was reversed: that stylesheet is
+render-blocking, so a network that silently drops packets to Google left every
+page blank for tens of seconds, and every page view sent the visitor's IP and
+the instance's hostname to a third party. Schibsted Grotesk ships as one
+variable woff2 narrowed to wght 400-800 (the weights the gallery CSS uses).
+Fraunces ships as a static instance pinned at opsz 72, wght 600, SOFT 100,
+WONK 0, made with fontTools' instancer (python3 + fonttools/brotli, the same
+build dependency as the Phosphor subset; the build fails without it). It has
+no variation axes, so `font-variation-settings` cannot change it, and
+`web/fonts/build.mjs` is the single source for those settings. Any other
+Fraunces weight or setting means widening that build. `.font-headline` sets the
+family, weight 600 and `font-synthesis:none`. `--font-sans` falls back to
+`system-ui` and `--font-display` to Georgia. CodeMirror and code stay monospace.
 
 **One headline per page (Exh-odyv).** Each app page carries exactly one
 `.font-headline` element, on its natural top heading and never on a decorative
@@ -803,9 +803,10 @@ Turso/libSQL territory and a larger commitment — out of scope for the default 
   worker. None of these are part of a release — they're things a deployer adds around
   the image.
 - **Build-time only:** Go toolchain, Node + esbuild (to bundle CodeMirror and vendor
-  the Phosphor icon and htmx assets — see `build_assets.md`), python3 +
+  the Phosphor icon, brand font and htmx assets — see `build_assets.md`), python3 +
   fonttools/brotli (to subset the Phosphor font to the `web/icons/icons.txt`
-  registry — see `build_assets.md` §6), `goose` (migrations are embedded
+  registry — see `build_assets.md` §6 — and to instance the self-hosted Fraunces
+  font, `web/fonts`, `build_assets.md` §8), `goose` (migrations are embedded
   and run from the binary). Dev-only: golangci-lint (`make lint`, not vendored) and
   ESLint for the editor workspace (§5).
 
