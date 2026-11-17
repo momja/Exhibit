@@ -18,6 +18,20 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Exhibit">{{end}}
 
+{{/* fontsHead loads the brand typefaces (Exh-wjqh) from Google Fonts. Fonts
+     deliberately come from a CDN, unlike icons and htmx, which are
+     self-hosted (technical_stack.md §1). Only the axes and weights in use are
+     requested: Schibsted Grotesk 400-800 (the weights the app's CSS uses) and
+     Fraunces pinned to opsz 72, weight 600, SOFT 100, WONK 0. This URL is the
+     single source for those settings: every axis is pinned, so Google serves a
+     static instance and font-variation-settings could not change it. Any
+     other Fraunces weight or setting means widening this request. display=swap with
+     system fallbacks keeps text readable when the hosts are blocked.
+     App-origin pages only, never the render surface. */}}
+{{define "fontsHead"}}<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@72,600,100,0&family=Schibsted+Grotesk:wght@400..800&display=swap">{{end}}
+
 {{/* tagDots renders a gallery card's tags as color alone (av-uvc6): one dot
      per tag, in the card's single meta row beside the title. The name is not
      drawn but is not lost either: it is the dot's title for a pointer and
