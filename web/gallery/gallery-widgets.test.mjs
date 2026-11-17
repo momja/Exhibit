@@ -7,6 +7,10 @@ import { loadPageScript } from "./testdom.mjs";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const WIDGETS_JS = path.join(here, "../../internal/api/assets/gallery/gallery-widgets.js");
 
+// Models the shipped card: the iframe arrives inside a <template>, so the well
+// owns no browsing context until the module clones one in. `frame` reads null
+// until that happens, which is what the "no browsing context offscreen" tests
+// assert on.
 async function loadWidgets({ intersection = true } = {}) {
   let visibility;
   let removals;
@@ -36,23 +40,38 @@ async function loadWidgets({ intersection = true } = {}) {
   root.querySelectorAll = (selector) => selector === "[data-gallery-widget]"
     ? widgets.filter((widget) => widget.well.isConnected).map((widget) => widget.well) : [];
 
-  function addWidget() {
-    const well = page.byId(`well-${widgets.length}`);
-    const frame = page.byId(`frame-${widgets.length}`);
-    well.isConnected = true;
-    well.dataset.widgetReload = `/artifacts/widget-${widgets.length}/widget/open`;
-    well.classList.add("has-frame");
-    well.matches = (selector) => selector === "[data-gallery-widget]";
-    well.querySelector = () => frame.parentNode === well ? frame : null;
-    frame.parentNode = well;
+  function makeFrame(index, events) {
+    const frame = page.byId(`frame-${index}`);
     frame.contentWindow = {};
-    frame.src = `https://render.test/w/${widgets.length}?t=original-token`;
-    const events = [];
+    frame.src = `https://render.test/w/${index}?t=original-token`;
     frame.addEventListener("exhibit:widget-dispose", () => events.push("dispose"));
     frame.addEventListener("exhibit:widget-mounted", () => events.push("mount"));
     frame.remove = () => { frame.parentNode = null; frame.contentWindow = null; };
-    well.append = () => { frame.parentNode = well; frame.contentWindow = {}; };
-    const widget = { well, frame, events };
+    return frame;
+  }
+
+  function addWidget() {
+    const index = widgets.length;
+    const well = page.byId(`well-${index}`);
+    const events = [];
+    let frame = null;
+    const template = { content: { cloneNode: () => makeFrame(index, events) } };
+    well.isConnected = true;
+    well.dataset.widgetReload = `/artifacts/widget-${index}/widget/open`;
+    well.matches = (selector) => selector === "[data-gallery-widget]";
+    well.querySelector = (selector) => {
+      if (selector === ".card-widget-frame") return frame && frame.parentNode === well ? frame : null;
+      if (selector === "template.card-widget-frame-template") return frame && frame.parentNode === well ? null : template;
+      return null;
+    };
+    // The module inserts by appending either a clone of the template's content
+    // or the frame node it already holds; both land in the well.
+    well.append = (node) => {
+      if (node) frame = node;
+      frame.parentNode = well;
+      frame.contentWindow ||= {};
+    };
+    const widget = { well, events, get frame() { return frame; } };
     widgets.push(widget);
     return widget;
   }
@@ -75,24 +94,36 @@ async function loadWidgets({ intersection = true } = {}) {
   };
 }
 
-test("nearby widgets retain their initial frame and direct render URL", async () => {
+// The whole point of the template: a card that has not come near the viewport
+// costs a parsed element and nothing else. A space switch inserts every card at
+// once, so this is what stops it paying for 24 browsing contexts.
+test("a card off the viewport owns no browsing context", async () => {
   const page = await loadWidgets();
+  assert.equal(page.first.frame, null, "the template's iframe must not be materialised");
+  assert.deepEqual(page.first.events, []);
+  assert.equal(page.visibility.observed.size, 1, "the card is still watched for intersection");
+});
+
+test("nearby widgets materialise their frame once and keep the direct render URL", async () => {
+  const page = await loadWidgets();
+  page.intersect(page.first, true);
   const { frame } = page.first;
   const originalWindow = frame.contentWindow;
-  page.intersect(page.first, true);
   page.intersect(page.first, true);
   await page.process(page.first);
 
   assert.equal(frame.contentWindow, originalWindow);
   assert.equal(frame.src, "https://render.test/w/0?t=original-token");
-  assert.deepEqual(page.first.events, []);
-  assert.equal(page.visibility.observed.size, 1);
+  assert.equal(page.first.well.classList.contains("has-frame"), true, "the live frame covers the monogram");
+  assert.deepEqual(page.first.events, ["mount"], "repeated intersection does not mount twice");
   assert.equal(page.visibility.options.rootMargin, "400px 0px");
 });
 
 test("offscreen widgets lose their document and reload with a fresh credential on re-entry", async () => {
   const page = await loadWidgets();
-  const { well, frame, events } = page.first;
+  page.intersect(page.first, true);
+  const { well, events } = page.first;
+  const frame = page.first.frame;
   const oldWindow = frame.contentWindow;
   well.classList.add("widget-failed");
   page.intersect(page.first, false);
@@ -108,11 +139,12 @@ test("offscreen widgets lose their document and reload with a fresh credential o
   assert.equal(frame.src, well.dataset.widgetReload, "the old render token must never be reused");
   assert.equal(well.classList.contains("has-frame"), true);
   page.intersect(page.first, true);
-  assert.deepEqual(events, ["dispose", "mount"], "repeated intersection does not reload a live frame");
+  assert.deepEqual(events, ["mount", "dispose", "mount"], "repeated intersection does not reload a live frame");
 });
 
 test('a protected widget drops its old srcdoc before loading the fresh trusted wrapper', async () => {
   const page = await loadWidgets();
+  page.intersect(page.first, true);
   const { well, frame } = page.first;
   frame.dataset.widgetWrapper = '';
   frame.srcdoc = 'old trusted wrapper';
@@ -128,27 +160,32 @@ test("paging observes new widgets and search releases removed ones", async () =>
   const added = page.addWidget();
   await page.process(added);
   assert.equal(page.visibility.observed.size, 2);
+  page.intersect(added, true);
   page.intersect(added, false);
   page.remove(added);
   page.intersect(added, true); // A callback queued before unobserve.
 
   assert.equal(page.visibility.observed.size, 1);
   assert.equal(added.frame.parentNode, null, "a removed search result must not be resurrected");
-  assert.deepEqual(added.events, ["dispose"]);
+  assert.deepEqual(added.events, ["mount", "dispose"]);
 });
 
 test("replacing the entire gallery releases every frame and observer", async () => {
   const page = await loadWidgets();
+  page.intersect(page.first, true);
+  const frame = page.first.frame;
   page.root.isConnected = false;
   page.removals.callback([{ removedNodes: [page.root] }]);
 
   assert.equal(page.visibility.observed.size, 0);
   assert.equal(page.removals.disconnected, true);
-  assert.equal(page.first.frame.parentNode, null);
+  assert.equal(frame.parentNode, null);
 });
 
-test("browsers without IntersectionObserver retain native lazy loading", async () => {
+test("browsers without IntersectionObserver materialise every frame and leave the fetch to lazy loading", async () => {
   const page = await loadWidgets({ intersection: false });
   assert.equal(page.first.frame.parentNode, page.first.well);
+  assert.equal(page.first.frame.src, "https://render.test/w/0?t=original-token");
+  assert.equal(page.first.well.classList.contains("has-frame"), true);
   assert.equal(page.visibility, undefined);
 });

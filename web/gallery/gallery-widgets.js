@@ -1,9 +1,18 @@
 // Keep widget documents near the viewport. The card and its server-rendered
 // iframe node survive paging; removing the iframe destroys its live document.
+//
+// The frame arrives inside a <template> (cardWidget), so a card owns no
+// browsing context until this module clones one in. That is deliberate: a
+// gallery is inserted wholesale, and building one context per card dominated
+// the cost of every library space switch.
 export function initializeGalleryWidgets(root) {
-  if (typeof IntersectionObserver !== 'function') return;
-
   const selector = '[data-gallery-widget]';
+  const frameSelector = '.card-widget-frame';
+  const templateSelector = 'template.card-widget-frame-template';
+  if (typeof IntersectionObserver !== 'function') {
+    materialiseAll(root);
+    return;
+  }
   const widgets = new Map();
   const visibility = new IntersectionObserver((entries) => {
     for (const entry of entries) {
@@ -15,23 +24,37 @@ export function initializeGalleryWidgets(root) {
   }, { rootMargin: '400px 0px' });
 
   function unmount(well, widget) {
-    if (widget.frame.parentNode !== well) return;
+    if (!widget.frame || widget.frame.parentNode !== well) return;
     widget.frame.dispatchEvent(new Event('exhibit:widget-dispose'));
     widget.frame.remove();
     well.classList.remove('has-frame', 'widget-failed');
     widget.reload = true;
   }
 
+  // Clones the server-rendered frame out of its template. The clone lands in
+  // the well, which is what gives it a document and starts the load.
+  function insertFrame(well, widget) {
+    const template = well.querySelector(templateSelector);
+    if (!template) return;
+    well.append(template.content.cloneNode(true));
+    widget.frame = well.querySelector(frameSelector);
+  }
+
   function mount(well, widget) {
-    if (widget.frame.parentNode === well) return;
-    // Re-entry may be hours later. The app-origin redirect mints a fresh
-    // render credential on demand rather than reusing the page's old token.
-    if (widget.reload) {
-      if (widget.frame.dataset.widgetWrapper !== undefined) widget.frame.removeAttribute('srcdoc');
-      widget.frame.src = well.dataset.widgetReload;
+    if (widget.frame?.parentNode === well) return;
+    if (!widget.frame) {
+      insertFrame(well, widget);
+      if (!widget.frame) return;
+    } else {
+      // Re-entry may be hours later. The app-origin redirect mints a fresh
+      // render credential on demand rather than reusing the page's old token.
+      if (widget.reload) {
+        if (widget.frame.dataset.widgetWrapper !== undefined) widget.frame.removeAttribute('srcdoc');
+        widget.frame.src = well.dataset.widgetReload;
+      }
+      well.append(widget.frame);
     }
     well.classList.add('has-frame');
-    well.append(widget.frame);
     widget.frame.dispatchEvent(new Event('exhibit:widget-mounted', { bubbles: true }));
   }
 
@@ -42,8 +65,8 @@ export function initializeGalleryWidgets(root) {
 
   function register(well) {
     if (widgets.has(well)) return;
-    const frame = well.querySelector('.card-widget-frame');
-    if (!frame) return;
+    const frame = well.querySelector(frameSelector);
+    if (!frame && !well.querySelector(templateSelector)) return;
     widgets.set(well, { frame, reload: false });
     visibility.observe(well);
   }
@@ -82,4 +105,16 @@ export function initializeGalleryWidgets(root) {
     widgets.forEach((_, well) => release(well));
     visibility.disconnect();
   };
+
+  // No observer to hang the lifecycle on: clone every frame in now and let
+  // each frame's own loading="lazy" decide when to fetch it. Widgets keep
+  // their fallback monogram either way.
+  function materialiseAll(scope) {
+    scope.querySelectorAll(selector).forEach((well) => {
+      const widget = { frame: well.querySelector(frameSelector), reload: false };
+      if (!widget.frame) insertFrame(well, widget);
+      if (!widget.frame) return;
+      well.classList.add('has-frame');
+    });
+  }
 }
