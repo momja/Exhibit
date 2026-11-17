@@ -1165,8 +1165,10 @@ is allowed; anything that produces egress or bypasses a user decision is not.**
     directly on the render origin ("Open in new tab") is a top-level page, not
     a sandboxed frame, so downloads work there natively — the user has
     explicitly navigated to the tool, and the per-artifact CSP still applies
-    via the response header. Share pages get no bridge: opened top-level they
+    via the response header. Share pages get no bridge: without attribution, opened top-level they
     behave the same way; there is no authenticated host to mediate for them.
+    Enabled attribution adds a sandboxed child and blocks native downloads too
+    (see the attribution compatibility costs below).
 - **External links** — the sandbox omits `allow-popups`, so a `target="_blank"`
   anchor is dropped on click and a plain anchor would navigate the iframe
   itself, replacing the artifact with an external page that usually refuses
@@ -1771,6 +1773,12 @@ input remained usable. The third-party embed used an origin explicitly named in
 every possible artifact; owners retain the hide override.
 
 
+The wrapper uses the artifact record's title for the tab and iframe accessible
+name, with HTML escaping. The tool keeps its own HTML `<title>` inside the child;
+it no longer controls the tab title. Server preview metadata is emitted once,
+at the very top of the outer head, ahead of artifact content. Hidden shares
+retain their previous bytes and head ordering.
+
 Enabled-share compatibility costs:
 
 - The child sees `about:srcdoc`, with empty `location.search` and
@@ -1808,9 +1816,28 @@ Enabled-share compatibility costs:
   answer them. Native clipboard
   calls therefore succeed or reject under browser policy rather than waiting
   forever for a nonexistent host. No clipboard read delegation is added.
+- Downloads are a measured regression: in both Chromium and WebKit a hidden,
+  top-level share downloads `hello.txt` from an `<a download href="data:…">`;
+  the same click with attribution shown produces no download. The child keeps
+  exactly `allow-scripts allow-forms`, with no `allow-downloads` and no host
+  download bridge. This accepts the loss consistently with the download policy
+  above; tools that export files need Hide.
+- Modal dialogs are also removed: in both engines the hidden share shows
+  `confirm('sure?')` and returns `false` after dismissal; the attributed share
+  shows no dialog and silently returns `false`. A tool that gates an action on
+  confirmation may therefore cancel that action without explaining why.
+  `allow-modals` remains absent. The same sandbox restricts `alert`, `prompt`
+  and `beforeunload` dialogs; those other modal APIs were not measured here.
+- Audit of other omitted sandbox allowances: same-origin storage, popups,
+  escaping popups, and top navigation remain restricted; no storage-access or
+  custom-protocol navigation allowance is added. Pointer lock, orientation lock
+  and presentation are limited by the omitted `allow-pointer-lock`,
+  `allow-orientation-lock` and `allow-presentation` tokens. These three APIs
+  were not measured: the browser fixtures do not establish their exact failure
+  behavior or broad sandbox compatibility.
 - sessionStorage is an in-memory framed shim, lost on reload, unlike the native
-  top-level share's sessionStorage. Origin storage, popups, downloads and device
-  APIs retain the opaque sandbox's limitations.
+  top-level share's sessionStorage. Origin storage and device APIs remain
+  subject to the opaque sandbox's restrictions.
 - The original wrapper lost initial keyboard input and autofocus until a click.
   Direct-share frame focus on load fixes window handlers; embeds wait for
   interaction. The child attempts autofocus

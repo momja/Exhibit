@@ -721,7 +721,7 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 	if rd.cfg.RelayEnabled && !widget && !versionView && !viewer.Anonymous && doc.headMeta == "" {
 		out = injectRelay(out, rd.cfg.AppOrigin, a.ID, allowed)
 	}
-	if doc.headMeta != "" {
+	if doc.headMeta != "" && !doc.attribution {
 		// Ahead of the preamble, and of any og: tags the artifact wrote for
 		// itself: a crawler reads the first, and may read no further.
 		out = prependToHead(out, doc.headMeta)

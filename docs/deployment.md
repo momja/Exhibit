@@ -1422,7 +1422,16 @@ origin, Chromium direct (hidden) shares write and read back successfully, but
 attributed shares still reject with `NotAllowedError`: the grant does not carry
 to the opaque child. Real-device clipboard permission UX remains unmeasured.
 The child retains local storage and fetch shims, without gallery capability bridges. Device access, origin
-storage, downloads and popups still face sandbox restrictions. Playwright WebKit
+storage and popups still face sandbox restrictions. Downloads and modal dialogs
+are explicit compatibility losses: in Chromium and WebKit a hidden top-level
+share downloads a data-URL `<a download>` file; the shown share produces no
+download. A hidden share shows `confirm()` and returns false when dismissed;
+a shown share silently returns false without showing a dialog, which may cancel
+a tool action. Neither `allow-downloads` nor `allow-modals` is added, and shares
+have no host download bridge. Other omitted tokens limit pointer lock,
+orientation lock and presentation; those APIs were not measured. The tab title
+uses the escaped artifact record title; the tool's own HTML title remains inside
+the child. Preview metadata appears once at the top of the outer head. Playwright WebKit
 does not establish iOS Safari toolbar or permission behavior; a non-scrolling
 outer page can keep mobile browser chrome expanded. Disable the bar per artifact
 for tools needing full top-level compatibility. See

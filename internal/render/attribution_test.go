@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"html"
 	"strings"
 	"testing"
 
@@ -57,4 +58,22 @@ func TestAttributionDoesNotChangeOtherRenderDocuments(t *testing.T) {
 	now := serveVersion(versioned, "abc", 1, versionToken("abc", 1, 1))
 	require.Equal(t, old.Body.String(), now.Body.String())
 	require.Equal(t, old.Header(), now.Header())
+}
+
+// Preview metadata belongs only to the outer crawler-visible head. The tool
+// retains its own title; the wrapper uses the escaped artifact record title.
+func TestAttributedShareMetadataAndTitles(t *testing.T) {
+	rd, st := newTestRenderer(t, "meta", `<!doctype html><html><head><title>Tool title</title></head><body>Tool</body></html>`)
+	title := `Record "</title><script>alert('x')</script>&`
+	require.NoError(t, st.UpdateArtifact(context.Background(), 1, "meta", map[string]any{"title": title, "share_attribution": "show"}))
+	link, err := st.CreateAnonymousLink(context.Background(), 1, "meta")
+	require.NoError(t, err)
+	body := serveShare(t, rd, link.ID).Body.String()
+	require.Contains(t, body, `<head><meta property="og:type"`)
+	require.Equal(t, 1, strings.Count(body, `property="og:title"`))
+	require.NotContains(t, body, `property=&#34;og:title&#34;`)
+	require.Contains(t, body, "<title>"+html.EscapeString(title)+"</title>")
+	require.Contains(t, body, `title="`+html.EscapeString(title)+`" sandbox=`)
+	require.Contains(t, body, html.EscapeString("<title>Tool title</title>"))
+	require.NotContains(t, body, "<script>alert('x')</script>")
 }

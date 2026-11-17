@@ -46,7 +46,7 @@ func (rd *Renderer) attributedShare(body string, a *store.Artifact, meta string)
  });
  </script>`)
 	mark := "data:image/svg+xml;base64," + base64.StdEncoding.EncodeToString([]byte(rd.cfg.FaviconSVG))
-	return fmt.Sprintf(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>%s</title>%s<link rel="icon" href="%s"><style>
+	return fmt.Sprintf(`<!doctype html><html lang="en"><head>%s<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>%s</title><link rel="icon" href="%s"><style>
  :root{color-scheme:light dark;font:12px/1.4 system-ui,sans-serif;background:#fff;color:#414751}
  *{box-sizing:border-box}html,body{margin:0;width:100%%;height:100%%;overflow:hidden}
  body{display:grid;grid-template-rows:36px minmax(0,1fr)}
@@ -57,5 +57,5 @@ func (rd *Renderer) attributedShare(body string, a *store.Artifact, meta string)
  @media(prefers-color-scheme:dark){:root{background:#17191e;color:#c8cdd5}header{background:#202329;border-color:#363b44}a:focus-visible{outline-color:#8ab4f8}}
  </style></head><body><header aria-label="Exhibit attribution"><a id="exhibit-attribution" href="%s" rel="noreferrer"><img src="%s" alt="">made with exhibit</a></header><iframe title="%s" sandbox="allow-scripts allow-forms" allow="fullscreen *; clipboard-write *" onload="if(window.top===window&&(document.activeElement===document.body||document.activeElement===this)){this.focus()}" srcdoc="%s"></iframe><script>
  if(window.self!==window.top){const a=document.getElementById('exhibit-attribution');a.removeAttribute('href');a.title='Exhibit attribution — open the share directly to visit Exhibit';}
- </script></body></html>`, html.EscapeString(a.Title), meta, artifacticon.DataURI(a.Tags), ExhibitProductOrigin, mark, html.EscapeString(a.Title), html.EscapeString(body))
+ </script></body></html>`, meta, html.EscapeString(a.Title), artifacticon.DataURI(a.Tags), ExhibitProductOrigin, mark, html.EscapeString(a.Title), html.EscapeString(body))
 }

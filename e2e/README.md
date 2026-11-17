@@ -105,3 +105,13 @@ EXHIBIT_E2E_APP_PORT=18380 EXHIBIT_E2E_RENDER_PORT=18381 npm test --prefix e2e -
 Attribution runs use a fixed third-party embed port, 18382. They cannot run
 concurrently with another attribution run even with distinct app/render ports.
 The configurable app/render port guidance above applies to the default suite.
+
+
+The dedicated attribution suite is local-only evidence. The default Playwright
+config excludes it, and neither **Go and Node tests** nor post-merge
+**Browser regression** runs that dedicated two-engine config. Passing Go/Node
+CI does not establish attribution browser coverage. Its download and confirm
+regressions compare hidden and shown modes in both engines; the negative
+download observation is bounded to 1.5 seconds. The Chromium clipboard permission
+grant case alone skips WebKit because that Playwright grant is unsupported;
+WebKit's native clipboard write behavior has its own two-mode assertion.

@@ -1,8 +1,16 @@
 import { test, expect } from '../fixtures';
+import type { Page, Frame } from '@playwright/test';
 import { renderOrigin } from '../environment';
 import { mkdir, writeFile } from 'node:fs/promises';
 
 const evidence = process.env.EXHIBIT_ATTRIBUTION_EVIDENCE || '/tmp/exhibit-review/banner/r2';
+// Resolve the direct child through its owning iframe, never global frame order.
+async function childFrame(parent: Page | Frame): Promise<Frame> {
+ const element = await parent.locator('iframe[title]').elementHandle();
+ const frame = await element!.contentFrame();
+ expect(frame).not.toBeNull();
+ return frame!;
+}
 test.beforeEach(async()=>{await mkdir(evidence,{recursive:true})});
 const body = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>
 html,body{margin:0;overflow:hidden;font:16px system-ui;color-scheme:light dark}main{height:100vh;display:grid;grid-template-rows:48px 1fr 48px;background:light-dark(#eef2f8,#151d2a);color:light-dark(#24324a,#e1e8f4)}h1{font-size:18px;margin:12px}canvas{width:100%;height:100%;min-height:0;background:light-dark(#d9e5f5,#283c58)}footer{position:fixed;bottom:0;height:48px;left:0;right:0;display:flex;align-items:center;justify-content:center;background:light-dark(#fff,#182333)}button{font:inherit;padding:6px 18px}</style></head><body><main><h1>Viewport canvas</h1><canvas aria-label="Drawing surface" onpointerdown="this.dataset.drawn='yes';this.getContext('2d').fillRect(0,0,20,20)"></canvas><footer><button onclick="this.textContent='Saved'">Save drawing</button></footer></main></body></html>`;
@@ -38,7 +46,7 @@ test('attribution viewport, theme, keyboard, hostile code and embed behavior', a
   await tool.getByRole('button').click(); await expect(tool.getByRole('button')).toHaveText('Saved');
   await tool.locator('canvas').click();
   await expect(tool.locator('canvas')).toHaveAttribute('data-drawn','yes');
-  const frame=page.frames()[1];
+  const frame=(await childFrame(page));
   const geometry=await frame.evaluate(()=>({height:innerHeight,tool:document.querySelector('main')!.getBoundingClientRect().height,bottom:document.querySelector('footer')!.getBoundingClientRect().bottom,overflow:document.documentElement.scrollHeight>innerHeight}));
   expect(geometry).toEqual({height:684,tool:684,bottom:684,overflow:false});
   await page.keyboard.press('Tab'); // no focus trap; ordinary document/frame tab order
@@ -60,7 +68,7 @@ test('attribution viewport, theme, keyboard, hostile code and embed behavior', a
  await page.screenshot({path:`${evidence}/${info.project.name}-third-party.png`});
  measurements.push({framedLink:'inert; no href; click leaves parent URL unchanged',topLevelLink:'self navigation succeeded with actual sandbox, no popup/top-navigation tokens'});
  // Child cannot remove the bar or overlay parent chrome.
- const child=page.frames()[2];
+ const child=(await childFrame(await childFrame(page)));
  expect(await child.evaluate(()=>{try{parent.document.body.remove();return 'removed'}catch{return 'blocked'}})).toBe('blocked');
  await writeFile(`${evidence}/${info.project.name}-measurements.json`,JSON.stringify(measurements,null,2));
 });
@@ -104,7 +112,7 @@ test('native framed anchors under the actual share CSP sandbox',async({page,api,
  await frame.getByText('top',{exact:true}).click();
  expect(page.url()).toBe(embedURL);
  await frame.getByText('self',{exact:true}).click();
- await expect.poll(()=>page.frames()[1].url()).toBe('https://exhibit.dizzard.net/native');
+ await expect.poll(async()=>(await childFrame(page)).url()).toBe('https://exhibit.dizzard.net/native');
  await writeFile(`${evidence}/${info.project.name}-native-anchors.json`,JSON.stringify({csp,messages,popup:'blocked',top:'blocked',self:'navigated child',decision:'inert framed attribution avoids replacing the embedded tool'},null,2));
 });
 
@@ -117,7 +125,7 @@ test('initial keyboard input, autofocus and accessible return to attribution',as
   await page.goto('about:blank');
   await page.bringToFront();
   await page.goto(`${renderOrigin}/s/${share.id}?x=1#frag`);
-  const tool=mode==='show'?page.frames()[1]:page.mainFrame();
+  const tool=mode==='show'?(await childFrame(page)):page.mainFrame();
   if(mode==='hide'||info.project.name==='chromium')await expect(tool.locator('input'),mode).toBeFocused();
   else await expect(page.locator('iframe')).toBeFocused();
   await page.keyboard.press('a'); await page.keyboard.press('b');
@@ -150,7 +158,7 @@ test('scroll-heavy tool and light narrow/short embeds remain usable',async({page
  const url=`${renderOrigin}/s/${share.id}?x=1#frag`;
  await page.setViewportSize({width:320,height:720}); await page.emulateMedia({colorScheme:'light'});
  await page.goto(url);
- const tool=page.frames()[1];
+ const tool=(await childFrame(page));
  await tool.getByRole('button').scrollIntoViewIfNeeded();
  await tool.getByRole('button').click(); await expect(tool.getByRole('button')).toHaveText('Done');
  expect(await tool.evaluate(()=>scrollY)).toBeGreaterThan(3000);
@@ -161,7 +169,7 @@ test('scroll-heavy tool and light narrow/short embeds remain usable',async({page
  await tool.evaluate(()=>sessionStorage.setItem('draft','temporary'));
  expect(await tool.evaluate(()=>sessionStorage.getItem('draft'))).toBe('temporary');
  await page.reload();
- expect(await page.frames()[1].evaluate(()=>sessionStorage.getItem('draft'))).toBeNull();
+ expect(await (await childFrame(page)).evaluate(()=>sessionStorage.getItem('draft'))).toBeNull();
  if(info.project.name==='chromium'){
   const counts=[];
   for(const mode of ['hide','show']){
@@ -178,11 +186,11 @@ test('scroll-heavy tool and light narrow/short embeds remain usable',async({page
  for(const height of [600,144]){
   await page.goto('http://127.0.0.1:18382/?src='+encodeURIComponent(url));
   const outer=page.locator('iframe'); await outer.evaluate((el,h)=>el.style.height=`${h}px`,height);
-  const shareFrame=page.frames()[1];
+  const shareFrame=(await childFrame(page));
   await expect(shareFrame.locator('#exhibit-attribution')).not.toHaveAttribute('href');
   await shareFrame.locator('#exhibit-attribution').evaluate(el=>(el as HTMLElement).focus());
   await expect(shareFrame.locator('#exhibit-attribution')).not.toBeFocused();
-  const child=page.frames()[2];
+  const child=(await childFrame(await childFrame(page)));
   expect(await child.evaluate(()=>innerHeight)).toBe(height-36);
   await child.getByRole('button').click(); await expect(child.getByRole('button')).toHaveText('Done');
   await page.screenshot({path:`${evidence}/${info.project.name}-embed-light-320-${height}.png`,fullPage:true});
@@ -196,7 +204,7 @@ test('native fullscreen succeeds and ungranted clipboard follows engine policy w
  for(const mode of ['hide','show']){
   await api.patch(`/api/artifacts/${artifact.id}`,{data:{share_attribution:mode}});
   await page.goto(`${renderOrigin}/s/${share.id}`);
-  const tool=mode==='show'?page.frames()[1]:page.mainFrame();
+  const tool=mode==='show'?(await childFrame(page)):page.mainFrame();
   if(mode==='show'){
    await expect(page.locator('iframe')).toHaveAttribute('allow','fullscreen *; clipboard-write *');
    await expect(page.locator('iframe')).toHaveAttribute('sandbox','allow-scripts allow-forms');
@@ -223,7 +231,7 @@ test('hostless shares scroll fragments, reject devices and refuse external navig
  await api.patch(`/api/artifacts/${artifact.id}`,{data:{share_attribution:'show'}});
  const {share}=await(await api.post('/api/shares',{data:{artifact_id:artifact.id}})).json();
  await page.goto(`${renderOrigin}/s/${share.id}`);
- const tool=page.frames()[1];
+ const tool=(await childFrame(page));
  await tool.getByRole('link',{name:'Jump to details'}).click();
  expect(tool.url()).toBe('about:srcdoc');
  await expect(tool.getByRole('heading',{name:'Details reached'})).toBeInViewport();
@@ -265,7 +273,7 @@ test('Chromium origin clipboard grant works directly but does not grant the opaq
  for(const mode of ['hide','show']){
   await api.patch(`/api/artifacts/${artifact.id}`,{data:{share_attribution:mode}});
   await page.goto(`${renderOrigin}/s/${share.id}`);
-  const tool=mode==='show'?page.frames()[1]:page.mainFrame();
+  const tool=mode==='show'?(await childFrame(page)):page.mainFrame();
   await tool.getByRole('button').click();
   await expect(tool.getByRole('button')).toHaveAttribute('data-result',mode==='hide'?'ok':'NotAllowedError');
   if(mode==='hide')expect(await tool.evaluate(()=>navigator.clipboard.readText())).toBe('Attribution test');
@@ -300,10 +308,64 @@ test('embedded attribution preserves unfocused host and active host typing on lo
   expect(await page.evaluate(()=>document.activeElement?.tagName)).toBe(typing?'INPUT':'BODY');
   await page.keyboard.type('after');
   if(typing)await expect(page.getByRole('textbox',{name:'Host input'})).toHaveValue('beforeafter');
-  expect(await page.frames()[2].evaluate(()=>(window as any).keys)).toBe(0);
+  expect(await (await childFrame(await childFrame(page))).evaluate(()=>(window as any).keys)).toBe(0);
   results.push({typing,active:await page.evaluate(()=>document.activeElement?.tagName)});
   await page.screenshot({path:`${evidence}/${info.project.name}-host-focus-${typing}.png`});
   await page.unroute(url);
  }
  await writeFile(`${evidence}/${info.project.name}-host-focus.json`,JSON.stringify(results,null,2));
+});
+
+
+test('data download works hidden and is blocked shown by the exact sandbox',async({page,api,artifacts},info)=>{
+ const artifact=await artifacts.create('<a download="hello.txt" href="data:text/plain,hello">Download file</a>');
+ const {share}=await(await api.post('/api/shares',{data:{artifact_id:artifact.id}})).json();
+ const results=[];
+ for(const mode of ['hide','show']){
+  expect((await api.patch(`/api/artifacts/${artifact.id}`,{data:{share_attribution:mode}})).ok()).toBeTruthy();
+  await page.goto(`${renderOrigin}/s/${share.id}`);
+  const tool=mode==='show'?await childFrame(page):page.mainFrame();
+  if(mode==='show')await expect(page.locator('iframe')).toHaveAttribute('sandbox','allow-scripts allow-forms');
+  // Install before clicking; bound the negative observation rather than hanging
+  // on an event which the sandbox is specifically expected to suppress.
+  const downloadEvent=page.waitForEvent('download',{timeout:1500}).catch(error=>{
+   if(error.name==='TimeoutError')return null;
+   throw error;
+  });
+  await tool.getByRole('link',{name:'Download file'}).click();
+  const download=await downloadEvent;
+  if(mode==='hide'){
+   expect(download).not.toBeNull();
+   expect(download!.suggestedFilename()).toBe('hello.txt');
+   expect(await download!.failure()).toBeNull();
+  }else expect(download).toBeNull();
+  results.push({mode,download:download?.suggestedFilename()??null,observationMs:1500});
+ }
+ await writeFile(`${evidence}/${info.project.name}-downloads.json`,JSON.stringify(results,null,2));
+});
+
+test('confirm shows a dismissible dialog hidden but silently returns false shown',async({page,api,artifacts},info)=>{
+ const artifact=await artifacts.create(`<button onclick="this.dataset.result=String(confirm('sure?'))">Confirm action</button>`);
+ const {share}=await(await api.post('/api/shares',{data:{artifact_id:artifact.id}})).json();
+ const results=[];
+ // Dismiss from the event handler so a baseline modal cannot hang the click.
+ const dialogs:{type:string,message:string}[]=[];
+ const dismiss=async(dialog:any)=>{dialogs.push({type:dialog.type(),message:dialog.message()});await dialog.dismiss()};
+ page.on('dialog',dismiss);
+ try{
+  for(const mode of ['hide','show']){
+   expect((await api.patch(`/api/artifacts/${artifact.id}`,{data:{share_attribution:mode}})).ok()).toBeTruthy();
+   await page.goto(`${renderOrigin}/s/${share.id}`);
+   const tool=mode==='show'?await childFrame(page):page.mainFrame();
+   const before=dialogs.length;
+   await tool.getByRole('button').click({timeout:5000});
+   await expect(tool.getByRole('button')).toHaveAttribute('data-result','false',{timeout:5000});
+   // The synchronous confirm has returned: a shown dialog would already have
+   // reached the listener. No arbitrary sleep or unbounded modal wait is needed.
+   const observed=dialogs.slice(before);
+   expect(observed).toEqual(mode==='hide'?[{type:'confirm',message:'sure?'}]:[]);
+   results.push({mode,dialogs:observed,result:'false'});
+  }
+ }finally{page.off('dialog',dismiss)}
+ await writeFile(`${evidence}/${info.project.name}-confirm.json`,JSON.stringify(results,null,2));
 });
