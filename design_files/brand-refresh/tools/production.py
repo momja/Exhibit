@@ -273,7 +273,8 @@ def main():
                         help='Where review images are written (never inside the checkout)')
     parser.add_argument('--assemble-only', action='store_true',
                         help='Skip matting and toning: verify and hash the saved masters, '
-                             'refresh review images, keep the other recorded figures')
+                             'refresh review images, keep the other recorded figures; refuses '
+                             'if the masters differ from the recorded hashes')
     args = parser.parse_args()
     review = args.review_dir
     review.mkdir(parents=True, exist_ok=True)
@@ -283,6 +284,18 @@ def main():
     for mode in modes:
         entry = report.setdefault(mode, {})
         if args.assemble_only:
+            # The kept alpha, ΔE and restoration figures describe the masters
+            # they were measured on. Refuse unless those are the masters on disk.
+            recorded = report.get('sha256', {})
+            stale = [str(f.relative_to(ROOT))
+                     for group, files in [('inputs', input_files([mode])),
+                                          ('outputs', [OUT / f'{mode}-{k}.webp' for k in ['sky', *LAYERS]])]
+                     for f in files
+                     if recorded.get(group, {}).get(str(f.relative_to(ROOT))) != sha256(f)]
+            if stale:
+                raise SystemExit(f'--assemble-only refused for {mode}: masters or inputs differ from the '
+                                 f'hashes in verification.json, so its kept measurements are stale '
+                                 f'(rerun without --assemble-only): {", ".join(stale)}')
             before = None
             w, h = entry['native']
         else:

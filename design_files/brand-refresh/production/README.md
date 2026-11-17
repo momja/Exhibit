@@ -56,7 +56,7 @@ python3 -m venv /tmp/exhibit-art-venv
 # Full matting and toning from the retained native inputs, writing the three masters per mode:
 NUMBA_NUM_THREADS=2 OPENBLAS_NUM_THREADS=2 /tmp/exhibit-art-venv/bin/python design_files/brand-refresh/tools/production.py
 # Or, without redoing the matting, only verify, hash and review the saved masters:
-/tmp/exhibit-art-venv/bin/python design_files/brand-refresh/tools/production.py --assemble-only
+/tmp/exhibit-art-venv/bin/python design_files/brand-refresh/tools/production.py --assemble-only  # refuses if the masters differ from the hashes in verification.json
 cd design_files/brand-refresh/tools/hero-export
 npm ci
 npm run export      # encodes web/hero-art/images; `npm run check` fails on any byte drift
