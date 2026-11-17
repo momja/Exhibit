@@ -883,3 +883,22 @@ Each instance owns its feedback and cleans up on removal; htmx-inserted fields
 connect automatically. Connected agents uses it for MCP endpoint, Claude Code,
 and the newly issued token; sharing uses it for public links and widget embed code.
 Token values remain browser-only and are cleared by the issuing feature.
+
+## Actions beside a field or row
+
+Use `.text-action-row` when one value or group of labels shares a row with
+one action or a small action group. Put the text first and the action second.
+Long text can wrap within the first column. Choose wrapping or truncation
+in the feature CSS based on whether the full value needs to stay visible.
+
+Compose `.btn.icon-btn.row-action` for compact actions with a recognizable
+icon. Supply an accessible name, include the affected item when there are
+repeated controls, and use a short `title` for the mouse tooltip. The shared
+button style provides a 44px target on narrow or coarse-pointer displays.
+Add and remove sites use plus and X. Granting and revoking a person's access
+use the paired person icons. Keep words visible when an icon would leave a
+distinct outcome unclear, such as asking again about a blocked site.
+
+Use the copy field for copying a displayed value. Keep the feature's
+existing form submission, permission checks, and update handling with its
+own controls. A multi-field form or a toolbar can use its own layout.

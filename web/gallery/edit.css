@@ -37,11 +37,26 @@ main{padding:var(--page-top) var(--page-gutter);max-width:900px;margin:0 auto}
 #allowlist-rows,#unapproved-rows,#blocked-rows{max-height:180px;overflow-y:auto}
 .security-col .allowlist-empty{margin:0}
 .origin-add{margin-top:12px}
-.allowlist-row code{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-/* Remove/Allow/Add sit in the same visual column across three different
- * rows/labels, so they read as one consistent action width rather than
- * shrink-to-fit text. */
-.allowlist-row .btn,#al-add-btn{min-width:76px;justify-content:center;flex-shrink:0}
+.allowlist-row {
+  padding: var(--space-2) 0;
+  font-size: 0.8125rem;
+}
+.allowlist-row code {
+  background: var(--color-ground);
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-sm);
+  overflow-wrap: anywhere;
+}
+.origin-block-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.origin-block-actions .btn-sm { padding-inline: var(--space-3); }
+@media (max-width: 480px) {
+  .allowlist-row:has(.origin-block-actions) { grid-template-columns: minmax(0, 1fr); }
+  .origin-block-actions { justify-self: end; }
+}
 .security-col label.row{margin-bottom:12px}
 .security-col label.row:last-child{margin-bottom:0}
 .security-col label.row>.field-label{margin:0}
@@ -125,9 +140,6 @@ input.state-input{max-width:340px}
   .edit-card{padding:14px}
   .security-body{flex-direction:column;gap:16px}
   .security-col+.security-col{border-left:none;padding-left:0;border-top:1px solid var(--color-hairline);padding-top:16px}
-  .security-col .allowlist-row{flex-wrap:wrap;justify-content:flex-end}
-  .security-col .allowlist-row code{flex-basis:100%}
-  .security-col .allowlist-row>.muted{margin-right:auto}
   /* Narrow enough that a label, its control and its remove button can't share
    * a line: keep the label paired with the button it applies to, and drop the
    * control to its own full-width line beneath them. */
@@ -196,8 +208,7 @@ input.state-input{max-width:340px}
 .tag-pill-btn:hover,.tag-pill-btn:focus-visible{background:var(--color-press-fill);color:var(--color-ink)}
 .tag-pill-btn i{font-size:1rem;line-height:1}
 .tag-panel>p{margin-bottom:12px}
-.tag-add-row{display:flex;gap:8px;align-items:center;max-width:320px}
-.tag-add-row .select{flex:1;min-width:0}
+.tag-add-row{max-width:320px}
 .tag-create{display:flex;flex-direction:column;gap:4px;margin-top:20px;max-width:320px;min-width:0;padding:0;border:0}
 .tag-create h3,.security-col h3{font-size:.875rem;line-height:1.5;font-weight:600;color:var(--color-ink-soft)}
 .tag-create h3{margin:0 0 8px}
@@ -222,9 +233,9 @@ input.state-input{max-width:340px}
 
 @media(max-width:767px){.edit-card>input[type=text]{min-height:44px}}
 
-.tag-add-row>.btn,#al-add-btn,.state-add>.btn,.state-adder>.btn{min-height:var(--control-height)}
+.state-add>.btn,.state-adder>.btn{min-height:var(--control-height)}
 
-@media(max-width:767px){.tag-add-row>.btn,.tag-create>.btn,#al-add-btn,.state-add>.btn{min-height:44px}}
+@media(max-width:767px){.tag-create>.btn,.state-add>.btn{min-height:44px}}
 
 @media(max-width:767px){.tag-create{width:100%;max-width:none}.editor-footer .btn{min-height:44px}}
 @media(max-width:767px){

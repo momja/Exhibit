@@ -3,17 +3,17 @@
 <div data-artifact-id="{{.ID}}">
   <h3>Allowed sites</h3>
   <div id="allowlist-rows">
-    {{range .Allowlist}}<div class="allowlist-row" data-origin="{{.}}">
+    {{range .Allowlist}}<div class="allowlist-row text-action-row" data-origin="{{.}}">
       <code title="{{.}}">{{.}}</code>
-      <button type="button" class="btn btn-sm btn-sec" data-action="remove">Remove</button>
+      <button type="button" class="btn btn-sec icon-btn row-action" data-action="remove" aria-label="Remove {{.}}" title="Remove site"><i class="ph ph-x" aria-hidden="true"></i></button>
     </div>{{else}}<p class="form-help allowlist-empty">No sites allowed yet.</p>{{end}}
   </div>
   {{if .Unapproved}}
   <h3>Found in source, not allowed</h3>
   <div id="unapproved-rows">
-    {{range .Unapproved}}<div class="allowlist-row" data-origin="{{.}}">
+    {{range .Unapproved}}<div class="allowlist-row text-action-row" data-origin="{{.}}">
       <code title="{{.}}">{{.}}</code>
-      <button type="button" class="btn btn-sm btn-sec" data-action="allow">Allow</button>
+      <button type="button" class="btn btn-sec icon-btn row-action" data-action="allow" aria-label="Allow {{.}}" title="Allow site"><i class="ph ph-plus" aria-hidden="true"></i></button>
     </div>{{end}}
   </div>
   {{end}}
@@ -24,15 +24,17 @@
   <h3>Blocked</h3>
   <p class="text-sm muted">Ask again removes the saved block. Requests stay blocked until you allow them.</p>
   <div id="blocked-rows">
-    {{range .Blocked}}<div class="allowlist-row" data-origin="{{.}}">
+    {{range .Blocked}}<div class="allowlist-row text-action-row" data-origin="{{.}}">
       <code title="{{.}}">{{.}}</code>
 
       {{/* Forget drops the decision entirely rather than overriding it,
            returning the origin to undecided so the runtime prompt may ask
            again (av-kmwj). Without it, "don't ask again" is a one-way
            trap: a blocked origin never prompts on its own. */}}
-      <button type="button" class="btn btn-sm btn-sec" data-action="forget">Ask again</button>
-      <button type="button" class="btn btn-sm btn-sec" data-action="allow">Allow</button>
+      <div class="origin-block-actions">
+        <button type="button" class="btn btn-sm btn-sec" data-action="forget" aria-label="Ask again for {{.}}">Ask again</button>
+        <button type="button" class="btn btn-sec icon-btn row-action" data-action="allow" aria-label="Allow {{.}}" title="Allow site"><i class="ph ph-plus" aria-hidden="true"></i></button>
+      </div>
     </div>{{end}}
   </div>
   {{end}}
