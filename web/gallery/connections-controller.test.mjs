@@ -42,6 +42,92 @@ async function setup(responses = []) {
   };
 }
 
+function mismatchResponse(origin = 'https://api-openai.co') {
+  return Response.json({
+    error: 'this looks like an Anthropic API key, which normally goes to https://api.anthropic.com, but it would be sent to ' + origin,
+    code: 'credential_origin_mismatch',
+    credential: 'Anthropic API key',
+    expected_origin: 'https://api.anthropic.com',
+    origin,
+  }, { status: 409 });
+}
+
+function fieldSection(recipes, ...inputs) {
+  return { dataset: { recipes }, hidden: false, querySelectorAll: () => inputs };
+}
+
+// The create form is one form with a recipe select. This drives the shipped
+// controller over the same fields a browser submits, including disabled ones,
+// so a stale value can be caught where it would actually be read.
+async function setupCreate(responses = []) {
+  const calls = [], finished = [];
+  const queue = [...responses];
+  let currentAction;
+  const page = loadPageScript([], {
+    CustomEvent, Headers,
+    FormData: class {
+      constructor(form) { this.fields = form.formDataFields || form; }
+      [Symbol.iterator]() { return Object.entries(this.fields)[Symbol.iterator](); }
+      get(name) { return this.fields[name] ?? null; }
+    },
+    fetch: async (path, options = {}) => {
+      calls.push({ path, method: options.method || 'GET', data: options.body ? JSON.parse(options.body) : null });
+      const response = queue.shift();
+      if (typeof response === 'function') return response();
+      return response || Response.json({ id: 'new-connection' }, { status: 201 });
+    },
+    confirm: () => true,
+  });
+  const { default: Connections } = await page.loadModule(script);
+  const provider = page.byId('connection-kind');
+  const elements = {
+    name: page.byId('connection-name'),
+    origin: page.byId('connection-origin'),
+    secret: page.byId('connection-secret'),
+    access_url: page.byId('connection-access-url'),
+    username: page.byId('connection-user'),
+    password: page.byId('connection-password'),
+    daily_limit: page.byId('connection-daily-limit'),
+    cache_minutes: page.byId('connection-cache-minutes'),
+    header: page.byId('connection-header'),
+  };
+  const createFormTarget = {
+    elements,
+    get formDataFields() {
+      return {
+        recipe: provider.value,
+        ...Object.fromEntries(Object.entries(elements).map(([name, element]) => [name, element.value])),
+      };
+    },
+  };
+  const controller = Object.create(Connections.prototype);
+  Object.assign(controller, {
+    artifactIdValue: 'connected-app',
+    returnUrlValue: '/connections',
+    providerTarget: provider,
+    fieldsTargets: [],
+    createFormTarget,
+    createErrorTarget: page.byId('create-error'),
+    createButtonTarget: page.byId('create-button'),
+    createWarningTarget: page.byId('create-warning'),
+    createWarningTextTarget: page.byId('create-warning-text'),
+    confirmButtonTarget: page.byId('confirm-button'),
+    destinationTarget: page.byId('destination'),
+    destinationHostTarget: page.byId('destination-host'),
+    feedbackTarget: page.byId('feedback'),
+    hasCreateWarningTarget: true,
+    hasDestinationTarget: true,
+  });
+  controller.action = (_event, work) => { currentAction = work(); return currentAction; };
+  controller.setupFinished = id => finished.push(id);
+  const submitEvent = () => ({ preventDefault() {}, submitter: page.byId('create-button') });
+  return {
+    ...page, controller, calls, finished, provider, elements, createFormTarget,
+    async create() { await controller.create(submitEvent()); },
+    async confirm() { controller.confirmCreate(submitEvent()); await currentAction; },
+  };
+}
+
 test('granting a connector sends only personal credential access', async () => {
   const page = await setup();
   await page.grant({ connection: 'selected-connection', sharing: 'on', egress: 'https://legacy.example.test' });
@@ -105,4 +191,85 @@ test('failed repair stays on setup and does not recreate dependent access', asyn
   await assert.rejects(page.repair('existing-account',{secret:'replacement-secret'}),/could not be replaced/);
   assert.equal(finished,false);
   assert.equal(page.calls.length,1);
+});
+
+test('the destination follows the active recipe instead of a disabled Basic URL', async () => {
+  const page = await setupCreate();
+  page.controller.fieldsTargets = [
+    fieldSection('api-key bearer basic', page.elements.origin),
+    fieldSection('api-key bearer', page.elements.secret),
+    fieldSection('basic', page.elements.access_url, page.elements.username, page.elements.password),
+    fieldSection('api-key bearer basic', page.elements.daily_limit, page.elements.cache_minutes),
+  ];
+
+  page.provider.value = 'basic';
+  page.controller.providerChanged();
+  page.elements.access_url.value = 'https://basic-user:basic-pass@basic.example.test/base';
+  page.controller.basicURLChanged();
+  assert.equal(page.controller.destinationHostTarget.textContent, 'basic.example.test');
+  assert.equal(page.elements.origin.disabled, true);
+
+  page.provider.value = 'bearer';
+  page.controller.providerChanged();
+  assert.equal(page.elements.access_url.disabled, true);
+  assert.equal(page.controller.destinationTarget.hidden, true, 'a disabled Basic credential URL is not the destination');
+  assert.equal(page.controller.destinationHostTarget.textContent, '');
+
+  page.elements.origin.value = 'https://api-openai.co';
+  page.controller.destinationChanged();
+  assert.equal(page.controller.destinationTarget.hidden, false);
+  assert.equal(page.controller.destinationHostTarget.textContent, 'api-openai.co');
+});
+
+test('editing the form after a mismatch warning requires a fresh submit', async () => {
+  const page = await setupCreate([mismatchResponse(), mismatchResponse()]);
+  page.provider.value = 'bearer';
+  page.elements.name.value = 'Anthropic account';
+  page.elements.origin.value = 'https://api-openai.co';
+  page.elements.secret.value = 'sk-ant-api03-not-a-real-key';
+
+  await page.create();
+  assert.equal(page.controller.createWarningTarget.hidden, false);
+  assert.match(page.controller.createWarningTextTarget.textContent, /api-openai\.co/);
+  assert.equal(page.calls.length, 1);
+  assert.equal(page.calls[0].data.confirm_origin_mismatch, undefined);
+
+  page.controller.formEdited();
+  assert.equal(page.controller.createWarningTarget.hidden, true);
+  assert.equal(page.controller.pendingCreate, null);
+  await page.confirm();
+  assert.equal(page.calls.length, 1, 'a stale confirmation cannot post');
+
+  await page.create();
+  assert.equal(page.calls.length, 2);
+  assert.equal(page.calls[1].data.confirm_origin_mismatch, undefined, 'the fresh submit is unconfirmed');
+  assert.equal(page.controller.createWarningTarget.hidden, false);
+  assert.match(page.controller.createWarningTextTarget.textContent, /api-openai\.co/);
+
+  await page.confirm();
+  assert.equal(page.calls.length, 3);
+  assert.equal(page.calls[2].data.confirm_origin_mismatch, true);
+  assert.deepEqual(page.finished, ['new-connection']);
+});
+
+test('a mismatch answer that arrives after an edit cannot restore the warning', async () => {
+  let release;
+  const page = await setupCreate([() => new Promise(resolve => {
+    release = () => resolve(mismatchResponse());
+  })]);
+  page.provider.value = 'bearer';
+  page.elements.name.value = 'Anthropic account';
+  page.elements.origin.value = 'https://api-openai.co';
+  page.elements.secret.value = 'sk-ant-api03-not-a-real-key';
+
+  const creating = page.create();
+  assert.equal(page.calls.length, 1);
+  page.controller.formEdited();
+  release();
+  await creating;
+
+  assert.equal(page.controller.createWarningTarget.hidden, true);
+  assert.equal(page.controller.pendingCreate, null);
+  await page.confirm();
+  assert.equal(page.calls.length, 1, 'the obsolete answer never lights a confirm button');
 });
