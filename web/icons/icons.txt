@@ -68,7 +68,6 @@ ph-timer
 ph-trash
 ph-tray-arrow-down
 ph-user-circle
-ph-user-minus
 ph-user-plus
 ph-users-three
 ph-warning

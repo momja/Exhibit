@@ -381,7 +381,7 @@
           {{/* Keep disabled accounts visible so their access can still be revoked. */}}
           {{if .Disabled}}<span class="text-sm muted">account disabled</span>{{end}}
         </div>
-        <button type="button" class="btn btn-sec icon-btn row-action" data-action="revoke" data-recipient-id="{{.RecipientID}}" aria-label="Revoke access for {{.Name}}" title="Revoke access"><i class="ph ph-user-minus" aria-hidden="true"></i></button>
+        <button type="button" class="btn btn-sec icon-btn row-action" data-action="revoke" data-recipient-id="{{.RecipientID}}" aria-label="Revoke access for {{.Name}}" title="Revoke access"><i class="ph ph-x" aria-hidden="true"></i></button>
       </li>{{end}}
     </ul>
     <p class="text-sm muted" id="share-empty"{{if .Shares.Grants}} hidden{{end}}>Not shared with anyone yet.</p>
