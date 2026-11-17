@@ -62,4 +62,5 @@ func TestLoginPageIsPainted(t *testing.T) {
 	assert.Equal(t, 1, strings.Count(page, "<script"), "only the descent module")
 	assert.Regexp(t, `<script type="module" src="/assets/v/[^"]+/gallery/login-descent\.js"></script>`, page)
 	assert.NotRegexp(t, `<script(?:\s[^>]*)?>\s*[^<\s]`, page, "no inline script")
+	assert.Regexp(t, `<noscript><style>[^<]*login-scene-composite[^<]*</style></noscript>`, page, "without JS the composite is shown; a noscript style is not a script")
 }

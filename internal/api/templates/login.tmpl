@@ -78,7 +78,8 @@
 <link rel="stylesheet" href="{{asset "gallery/components.css"}}">
 <link rel="stylesheet" href="{{asset "gallery/login.css"}}">
 <link rel="stylesheet" href="{{asset "gallery/login-descent.css"}}">
-{{if .Descend}}<script type="module" src="{{asset "gallery/login-descent.js"}}"></script>{{end}}
+{{if .Descend}}<script type="module" src="{{asset "gallery/login-descent.js"}}"></script>
+<noscript><style>.login-descend .login-scene-composite{opacity:1;animation:none}</style></noscript>{{end}}
 </head>
 <body class="login-page login-painted{{if .Descend}} login-descend{{end}}">{{template "loginScene" .Descend}}
 {{template "appHeader" .Header}}
