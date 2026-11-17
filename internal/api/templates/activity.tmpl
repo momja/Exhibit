@@ -8,7 +8,7 @@
 {{define "activityItems"}}{{range .Activity.Items}}{{template "activityItem" .}}{{else}}{{if eq .Offset 0}}<p class="empty">No changes yet. Saved artifact versions and agent changes will appear here.</p>{{end}}{{end}}
 {{if or .NextURL .RetryURL}}{{template "galleryMore" .}}{{end}}{{end}}
 
-{{define "activityItem"}}<a class="activity-item" href="{{.URL}}">
+{{define "activityItem"}}<a class="activity-item" href="{{.URL}}" data-gallery-anchor="{{.Key}}">
   <span class="activity-icon"><i class="ph {{.Icon}}" aria-hidden="true"></i></span>
   <div class="activity-detail"><div class="activity-meta"><span>{{.Label}}</span>{{if .Version}}<span class="activity-version">v{{.Version}}</span>{{end}}{{if .When}}<time datetime="{{.WhenISO}}">{{.When}}</time>{{end}}</div>
     <h4>{{.Title}}</h4><p>{{.Description}}</p>

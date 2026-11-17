@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/momja/Exhibit/internal/store"
@@ -16,9 +17,9 @@ var activityGallery = galleryDefinition{
 
 type activityFeed struct{ Running, Items []activityItem }
 type activityItem struct {
-	Title, Description, Label, Icon, URL, When, WhenISO string
-	Version                                             int
-	Conversation                                        bool
+	Key, Title, Description, Label, Icon, URL, When, WhenISO string
+	Version                                                  int
+	Conversation                                             bool
 }
 
 func conversationURL(artifact, session, parameter string) string {
@@ -50,19 +51,20 @@ func (ro *Router) loadActivity(r *http.Request, grid galleryGridData, offset int
 				}
 				title, version = a.Title, a.VersionSeq
 			}
-			grid.Activity.Running = append(grid.Activity.Running, activityItem{Title: title, Description: session.Title, Label: "Agent running", Icon: "ph-robot", Version: version, URL: conversationURL(session.ArtifactID, session.ID, "live"), Conversation: true})
+			grid.Activity.Running = append(grid.Activity.Running, activityItem{Key: "session:" + session.ID, Title: title, Description: session.Title, Label: "Agent running", Icon: "ph-robot", Version: version, URL: conversationURL(session.ArtifactID, session.ID, "live"), Conversation: true})
 		}
 	}
-	records, err := ro.cfg.Store.ListArtifactActivity(r.Context(), owner, galleryPageSize+1, offset)
+	limit := galleryPageLimit(r, activityGallery.PagePath)
+	records, err := ro.cfg.Store.ListArtifactActivity(r.Context(), owner, limit+1, offset)
 	if err != nil {
 		return grid, err
 	}
-	if len(records) > galleryPageSize {
-		records = records[:galleryPageSize]
-		grid.NextURL = grid.url(activityGallery.FragmentPath, offset+galleryPageSize)
+	if len(records) > limit {
+		records = records[:limit]
+		grid.NextURL = grid.url(activityGallery.FragmentPath, offset+limit)
 	}
 	for _, record := range records {
-		item := activityItem{Title: record.Title, Description: record.Message, Label: versionOriginLabels[record.Origin], Icon: "ph-pencil-simple", Version: record.Seq, URL: "/artifacts/" + record.ArtifactID + "/edit#versions-panel", When: record.CreatedAt.UTC().Format("Jan 2, 2006 · 15:04 UTC"), WhenISO: record.CreatedAt.UTC().Format(time.RFC3339)}
+		item := activityItem{Key: "version:" + record.ArtifactID + ":" + strconv.Itoa(record.Seq), Title: record.Title, Description: record.Message, Label: versionOriginLabels[record.Origin], Icon: "ph-pencil-simple", Version: record.Seq, URL: "/artifacts/" + record.ArtifactID + "/edit#versions-panel", When: record.CreatedAt.UTC().Format("Jan 2, 2006 · 15:04 UTC"), WhenISO: record.CreatedAt.UTC().Format(time.RFC3339)}
 		if item.Description == "" {
 			item.Description = "Artifact version saved."
 		}

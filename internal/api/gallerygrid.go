@@ -14,6 +14,16 @@ import (
 
 const galleryPageSize = 24
 
+// Full gallery renders can restore a previously loaded range in one request.
+func galleryPageLimit(r *http.Request, pagePath string) int {
+	if r.URL.Path == pagePath {
+		if visible, err := strconv.Atoi(r.URL.Query().Get("visible")); err == nil {
+			return min(max(visible, galleryPageSize), 480)
+		}
+	}
+	return galleryPageSize
+}
+
 // A gallery owns its routes and its artifact selection. Other gallery pages
 // supply their own selection without teaching paging or the browser about
 // ownership or other selection rules. Filters is the default owner selection.
@@ -119,12 +129,7 @@ func (ro *Router) loadGalleryGrid(r *http.Request, gallery galleryDefinition, of
 	}
 	var cards []galleryCard
 	var err error
-	limit := galleryPageSize
-	if r.URL.Path == gallery.PagePath {
-		if visible, parseErr := strconv.Atoi(r.URL.Query().Get("visible")); parseErr == nil && visible > limit {
-			limit = min(visible, 480)
-		}
-	}
+	limit := galleryPageLimit(r, gallery.PagePath)
 	if gallery.Select != nil {
 		cards, grid.Parameters, err = gallery.Select(ro, r, offset, limit+1, grid.Query)
 	} else {

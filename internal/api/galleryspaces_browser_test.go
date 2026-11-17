@@ -232,14 +232,16 @@ func TestGalleryEmptySpacesBrowser(t *testing.T) {
 		require.NoError(t, chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](`document.querySelectorAll('.space-label').forEach(el=>el.style.fontSize='24px');document.querySelector('.space-label').textContent='My personal artifact library'`)))
 		check(`document.documentElement.scrollWidth <= innerWidth && Array.from(document.querySelectorAll('.space-label')).filter(el => el.getClientRects().length).every(el=>{const r=el.getBoundingClientRect(),a=el.closest('a').getBoundingClientRect();return el.scrollWidth <= el.clientWidth && el.scrollHeight <= el.clientHeight && r.left >= a.left && r.right <= a.right && r.bottom <= a.bottom;})`)
 	}
-	// A newly received share appears on the next visit; revoking the last one
-	// restores the explanation without stranding the user in that space.
+	// A newly received share appears on background refresh after a revisit.
+	// Revoking the last one restores the explanation in the same way.
 	_, err = in.ro.cfg.Store.CreateGrant(ctx, in.ownerOne, in.artifactOne, in.ownerTwo)
 	require.NoError(t, err)
 	visit("/shared")
+	require.NoError(t, chromedp.Do(ctx, chromedp.Poll[chromedp.Void](`document.querySelectorAll('.card').length === 1`)))
 	check(`document.querySelectorAll('.card').length === 1 && !document.querySelector('.empty')`)
 	require.NoError(t, in.ro.cfg.Store.DeleteGrant(ctx, in.ownerOne, in.artifactOne, in.ownerTwo))
 	visit("/")
 	visit("/shared")
+	require.NoError(t, chromedp.Do(ctx, chromedp.Poll[chromedp.Void](`document.querySelectorAll('.card').length === 0`)))
 	check(`document.querySelectorAll('.card').length === 0 && document.querySelector('.empty').textContent === 'Nothing shared yet' && document.querySelector('.empty-hint').textContent === 'Share one of your artifacts, or ask someone to share with you.' && document.querySelectorAll('.gallery-spaces a').length === 4`)
 }

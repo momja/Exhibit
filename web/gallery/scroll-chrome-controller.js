@@ -19,8 +19,21 @@ export default class extends Controller {
     this.events = eventScope();
     this.events.on(window, 'scroll', () => {
       this.scrollY = window.scrollY;
+      if (this.scrollY === this.restoredY) return;
+      this.restoredY = undefined;
       this.schedule();
     }, { passive: true });
+    this.events.on(this.element, 'exhibit:gallery-scroll-restored', event => {
+      this.scrollY = this.restoredY = window.scrollY;
+      if (event.detail?.revealChrome) {
+        this.state = initialScrollChrome(this.position().y);
+        this.element.removeAttribute('data-chrome-hidden');
+      } else {
+        this.state.anchor = this.position().y;
+      }
+      cancelAnimationFrame(this.frame);
+      this.frame = 0;
+    });
     // Keyboard focus and the / shortcut must never land on a bar the user
     // cannot see.
     this.events.on(this.element, 'focusin', event => {
