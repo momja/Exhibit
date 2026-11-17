@@ -550,7 +550,8 @@ const descentCookieTTL = 365 * 24 * time.Hour
 // password attempt or a second tab shows the final frame. Sign-out clears the
 // cookie (authLogout; hosted sign-out reaches it through /auth/logout), which
 // re-arms the next visit. The decision has to be server-side because the page
-// is scriptless and must be usable before anything else loads.
+// must be usable before, and without, any script: the descent module is loaded
+// only on the visit this marks.
 func (ro *Router) playsDescent(w http.ResponseWriter, r *http.Request) bool {
 	if c, err := r.Cookie(descentCookieName); err == nil && c.Value != "" {
 		return false

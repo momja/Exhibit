@@ -5,9 +5,11 @@
      provider alone the gate redirects straight to the provider, because a page
      whose only control is "continue" is a choice that does not exist.
 
-     Deliberately scriptless: no bootstrap block, no /assets/gallery/*.js. The
-     form posts itself, and this is the one page in the app that must work for
-     somebody who is not yet allowed to load anything else.
+     Works without script: no bootstrap block, and the form posts itself, since
+     this is the one page in the app that must work for somebody who is not yet
+     allowed to load anything else. The only script it may carry is the
+     same-origin descent module (Exh-vsw0), on a visit that animates; it moves
+     scenery and never touches the form.
 
      Username and Error are echoed back through html/template's contextual
      escaping — Username is whatever was typed into the form, so it is
