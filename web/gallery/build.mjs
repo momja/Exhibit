@@ -55,6 +55,7 @@ const files = [
   // to use.
   "login.css",
   "login-descent.css",
+  "login-descent.js",
 ];
 
 for (const f of files) {

@@ -26,6 +26,19 @@
      so the first matching media query and a supported type win. Light is the
      default, dusk follows prefers-color-scheme: dark, phones get the portrait
      crop. Explicit dimensions keep the stage from shifting layout. */}}
+{{/* One descent layer (Exh-vsw0), by name: sky, clouds or hill. Sources mirror
+     the composite's (dusk under prefers-color-scheme: dark, AVIF before WebP).
+     The art is 2560 wide and the frame is as wide as the cover-fitted composite
+     (max(100vw,177.8vh)); on phones the frame is 2560/960 of the viewport and
+     the visible crop is about 37% of it, so 200vw is the width asked for. */}}
+{{define "loginLayer"}}{{$sizes := "(max-width:600px) 200vw, max(100vw, 177.8vh)"}}{{$h := 1440}}{{if eq . "sky"}}{{$h = 2272}}{{end}}<picture>
+      <source media="(prefers-color-scheme:dark)" type="image/avif" srcset="{{asset (printf "hero-art/dusk-%s-960.avif" .)}} 960w, {{asset (printf "hero-art/dusk-%s-1600.avif" .)}} 1600w, {{asset (printf "hero-art/dusk-%s-2560.avif" .)}} 2560w" sizes="{{$sizes}}">
+      <source media="(prefers-color-scheme:dark)" type="image/webp" srcset="{{asset (printf "hero-art/dusk-%s-960.webp" .)}} 960w, {{asset (printf "hero-art/dusk-%s-1600.webp" .)}} 1600w, {{asset (printf "hero-art/dusk-%s-2560.webp" .)}} 2560w" sizes="{{$sizes}}">
+      <source type="image/avif" srcset="{{asset (printf "hero-art/day-%s-960.avif" .)}} 960w, {{asset (printf "hero-art/day-%s-1600.avif" .)}} 1600w, {{asset (printf "hero-art/day-%s-2560.avif" .)}} 2560w" sizes="{{$sizes}}">
+      <source type="image/webp" srcset="{{asset (printf "hero-art/day-%s-960.webp" .)}} 960w, {{asset (printf "hero-art/day-%s-1600.webp" .)}} 1600w, {{asset (printf "hero-art/day-%s-2560.webp" .)}} 2560w" sizes="{{$sizes}}">
+      <img class="login-layer login-layer-{{.}}" src="{{asset (printf "hero-art/day-%s-1600.webp" .)}}" alt="" width="2560" height="{{$h}}" decoding="async">
+    </picture>{{end}}
+
 {{define "loginScene"}}<div class="login-scene" aria-hidden="true">
   <picture class="login-scene-composite">
     <source media="(max-width:600px) and (prefers-color-scheme:dark)" type="image/avif" srcset="{{asset "hero-art/dusk-phone-750.avif"}} 750w, {{asset "hero-art/dusk-phone-1170.avif"}} 1170w" sizes="100vw" width="1170" height="2535">
@@ -38,7 +51,7 @@
     <source type="image/webp" srcset="{{asset "hero-art/day-composite-960.webp"}} 960w, {{asset "hero-art/day-composite-1600.webp"}} 1600w, {{asset "hero-art/day-composite-2560.webp"}} 2560w" sizes="max(100vw, 177.8vh)" width="2560" height="1440">
     <img class="login-scene-image" src="{{asset "hero-art/day-composite-1600.webp"}}" alt="" width="2560" height="1440" decoding="async" fetchpriority="high">
   </picture>
-  {{if .}}<div class="login-layers"><div class="login-layers-stage"><div class="login-layer login-layer-sky"></div><div class="login-layer login-layer-clouds"></div><div class="login-layer login-layer-hill"></div></div></div>{{end}}
+  {{if .}}<div class="login-layers"><div class="login-layers-stage"><template>{{template "loginLayer" "sky"}}{{template "loginLayer" "clouds"}}{{template "loginLayer" "hill"}}</template></div></div>{{end}}
   <div class="login-scene-grain grain"></div>
 </div>{{end}}
 
@@ -63,6 +76,7 @@
 <link rel="stylesheet" href="{{asset "gallery/components.css"}}">
 <link rel="stylesheet" href="{{asset "gallery/login.css"}}">
 <link rel="stylesheet" href="{{asset "gallery/login-descent.css"}}">
+{{if .Descend}}<script type="module" src="{{asset "gallery/login-descent.js"}}"></script>{{end}}
 </head>
 <body class="login-page login-painted{{if .Descend}} login-descend{{end}}">{{template "loginScene" .Descend}}
 {{template "appHeader" .Header}}

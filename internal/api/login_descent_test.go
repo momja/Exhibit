@@ -29,8 +29,8 @@ func TestLoginDescentPlaysOncePerSignOut(t *testing.T) {
 	first := getLogin(ro)
 	require.Equal(t, 200, first.Code)
 	assert.Contains(t, first.Body.String(), `class="login-page login-painted login-descend"`)
-	assert.Contains(t, first.Body.String(), `login-layer-sky`)
-	assert.NotContains(t, first.Body.String(), "<script")
+	assert.Contains(t, first.Body.String(), `<template>`)
+	assert.Contains(t, first.Body.String(), `login-descent.js`)
 	seen := cookiesFrom(first)[descentCookieName]
 	require.NotNil(t, seen, "the first visit records that the descent was shown")
 	assert.True(t, seen.HttpOnly)
@@ -43,6 +43,7 @@ func TestLoginDescentPlaysOncePerSignOut(t *testing.T) {
 	assert.Contains(t, repeat.Body.String(), `class="login-page login-painted"`)
 	assert.NotContains(t, repeat.Body.String(), "login-descend")
 	assert.NotContains(t, repeat.Body.String(), "login-layer")
+	assert.NotContains(t, repeat.Body.String(), "<script", "a repeat visit loads no script and no layer art")
 	assert.Nil(t, cookiesFrom(repeat)[descentCookieName], "nothing to re-record")
 
 	// A rejected password re-renders the page; it must not replay the descent.

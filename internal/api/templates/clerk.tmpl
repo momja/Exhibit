@@ -20,8 +20,9 @@
 <link rel="stylesheet" href="{{asset "gallery/login.css"}}">
 <link rel="stylesheet" href="{{asset "gallery/login-descent.css"}}">
 {{template "clerkScripts" .Clerk}}
+{{if .Descend}}<script type="module" src="{{asset "gallery/login-descent.js"}}"></script>{{end}}
 </head>
-<body class="login-page login-painted{{if .Descend}} login-descend{{end}}">{{template "loginScene" .Descend}}
+<body class="login-page login-painted{{if .Descend}} login-descend{{end}}"{{if .Descend}} data-descent-after="clerk"{{end}}>{{template "loginScene" .Descend}}
 {{template "appHeader" .Header}}
 <div class="login-content">
 {{template "loginIntro"}}
