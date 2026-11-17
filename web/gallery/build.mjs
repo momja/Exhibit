@@ -54,6 +54,7 @@ const files = [
   // script, being the one page a not-yet-authenticated visitor has to be able
   // to use.
   "login.css",
+  "login-descent.css",
 ];
 
 for (const f of files) {

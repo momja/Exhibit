@@ -1,0 +1,46 @@
+/* Sign-in descent (Exh-vsw0). Served at /assets/gallery/login-descent.css.
+ *
+ * Everything here applies only to a visit the server marked with
+ * .login-descend (first visit, or the first after sign-out; see
+ * docs/architecture.md, "Sign-in descent"). The three layer images are CSS
+ * backgrounds inside a prefers-reduced-motion:no-preference query, so a visitor
+ * who asked for no motion, and every repeat visit, never downloads them: they
+ * see the composite the page already paints.
+ *
+ * The layers reproduce the composite's geometry exactly (production README,
+ * "Files and coordinates"): sky at (0,-832u), clouds and hill at (0,0), all in
+ * units u = frame width / 2560, over a frame placed as object-fit:cover with
+ * object-position 78% 50% would place the composite. The animation starts
+ * 832u/1216u/1600u lower and ends at rest, so the last frame is the composite.
+ */
+@media (prefers-reduced-motion:no-preference){
+.login-descend{--descent-ms:3600ms;--descent-ease:cubic-bezier(.5,0,.15,1)}
+/* Default tier and day art; the composite is hidden while the layers move and
+ * comes back, under them, when they have settled. */
+.login-descend{--descent-sky:image-set(url("../hero-art/day-sky-1600.avif") type("image/avif"),url("../hero-art/day-sky-1600.webp") type("image/webp"));--descent-clouds:image-set(url("../hero-art/day-clouds-1600.avif") type("image/avif"),url("../hero-art/day-clouds-1600.webp") type("image/webp"));--descent-hill:image-set(url("../hero-art/day-hill-1600.avif") type("image/avif"),url("../hero-art/day-hill-1600.webp") type("image/webp"));}
+@media (prefers-color-scheme:dark){.login-descend{--descent-sky:image-set(url("../hero-art/dusk-sky-1600.avif") type("image/avif"),url("../hero-art/dusk-sky-1600.webp") type("image/webp"));--descent-clouds:image-set(url("../hero-art/dusk-clouds-1600.avif") type("image/avif"),url("../hero-art/dusk-clouds-1600.webp") type("image/webp"));--descent-hill:image-set(url("../hero-art/dusk-hill-1600.avif") type("image/avif"),url("../hero-art/dusk-hill-1600.webp") type("image/webp"));}}
+@media (min-width:601px) and (max-width:960px) and (max-resolution:1.49dppx){.login-descend{--descent-sky:image-set(url("../hero-art/day-sky-960.avif") type("image/avif"),url("../hero-art/day-sky-960.webp") type("image/webp"));--descent-clouds:image-set(url("../hero-art/day-clouds-960.avif") type("image/avif"),url("../hero-art/day-clouds-960.webp") type("image/webp"));--descent-hill:image-set(url("../hero-art/day-hill-960.avif") type("image/avif"),url("../hero-art/day-hill-960.webp") type("image/webp"));}
+@media (prefers-color-scheme:dark){.login-descend{--descent-sky:image-set(url("../hero-art/dusk-sky-960.avif") type("image/avif"),url("../hero-art/dusk-sky-960.webp") type("image/webp"));--descent-clouds:image-set(url("../hero-art/dusk-clouds-960.avif") type("image/avif"),url("../hero-art/dusk-clouds-960.webp") type("image/webp"));--descent-hill:image-set(url("../hero-art/dusk-hill-960.avif") type("image/avif"),url("../hero-art/dusk-hill-960.webp") type("image/webp"));}}}
+@media (min-width:601px) and (min-width:1500px),(min-width:901px) and (min-resolution:2dppx){.login-descend{--descent-sky:image-set(url("../hero-art/day-sky-2560.avif") type("image/avif"),url("../hero-art/day-sky-2560.webp") type("image/webp"));--descent-clouds:image-set(url("../hero-art/day-clouds-2560.avif") type("image/avif"),url("../hero-art/day-clouds-2560.webp") type("image/webp"));--descent-hill:image-set(url("../hero-art/day-hill-2560.avif") type("image/avif"),url("../hero-art/day-hill-2560.webp") type("image/webp"));}
+@media (prefers-color-scheme:dark){.login-descend{--descent-sky:image-set(url("../hero-art/dusk-sky-2560.avif") type("image/avif"),url("../hero-art/dusk-sky-2560.webp") type("image/webp"));--descent-clouds:image-set(url("../hero-art/dusk-clouds-2560.avif") type("image/avif"),url("../hero-art/dusk-clouds-2560.webp") type("image/webp"));--descent-hill:image-set(url("../hero-art/dusk-hill-2560.avif") type("image/avif"),url("../hero-art/dusk-hill-2560.webp") type("image/webp"));}}}
+
+.login-descend .login-scene-composite{visibility:hidden;animation:login-descent-reveal 1ms linear var(--descent-ms) forwards}
+@keyframes login-descent-reveal{to{visibility:visible}}
+
+.login-layers{position:absolute;inset:0;overflow:hidden}
+.login-layers-stage{--w:max(100cqw,177.7778cqh);--u:calc(var(--w)/2560);position:absolute;width:var(--w);height:calc(var(--u)*1440);left:calc((100cqw - var(--w))*.78);top:calc((100cqh - var(--u)*1440)*.5)}
+.login-layer{position:absolute;left:0;width:100%;top:0;height:100%;background:no-repeat 0 0/100% 100%;will-change:transform;animation:var(--descent-ms) var(--descent-ease) backwards}
+.login-layer-sky{top:calc(var(--u)*-832);height:calc(var(--u)*2272);background-image:var(--descent-sky);animation-name:login-descent-sky}
+.login-layer-clouds{background-image:var(--descent-clouds);animation-name:login-descent-clouds}
+.login-layer-hill{background-image:var(--descent-hill);animation-name:login-descent-hill}
+@keyframes login-descent-sky{from{transform:translateY(calc(var(--u)*832))}}
+@keyframes login-descent-clouds{from{transform:translateY(calc(var(--u)*1216))}}
+@keyframes login-descent-hill{from{transform:translateY(calc(var(--u)*1600))}}
+
+@media (max-width:600px){
+  /* The phone shows the 960x2080 crop at (1540,192) of the extended scene, its
+   * bottom edge on the page's bottom: the frame is 2560u wide with u = width/960. */
+  .login-layers{inset:auto 0 0;height:var(--login-painting-h);-webkit-mask-image:linear-gradient(transparent 0,#000 28%);mask-image:linear-gradient(transparent 0,#000 28%)}
+  .login-layers-stage{--w:calc(100cqw*2560/960);left:calc(var(--u)*-1540);top:auto;bottom:0}
+}
+}

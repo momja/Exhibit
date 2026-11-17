@@ -332,6 +332,11 @@ for its own reason rather than by the rule above:
   exists. Forging it starts a login the attacker cannot finish. (On an instance
   with a local credential it renders the login page and mints nothing; it is
   declared by its worse case.)
+- `GET /auth/login` also sets `exhibit_descent_seen=1` the first time, to play
+  the sign-in animation once (Exh-vsw0). It is not a credential or an identifier:
+  a constant, host-only, `HttpOnly`, `SameSite=Lax`, `Secure` with `APP_ORIGIN`,
+  cleared at sign-out; forging, stealing or deleting it changes only whether a
+  background image moves. It is never set on the render origin.
 - `GET /auth/sso` is that provider redirect split out, so the login page has
   something to point its SSO button at when both login paths exist. Same
   cookies, same reason.

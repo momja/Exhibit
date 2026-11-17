@@ -52,7 +52,7 @@
 .login-painted{position:relative;isolation:isolate;background:var(--painting-sky-top)}
 
 /* The stage: fixed to the viewport on desktop, the whole page on phones. */
-.login-scene{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none;background:var(--painting-sky-top)}
+.login-scene{container-type:size;position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none;background:var(--painting-sky-top)}
 .login-scene-composite{display:block;position:absolute;inset:0}
 .login-scene-image{display:block;width:100%;height:100%;object-fit:cover;object-position:78% 50%}
 /* Grain over the painting: the shared .grain utility, one layer above the art. */

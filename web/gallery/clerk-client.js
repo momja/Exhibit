@@ -101,7 +101,7 @@ async function loadClient() {
     appearance: clerkAppearance,
     signInUrl: '/auth/login',
     signUpUrl: '/auth/signup',
-    afterSignOutUrl: '/auth/login',
+    afterSignOutUrl: '/auth/logout',
   });
   return window.Clerk;
 }

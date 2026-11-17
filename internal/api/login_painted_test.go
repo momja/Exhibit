@@ -21,12 +21,14 @@ func TestLoginPageIsPainted(t *testing.T) {
 	require.Equal(t, 200, w.Code)
 	page := w.Body.String()
 
-	assert.Contains(t, page, `class="login-page login-painted"`)
+	// The first visit also plays the descent (login_descent_test.go); the
+	// painted page itself is the same either way.
+	assert.Contains(t, page, `class="login-page login-painted login-descend"`)
 	assert.Contains(t, page, `A shelf for <em>small</em> tools.`)
 	assert.Contains(t, page, `class="login-wordmark"`)
 	assert.Contains(t, page, `<picture class="login-scene-composite">`)
 	assert.Regexp(t, `<img class="login-scene-image"[^>]* width="2560" height="1440"`, page)
-	assert.NotContains(t, page, "-sky-", "the layer set belongs to the descent story, not first paint")
+	assert.NotContains(t, page, "-sky-", "layer art is named by CSS, only on visits that animate")
 	assert.NotContains(t, page, "-clouds-")
 
 	sources := regexp.MustCompile(`<source [^>]*>`).FindAllString(page, -1)

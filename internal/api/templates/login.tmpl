@@ -14,12 +14,13 @@
      attacker-controlled text and must never be assembled into markup. */}}
 {{/* The painted front door (Exh-90b2). One scene, shared by every sign-in page.
 
-     Structure is built to be extended by Exh-vsw0 (the descent animation):
      .login-scene is a fixed, pointer-less stage; .login-scene-composite is the
-     static final frame that paints first. The animation adds its sky, cloud and
-     hill layers as further children of .login-scene, stacked above the composite
-     with the same placement rules, then hides the composite once they load. Only
-     .login-scene ever moves; .login-content never does.
+     static final frame that paints first. Data: whether this visit plays the
+     descent (Exh-vsw0). If so, the sky, cloud and hill layers are emitted as
+     empty divs (their images are CSS backgrounds in login-descent.css, so a
+     visit that does not animate downloads none of them) and the composite is
+     hidden until they settle on top of it. Only .login-scene ever moves;
+     .login-content never does.
 
      Only the active colour mode and one width download: sources match in order,
      so the first matching media query and a supported type win. Light is the
@@ -37,6 +38,7 @@
     <source type="image/webp" srcset="{{asset "hero-art/day-composite-960.webp"}} 960w, {{asset "hero-art/day-composite-1600.webp"}} 1600w, {{asset "hero-art/day-composite-2560.webp"}} 2560w" sizes="max(100vw, 177.8vh)" width="2560" height="1440">
     <img class="login-scene-image" src="{{asset "hero-art/day-composite-1600.webp"}}" alt="" width="2560" height="1440" decoding="async" fetchpriority="high">
   </picture>
+  {{if .}}<div class="login-layers"><div class="login-layers-stage"><div class="login-layer login-layer-sky"></div><div class="login-layer login-layer-clouds"></div><div class="login-layer login-layer-hill"></div></div></div>{{end}}
   <div class="login-scene-grain grain"></div>
 </div>{{end}}
 
@@ -60,8 +62,9 @@
 <link rel="stylesheet" href="{{asset "gallery/tokens.css"}}">
 <link rel="stylesheet" href="{{asset "gallery/components.css"}}">
 <link rel="stylesheet" href="{{asset "gallery/login.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/login-descent.css"}}">
 </head>
-<body class="login-page login-painted">{{template "loginScene"}}
+<body class="login-page login-painted{{if .Descend}} login-descend{{end}}">{{template "loginScene" .Descend}}
 {{template "appHeader" .Header}}
 <div class="login-content">
 {{template "loginIntro"}}
@@ -113,7 +116,7 @@
 <link rel="stylesheet" href="{{asset "gallery/components.css"}}">
 <link rel="stylesheet" href="{{asset "gallery/login.css"}}">
 </head>
-<body class="login-page login-painted">{{template "loginScene"}}
+<body class="login-page login-painted">{{template "loginScene" false}}
 {{template "appHeader" .Header}}
 <div class="login-content">
 {{template "loginIntro"}}

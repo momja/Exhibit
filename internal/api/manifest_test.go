@@ -97,7 +97,8 @@ func pwaHeadConfiguredPages(t *testing.T) map[string]string {
 		Clerk   *clerkView
 		Mode    string
 		Next    string
-	}{paintedAuthHeader("Sign in"), template.URL(exhibitLogoDataURI), nil, "login", "/"})
+		Descend bool
+	}{paintedAuthHeader("Sign in"), template.URL(exhibitLogoDataURI), nil, "login", "/", false})
 	require.NoError(t, err)
 	pages["clerk sign in"] = clerk
 	consent, err := renderPage("oauthConsent", oauthConsentData{Header: authPageHeader("Connect an agent")})
