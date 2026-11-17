@@ -1,6 +1,6 @@
 ---
 id: Exh-wjqh
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-11-15T02:03:46Z
@@ -22,3 +22,13 @@ Note in technical_stack.md §1 that fonts deliberately come from a CDN, unlike i
 
 Fonts load on app pages and the sign-in page; text renders acceptably with the fonts blocked; technical_stack.md updated.
 
+
+## Notes
+
+**2026-11-16T16:21:09Z**
+
+Fonts via shared fontsHead partial. Schibsted wght 400..800; Fraunces pinned opsz72 wght600 SOFT100 WONK0. App origin sets no style/font CSP, so no CSP change; render origin untouched. Verified live load and blocked fallback with Playwright.
+
+**2026-11-16T17:01:25Z**
+
+Round 1 fixes: Clerk/CodeMirror/connections use --font-sans; Fraunces is a pinned static instance so font-variation-settings removed (fontsHead URL is the single source); body font-family consolidated in components.css; tests cover all pages.

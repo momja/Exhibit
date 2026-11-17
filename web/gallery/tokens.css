@@ -3,17 +3,19 @@
  * av-jafp). Loaded on every gallery page first, before components.css and the
  * page sheet.
  *
- * --brand-blue / --brand-blue-hover mirror internal/color/brand.go — the Go
- * constant still colors the server-rendered SVG logo, so keep the two in
- * sync. They live here as committed CSS (instead of the old per-template
- * inline <style> injection) so static stylesheets need no Go round-trip.
+ * --brand-blue / --brand-blue-hover are the UI accent: ink on the paper
+ * ground, cream on dusk (Exh-plvh). The logo keeps its own pigments in
+ * internal/color/brand.go and no longer shares a value with the accent.
+ * They live here as committed CSS (instead of the old per-template inline
+ * <style> injection) so static stylesheets need no Go round-trip.
  *
  * Dark mode (av-xie4) follows the system setting and has no in-app toggle.
  * Every color a page sheet uses comes from a token below, and the dark values
  * are the one prefers-color-scheme block at the end of this file: a new
  * component gets dark mode by using tokens, and a literal color in a page
- * sheet is a component that stays light. In the dark block --brand-blue is
- * the UI accent rather than the logo's blue — the logo keeps its own. */
+ * sheet is a component that stays light. Inline text links take --color-link;
+ * every other accent use (fills, icons, focus) takes --brand-blue.
+ * internal/api/palette_contrast_test.go holds each text/surface pair to WCAG AA. */
 /* Opts every cross-document navigation between gallery/detail/edit into the
  * View Transitions API (Exh-pb2k): instead of unloading straight to a blank
  * default-white frame, the browser keeps the outgoing page's snapshot on
@@ -33,75 +35,81 @@
 	color-scheme:light dark;
 
 	/* brand / accent */
-	--brand-blue:#23559e;
-	--brand-blue-hover:#1a4076;
+	--brand-blue:#1f2a1c;
+	--brand-blue-hover:#3f503a;
 	--color-accent:var(--brand-blue);
-	--color-on-accent:#fff;            /* text and icons on an accent fill */
-	--color-accent-disabled:#b7c3d9;   /* a disabled accent button's fill */
-	--color-on-accent-disabled:#fff;
-	--color-accent-tint:#eef4ff;       /* selected/suggested surfaces */
-	--color-accent-tint-border:#c4d7f7;
-	--color-accent-tint-strong:#dbe7fb;
-	--color-accent-tint-ink:#223344;
+	--color-on-accent:#fbf7ec;            /* text and icons on an accent fill */
+	--color-accent-disabled:#d9d2bb;   /* a disabled accent button's fill */
+	--color-on-accent-disabled:var(--color-ink-mid);
+	--color-accent-tint:#e6e0cf;       /* selected/suggested surfaces */
+	--color-accent-tint-border:#c6bea6;
+	--color-accent-tint-strong:#dcd5c1;
+	--color-accent-tint-ink:#1f2a1c;
+	/* Inline text links only (Exh-plvh): an anchor inside a sentence or note.
+	 * Buttons, banner actions and text-only controls stay ink. Slate sits only
+	 * ~1.9:1 from ink, so colour is not the cue: every consumer keeps its
+	 * underline, and takes --color-link-hover on hover. */
+	--color-link:#2e5482;
+	--color-link-hover:#233f62;
 
 	/* Neutrals used for small text clear 4.5:1 on panel, ground, subtle
 	 * and hover surfaces. Faint is also text (optional-field hints). */
-	--color-ink:#17202e;             /* primary text */
-	--color-ink-soft:#303a49;        /* headings, strong secondary text */
-	--color-ink-mid:#475569;      /* body copy that steps back */
-	--color-muted:#5d6878;        /* metadata, secondary text */
-	--color-label:#526174;        /* field and column labels */
-	--color-faint:#5d6878;        /* empty-state glyphs, optional-field hints */
-	--color-placeholder:#5d6878;  /* field placeholders */
-	--color-ground:#f5f6f8;       /* page background */
-	--color-panel:#fff;           /* cards, header, modals */
-	--color-subtle:#f7f8fa;       /* a well inside a panel (scan results, chips) */
-	--color-hairline:#e1e7ef;     /* panel dividers */
-	--color-hairline-strong:#d5deea; /* header underline */
-	--color-border:#d3d9e2;         /* quiet secondary boundaries */
-	--color-field-border:#8792a2;  /* inputs retain at least 3:1 */
-	--color-field:#fff;
-	--color-code-muted:#5e6877;
+	--color-ink:#1f2a1c;             /* primary text */
+	--color-ink-soft:#2c3828;        /* headings, strong secondary text */
+	--color-ink-mid:#465141;      /* body copy that steps back */
+	--color-muted:#5a6453;        /* metadata, secondary text */
+	--color-label:#535d4c;        /* field and column labels */
+	--color-faint:#5a6453;        /* empty-state glyphs, optional-field hints */
+	--color-placeholder:#5a6453;  /* field placeholders */
+	--color-ground:#f1e9d6;       /* page background */
+	--color-panel:#fbf7ec;           /* cards, header, modals */
+	--color-subtle:#f5efdf;       /* a well inside a panel (scan results, chips) */
+	--color-hairline:#e0d6bd;     /* panel dividers */
+	--color-hairline-strong:#d3c8ab; /* header underline */
+	--color-border:#cfc4a6;         /* quiet secondary boundaries */
+	--color-field-border:#857d62;  /* inputs retain at least 3:1 */
+	--color-field:#fffdf6;
+	--color-code-muted:#5a6453;
 	/* The active line sits above CodeMirror's selection layer. */
-	--color-code-active:rgba(240,243,248,.25);
-	--color-code-selection:#dbe7fb; /* primary text selection */
-	--color-code-match:rgba(35,85,158,.08); /* secondary occurrences */
-	--color-card-border:#dce0e6;  /* the gallery's flat cards */
-	--color-hover-fill:#e8eef6;   /* pill behind a hovered icon control */
-	--color-press-fill:rgba(0,0,0,.12); /* a pressed control on a tinted chip */
+	--color-code-active:rgba(245,239,223,.25);
+	--color-code-selection:#dcd5c1; /* primary text selection */
+	--color-code-match:rgba(31,42,28,.08); /* secondary occurrences */
+	--color-card-border:#d6cbae;  /* the gallery's flat cards */
+	--color-hover-fill:#e8dfc8;   /* pill behind a hovered icon control */
+	--color-press-fill:rgba(31,42,28,.12); /* a pressed control on a tinted chip */
 	--color-code-on-tint:#fff3;   /* inline code inside a tinted banner */
-	--color-on-accent-edge:rgba(255,255,255,.5); /* an edge drawn on an accent fill */
-	--color-tag-ring:rgba(0,0,0,.12);   /* keeps a ground-colored tag dot visible */
+	--color-on-accent-edge:rgba(251,247,236,.5); /* an edge drawn on an accent fill */
+	--color-tag-ring:rgba(31,42,28,.14);   /* keeps a ground-colored tag dot visible */
 
 	/* The 404 page's slate ramp. */
-	--color-slate-ink:#3a3f49;
-	--color-slate-body:#565c68;
-	--color-slate-medium:#646b76;
-	--color-slate-muted:#646b76;
-	--color-slate-placeholder:#676e79;
-	--color-slate-rule:#d6dae0;
+	--color-slate-ink:#3a3f36;
+	--color-slate-body:#4f5548;
+	--color-slate-medium:#5c6254;
+	--color-slate-muted:#5c6254;
+	--color-slate-placeholder:#5f6556;
+	--color-slate-rule:#d6cbae;
 
 	/* feedback */
-	--color-danger:#b42318;
-	--color-danger-hover:#912018;
+	--color-danger:#b5331f;
+	--color-danger-hover:#8f2716;
 	--color-on-danger:#fff;
-	--color-danger-tint:#fee;          /* error notices */
-	--color-danger-tint-border:#fbb;
-	--color-danger-ink:#900;
-	--color-danger-soft:#fdf3f3;       /* a quieter refusal (login, failed tool) */
-	--color-warn-tint:#fffbe6;         /* warning banners and notes */
-	--color-warn-tint-border:#ffe58f;
-	--color-warn-strong:#d48806;       /* warning icon, warning control border */
-	--color-warn-ink:#614700;
-	--color-warn-ink-soft:#8a6d00;
-	--color-info-tint:#f0f5ff;         /* a fact, not a problem */
-	--color-info-tint-border:#adc6ff;
-	--color-info-ink:#243c5a;
-	--color-success:#2a7d2a;
-	--color-success-tint:#f2faf2;
-	--color-success-tint-border:#bfe3bf;
-	--color-note-tint:#f3efe6;         /* neutral "custom" chip */
-	--color-note-ink:#7a6535;
+	--color-danger-tint:#fbe8e2;          /* error notices */
+	--color-danger-tint-border:#eebdb0;
+	--color-danger-ink:#8a2616;
+	--color-danger-soft:#fbefea;       /* a quieter refusal (login, failed tool) */
+	--color-warn-tint:#fbefd0;         /* warning banners and notes */
+	--color-warn-tint-border:#e8cf8e;
+	--color-warn-strong:#b0700a;       /* warning icon, warning control border */
+	--color-warn-ink:#5e3d05;
+	--color-warn-ink-soft:#7a5008;
+	--color-info-tint:#e4e6e0;         /* a fact, not a problem */
+	--color-info-tint-border:#b9c0c6;
+	--color-info-ink:#23405f;
+	--color-success:#2f6a34;
+	--color-success-tint:#e6efdb;
+	--color-success-tint-border:#b9d3a8;
+	--color-note-tint:#efe6cc;         /* neutral "custom" chip */
+	--color-note-ink:#6f5a28;
 
 	/* Default card tile (components.css): saturation + lightness pairs
 	 * completed by the artifact's --tile-hue. */
@@ -112,13 +120,27 @@
 	--tile-mono-ink:42% 34%;
 
 	/* elevation */
-	--shadow-header:0 1px 6px rgba(0,0,0,.07);
-	--shadow-card:0 1px 3px rgba(0,0,0,.08);
-	--shadow-card-hover:0 2px 8px rgba(0,0,0,.12);
-	--shadow-modal:0 4px 24px rgba(0,0,0,.25);
-	--shadow-raised:0 1px 2px rgba(0,0,0,.14);
-	--shadow-sheet:0 -4px 24px rgba(0,0,0,.25); /* a bottom sheet over the page */
-	--overlay:rgba(0,0,0,.4);
+	--shadow-header:0 1px 0 rgba(60,45,10,.12);
+	/* --shadow-card[-hover] belong to the gallery's tiles: a hairline ring and a
+	 * soft lift. Panels, dialogs and the sign-in box float on --shadow-panel. */
+	--shadow-card:0 1px 0 rgba(60,45,10,.10),0 0 0 1px rgba(60,45,10,.07);
+	--shadow-card-hover:0 3px 10px rgba(60,45,10,.14),0 0 0 1px rgba(60,45,10,.09);
+	--shadow-panel:0 8px 24px rgba(60,45,10,.14),0 1px 3px rgba(60,45,10,.10);
+	--shadow-modal:0 4px 24px rgba(40,30,5,.25);
+	--shadow-raised:0 1px 2px rgba(40,30,5,.14);
+	--shadow-sheet:0 -4px 24px rgba(40,30,5,.25); /* a bottom sheet over the page */
+	--overlay:rgba(31,42,28,.45);
+
+	/* Typefaces (Exh-wjqh), loaded from Google Fonts by the fontsHead partial.
+	 * The fallbacks keep text readable when the fonts are blocked or slow. Code
+	 * and CodeMirror stay on their own monospace stacks. */
+	--font-sans:"Schibsted Grotesk",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+	--font-display:Fraunces,Georgia,serif;
+	/* Fraunces is requested as ONE pinned static instance (opsz 72, wght 600,
+	 * SOFT 100, WONK 0) in the fontsHead partial, the single source for those
+	 * settings. A static instance has no variation axes, so font-variation-
+	 * settings cannot change it. Any other Fraunces weight or setting means
+	 * widening that request. */
 
 	/* Every form control sizes itself from one of these, never a literal px:
 	 * iOS zooms in on focusing a field under 16px and does not zoom back out
@@ -180,76 +202,76 @@
 	}
 }
 
-/* Dark palette (av-xie4). A cool charcoal rather than black, so panels can sit
- * one step above the ground and shadows still read. The accent turns from the
- * logo's deep blue to a light one: no single blue reaches 4.5:1 both as link
- * text on a dark panel and under white button text, so in the dark the accent
- * fills take dark text instead (--color-on-accent), as danger fills do. */
+/* Dark palette (av-xie4, Exh-plvh): dusk. A deep indigo ground with panels one
+ * step lighter so shadows still read. The accent turns from ink to cream, so
+ * accent fills take dark text instead (--color-on-accent), as danger fills do. */
 @media (prefers-color-scheme:dark){
 	:root{
-		--brand-blue:#7eaaf0;
-		--brand-blue-hover:#a1c2f5;
-		--color-on-accent:#0e1726;
-		--color-accent-disabled:#2f3b4e;
-		--color-on-accent-disabled:#8592a6;
-		--color-accent-tint:#1c2940;
-		--color-accent-tint-border:#34507a;
-		--color-accent-tint-strong:#2a3c5a;
-		--color-accent-tint-ink:#c8daf6;
+		--brand-blue:#efe8d6;
+		--brand-blue-hover:#bab29b;
+		--color-on-accent:#10142a;
+		--color-accent-disabled:#343a5e;
+		--color-on-accent-disabled:var(--color-ink-mid);
+		--color-accent-tint:#262b48;
+		--color-accent-tint-border:#454c78;
+		--color-accent-tint-strong:#2f355a;
+		--color-accent-tint-ink:#e4ddca;
+		--color-link:#9db6d6;
+		--color-link-hover:#b9cbe3;
 
-		--color-ink:#e8eaed;
-		--color-ink-soft:#ccd0d6;
-		--color-ink-mid:#abb0b8;
-		--color-muted:#9aa0a9;
-		--color-label:#979eaa;
-		--color-faint:#a0a6af;
-		--color-placeholder:#949eac;
-		--color-ground:#16181c;
-		--color-panel:#202328;
-		--color-subtle:#1a1d21;
-		--color-hairline:#2f333a;
-		--color-hairline-strong:#363b42;
-		--color-border:#3e4652;
-		--color-field-border:#647083;
-		--color-field:#1a1d21;
-		--color-code-muted:#a4aebd;
-		--color-code-active:rgba(35,43,54,.25);
-		--color-code-selection:#27364a;
-		--color-code-match:rgba(126,170,240,.08);
-		--color-card-border:#363b42;
-		--color-hover-fill:#2e3239;
-		--color-press-fill:rgba(255,255,255,.14);
-		--color-code-on-tint:rgba(255,255,255,.08);
-		--color-on-accent-edge:rgba(14,23,38,.35);
-		--color-tag-ring:rgba(255,255,255,.28);
+		--color-ink:#efe8d6;
+		--color-ink-soft:#d6cfbd;
+		--color-ink-mid:#b5af9f;
+		--color-muted:#a09b8d;
+		--color-label:#a09b8d;
+		--color-faint:#a09b8d;
+		--color-placeholder:#a09b8d;
+		--color-ground:#14182e;
+		--color-panel:#1d2240;
+		--color-subtle:#181c36;
+		--color-hairline:#2c3258;
+		--color-hairline-strong:#343b66;
+		--color-border:#3d4472;
+		--color-field-border:#6c749e;
+		--color-field:#181c36;
+		--color-code-muted:#a8a496;
+		--color-code-active:rgba(44,50,88,.25);
+		--color-code-selection:#2f355a;
+		--color-code-match:rgba(239,232,214,.08);
+		--color-card-border:#343b66;
+		--color-hover-fill:#2a3058;
+		--color-press-fill:rgba(239,232,214,.14);
+		--color-code-on-tint:rgba(16,20,42,.12);
+		--color-on-accent-edge:rgba(16,20,42,.35);
+		--color-tag-ring:rgba(239,232,214,.28);
 
-		--color-slate-ink:#cdd2da;
-		--color-slate-body:#adb3bd;
-		--color-slate-medium:#979da8;
-		--color-slate-muted:#8f96a1;
-		--color-slate-placeholder:#858b96;
-		--color-slate-rule:#363b42;
+		--color-slate-ink:#d6cfbd;
+		--color-slate-body:#b5af9f;
+		--color-slate-medium:#a09b8d;
+		--color-slate-muted:#9a9588;
+		--color-slate-placeholder:#948f82;
+		--color-slate-rule:#343b66;
 
-		--color-danger:#f2726a;
-		--color-danger-hover:#ff9690;
-		--color-on-danger:#1f0b0a;
-		--color-danger-tint:#2e1817;
-		--color-danger-tint-border:#6b2c28;
-		--color-danger-ink:#ffa39d;
-		--color-danger-soft:#2a1716;
-		--color-warn-tint:#2a2310;
-		--color-warn-tint-border:#5e4b14;
-		--color-warn-strong:#e0a82e;
-		--color-warn-ink:#f0d68a;
-		--color-warn-ink-soft:#d6b95e;
-		--color-info-tint:#172238;
-		--color-info-tint-border:#2f4b78;
-		--color-info-ink:#c5d6f2;
-		--color-success:#7bd08a;
-		--color-success-tint:#152619;
-		--color-success-tint-border:#2d5a37;
-		--color-note-tint:#2b2619;
-		--color-note-ink:#d8c38f;
+		--color-danger:#f08670;
+		--color-danger-hover:#ffa592;
+		--color-on-danger:#2a0d08;
+		--color-danger-tint:#2f2340;
+		--color-danger-tint-border:#6e3b4a;
+		--color-danger-ink:#ffb5a5;
+		--color-danger-soft:#2a2140;
+		--color-warn-tint:#2c2618;
+		--color-warn-tint-border:#6b5424;
+		--color-warn-strong:#f2a23a;
+		--color-warn-ink:#f5d99b;
+		--color-warn-ink-soft:#e0b96a;
+		--color-info-tint:#1d2850;
+		--color-info-tint-border:#3d4b75;
+		--color-info-ink:#c3d3ea;
+		--color-success:#8fcf98;
+		--color-success-tint:#182c34;
+		--color-success-tint-border:#2f5a4c;
+		--color-note-tint:#2b2a3a;
+		--color-note-ink:#d8cba0;
 
 		--tile-face-top:16% 21%;
 		--tile-face-bottom:14% 17%;
@@ -257,13 +279,14 @@
 		--tile-mono-shadow:0% 0% / .35;
 		--tile-mono-ink:45% 80%;
 
-		--shadow-header:0 1px 6px rgba(0,0,0,.4);
-		--shadow-card:0 1px 3px rgba(0,0,0,.4);
-		--shadow-card-hover:0 2px 8px rgba(0,0,0,.5);
+		--shadow-header:0 1px 0 rgba(0,0,0,.5);
+		--shadow-card:0 1px 0 rgba(0,0,0,.5),0 0 0 1px rgba(0,0,0,.25);
+		--shadow-card-hover:0 3px 10px rgba(0,0,0,.5),0 0 0 1px rgba(0,0,0,.3);
+		--shadow-panel:0 10px 30px rgba(0,0,0,.5),0 1px 3px rgba(0,0,0,.35);
 		--shadow-modal:0 6px 28px rgba(0,0,0,.6);
 		--shadow-raised:0 1px 2px rgba(0,0,0,.5);
 		--shadow-sheet:0 -6px 28px rgba(0,0,0,.6);
-		--overlay:rgba(0,0,0,.6);
+		--overlay:rgba(8,10,24,.65);
 	}
 }
 

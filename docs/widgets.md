@@ -243,9 +243,9 @@ markup, so the tile starts from a sane floor and can override anything.
 - Read on both a light and a dark card: the gallery follows the system color
   scheme (av-xie4). Declare `color-scheme: light dark`, keep the background
   transparent, and put colors in custom properties with dark values under
-  `@media (prefers-color-scheme: dark)`. Light: text `#111`, muted `#888`,
-  accent `#23559e`, hairline `#e0e0e0`. Dark: text `#e8eaed`, muted
-  `#9aa0a9`, accent `#7eaaf0`, hairline `#2f333a`.
+  `@media (prefers-color-scheme: dark)`. Light: text `#1f2a1c`, muted `#5a6453`,
+  accent `#1f2a1c`, hairline `#e0d6bd`. Dark: text `#efe8d6`, muted
+  `#a09b8d`, accent `#efe8d6`, hairline `#2c3258`.
 - A widget that declares no `color-scheme` is drawn on an opaque light canvas
   when the gallery is dark, because a frame whose scheme differs from its
   embedder's is not composited transparently. Older light-only widgets
