@@ -12,8 +12,20 @@ import (
 // face between visits is not recognizable.
 func TestHueIsStablePerArtifact(t *testing.T) {
 	assert.Equal(t, Hue("abc"), Hue("abc"))
-	assert.NotEqual(t, Hue("abc"), Hue("abd"))
-	assert.Less(t, Hue("abc"), 360)
+}
+
+// A tile may only wear a palette hue, and over many ids every hue is used.
+func TestHueIsAlwaysAPaletteHue(t *testing.T) {
+	seen := map[int]int{}
+	for i := 0; i < 600; i++ {
+		seen[Hue("artifact-"+strconv.Itoa(i))]++
+	}
+	for hue := range seen {
+		assert.Contains(t, Palette, hue)
+	}
+	for _, hue := range Palette {
+		assert.Greater(t, seen[hue], 40, "hue %d should be spread across ids", hue)
+	}
 }
 
 func TestMonogram(t *testing.T) {
