@@ -11,8 +11,8 @@ import (
 
 // DataURI draws an Exhibit-style Mondrian grid using up to three tag colors
 // in gallery order. The fixed panels have similar areas (49, 48, 42 units),
-// with a smaller white panel and offset dividers retaining the logo's asymmetry.
-// Untagged artifacts use the logo pigments on an ink ground (Exh-d5ku); unused tag panels stay white.
+// with a smaller cream panel and offset dividers retaining the logo's asymmetry.
+// Untagged artifacts use the logo pigments on an ink ground (Exh-d5ku); unused tag panels stay cream.
 func DataURI(tags []*store.Tag) string {
 	palette := [3]string{color.BrandWhite, color.BrandWhite, color.BrandWhite}
 	if len(tags) == 0 {

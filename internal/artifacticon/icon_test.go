@@ -46,6 +46,7 @@ func TestTagMosaic(t *testing.T) {
 
 func TestUntaggedMosaicUsesBrandPalette(t *testing.T) {
 	rects := iconRectangles(t, nil)
+	require.Equal(t, color.BrandInk, rects[0].Fill, "ink ground")
 	require.Equal(t, color.BrandRed, rects[1].Fill)
 	require.Equal(t, color.BrandBlue, rects[2].Fill)
 	require.Equal(t, color.BrandYellow, rects[3].Fill)

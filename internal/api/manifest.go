@@ -3,7 +3,6 @@ package api
 import (
 	"encoding/json"
 	"net/http"
-
 )
 
 // webManifestIcon is one entry of the web app manifest's "icons" array
