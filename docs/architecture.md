@@ -975,9 +975,12 @@ the shared `.grain` layer over it. Only the active mode and one width download.
 The sky/clouds/hill layers are not loaded here: Exh-vsw0 adds them as further
 children of `.login-scene` above the composite, so the form (`.login-content`,
 a sibling of the stage) is never restructured or moved. The headline and
-tagline sit on a translucent scrim chip (`--painting-scrim`) whose alpha keeps
-cream text above AA even over pure white, so contrast does not depend on which
-part of the painting, or later which animated layer, is behind it. The box is
+tagline sit directly on the sky: a feathered shade (`--painting-shade`, a
+radial gradient in the scene's `::after`, no visible edge) keeps cream text
+above 3:1 over any part of the sky, so contrast does not depend on which
+pixels, or later which animated layer, are behind it. The headline is large
+text, and the tagline and wordmark are sized as large text too (19px/20px
+semibold or bold). The box is
 the ordinary `.login` card; for Clerk, `.login-clerk` is the box and Clerk's own
 card is flattened inside it (`clerkAuthAppearance`, plus `.cl-*` rules). On
 phones the painting owns a band at the bottom of the page and the content

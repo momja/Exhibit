@@ -131,7 +131,8 @@
 	 * scrim that keeps it legible, and the sky the phone layout fades the
 	 * painting into (sampled from the top of the portrait crop). */
 	--color-on-painting:#fbf7ec;
-	--painting-scrim:rgba(11,42,90,.72);
+	--painting-shade:rgba(11,42,90,.42);
+	--painting-text-shadow:rgba(11,42,90,.45);
 	--painting-sky-top:#2f78dc;
 	--painting-sky-bottom:#4f8fd4;
 
@@ -295,7 +296,8 @@
 		--tile-mono-shadow:40% 8% / .5;
 		--tile-mono-ink:60% 90%;
 		--grain-opacity:.4;
-		--painting-scrim:rgba(8,10,30,.68);
+		--painting-shade:rgba(8,10,30,.4);
+		--painting-text-shadow:rgba(8,10,30,.5);
 		--painting-sky-top:#18235c;
 		--painting-sky-bottom:#2a2f6a;
 
