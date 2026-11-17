@@ -365,7 +365,7 @@ func TestAgentPaneRelayConsentBrowser(t *testing.T) {
 			run(chromedp.EmulateViewport(320, 568))
 			_, err = chromedp.Call(ctx, page.Navigate, page.NavigateParams{URL: app.URL + "/agent?artifact=" + id})
 			require.NoError(t, err)
-			run(chromedp.Poll[chromedp.Void](`document.querySelector('.relay-consent') && [...document.styleSheets].some(sheet => sheet.href?.endsWith('/gallery/agent.css') && sheet.cssRules.length)`),
+			run(chromedp.Poll[chromedp.Void](`document.querySelector('.relay-consent') && document.querySelector('script[src$="/gallery/controllers.js"]') && [...document.styleSheets].some(sheet => sheet.href?.endsWith('/gallery/agent.css') && sheet.cssRules.length)`),
 				chromedp.Evaluate[chromedp.Void](`import(document.querySelector('script[src$="/gallery/controllers.js"]').src).then(({application}) => { window.relayApplication = application; })`, chromedp.EvalAwaitPromise),
 				chromedp.Poll[chromedp.Void](`!!(window.relayHost = relayApplication.getControllerForElementAndIdentifier(document.getElementById('frame-wrap'), 'relay-host'))`))
 			if initialized {

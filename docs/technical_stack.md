@@ -537,6 +537,23 @@ keyboard and a landscape tablet is wide and still touched. The standing rule whe
 adding a control: size it from the token, never a literal `px` — a hardcoded size
 opts it out of the bump silently, and the symptom only shows up on a phone.
 
+**Palette (Exh-plvh).** Light is a paper ground (`#f1e9d6`) and dark is dusk
+(`#14182e`). The UI accent, `--brand-blue`, is ink (cream in the dark) and fills
+every button and accent mark; the logo's pigments live in `internal/color` and
+no longer feed it. Inline text links alone use `--color-link` (slate, light blue
+in the dark): an anchor inside a sentence or note, never a button, banner
+action or text-only control, which stay ink. Slate sits only ~1.9:1 from ink, so
+colour is never the cue: every `--color-link` consumer keeps its underline and
+takes `--color-link-hover` on hover. Text-only controls with no icon or button
+shape underline on `:hover` and `:focus-visible`. Panels, dialogs, the sign-in
+box and Clerk float on `--shadow-panel`; `--shadow-card` is the tiles' ring.
+Primary hover is a perceptibly lighter ink (darker cream), and a disabled
+accent button is repainted at 3:1 or better rather than faded. Danger, warning and success
+are separate hues: success is a green kept out of the accent's role.
+`internal/api/palette_contrast_test.go` parses `tokens.css` and holds every
+text/surface pair to WCAG AA in both modes, so a changed value fails without a
+browser. Clerk panels take the same tokens through `clerk-appearance.js`.
+
 **Dark mode follows the system (av-xie4).** There is no in-app toggle: every
 app-origin page reads `prefers-color-scheme`. `tokens.css` declares
 `color-scheme: light dark` on `:root`, so native controls, scrollbars and form
@@ -544,9 +561,9 @@ fields follow, and it holds the whole dark palette in one
 `@media (prefers-color-scheme: dark)` block that redefines the same tokens. A
 page sheet takes every color from a token and never writes a literal, which is
 what makes a new component dark-ready for free; a color the palette lacks is a
-new token with a value in both places. In the dark the accent is a light blue
-with dark text on its fills (`--color-on-accent`), because no single blue
-reads both as link text on a dark panel and under white button text. The
+new token with a value in both places. In the dark the accent is cream
+with dark text on its fills (`--color-on-accent`), mirroring ink with cream
+text in the light. The
 CodeMirror bundle swaps One Dark in and out through a `Compartment` on the
 media query's `change` event, so the editor follows a live setting change
 without losing its buffer. The render origin is untouched: an artifact owns

@@ -1005,9 +1005,9 @@ func newGalleryWidgetView(a *store.Artifact, urls renderURLs) widgetView {
 }
 
 // The brand palette lives in web/gallery/tokens.css (av-xgik): pages link it
-// instead of the old per-template inline :root injection. tokens.css mirrors
-// internal/color/brand.go — keep the two in sync (color.BrandBlue still
-// colors the server-rendered SVG logo).
+// instead of the old per-template inline :root injection. The UI accent is ink
+// (Exh-plvh) and no longer mirrors internal/color/brand.go, whose pigments
+// still color the server-rendered SVG logo.
 
 type galleryPageData struct {
 	Header appHeaderView
