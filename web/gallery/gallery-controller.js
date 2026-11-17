@@ -1,5 +1,5 @@
 import { Controller } from '../stimulus/stimulus.js';
-import { initializeGallery } from './gallery.js';
+import { focusGallerySearch, initializeGallery } from './gallery.js';
 import { eventScope } from './event-scope.js';
 import { GallerySpaceCache, gallerySpaceSnapshot, gallerySnapshotMaxAge } from './gallery-space-cache.js';
 import { canKeepGalleryViewport, captureGalleryViewport, restoreGalleryViewport } from './gallery-viewport.js';
@@ -94,11 +94,7 @@ export default class extends Controller {
     on('htmx:after:history:update', () => {
       this.currentURL = location.pathname + location.search;
     });
-    // htmx already preserves Ctrl/Cmd/Shift clicks. Leave Alt clicks to the
-    // browser too, before htmx's click handler can prevent their default.
-    this.events.on(this.element, 'click', event => {
-      if (event.altKey && event.target.closest('[data-gallery-space-link]')) event.stopPropagation();
-    }, true);
+    this.events.on(this.element, 'click', event => this.beforeTabClick(event), true);
     const moved = () => {
       this.lastScroll = performance.now();
       this.retryRefresh();
@@ -125,6 +121,23 @@ export default class extends Controller {
         this.cancelRefresh();
       });
     }
+  }
+
+  beforeTabClick(event) {
+    const link = event.target.closest('[data-gallery-space-link]');
+    if (!link) return;
+    // htmx preserves Ctrl/Cmd/Shift clicks. Leave Alt clicks to the browser too.
+    if (event.altKey) event.stopPropagation();
+    if (event.defaultPrevented || event.button !== 0 || event.altKey ||
+        event.ctrlKey || event.metaKey || event.shiftKey || this.navigating) return;
+    if (!link.matches(tabSelector + '[href="/search"][aria-current="page"]') ||
+        location.pathname !== '/search') return;
+    const input = this.spaceElement.querySelector('[data-gallery-query]');
+    if (!input) return;
+    event.preventDefault();
+    event.stopPropagation();
+    // Focus within the tap so mobile browsers can open their keyboard.
+    focusGallerySearch(input);
   }
 
   leave() {
@@ -185,7 +198,7 @@ export default class extends Controller {
     this.requests.set(ctx, {
       revision: this.revision, navigation, from, tab, cached,
       page: !navigation && ctx.sourceElement.matches('[data-gallery-page]'),
-      focusSearch: navigation && path === '/search' && ctx.sourceElement.matches('[data-gallery-space-link]'),
+      focusSearch: navigation && ctx.focusSearch,
     });
   }
 
@@ -361,12 +374,9 @@ export default class extends Controller {
     } else {
       this.clearPending();
       this.currentURL = location.pathname + location.search;
-      // A Search-tab click (including the / shortcut) carries its focus intent
-      // through the async swap. History restores keep their own focus context.
+      // The / shortcut explicitly asks for focus even when it opens Search.
       if (request.focusSearch) {
-        const input = this.element.querySelector('[data-gallery-query]');
-        input.focus({ preventScroll: true });
-        input.select();
+        focusGallerySearch(this.spaceElement.querySelector('[data-gallery-query]'), {select: true});
       }
       if (request.cached) this.refreshTab(request.tab);
     }

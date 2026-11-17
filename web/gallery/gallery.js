@@ -101,6 +101,13 @@ export function initializeGallery(root) {
   };
 }
 
+export function focusGallerySearch(input, {select = false} = {}) {
+  if (!input) return;
+  input.scrollIntoView({block: 'center', behavior: 'instant'});
+  input.focus({preventScroll: true});
+  if (select) input.select();
+}
+
 export function initializeGalleryShortcut() {
   document.addEventListener('keydown', (event) => {
     if (event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented) return;
@@ -112,7 +119,13 @@ export function initializeGalleryShortcut() {
     event.preventDefault();
     const input = gallery.querySelector('[data-gallery-query]');
     if (!input || (input.getClientRects && !input.getClientRects().length)) {
-      gallery.querySelector('[data-gallery-space-link][href="/search"]')?.click();
+      const link = gallery.querySelector('[data-gallery-space-link][href="/search"]');
+      if (!link) return;
+      if (window.htmx) {
+        window.htmx.ajax('GET', '/search', {source: link, focusSearch: true});
+      } else {
+        link.click();
+      }
       return;
     }
     input.focus();

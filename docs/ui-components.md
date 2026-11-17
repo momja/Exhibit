@@ -356,9 +356,10 @@ partial. The search covers owned artifacts and incoming account grants, using
 the existing title, visible source and tag index with one stable paginated order.
 Shared cards retain recipient-scoped widget URLs and omit owner actions. A blank
 query shows a prompt. Search does not inherit the source space’s filters.
-Owned cards carry `/search?q=…` as their editor return destination. Tab clicks
-and the `/` shortcut focus the Search field after the successful htmx swap;
-history restoration keeps its existing focus behavior.
+Owned cards carry `/search?q=…` as their editor return destination. Opening
+Search from another tab leaves the field unfocused. Clicking the active Search
+tab scrolls to the field and focuses it without replacing the query or results.
+The `/` shortcut still focuses the search field.
 
 Each content root uses `gallery-space`. Its connection initializes widget
 visibility, duplication and edit-return behavior; disconnect releases their
