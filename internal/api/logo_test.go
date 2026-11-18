@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/momja/Exhibit/internal/color"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -56,6 +57,30 @@ func TestLogoWireAndNailPaintIsNotInlineStyle(t *testing.T) {
 	assert.Contains(t, exhibitHangingLogoSVG, ".logo-nail{fill:#b4bac4}")
 }
 
+// Both artworks are painted in the pigments of internal/color and no others
+// (Exh-d5ku); the hanging variant's dark-mode wire lightening and the black
+// shadow are the only other colors.
+func TestLogoArtworkUsesBrandPigments(t *testing.T) {
+	hex := regexp.MustCompile(`#[0-9a-fA-F]{6}`)
+	pigments := []string{color.BrandBlue, color.BrandRed, color.BrandYellow, color.BrandWhite, color.BrandInk}
+	// Only the hanging mark has a wire (lightened in dark mode) and a shadow.
+	extras := map[string][]string{"flat": nil, "hanging": {"#b4bac4", "#000000"}}
+	for name, svg := range map[string]string{"flat": exhibitLogoSVG, "hanging": exhibitHangingLogoSVG} {
+		allowed := map[string]bool{}
+		for _, c := range append(append([]string{}, pigments...), extras[name]...) {
+			allowed[c] = true
+		}
+		seen := map[string]bool{}
+		for _, h := range hex.FindAllString(svg, -1) {
+			assert.True(t, allowed[h], "%s: unexpected colour %s", name, h)
+			seen[h] = true
+		}
+		for _, want := range pigments {
+			assert.True(t, seen[want], "%s: missing pigment %s", name, want)
+		}
+	}
+}
+
 func svgNumber(t *testing.T, re, svg string) float64 {
 	t.Helper()
 	m := regexp.MustCompile(re).FindStringSubmatch(svg)
@@ -73,7 +98,7 @@ func svgNumber(t *testing.T, re, svg string) float64 {
 func TestHangingLogoGeometry(t *testing.T) {
 	svg := exhibitHangingLogoSVG
 	const eps = 1e-3
-	frame := regexp.MustCompile(`<rect style="fill:#ffffff;stroke:#000000;stroke-width:([\d.]+)[^"]*" width="([\d.]+)" height="[\d.]+" x="([\d.]+)" y="([\d.]+)"`).FindStringSubmatch(svg)
+	frame := regexp.MustCompile(`<rect style="fill:#f6efdc;stroke:#1f2a1c;stroke-width:([\d.]+)[^"]*" width="([\d.]+)" height="[\d.]+" x="([\d.]+)" y="([\d.]+)"`).FindStringSubmatch(svg)
 	require.NotNil(t, frame)
 	f := make([]float64, 4)
 	for i := range f {

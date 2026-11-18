@@ -5,9 +5,13 @@
 // api's gallery and logo rendering just consume it.
 package color
 
-// Brand palette: the Exhibit logo artwork's pigments.
+// Brand palette: the pigments of the hero painting (Exh-d5ku). The logo
+// artwork (internal/api/logo*.svg) spells the same literals, and a test pins
+// them together.
 const (
-	BrandBlue   = "#23559e"
-	BrandYellow = "#fae317"
-	BrandRed    = "#de281d"
+	BrandBlue   = "#2f6fc4"
+	BrandYellow = "#f2b63c"
+	BrandRed    = "#d9432b"
+	BrandWhite  = "#f6efdc" // the frame's white cell
+	BrandInk    = "#1f2a1c" // frame and strokes
 )
