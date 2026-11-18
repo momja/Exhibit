@@ -34,6 +34,32 @@ The convention is the stable contract — a workspace's `package.json` `descript
 documents what it builds and where, so the source stays self-describing without this
 page enumerating each one.
 
+### Committed derivatives: `web/hero-art`
+
+The sign-in hero paintings are the one asset set whose generated output *is*
+committed. `web/hero-art/images/` holds 56 encoded WebP/AVIF files and a
+`manifest.json` (filename, pixel size, byte count), and the workspace's `build` only
+copies them to `internal/api/assets/hero-art/`. The rule in §1 yields here because the
+inputs cannot reach the build: the lossless masters live in `design_files/`, which
+`.dockerignore` excludes, and the Node stage has neither the masters nor the Python
+matting stack that makes them. Encoding is also not reproducible across platforms
+(libvips output differs by CPU and version), so re-encoding in the image would change
+the bytes every deploy.
+
+- The workspace has no dependencies, so the asset build installs nothing for it.
+  Its `build.mjs` removes the target directory first, copies the files named by the
+  manifest (the manifest itself is not copied; nothing reads it) and exits non-zero if
+  any copied file's size differs from the manifest's `bytes`.
+- The encoder, which does need `sharp`, is a manual design-time tool outside `web/`:
+  `design_files/brand-refresh/tools/hero-export/`. `npm run export` rewrites the
+  derivatives; `npm run check` re-encodes in memory and fails on any byte drift, an
+  unlisted file, a missing file, or a size over the per-kind budget. Run `check` after
+  touching the masters, the encoder or its lockfile. Regenerate only on Linux x64 with
+  the sharp version in that lockfile.
+- Masters are lossless WebP, not PNG, to keep the repository small; only the sky,
+  clouds and hill layers are masters. See
+  `design_files/brand-refresh/production/README.md`.
+
 ## 3. The build entrypoint
 
 `scripts/build-assets.sh` is the single source of truth for building assets. It
