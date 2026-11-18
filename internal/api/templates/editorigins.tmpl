@@ -5,7 +5,7 @@
   <div id="allowlist-rows">
     {{range .Allowlist}}<div class="allowlist-row text-action-row" data-origin="{{.}}">
       <code title="{{.}}">{{.}}</code>
-      <button type="button" class="btn btn-sec icon-btn row-action" data-action="remove" aria-label="Remove {{.}}" title="Remove site"><i class="ph ph-x" aria-hidden="true"></i></button>
+      <button type="button" class="btn btn-sec icon-btn" data-action="remove" aria-label="Remove {{.}}" title="Remove site"><i class="ph ph-x" aria-hidden="true"></i></button>
     </div>{{else}}<p class="form-help allowlist-empty">No sites allowed yet.</p>{{end}}
   </div>
   {{if .Unapproved}}
@@ -13,7 +13,7 @@
   <div id="unapproved-rows">
     {{range .Unapproved}}<div class="allowlist-row text-action-row" data-origin="{{.}}">
       <code title="{{.}}">{{.}}</code>
-      <button type="button" class="btn btn-sec icon-btn row-action" data-action="allow" aria-label="Allow {{.}}" title="Allow site"><i class="ph ph-check" aria-hidden="true"></i></button>
+      <button type="button" class="btn btn-sec icon-btn" data-action="allow" aria-label="Allow {{.}}" title="Allow site"><i class="ph ph-check" aria-hidden="true"></i></button>
     </div>{{end}}
   </div>
   {{end}}
@@ -32,8 +32,8 @@
            again (av-kmwj). Without it, "don't ask again" is a one-way
            trap: a blocked origin never prompts on its own. */}}
       <div class="origin-block-actions">
-        <button type="button" class="btn btn-sm btn-sec" data-action="forget" aria-label="Ask again for {{.}}">Ask again</button>
-        <button type="button" class="btn btn-sec icon-btn row-action" data-action="allow" aria-label="Allow {{.}}" title="Allow site"><i class="ph ph-check" aria-hidden="true"></i></button>
+        <button type="button" class="btn btn-sec" data-action="forget" aria-label="Ask again for {{.}}">Ask again</button>
+        <button type="button" class="btn btn-sec icon-btn" data-action="allow" aria-label="Allow {{.}}" title="Allow site"><i class="ph ph-check" aria-hidden="true"></i></button>
       </div>
     </div>{{end}}
   </div>

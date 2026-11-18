@@ -51,7 +51,6 @@ main{padding:var(--page-top) var(--page-gutter);max-width:900px;margin:0 auto}
   align-items: center;
   gap: var(--space-2);
 }
-.origin-block-actions .btn-sm { padding-inline: var(--space-3); }
 @media (max-width: 480px) {
   .allowlist-row:has(.origin-block-actions) { grid-template-columns: minmax(0, 1fr); }
   .origin-block-actions { justify-self: end; }

@@ -286,9 +286,6 @@ input,select,textarea{font-size:var(--field-font-size)}
   gap: var(--space-3);
 }
 .text-action-row > :first-child { min-width: 0; }
-@media (max-width: 767px), (pointer: coarse) {
-  .icon-btn.row-action { width: 44px; height: 44px; min-height: 44px; }
-}
 
 /* Small inline posture indicator (icon + optional label) — the gallery card
  * badge (av-isb3) and the popover header (av-41se) build on this. Neutral
