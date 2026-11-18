@@ -341,11 +341,36 @@ hand-rolled HTML escaping the old string-concatenated pages needed.)
 CodeMirror and the renderer iframe are islands of client JS inside these
 server-rendered pages.
 
+**The logo is two artworks** (Exh-bv8l). `internal/api/logo.svg` is the flat mark:
+the frame alone in a tight viewBox, with no wire, nail or shadow, and no ids. It is
+the header, sign-in, Clerk and admin mark, the app and render-origin favicon, and the
+source `web/pwa-icons` rasterizes into the PWA, maskable and link-preview icons (those
+PNGs are generated into `internal/api/assets/icons` and never committed; the maskable
+safe zone is computed from the viewBox). `internal/api/logo-hanging.svg` adds the nail,
+wire and a single down-right shadow, and only the 404 hero uses it, as an `<img>` data
+URI. `TestHangingLogoGeometry` (`internal/api/logo_test.go`) verifies that its nail, wire apex and frame
+centre share one axis and that the wire's legs land symmetrically. The wire and nail
+lighten under `prefers-color-scheme: dark`; their paint is a presentation attribute,
+because an inline `style` would outrank that rule (a test pins it). Per-artifact favicons
+(`internal/artifacticon`) are separate.
+
+**Logo pigments (Exh-d5ku).** Both artworks are painted in the hero painting's
+pigments, named in `internal/color/brand.go`: blue `#2f6fc4`, red `#d9432b`, yellow
+`#f2b63c`, the cream cell `#f6efdc`, and ink `#1f2a1c` for the frame and strokes.
+`TestLogoArtworkUsesBrandPigments` holds each SVG to those constants (the wire's dark-mode paint and the shadow are allowed in the hanging mark only). The frame stroke is 1.5 units so the cream cell keeps an edge at 16-18px. The flat mark
+needs no dark-mode lightening: on dusk the ink frame sinks into the ground, but the
+pigment blocks and the cream cell still define the edge. The hanging wire and nail
+sit on the bare page, so they keep their lighter dark-mode paint. The manifest's
+`theme_color` and `background_color` and the PWA/OG canvases take paper
+(`#f1e9d6`), the ground the app opens on, because a manifest cannot follow the
+colour scheme; the old logo blue is no longer an app surface colour (artifact fixtures and samples may still use it, being artifact content). The `theme-color` metas in `pwaHead` give the browser chrome paper in light and dusk in dark; a test pins them, the manifest and `web/pwa-icons` to `--color-ground`.
+
 Artifact viewer tabs and direct render documents share a generated SVG favicon
 from `internal/artifacticon`: an asymmetric Mondrian grid inspired by the logo,
 with up to three tag-colored panels in gallery tag order. The panels have similar
-areas, with one smaller panel always white. Untagged artifacts use Exhibit’s red,
-blue, and yellow; unused tag panels stay white. Render-time icon links replace
+areas, with one smaller panel always cream. Untagged artifacts use the logo pigments
+(red, blue, yellow) on an ink ground; unused tag panels and the fixed panel use the
+logo's cream. Render-time icon links replace
 stored favicon links without changing the saved source; widgets retain their
 existing rendering. Other app pages and the automatic `/favicon.ico` routes keep
 the full Exhibit logo.
@@ -813,6 +838,14 @@ Turso/libSQL territory and a larger commitment — out of scope for the default 
 The deliberate outcome: in production it's one small image and one process by default,
 with safety and richness added as opt-in Compose profiles — matching the spec's promise
 that the easy path and the serious path share almost all of the same system.
+
+One workspace commits its encoded output: `web/hero-art/images/` holds the responsive
+sign-in hero paintings (WebP/AVIF) and a manifest. `design_files/` is dockerignored and
+the Node stage has neither the lossless masters nor the matting dependencies, so the
+build cannot re-encode them; `web/hero-art/build.mjs` copies the files and fails when
+any size differs from the manifest. The encoder (`sharp`) lives outside `web/` in
+`design_files/brand-refresh/tools/hero-export`, whose `npm run check` guards against
+byte drift. See `build_assets.md`.
 
 The Node-built assets (CodeMirror bundle, Phosphor Icons, htmx) are generated into
 `internal/api/assets/` at build time and **not** committed to git. See `build_assets.md`

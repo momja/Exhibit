@@ -681,9 +681,9 @@ func (ro *Router) notFound(w http.ResponseWriter, r *http.Request) {
 // notFoundPageData feeds the 404 page. RequestedPath is attacker-controlled
 // URL text — html/template's contextual escaping is the whole defence, so it
 // must reach the page as a template value and never as concatenated markup.
-// LogoImage is the brand mark as an image source: the page inlines the SVG
-// once in its header and draws the hero frame from the data URI, so one
-// artwork serves both without duplicating its element ids (logo.go).
+// LogoImage is the hanging variant of the mark as an image source: the page
+// inlines the flat mark in its header and draws the hero from this data URI,
+// so the two artworks never share a document (logo.go).
 type notFoundPageData struct {
 	Header        appHeaderView
 	Favicon       template.URL
@@ -695,7 +695,7 @@ func renderNotFoundPage(requestedPath string) (string, error) {
 	return renderPage("notfound", notFoundPageData{
 		Header:        notFoundHeader(),
 		Favicon:       template.URL(exhibitLogoDataURI),
-		LogoImage:     template.URL(exhibitLogoDataURI),
+		LogoImage:     template.URL(exhibitHangingLogoDataURI),
 		RequestedPath: requestedPath,
 	})
 }
