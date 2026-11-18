@@ -80,6 +80,8 @@
 /* Clerk draws its own card; inside our box it is flattened so there is one box,
  * not two. Class selectors (cl-*) are Clerk's stable element hooks. */
 .login-clerk .cl-cardBox,.login-clerk .cl-card{background:transparent;box-shadow:none;border:0;border-radius:0}
+/* Clerk positions the Last used badge just outside its provider button. */
+.login-clerk .cl-cardBox{overflow:visible}
 .login-clerk .cl-card{padding:0}
 .login-clerk .cl-footer{background:transparent;background-image:none}
 
