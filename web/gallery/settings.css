@@ -12,7 +12,7 @@ body{background:var(--color-ground);color:var(--color-ink);min-height:100vh}
 main{padding:var(--page-top) var(--page-gutter);max-width:900px;margin:0 auto}
 
 /* --- lede -------------------------------------------------------------- */
-.lede h2{font-size:var(--page-title-size);line-height:1.25;font-weight:650;letter-spacing:-.025em}
+.lede h2{font-size:var(--page-title-size);line-height:1.25;letter-spacing:-.01em}
 .lede p{font-size:0.875rem;color:var(--color-muted);margin-top:7px;line-height:1.55;max-width:620px}
 .settings>.card{margin-top:26px}
 .settings-h3{font-size:0.9375rem;font-weight:600;margin-bottom:var(--space-6)}

@@ -29,7 +29,7 @@ func TestNewPageOffersThreeRoutes(t *testing.T) {
 	page := getPage(t, r, "/new")
 
 	assert.Contains(t, page, "<title>Add artifact — Exhibit</title>")
-	assert.Contains(t, page, `<h2>Add to Gallery</h2>`)
+	assert.Contains(t, page, `<h2 class="font-headline">Add to Gallery</h2>`)
 
 	assert.Contains(t, page, `<button type="button" class="route is-selected" data-mode="agent" aria-pressed="true">`)
 	assert.Contains(t, page, `<button type="button" class="route" data-mode="paste" aria-pressed="false">`)
