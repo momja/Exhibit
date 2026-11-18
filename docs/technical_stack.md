@@ -341,6 +341,19 @@ hand-rolled HTML escaping the old string-concatenated pages needed.)
 CodeMirror and the renderer iframe are islands of client JS inside these
 server-rendered pages.
 
+**The logo is two artworks** (Exh-bv8l). `internal/api/logo.svg` is the flat mark:
+the frame alone in a tight viewBox, with no wire, nail or shadow, and no ids. It is
+the header, sign-in, Clerk and admin mark, the app and render-origin favicon, and the
+source `web/pwa-icons` rasterizes into the PWA, maskable and link-preview icons (those
+PNGs are generated into `internal/api/assets/icons` and never committed; the maskable
+safe zone is computed from the viewBox). `internal/api/logo-hanging.svg` adds the nail,
+wire and a single down-right shadow, and only the 404 hero uses it, as an `<img>` data
+URI. `TestHangingLogoGeometry` (`internal/api/logo_test.go`) verifies that its nail, wire apex and frame
+centre share one axis and that the wire's legs land symmetrically. The wire and nail
+lighten under `prefers-color-scheme: dark`; their paint is a presentation attribute,
+because an inline `style` would outrank that rule (a test pins it). Per-artifact favicons
+(`internal/artifacticon`) are separate.
+
 Artifact viewer tabs and direct render documents share a generated SVG favicon
 from `internal/artifacticon`: an asymmetric Mondrian grid inspired by the logo,
 with up to three tag-colored panels in gallery tag order. The panels have similar
