@@ -21,12 +21,19 @@ func TestLoginPageIsPainted(t *testing.T) {
 	require.Equal(t, 200, w.Code)
 	page := w.Body.String()
 
-	assert.Contains(t, page, `class="login-page login-painted"`)
+	// The first visit also plays the descent (login_descent_test.go); the
+	// painted page itself is the same either way.
+	assert.Contains(t, page, `class="login-page login-painted login-descend"`)
 	assert.Contains(t, page, `A shelf for <em>small</em> tools.`)
 	assert.Contains(t, page, `class="login-wordmark"`)
 	assert.Contains(t, page, `<picture class="login-scene-composite">`)
 	assert.Regexp(t, `<img class="login-scene-image"[^>]* width="2560" height="1440"`, page)
-	assert.NotContains(t, page, "-sky-", "the layer set belongs to the descent story, not first paint")
+	// The layer art is inert inside a <template> (fetched only by the descent
+	// module) and absent from the visible markup.
+	template := regexp.MustCompile(`(?s)<template>.*?</template>`)
+	assert.Contains(t, template.FindString(page), "-sky-")
+	page = template.ReplaceAllString(page, "")
+	assert.NotContains(t, page, "-sky-")
 	assert.NotContains(t, page, "-clouds-")
 
 	sources := regexp.MustCompile(`<source [^>]*>`).FindAllString(page, -1)
@@ -51,5 +58,9 @@ func TestLoginPageIsPainted(t *testing.T) {
 		ro.ServeHTTP(r, httptest.NewRequest("GET", u, nil))
 		assert.Equal(t, 200, r.Code, u)
 	}
-	assert.False(t, strings.Contains(page, "<script"), "the login page stays scriptless")
+	// Scriptless except for the first visit's descent module (login_descent_test.go).
+	assert.Equal(t, 1, strings.Count(page, "<script"), "only the descent module")
+	assert.Regexp(t, `<script type="module" src="/assets/v/[^"]+/gallery/login-descent\.js"></script>`, page)
+	assert.NotRegexp(t, `<script(?:\s[^>]*)?>\s*[^<\s]`, page, "no inline script")
+	assert.Regexp(t, `<noscript><style>[^<]*login-scene-composite[^<]*</style></noscript>`, page, "without JS the composite is shown; a noscript style is not a script")
 }

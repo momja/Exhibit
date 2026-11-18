@@ -101,7 +101,9 @@ async function loadClient() {
     appearance: clerkAppearance,
     signInUrl: '/auth/login',
     signUpUrl: '/auth/signup',
-    afterSignOutUrl: '/auth/login',
+    afterSignOutUrl: '/auth/logout',
   });
+  // The sign-in descent holds its own downloads back until Clerk is up.
+  window.dispatchEvent(new Event('exhibit:clerk-loaded'));
   return window.Clerk;
 }

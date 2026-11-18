@@ -50,10 +50,13 @@ const files = [
   // have and profile.js (av-4wyq) drives a deletion /admin/users must not.
   "settings.css", "settings.js", "profile.js", "agent-grants.js",
   "agent.css", "agent.js", "session-preparation.js", "agent-resize.js", "agent-questions.js", "message-actions.js",
-  // The login page (av-q30x) is stylesheet-only: it deliberately ships no
-  // script, being the one page a not-yet-authenticated visitor has to be able
-  // to use.
+  // The login page (av-q30x) works without script, being the one page a
+  // not-yet-authenticated visitor has to be able to use. Its only script is
+  // the descent module (Exh-vsw0), loaded on the one visit that animates; it
+  // never touches the form.
   "login.css",
+  "login-descent.css",
+  "login-descent.js",
 ];
 
 for (const f of files) {

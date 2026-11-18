@@ -408,6 +408,7 @@ func (ro *Router) authLogout(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	ro.clearCookie(w, sessionCookieName)
+	ro.clearCookie(w, descentCookieName)
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
@@ -425,6 +426,8 @@ type loginPageData struct {
 	Error    string
 	SSO      bool
 	SSOHref  string
+	// Descend asks the page to play the sign-in descent (Exh-vsw0).
+	Descend bool
 }
 
 // renderLogin writes the login page. next must already have been through
@@ -438,6 +441,7 @@ func (ro *Router) renderLogin(w http.ResponseWriter, r *http.Request, status int
 		Error:    errMsg,
 		SSO:      ro.identityEnabled(),
 		SSOHref:  "/auth/sso",
+		Descend:  ro.playsDescent(w, r),
 	}
 	if data.SSO && next != "" {
 		data.SSOHref += "?next=" + url.QueryEscape(next)
@@ -529,6 +533,31 @@ func (ro *Router) setCookie(w http.ResponseWriter, name, value string, ttl time.
 		Secure:   ro.cookieSecure(),
 		SameSite: http.SameSiteLaxMode,
 	})
+}
+
+// descentCookieName records that this browser has been shown the sign-in
+// descent animation (Exh-vsw0). Its value is the constant "1": it identifies
+// nobody and authorizes nothing, so there is nothing in it to protect beyond
+// what any app-origin cookie already gets (host-only, HttpOnly, SameSite=Lax,
+// Secure on https). It lives a year because "the first visit" has no natural end.
+const descentCookieName = "exhibit_descent_seen"
+
+const descentCookieTTL = 365 * 24 * time.Hour
+
+// playsDescent decides, on the server, whether this sign-in page plays the
+// descent: only when the browser has not been shown it since it last signed
+// out. It records the decision in the same response, so a reload, a failed
+// password attempt or a second tab shows the final frame. Sign-out clears the
+// cookie (authLogout; hosted sign-out reaches it through /auth/logout), which
+// re-arms the next visit. The decision has to be server-side because the page
+// must be usable before, and without, any script: the descent module is loaded
+// only on the visit this marks.
+func (ro *Router) playsDescent(w http.ResponseWriter, r *http.Request) bool {
+	if c, err := r.Cookie(descentCookieName); err == nil && c.Value != "" {
+		return false
+	}
+	ro.setCookie(w, descentCookieName, "1", descentCookieTTL)
+	return true
 }
 
 func (ro *Router) clearCookie(w http.ResponseWriter, name string) {

@@ -154,8 +154,8 @@ The fonts workspace (`web/fonts`) vendors Schibsted Grotesk and Fraunces (both S
 from the exact-pinned `@fontsource-variable/*` packages (`package.json` plus the
 lockfile's integrity hashes) into `internal/api/assets/fonts/`, with the licence files
 beside them. Schibsted Grotesk is one variable woff2 narrowed to wght 400-800 by
-fontTools' instancer. Fraunces is a **static** upright instance pinned at opsz 72,
-wght 600, SOFT 100, WONK 0: it has no variation axes and is a fraction of the variable
+fontTools' instancer. Fraunces is two **static** instances, upright and italic (from Fraunces' italic source; the sign-in headline's "small"), each pinned at opsz 72,
+wght 600, SOFT 100, WONK 0: each has no variation axes and is a fraction of the variable
 file. `fonts.css` declares the `@font-face`s with `font-display: swap` and relative
 `url()`s, which resolve inside the versioned `/assets/v/<build>/` tree; the shared
 `fontsHead` partial links it. Changing the headline weight or any axis means editing
