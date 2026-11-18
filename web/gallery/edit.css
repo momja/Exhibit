@@ -39,12 +39,11 @@ main{padding:var(--page-top) var(--page-gutter);max-width:900px;margin:0 auto}
 .origin-add{margin-top:12px}
 .allowlist-row {
   padding: var(--space-2) 0;
-  font-size: 0.8125rem;
 }
 .allowlist-row code {
-  background: var(--color-ground);
-  padding: 1px var(--space-2);
-  border-radius: var(--radius-sm);
+  padding-block: var(--space-2);
+  font-size: 0.875rem;
+  line-height: 1.45;
   overflow-wrap: anywhere;
 }
 .origin-block-actions {
