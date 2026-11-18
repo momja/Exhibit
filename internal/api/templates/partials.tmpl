@@ -162,12 +162,12 @@
   </ul>{{else}}<p class="text-sm muted">This artifact has no tags.</p>{{end}}
   <div id="tag-list-error" class="text-sm tag-error" role="alert" hidden></div>
   {{if .Available}}<label for="tag-add-select" class="field-label">Add existing tag</label>
-  <div class="tag-add-row">
+  <div class="tag-add-row text-action-row">
     <select id="tag-add-select" class="select" aria-label="Tag to add" aria-describedby="tag-add-error">
       <option value="">Choose a tag…</option>
       {{range .Available}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
     </select>
-    <button type="button" class="btn btn-sm btn-sec" id="tag-add-confirm" disabled><i class="ph ph-plus" aria-hidden="true"></i> Add</button>
+    <button type="button" class="btn btn-sec icon-btn" id="tag-add-confirm" aria-label="Add tag" title="Add tag" disabled><i class="ph ph-plus" aria-hidden="true"></i></button>
   </div>
   {{else}}<p class="form-help tag-available-note">{{if .Tags}}All existing tags are already on this artifact.{{else}}Create your first tag below.{{end}}</p>{{end}}
   <div id="tag-add-error" class="text-sm tag-error" role="alert" hidden></div>
@@ -369,20 +369,19 @@
          wrong person. */}}
     <label for="share-add-input" class="text-sm">Add people</label>
     <p class="share-help" id="share-add-help">Enter existing Exhibit usernames or emails, separated by commas.</p>
-    <form class="share-add" id="share-add-form" method="post" action="/api/shares">
+    <form class="share-add text-action-row" id="share-add-form" method="post" action="/api/shares">
       <input type="text" id="share-add-input" name="recipients" class="field" aria-describedby="share-add-help" placeholder="Username or email" autocomplete="off" data-1p-ignore data-bwignore="true" data-lpignore="true" data-protonpass-ignore="true" enterkeyhint="done" aria-label="Usernames or emails, separated by commas">
-      <button type="submit" class="btn btn-sm">Give access</button>
+      <button type="submit" class="btn icon-btn" aria-label="Give access" title="Give access"><i class="ph ph-user-plus" aria-hidden="true"></i></button>
     </form>
     <div class="share-people-list" tabindex="0" role="region" aria-label="People with access">
     <ul class="share-grants" id="share-grants">
-      {{range .Shares.Grants}}<li class="share-grant" data-recipient-id="{{.RecipientID}}">
-        <span class="share-grant-name">{{.Name}}</span>
-        {{/* A disabled account is shown rather than filtered: a row that
-             silently vanishes is a row the owner cannot revoke and does not
-             know exists. */}}
-        {{if .Disabled}}<span class="text-sm muted">account disabled</span>{{end}}
-        <span class="spacer"></span>
-        <button type="button" class="btn btn-sm btn-sec" data-action="revoke" data-recipient-id="{{.RecipientID}}" aria-label="Revoke access for {{.Name}}"><i class="ph ph-x"></i> Revoke</button>
+      {{range .Shares.Grants}}<li class="share-grant text-action-row" data-recipient-id="{{.RecipientID}}">
+        <div>
+          <span class="share-grant-name">{{.Name}}</span>
+          {{/* Keep disabled accounts visible so their access can still be revoked. */}}
+          {{if .Disabled}}<span class="text-sm muted">account disabled</span>{{end}}
+        </div>
+        <button type="button" class="btn btn-sec icon-btn" data-action="revoke" data-recipient-id="{{.RecipientID}}" aria-label="Revoke access for {{.Name}}" title="Revoke access"><i class="ph ph-x" aria-hidden="true"></i></button>
       </li>{{end}}
     </ul>
     <p class="text-sm muted" id="share-empty"{{if .Shares.Grants}} hidden{{end}}>Not shared with anyone yet.</p>

@@ -36,15 +36,12 @@ body[data-pip-corner^=t] .pip-notices{top:auto;bottom:0}
 .share-cols{display:flex;flex-direction:column;gap:16px}
 .share-col{flex:0 0 auto;display:flex;flex-direction:column;gap:8px;min-width:0}
 .share-col h3{margin:0;font-size:.875rem;font-weight:600;line-height:1.5;color:var(--color-ink-soft)}
-.share-add{display:flex;gap:8px;align-items:center}
-.share-add .field{flex:1;min-width:0}
 /* A long guest list must not push the link and saved-data settings far away.
    Its limit follows the window rather than a fixed number of people. */
 #share-panel .share-people-list{display:flex;flex-direction:column;max-block-size:30dvh;min-block-size:0;overflow-y:auto;scrollbar-gutter:auto}
 #share-panel .share-people-list:focus-visible{outline:2px solid var(--brand-blue);outline-offset:3px;border-radius:4px}
 .share-grants{list-style:none;display:flex;flex-direction:column}
-.share-grant{display:flex;align-items:center;gap:8px;min-block-size:45px;font-size:13px;line-height:20px;padding:8px 0;border-bottom:1px solid var(--color-hairline)}
-.share-grant .btn{flex-shrink:0;justify-content:center;line-height:16px}
+.share-grant{min-block-size:45px;font-size:13px;line-height:20px;padding:8px 0;border-bottom:1px solid var(--color-hairline)}
 .share-grant-name{overflow-wrap:anywhere}
 /* Saved-data choices persist as soon as a selection is confirmed. */
 .state-sharing{flex:0 0 auto;min-width:0;display:flex;flex-direction:column;gap:12px;border-top:1px solid var(--color-hairline);padding-top:16px}
@@ -89,11 +86,9 @@ body[data-pip-corner^=t] .pip-notices{top:auto;bottom:0}
   .state-choice-description{font-size:var(--text-helper);line-height:var(--line-helper)}
 }
 
-.share-add>.btn{min-height:var(--control-height)}
 
 .share-replace-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 @media(max-width:767px){
-  .share-add>.btn{min-height:44px;align-self:stretch}
   .share-replace-row{flex-direction:column;align-items:flex-start;gap:6px}
 }
 
@@ -103,6 +98,6 @@ body[data-pip-corner^=t] .pip-notices{top:auto;bottom:0}
 .modal-dialog .share-data-note{display:flex;align-items:flex-start;gap:8px;margin:0;padding:12px;border-radius:var(--radius-md);background:var(--color-subtle);color:var(--color-ink-mid);font-size:var(--text-helper);line-height:var(--line-helper)}
 .share-data-note>i{flex:0 0 auto;font-size:1rem;line-height:1.5;color:var(--color-accent)}
 .share-col .modal-check{margin-top:0}
-#share-panel .share-replace-row>.btn,#share-panel .share-grant>.btn{min-height:44px}
+#share-panel .share-replace-row>.btn{min-height:44px}
 .state-choice input{left:14px;top:15px;z-index:1;opacity:1;width:18px;height:18px;accent-color:var(--color-accent);margin:0}
 @media(max-width:480px){.state-choice>span{padding-left:44px}}

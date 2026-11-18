@@ -36,7 +36,7 @@ test('expanded editor tools keep descriptions with actions and consistent operab
           return {
             heading: style(panel.querySelector('h3')!),
             sharedHeading: style(document.querySelector('.tag-create h3')!),
-            labels: [...panel.querySelectorAll('label.row > span')].map(style),
+            labels: [...panel.querySelectorAll('label.row > .field-label')].map(style),
             sharedLabel: style(document.querySelector('label[for=title]')!),
             add: buttonPaint(panel.querySelector('#al-add-btn')!),
             sharedAdd: buttonPaint(document.querySelector('.tag-add-row button')!),
@@ -117,10 +117,10 @@ test('expanded editor tools keep descriptions with actions and consistent operab
     const draftRow = await page.locator('#allowlist-rows .allowlist-row').evaluate(row => {
       const origin = row.querySelector('code')!.getBoundingClientRect();
       const action = row.querySelector('button')!.getBoundingClientRect();
-      return { separated: origin.bottom <= action.top, fits: row.scrollWidth <= row.clientWidth };
+      return { adjacent: origin.right <= action.left && origin.top < action.bottom && action.top < origin.bottom, fits: row.scrollWidth <= row.clientWidth };
     });
-    expect(draftRow).toEqual({ separated: true, fits: true });
-    await page.locator('#allowlist-rows').getByRole('button', { name: 'Remove', exact: true }).click();
+    expect(draftRow).toEqual({ adjacent: true, fits: true });
+    await page.locator('#allowlist-rows').getByRole('button', { name: 'Remove https://draft.example.test', exact: true }).click();
     await expect(page.locator('#allowlist-rows .allowlist-row')).toHaveCount(0);
     await expect(page.locator('#allowlist-rows')).toContainText('No sites allowed yet.');
     const savedArtifact = await api.get(`/api/artifacts/${artifact.id}`);
