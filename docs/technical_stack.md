@@ -32,6 +32,7 @@ safety" (§12).
 | Reusable UI behavior | **Stimulus** — self-hosted ES module, Go partials own markup (§9) | explicit component initialization in vanilla JS |
 | Response compression | `chi` `middleware.Compress` — gzip, explicit type allowlist | brotli (better ratio, new dependency) |
 | Agent harness | **Pi Bolt 1.0.8 / Pi 1.4.0** (native `pi --mode rpc` sidecar per session; runtime-loaded TS tools extension; keys AES-GCM at rest; per-session scoped API credentials; `internal/mockllm` for tests) | Claude Agent SDK (heavier, vendor-tied) |
+| Fonts | **Schibsted Grotesk** (text) and **Fraunces** (one headline per page), SIL OFL, self-hosted from the app origin by `web/fonts` (woff2, Fraunces a static instance), `display=swap`, system-ui / Georgia fallbacks (§9) | Google Fonts CDN (rejected, see §9) |
 | Icons | **Phosphor Icons** — self-hosted / embedded on app origin, no CDN (§9) | Lucide / Heroicons |
 | Hosted login | Clerk Go SDK + ClerkJS / Clerk UI from the application Frontend API domain; enabled only by Clerk configuration | Replacing self-hosted login |
 | Login (optional) | Generic OIDC via discovery — `coreos/go-oidc/v3` + `golang.org/x/oauth2`, exchanged once for our own session (§10) | auth at the operator's proxy (also supported); vendor SDK (rejected) |
@@ -340,6 +341,19 @@ hand-rolled HTML escaping the old string-concatenated pages needed.)
 CodeMirror and the renderer iframe are islands of client JS inside these
 server-rendered pages.
 
+**The logo is two artworks** (Exh-bv8l). `internal/api/logo.svg` is the flat mark:
+the frame alone in a tight viewBox, with no wire, nail or shadow, and no ids. It is
+the header, sign-in, Clerk and admin mark, the app and render-origin favicon, and the
+source `web/pwa-icons` rasterizes into the PWA, maskable and link-preview icons (those
+PNGs are generated into `internal/api/assets/icons` and never committed; the maskable
+safe zone is computed from the viewBox). `internal/api/logo-hanging.svg` adds the nail,
+wire and a single down-right shadow, and only the 404 hero uses it, as an `<img>` data
+URI. `TestHangingLogoGeometry` (`internal/api/logo_test.go`) verifies that its nail, wire apex and frame
+centre share one axis and that the wire's legs land symmetrically. The wire and nail
+lighten under `prefers-color-scheme: dark`; their paint is a presentation attribute,
+because an inline `style` would outrank that rule (a test pins it). Per-artifact favicons
+(`internal/artifacticon`) are separate.
+
 Artifact viewer tabs and direct render documents share a generated SVG favicon
 from `internal/artifacticon`: an asymmetric Mondrian grid inspired by the logo,
 with up to three tag-colored panels in gallery tag order. The panels have similar
@@ -572,6 +586,26 @@ background on a dark page. The widget base stylesheet therefore leaves
 `color-scheme` to the widget, and the agent's prompt asks artifacts and
 widgets to declare `light dark` themselves (`docs/widgets.md`).
 
+**Fonts: self-hosted, like icons and htmx (Exh-wjqh).** The brand typefaces
+are vendored by the `web/fonts` asset workspace from exact-pinned
+`@fontsource-variable` packages (lockfile integrity; SIL OFL, licence files
+shipped beside the fonts) into `assets/fonts`, and loaded through the shared
+`fontsHead` partial that every app-origin page head includes (a preload of the
+text face plus `fonts.css`, served at a versioned asset URL). The first
+version loaded them from Google Fonts and was reversed: that stylesheet is
+render-blocking, so a network that silently drops packets to Google left every
+page blank for tens of seconds, and every page view sent the visitor's IP and
+the instance's hostname to a third party. Schibsted Grotesk ships as one
+variable woff2 narrowed to wght 400-800 (the weights the gallery CSS uses).
+Fraunces ships as a static instance pinned at opsz 72, wght 600, SOFT 100,
+WONK 0, made with fontTools' instancer (python3 + fonttools/brotli, the same
+build dependency as the Phosphor subset; the build fails without it). It has
+no variation axes, so `font-variation-settings` cannot change it, and
+`web/fonts/build.mjs` is the single source for those settings. Any other
+Fraunces weight or setting means widening that build. `.font-headline` sets the
+family, weight 600 and `font-synthesis:none`. `--font-sans` falls back to
+`system-ui` and `--font-display` to Georgia. CodeMirror and code stay monospace.
+
 **Icons: Phosphor Icons — the required icon set for all new UI.** Standardize on
 [Phosphor Icons](https://phosphoricons.com) so every future story inherits one consistent
 icon vocabulary without re-deciding. Load it **self-hosted on the app origin, never from a
@@ -772,15 +806,24 @@ Turso/libSQL territory and a larger commitment — out of scope for the default 
   worker. None of these are part of a release — they're things a deployer adds around
   the image.
 - **Build-time only:** Go toolchain, Node + esbuild (to bundle CodeMirror and vendor
-  the Phosphor icon and htmx assets — see `build_assets.md`), python3 +
+  the Phosphor icon, brand font and htmx assets — see `build_assets.md`), python3 +
   fonttools/brotli (to subset the Phosphor font to the `web/icons/icons.txt`
-  registry — see `build_assets.md` §6), `goose` (migrations are embedded
+  registry — see `build_assets.md` §6 — and to instance the self-hosted Fraunces
+  font, `web/fonts`, `build_assets.md` §8), `goose` (migrations are embedded
   and run from the binary). Dev-only: golangci-lint (`make lint`, not vendored) and
   ESLint for the editor workspace (§5).
 
 The deliberate outcome: in production it's one small image and one process by default,
 with safety and richness added as opt-in Compose profiles — matching the spec's promise
 that the easy path and the serious path share almost all of the same system.
+
+One workspace commits its encoded output: `web/hero-art/images/` holds the responsive
+sign-in hero paintings (WebP/AVIF) and a manifest. `design_files/` is dockerignored and
+the Node stage has neither the lossless masters nor the matting dependencies, so the
+build cannot re-encode them; `web/hero-art/build.mjs` copies the files and fails when
+any size differs from the manifest. The encoder (`sharp`) lives outside `web/` in
+`design_files/brand-refresh/tools/hero-export`, whose `npm run check` guards against
+byte drift. See `build_assets.md`.
 
 The Node-built assets (CodeMirror bundle, Phosphor Icons, htmx) are generated into
 `internal/api/assets/` at build time and **not** committed to git. See `build_assets.md`

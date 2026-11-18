@@ -9,8 +9,9 @@
 # the built bytes from this stage; Node is not needed by the native Pi sidecar.
 FROM node:22-bookworm-slim AS assets
 
-# python3 + fonttools/brotli for the Phosphor subset step (web/icons/build.mjs,
-# av-diue): the icon font ships subset to the classes the repo uses.
+# python3 + fonttools/brotli for the Phosphor subset step (web/icons/build.mjs)
+# (av-diue: the icon font ships subset to the classes the repo uses) and the
+# Fraunces instancing step (web/fonts/build.mjs, Exh-wjqh).
 RUN apt-get update \
 	&& apt-get install -y --no-install-recommends python3 python3-fonttools python3-brotli \
 	&& rm -rf /var/lib/apt/lists/*

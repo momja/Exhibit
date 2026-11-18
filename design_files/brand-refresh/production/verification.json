@@ -1,0 +1,86 @@
+{
+  "day": {
+    "native": [
+      1672,
+      941
+    ],
+    "composite": [
+      2560,
+      1440
+    ],
+    "sky": [
+      2560,
+      2272
+    ],
+    "phone": [
+      1170,
+      2535
+    ],
+    "max_error": 0,
+    "mean_error": 0.0,
+    "alpha_max_error": 0,
+    "delta_e_2000": {
+      "before": 3.3280423968698596,
+      "after": 2.2527499203116386
+    },
+    "restoration_max_error": 146,
+    "restoration_mean_error": 10.41524242259838,
+    "composite_rgb_sha256": "6aecd554544e14b5cc2fa2216532ad7ca1493a16e5a7433150f986f6ff06703a",
+    "phone_rgb_sha256": "2edf8e42db589ba13c42854d1b504db94b82cc131ca5e4d47b1e3e81f901703e"
+  },
+  "dusk": {
+    "native": [
+      1672,
+      941
+    ],
+    "composite": [
+      2560,
+      1440
+    ],
+    "sky": [
+      2560,
+      2272
+    ],
+    "phone": [
+      1170,
+      2535
+    ],
+    "max_error": 0,
+    "mean_error": 0.0,
+    "alpha_max_error": 0,
+    "delta_e_2000": {
+      "before": 3.5740254102773963,
+      "after": 2.5444258171341847
+    },
+    "restoration_max_error": 72,
+    "restoration_mean_error": 7.136922019675926,
+    "composite_rgb_sha256": "958314da58382f4d2c5b6026c6d0971e5bec98c211996365a81efaf66897cd98",
+    "phone_rgb_sha256": "aca172e800304843f82800615a9dc8d63349d53ef0a50183450cf92f93faea12"
+  },
+  "sha256": {
+    "inputs": {
+      "production/day-native.webp": "4ebc29c755dec92655513b415b56d55243d9f2cc92eeb30d8a60347fc50aeeb3",
+      "production/day-sky-native.webp": "b8bad1a056c59ed88d3bee9057e21d6b2c4762af1e4c9b1dcfee3272f39d0700",
+      "production/day-clouds-native.webp": "bba7f9b108dc30b80565864fef6078a6f7adaade3417897f43b67a9c19b99547",
+      "production/day-hill-native.webp": "df912f81277935edc4108cd25388065ad5f44e93e743231b7866ea4637d690b7",
+      "paintings/hero-day.png": "24414c21472c411d6b44e0255ef9bf6a2a0561c7387c88fe6ce24b0c8c0afd93",
+      "layers/day-clouds.webp": "128d97696317b7c925a5691b9fac926bae9e3e67dba3551bb925eac0f19b85d4",
+      "layers/day-hill.webp": "6d4c4bb4f834b49b3b4cbb7c71c862e5f080c15c13f3eb707deb8dea323fc317",
+      "production/dusk-native.webp": "8918fb07015411a72a8488aeed871cd836fe2fb19caa8cdda387240c69b7234b",
+      "production/dusk-sky-native.webp": "eabc760d9a03dff6afa6a407d6d0d95f9ec4e01e22c1633bbca0850c0854eea3",
+      "production/dusk-clouds-native.webp": "cf6436d1bd551cce81da43ad9e3b30f53ef56adb9605cd4e2875014d612ba877",
+      "production/dusk-hill-native.webp": "f7ced6faf403dd8f99d2f4746a3ac68a9351e3c591801a4f6460d3f4ba4bbdc3",
+      "paintings/hero-dusk.png": "ff2e43f55e56def0f97369168f79c7d5dc03327d2e75b3bed384e90629e78699",
+      "layers/dusk-clouds.webp": "ca3814a32574c771b8af5a3a70cb988bf1bd100efd53c7b5d14b09fafa1b9dcb",
+      "layers/dusk-hill.webp": "1fddbf70b33219049ef26547472cef64fad3509521f167132f3ca0e901083e01"
+    },
+    "outputs": {
+      "production/day-sky.webp": "92bfc08b88f9cb4e4a1be8cf60d992d576d8b366e8b8cb323b2eab132e7fe404",
+      "production/day-clouds.webp": "40309b34979926fac407b6483ba7a5c9325b69374115ac65224ae3218364414a",
+      "production/day-hill.webp": "c1380c39003b34ff9ab61cda896cfcb38758f434f709b0e56700b68b9fc0148e",
+      "production/dusk-sky.webp": "111fe74799b0bfc4b8fe7cc0cfbac6db10cfb23c117743380e37626a052c0fcf",
+      "production/dusk-clouds.webp": "255c681f5e79267ea4950984f65b1442ac9207689c0aa49a7a17b66e80c1d809",
+      "production/dusk-hill.webp": "a2dcfc497e6eea2388d0b7ca08ad0969559d2f17ad505ebb76c98a305b8b46e6"
+    }
+  }
+}
