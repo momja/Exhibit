@@ -6,7 +6,7 @@
 body{background:var(--color-ground);color:var(--color-ink);min-height:100vh}
 main{padding:var(--page-top) var(--page-gutter);max-width:900px;margin:0 auto}
 .edit-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px}
-.edit-heading h1{font-size:var(--page-title-size);font-weight:650;letter-spacing:-.025em;line-height:1.25;overflow-wrap:anywhere}
+.edit-heading h1{font-size:var(--page-title-size);letter-spacing:-.01em;line-height:1.25;overflow-wrap:anywhere}
 .edit-heading p{margin-bottom:4px}
 .edit-card>label{display:block;margin-bottom:6px}
 @media(max-width:600px){main{padding:var(--page-top) var(--page-gutter)}.edit-heading{align-items:flex-start;flex-direction:column;gap:8px}.edit-heading h1{font-size:var(--page-title-size)}.edit-card{padding:16px}.edit-card>.btn-row{flex-wrap:wrap}}
