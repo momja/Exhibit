@@ -11,6 +11,7 @@ and Stimulus as described in `docs/`.
 | Path | What it is | Used by |
 |---|---|---|
 | `paintings/hero-day.png`, `hero-dusk.png` | Hero paintings (1600x900): poppies, Mondrian grid on the screen. Day for light mode, dusk for dark. | [Exh-90b2](../../.tickets/Exh-90b2.md) until [Exh-qhvv](../../.tickets/Exh-qhvv.md) replaces them |
+| `production/` | Production day/dusk lossless WebP masters (sky, matted clouds and hill layers) and retained native inputs; composite and phone crops are assembled from them. `tools/hero-export/` encodes the derivatives. [Generation, coordinates and export instructions](production/README.md). Committed responsive WebP/AVIF derivatives live in `web/hero-art/images/`, served under `/assets/hero-art/`. | [Exh-qhvv](../../.tickets/Exh-qhvv.md), [Exh-90b2](../../.tickets/Exh-90b2.md), [Exh-vsw0](../../.tickets/Exh-vsw0.md) |
 | `layers/{day,dusk}-{sky,clouds,hill}.webp` | Paintings cut into three layers by `tools/split.py`. The sky is 1600x1420, extended 520px upward. Expect halos; the real layers come from Exh-qhvv. | [Exh-vsw0](../../.tickets/Exh-vsw0.md) |
 | `prototypes/descend.html` | Working descent animation over the layers. Open the file in a browser; Day/Dusk/Replay in the top bar. | Exh-vsw0 |
 | `logo/logo-pigments.svg` | Current logo recoloured in painting pigments, hanger still attached. | [Exh-d5ku](../../.tickets/Exh-d5ku.md) after [Exh-bv8l](../../.tickets/Exh-bv8l.md) |

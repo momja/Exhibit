@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/momja/Exhibit/internal/tile"
 	"github.com/stretchr/testify/require"
 )
 
@@ -164,6 +165,65 @@ func TestPrimaryHoverIsPerceptible(t *testing.T) {
 		t.Log(fmt.Sprintf("%s brand-blue vs brand-blue-hover %.2f", mode, ratio))
 		if ratio < minHoverStep {
 			t.Errorf("%s: hover fill is %.2f:1 from rest, needs %.1f:1", mode, ratio, minHoverStep)
+		}
+	}
+}
+
+// hslToLinearRGB converts hsl(h s% l%) to the linear channels contrastRatio
+// takes. The tile tokens are written as "S% L%" pairs completed by a hue.
+func hslToLinearRGB(h, s, l float64) [3]float64 {
+	s, l = s/100, l/100
+	c := (1 - math.Abs(2*l-1)) * s
+	x := c * (1 - math.Abs(math.Mod(h/60, 2)-1))
+	m := l - c/2
+	var r, g, b float64
+	switch int(h/60) % 6 {
+	case 0:
+		r, g, b = c, x, 0
+	case 1:
+		r, g, b = x, c, 0
+	case 2:
+		r, g, b = 0, c, x
+	case 3:
+		r, g, b = 0, x, c
+	case 4:
+		r, g, b = x, 0, c
+	default:
+		r, g, b = c, 0, x
+	}
+	lin := func(v float64) float64 {
+		v += m
+		if v <= .04045 {
+			return v / 12.92
+		}
+		return math.Pow((v+.055)/1.055, 2.4)
+	}
+	return [3]float64{lin(r), lin(g), lin(b)}
+}
+
+func tileSL(t *testing.T, tokens map[string]string, name string) (s, l float64) {
+	t.Helper()
+	m := regexp.MustCompile(`^([0-9.]+)%\s+([0-9.]+)%`).FindStringSubmatch(tokens["--"+name])
+	require.NotNil(t, m, "--%s must be an \"S%% L%%\" pair, got %q", name, tokens["--"+name])
+	s, _ = strconv.ParseFloat(m[1], 64)
+	l, _ = strconv.ParseFloat(m[2], 64)
+	return s, l
+}
+
+// The monogram's letters hold WCAG AA on their plate for every palette hue in
+// both schemes (Exh-z8i2). The plate is opaque and sits above the grain, so
+// the noise cannot lower this ratio.
+func TestTilePaletteKeepsTextContrast(t *testing.T) {
+	light, dark := parseTokens(t)
+	for mode, tokens := range map[string]map[string]string{"light": light, "dark": dark} {
+		inkS, inkL := tileSL(t, tokens, "tile-mono-ink")
+		fillS, fillL := tileSL(t, tokens, "tile-mono-fill")
+		for _, hue := range tile.Palette {
+			ratio := contrastRatio(hslToLinearRGB(float64(hue), inkS, inkL), hslToLinearRGB(float64(hue), fillS, fillL))
+			t.Log(fmt.Sprintf("%s hue %d monogram %.2f", mode, hue, ratio))
+			if ratio < 4.8 { // AA plus headroom for rendering variance
+				t.Errorf("%s: monogram on hue %d is %.2f:1, needs 4.8:1", mode, hue, ratio)
+			}
 		}
 	}
 }
