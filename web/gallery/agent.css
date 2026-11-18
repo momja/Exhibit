@@ -19,7 +19,7 @@ body{background:var(--color-ground);color:var(--color-ink);display:flex;flex-dir
 .chat-bar{position:absolute;top:10px;right:12px;z-index:2;pointer-events:none}
 /* This inset scrolls away with the messages instead of clipping every turn. */
 .chat:has(#history-btn:not([hidden])) #messages{padding-top:56px;scroll-padding-top:56px}
-.hist-btn,.history-back{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;font:inherit;font-size:13px;border:1px solid var(--color-border);border-radius:6px;background:var(--color-panel);color:var(--color-ink-soft);cursor:pointer}
+.hist-btn,.history-back{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;font:inherit;font-size:13px;border:1px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-panel);color:var(--color-ink-soft);cursor:pointer}
 .hist-btn{pointer-events:auto;padding:7px 12px;border-radius:999px;box-shadow:var(--shadow-card-hover)}
 .hist-btn:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px}
 .hist-btn:hover,.history-back:hover{border-color:var(--brand-blue);color:var(--brand-blue)}
@@ -157,7 +157,7 @@ body{background:var(--color-ground);color:var(--color-ink);display:flex;flex-dir
 .preview-open{font:inherit;background:none;border:0;padding:0;cursor:pointer}
 .preview-bar .title{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .preview-bar .spacer{flex:1}
-.snip-btn{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;font-size:13px;border:1px solid var(--color-border);border-radius:6px;background:var(--color-panel);cursor:pointer}
+.snip-btn{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;font-size:13px;border:1px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-panel);cursor:pointer}
 .snip-btn:hover:not(:disabled){border-color:var(--brand-blue);color:var(--brand-blue)}
 .snip-btn:disabled{color:var(--color-faint);cursor:default}
 .snip-btn.active{background:var(--brand-blue);color:var(--color-on-accent);border-color:var(--brand-blue)}
