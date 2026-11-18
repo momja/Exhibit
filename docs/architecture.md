@@ -966,6 +966,27 @@ type Identity struct{ ExternalID, Email string }
   `Config.LocalUsers` is read at startup, so the first CLI-created account needs a
   restart.
 
+**Painted sign-in page** (Exh-90b2): `/auth/login` (local form, failure page and
+the hosted Clerk page) is the brand's front door. `loginScene` renders a fixed
+`.login-scene` stage behind the page: one `<picture>` of the static composite
+(day, or dusk under `prefers-color-scheme: dark`; the portrait crop at 600px
+and below; AVIF before WebP; explicit dimensions) from `/assets/hero-art/`, and
+the shared `.grain` layer over it. Only the active mode and one width download.
+The sky/clouds/hill layers are not loaded here: Exh-vsw0 adds them as further
+children of `.login-scene` above the composite, so the form (`.login-content`,
+a sibling of the stage) is never restructured or moved. The headline and
+tagline sit directly on the sky: a feathered shade (`--painting-shade`, a
+radial gradient in the scene's `::after`, no visible edge) keeps cream text
+above 3:1 over any part of the sky, so contrast does not depend on which
+pixels, or later which animated layer, are behind it. The headline is large
+text, and the tagline and wordmark are sized as large text too (19px and 20px at weight 700,
+the WCAG bold threshold; 600 would count as normal text and need 4.5:1). The box is
+the ordinary `.login` card; for Clerk, `.login-clerk` is the box and Clerk's own
+card is flattened inside it (`clerkAuthAppearance`, plus `.cl-*` rules). On
+phones the painting owns a band at the bottom of the page and the content
+reserves it, so a short screen scrolls rather than covering the figure. The
+OAuth consent page keeps the plain card (`.login-painted` scopes the art).
+
 ### 3.8a Administration (av-utap)
 
 Acting on your own account (§3.8b) needs a session. Acting on someone else's needs

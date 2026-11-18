@@ -20,11 +20,11 @@
 <link rel="stylesheet" href="{{asset "gallery/login.css"}}">
 {{template "clerkScripts" .Clerk}}
 </head>
-<body class="login-page">
+<body class="login-page login-painted">{{template "loginScene"}}
 {{template "appHeader" .Header}}
 <div class="login-content">
+{{template "loginIntro"}}
 <main class="login login-clerk">
-<p class="login-sub">Your Gallery, wherever you work.</p>
 <div data-controller="clerk" data-clerk-mode-value="{{.Mode}}" data-clerk-next-value="{{.Next}}">
  <p data-clerk-target="status" role="status">Loading your account…</p>
  <div data-clerk-target="mount"></div>

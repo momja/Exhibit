@@ -12,6 +12,41 @@
      Username and Error are echoed back through html/template's contextual
      escaping — Username is whatever was typed into the form, so it is
      attacker-controlled text and must never be assembled into markup. */}}
+{{/* The painted front door (Exh-90b2). One scene, shared by every sign-in page.
+
+     Structure is built to be extended by Exh-vsw0 (the descent animation):
+     .login-scene is a fixed, pointer-less stage; .login-scene-composite is the
+     static final frame that paints first. The animation adds its sky, cloud and
+     hill layers as further children of .login-scene, stacked above the composite
+     with the same placement rules, then hides the composite once they load. Only
+     .login-scene ever moves; .login-content never does.
+
+     Only the active colour mode and one width download: sources match in order,
+     so the first matching media query and a supported type win. Light is the
+     default, dusk follows prefers-color-scheme: dark, phones get the portrait
+     crop. Explicit dimensions keep the stage from shifting layout. */}}
+{{define "loginScene"}}<div class="login-scene" aria-hidden="true">
+  <picture class="login-scene-composite">
+    <source media="(max-width:600px) and (prefers-color-scheme:dark)" type="image/avif" srcset="{{asset "hero-art/dusk-phone-750.avif"}} 750w, {{asset "hero-art/dusk-phone-1170.avif"}} 1170w" sizes="100vw" width="1170" height="2535">
+    <source media="(max-width:600px) and (prefers-color-scheme:dark)" type="image/webp" srcset="{{asset "hero-art/dusk-phone-750.webp"}} 750w, {{asset "hero-art/dusk-phone-1170.webp"}} 1170w" sizes="100vw" width="1170" height="2535">
+    <source media="(max-width:600px)" type="image/avif" srcset="{{asset "hero-art/day-phone-750.avif"}} 750w, {{asset "hero-art/day-phone-1170.avif"}} 1170w" sizes="100vw" width="1170" height="2535">
+    <source media="(max-width:600px)" type="image/webp" srcset="{{asset "hero-art/day-phone-750.webp"}} 750w, {{asset "hero-art/day-phone-1170.webp"}} 1170w" sizes="100vw" width="1170" height="2535">
+    <source media="(prefers-color-scheme:dark)" type="image/avif" srcset="{{asset "hero-art/dusk-composite-960.avif"}} 960w, {{asset "hero-art/dusk-composite-1600.avif"}} 1600w, {{asset "hero-art/dusk-composite-2560.avif"}} 2560w" sizes="max(100vw, 177.8vh)" width="2560" height="1440">
+    <source media="(prefers-color-scheme:dark)" type="image/webp" srcset="{{asset "hero-art/dusk-composite-960.webp"}} 960w, {{asset "hero-art/dusk-composite-1600.webp"}} 1600w, {{asset "hero-art/dusk-composite-2560.webp"}} 2560w" sizes="max(100vw, 177.8vh)" width="2560" height="1440">
+    <source type="image/avif" srcset="{{asset "hero-art/day-composite-960.avif"}} 960w, {{asset "hero-art/day-composite-1600.avif"}} 1600w, {{asset "hero-art/day-composite-2560.avif"}} 2560w" sizes="max(100vw, 177.8vh)" width="2560" height="1440">
+    <source type="image/webp" srcset="{{asset "hero-art/day-composite-960.webp"}} 960w, {{asset "hero-art/day-composite-1600.webp"}} 1600w, {{asset "hero-art/day-composite-2560.webp"}} 2560w" sizes="max(100vw, 177.8vh)" width="2560" height="1440">
+    <img class="login-scene-image" src="{{asset "hero-art/day-composite-1600.webp"}}" alt="" width="2560" height="1440" decoding="async" fetchpriority="high">
+  </picture>
+  <div class="login-scene-grain grain"></div>
+</div>{{end}}
+
+{{/* Headline and tagline, over the painting. Copy overlaps Exh-s7kn's onboarding
+     copy; see the note on Exh-90b2. */}}
+{{define "loginIntro"}}<div class="login-intro">
+  <p class="login-headline font-headline">A shelf for <em>small</em> tools.</p>
+  <p class="login-tagline">Saved as files, rendered anywhere, yours to keep.</p>
+</div>{{end}}
+
 {{define "login"}}<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -26,11 +61,12 @@
 <link rel="stylesheet" href="{{asset "gallery/components.css"}}">
 <link rel="stylesheet" href="{{asset "gallery/login.css"}}">
 </head>
-<body class="login-page">
+<body class="login-page login-painted">{{template "loginScene"}}
 {{template "appHeader" .Header}}
 <div class="login-content">
+{{template "loginIntro"}}
 <main class="login">
-  <p class="login-sub">Sign in to your Gallery.</p>
+  <p class="login-sub">Sign in to your library</p>
 
   {{if .Error}}
   {{/* role=alert so the message is announced when the page reloads into it —
@@ -77,9 +113,11 @@
 <link rel="stylesheet" href="{{asset "gallery/components.css"}}">
 <link rel="stylesheet" href="{{asset "gallery/login.css"}}">
 </head>
-<body class="login-page">
+<body class="login-page login-painted">{{template "loginScene"}}
 {{template "appHeader" .Header}}
-<div class="login-content"><main class="login">
+<div class="login-content">
+{{template "loginIntro"}}
+<main class="login">
   <p class="login-error" role="alert">{{.Error}}</p>
   <a class="btn login-submit" href="/auth/login">Return to sign in</a>
 </main></div>

@@ -609,7 +609,8 @@ render-blocking, so a network that silently drops packets to Google left every
 page blank for tens of seconds, and every page view sent the visitor's IP and
 the instance's hostname to a third party. Schibsted Grotesk ships as one
 variable woff2 narrowed to wght 400-800 (the weights the gallery CSS uses).
-Fraunces ships as a static instance pinned at opsz 72, wght 600, SOFT 100,
+Fraunces ships as two static instances, upright and italic (the sign-in
+headline's "small", Exh-90b2), each pinned at opsz 72, wght 600, SOFT 100,
 WONK 0, made with fontTools' instancer (python3 + fonttools/brotli, the same
 build dependency as the Phosphor subset; the build fails without it). It has
 no variation axes, so `font-variation-settings` cannot change it, and

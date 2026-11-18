@@ -59,13 +59,13 @@ func TestBrandFontAssetsAreEmbeddedAndServed(t *testing.T) {
 	assert.Contains(t, css.Header().Get("Content-Type"), "text/css")
 	assert.Contains(t, css.Header().Get("Cache-Control"), "immutable", "versioned font URLs are immutable")
 	body := css.Body.String()
-	for _, want := range []string{`font-family:"Schibsted Grotesk"`, "font-family:Fraunces"} {
+	for _, want := range []string{`font-family:"Schibsted Grotesk"`, "font-family:Fraunces", "font-style:italic"} {
 		assert.Contains(t, body, want)
 	}
-	assert.Equal(t, 2, strings.Count(body, "font-display:swap"), "every face swaps")
+	assert.Equal(t, 3, strings.Count(body, "font-display:swap"), "every face swaps")
 
 	urls := regexp.MustCompile(`url\("\./([^"]+)"\)`).FindAllStringSubmatch(body, -1)
-	require.Len(t, urls, 2)
+	require.Len(t, urls, 3)
 	dir := cssPath[:strings.LastIndex(cssPath, "/")+1]
 	for _, m := range urls {
 		w := get(dir + m[1])

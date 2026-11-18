@@ -97,6 +97,13 @@ func authPageHeader(title string) appHeaderView {
 	return appHeaderView{Title: title, Logo: template.HTML(exhibitLogoSVG)}
 }
 
+// paintedAuthHeader is the sign-in pages' header (Exh-90b2): the flat mark with
+// an "Exhibit" wordmark over the painting. The title stays as the page's h1 for
+// assistive technology, since the visible headline is display copy.
+func paintedAuthHeader(title string) appHeaderView {
+	return appHeaderView{Title: title, HideTitle: true, Logo: template.HTML(exhibitLogoSVG + `<span class="login-wordmark" aria-hidden="true">Exhibit</span>`)}
+}
+
 // The viewer keeps its draggable controls as a header variant. Its facts and
 // permissions are composed by the page, while the library owns the markup,
 // styling and controller lifecycle for the entire floating header.
