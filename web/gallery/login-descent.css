@@ -17,12 +17,12 @@
 /* An animating visit starts on the plain sky colour the scene already has, not
  * on the finished picture (the descent would otherwise read as a rewind). The
  * composite is revealed when the run is skipped (the module adds
- * .login-descent-skip, crossfading over 300ms), without JS (<noscript>), under
+ * .login-descent-skip, crossfading over 300ms; the transition lives on that rule alone, so a style pass that precedes this sheet cannot turn the initial opacity into a visible fade), without JS (<noscript>), under
  * reduced motion (below, immediately), or, should the module never arrive, by
  * the delayed animation: only then does it fade in. While the layers play it is
  * covered by the opaque sky, never toggled over the text. */
-.login-descend .login-scene-composite{opacity:0;transition:opacity 300ms ease-out;animation:login-composite-fallback 300ms ease-out 3200ms forwards}
-.login-descent-skip .login-scene-composite{opacity:1}
+.login-descend .login-scene-composite{opacity:0;animation:login-composite-fallback 300ms ease-out 3200ms forwards}
+.login-descent-skip .login-scene-composite{opacity:1;transition:opacity 300ms ease-out}
 @keyframes login-composite-fallback{to{opacity:1}}
 @media (prefers-reduced-motion:reduce){.login-descend .login-scene-composite{opacity:1;transition:none;animation:none}}
 /* Layers exist only where motion is allowed, so turning reduced motion on while

@@ -20,6 +20,17 @@ import (
 // the first frame and never moves; the layers settle exactly where the composite
 // image is drawn; and a visitor who asked for no motion gets no animation and
 // downloads none of the layer art.
+// awaitLoginStyled returns once the form exists and every stylesheet in the page
+// has been parsed, without reading any style. Reading computed style (as
+// WaitVisible does) while a head stylesheet is still loading caches the unstyled
+// value, and the sheet then applies as a 300ms opacity transition: a state no
+// visitor sees, because the browser withholds first paint until head sheets load.
+// Assertions on the first state must start from here.
+func awaitLoginStyled(t *testing.T, ctx context.Context) {
+	t.Helper()
+	require.NoError(t, chromedp.Do(ctx, chromedp.Poll[chromedp.Void](`document.querySelector('#username') !== null && [...document.querySelectorAll('link[rel=stylesheet]')].every(l => l.sheet)`, chromedp.WithPollingTimeout(10*time.Second))))
+}
+
 func TestLoginDescentBrowser(t *testing.T) {
 	for _, motion := range []string{"no-preference", "reduce"} {
 		t.Run(motion, func(t *testing.T) {
@@ -38,7 +49,8 @@ func TestLoginDescentBrowser(t *testing.T) {
 			require.NoError(t, err)
 			_, err = chromedp.Call(ctx, emulation.SetEmulatedMedia, emulation.SetEmulatedMediaParams{Features: []*emulation.MediaFeature{{Name: "prefers-reduced-motion", Value: motion}}})
 			require.NoError(t, err)
-			require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(app.URL+"/auth/login"), chromedp.WaitVisible(chromedp.CSS(`#username`))))
+			require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(app.URL+"/auth/login")))
+			awaitLoginStyled(t, ctx)
 			eval := func(script string) bool {
 				t.Helper()
 				ok, err := chromedp.Run(ctx, chromedp.Evaluate[bool](script))
@@ -59,6 +71,7 @@ func TestLoginDescentBrowser(t *testing.T) {
 				return
 			}
 			require.NoError(t, chromedp.Do(ctx, chromedp.Poll[chromedp.Void](layers+` >= 3`, chromedp.WithPollingTimeout(10*time.Second))))
+			require.True(t, eval(`document.getAnimations().filter(a => a.transitionProperty).length === 0`), "no opacity fade runs on an animating visit")
 			require.True(t, eval(`getComputedStyle(document.querySelector('.login-scene-composite')).opacity === '0'`), "an animating visit does not start on the finished picture")
 			// Jump to the end of every animation, as the timeline would.
 			require.NoError(t, chromedp.Do(ctx, chromedp.Poll[chromedp.Void](`document.body.classList.contains('login-descent-go')`, chromedp.WithPollingTimeout(5*time.Second))), "the animation starts once the layers are decoded")
@@ -105,7 +118,7 @@ func TestLoginDescentSkippedWhenLayersAreLate(t *testing.T) {
 	// Do not wait for load: it waits for the layers this test holds back.
 	_, err = chromedp.Call(ctx, page.Navigate, page.NavigateParams{URL: app.URL + "/auth/login"})
 	require.NoError(t, err)
-	require.NoError(t, chromedp.Do(ctx, chromedp.Poll[chromedp.Void](`document.querySelector('#username')`, chromedp.WithPollingTimeout(5*time.Second))))
+	awaitLoginStyled(t, ctx)
 	ok, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`getComputedStyle(document.querySelector('.login-scene-composite')).opacity === '0' && !document.body.classList.contains('login-descent-skip')`))
 	require.NoError(t, err)
 	require.True(t, ok, "the visit starts on the plain sky while the layers are awaited")
