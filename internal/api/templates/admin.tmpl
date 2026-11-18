@@ -30,7 +30,7 @@
 {{template "appHeader" .Header}}
 <main class="settings">
 <div class="lede">
-  <h2>Who can sign in.</h2>
+  <h2 class="font-headline">Who can sign in.</h2>
   {{if .Clerk}}<p>People sign up and manage their credentials through Clerk. Manage their Exhibit roles, access, and entitlements here.</p>{{else}}
   <p>You are this instance&#39;s user directory. Create accounts here, reset a forgotten password, and switch an account off when someone should no longer have access. There is no registration form and no email anywhere in this.</p>{{end}}
 </div>

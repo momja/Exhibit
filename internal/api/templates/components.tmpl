@@ -87,7 +87,7 @@
      blurred, and either makes it the containing block of a fixed-position
      child, which would pin the card to the pill instead of the window. */}}
 <div class="pip-popup pip-info" id="pip-info" role="region" aria-label="About this artifact" tabindex="-1" hidden>
-  <h1 class="pip-info-title" id="pip-info-title">{{.Title}}</h1>
+  <h1 class="pip-info-title font-headline" id="pip-info-title">{{.Title}}</h1>
   <div class="pip-info-meta">Created {{.Created}}</div>
   <div id="capability-cluster"
        hx-get="/partials/capability-cluster?artifact={{.ID}}"

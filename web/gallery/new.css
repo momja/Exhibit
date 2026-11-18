@@ -12,7 +12,7 @@ main{padding:var(--page-top) var(--page-gutter);max-width:900px;margin:0 auto}
 /* --- lede -------------------------------------------------------------- */
 /* The page states its premise before offering controls: three routes, one
  * outcome. The measure is capped so the line doesn't run the panel's width. */
-.lede h2{font-size:var(--page-title-size);line-height:1.25;font-weight:650;letter-spacing:-.025em}
+.lede h2{font-size:var(--page-title-size);line-height:1.25;letter-spacing:-.01em}
 .lede p{font-size:0.875rem;color:var(--color-muted);margin-top:7px;line-height:1.55;max-width:620px}
 
 /* --- route tiles ------------------------------------------------------- */
