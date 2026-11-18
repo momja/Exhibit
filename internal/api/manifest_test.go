@@ -2,12 +2,15 @@ package api
 
 import (
 	"encoding/json"
+	"html/template"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
 
+	"github.com/momja/Exhibit/internal/connectors"
+	"github.com/momja/Exhibit/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -54,6 +57,55 @@ func pwaHeadPages(artifactID string) map[string]string {
 	}
 }
 
+// pwaHeadConfiguredPages is the config-dependent half of the app-origin page
+// list: pages the default router cannot serve (sign-in, admin, connections)
+// or that only render under a hosted or MCP configuration (Clerk, OAuth
+// consent), rendered from their real handlers or templates. Returned as name
+// to HTML so the tests that walk pwaHeadPages walk these too.
+func pwaHeadConfiguredPages(t *testing.T) map[string]string {
+	t.Helper()
+	pages := map[string]string{}
+
+	in := newAdminInstance(t)
+	get := func(path string, c *http.Cookie) string {
+		req := httptest.NewRequest("GET", path, nil)
+		if c != nil {
+			req.AddCookie(c)
+		}
+		w := httptest.NewRecorder()
+		in.ro.ServeHTTP(w, req)
+		require.Equal(t, http.StatusOK, w.Code, path)
+		return w.Body.String()
+	}
+	pages["sign in"] = get("/auth/login", nil)
+	pages["admin"] = get("/admin/users", in.adminCookie)
+	w := httptest.NewRecorder()
+	in.ro.failLogin(w, "login state mismatch")
+	pages["sign-in failure"] = w.Body.String()
+
+	ro := newTestRouter(t)
+	ro.cfg.Relay.Enabled = true
+	ro.cfg.Connections = connectors.New(connectors.Config{Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
+	w = httptest.NewRecorder()
+	ro.ServeHTTP(w, httptest.NewRequest("GET", "/connections", nil))
+	require.Equal(t, http.StatusOK, w.Code)
+	pages["connections"] = w.Body.String()
+
+	clerk, err := renderPage("clerkLogin", struct {
+		Header  appHeaderView
+		Favicon template.URL
+		Clerk   *clerkView
+		Mode    string
+		Next    string
+	}{authPageHeader("Sign in"), template.URL(exhibitLogoDataURI), nil, "login", "/"})
+	require.NoError(t, err)
+	pages["clerk sign in"] = clerk
+	consent, err := renderPage("oauthConsent", oauthConsentData{Header: authPageHeader("Connect an agent")})
+	require.NoError(t, err)
+	pages["oauth consent"] = consent
+	return pages
+}
+
 // TestAppOriginPagesCarryPWAHeadTags is av-fdcx's AC2: every app-origin
 // page's <head> links the manifest and carries the apple-* home-screen
 // tags. It exercises the actual routes rather than the "pwaHead" partial in
@@ -73,6 +125,12 @@ func TestAppOriginPagesCarryPWAHeadTags(t *testing.T) {
 			assert.Contains(t, body, `<link rel="apple-touch-icon" href="`+assetURL("icons/apple-touch-icon-180.png")+`">`)
 			assert.Contains(t, body, `<meta name="apple-mobile-web-app-capable" content="yes">`)
 			assert.Contains(t, body, `<meta name="apple-mobile-web-app-status-bar-style" content="default">`)
+			assert.Contains(t, body, `<meta name="apple-mobile-web-app-title" content="Exhibit">`)
+		})
+	}
+	for name, body := range pwaHeadConfiguredPages(t) {
+		t.Run(name, func(t *testing.T) {
+			assert.Contains(t, body, `<link rel="manifest" href="/manifest.json">`)
 			assert.Contains(t, body, `<meta name="apple-mobile-web-app-title" content="Exhibit">`)
 		})
 	}

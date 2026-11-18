@@ -29,8 +29,8 @@ export const clerkAppearance = {
     colorSuccess: 'var(--color-success)',
     colorWarning: 'var(--color-warn-strong)',
     colorRing: 'var(--color-accent)',
-    fontFamily: 'system-ui, sans-serif',
-    fontFamilyButtons: 'system-ui, sans-serif',
+    fontFamily: 'var(--font-sans)',
+    fontFamilyButtons: 'var(--font-sans)',
     fontSize: '14px',
     borderRadius: 'var(--radius-md)',
   },
@@ -72,6 +72,10 @@ export const clerkAppearance = {
 
 // Width belongs to the standalone login form, not the navigation's user button.
 export const clerkAuthAppearance = {
+  variables: {
+    fontFamily: 'var(--font-sans)',
+    fontFamilyButtons: 'var(--font-sans)',
+  },
   elements: {
     rootBox: { width: '100%', maxWidth: '100%' },
     cardBox: { width: '100%', maxWidth: '100%' },

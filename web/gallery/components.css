@@ -8,6 +8,7 @@
  * The .btn family, .card surface, and .spacer moved here from the three page
  * stylesheets, where they were triplicated verbatim; values are unchanged. */
 
+body{font-family:var(--font-sans)}
 :where(button,input,select,textarea){font-family:inherit}
 
 /* --- buttons ---------------------------------------------------------- */
@@ -219,10 +220,16 @@ body.pip-dragging .pip-grip{cursor:grabbing}
 .card-widget{position:relative;height:132px;margin:calc(var(--space-6) * -1) calc(var(--space-6) * -1) 0;border-radius:var(--radius-lg) var(--radius-lg) 0 0;overflow:hidden;background:var(--color-panel);border-bottom:1px solid var(--color-hairline)}
 .card-widget-frame{position:absolute;inset:0;z-index:1;display:block;width:100%;height:100%;border:0;background:transparent;pointer-events:none}
 /* Default tile: a monogram on a tint derived from the artifact id (--tile-hue
- * comes from the server, so the same artifact always wears the same face).
- * The saturation/lightness halves are tokens, so the tile darkens with the
- * page while keeping its hue. */
-.card-widget-default{position:absolute;inset:0;z-index:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(140deg,hsl(var(--tile-hue) var(--tile-face-top)),hsl(calc(var(--tile-hue) + 28) var(--tile-face-bottom)))}
+ * comes from the server and is always one of tile.Palette, so the same artifact
+ * always wears the same face). The saturation/lightness halves are tokens, so
+ * the tile darkens with the page while keeping its hue. */
+.card-widget-default{position:absolute;inset:0;z-index:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(150deg,hsl(var(--tile-hue) var(--tile-face-top)),hsl(var(--tile-hue) var(--tile-face-bottom)))}
+/* Grain (Exh-z8i2): a shared utility. Put .grain on any positioned surface;
+ * its noise sits above the surface's own background and below its content
+ * (give that content position:relative and z-index:1). Static data: image, no
+ * script, no animation. */
+.grain{isolation:isolate}
+.grain::before{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;background:var(--grain-url);mix-blend-mode:overlay;opacity:var(--grain-opacity)}
 /* With a live frame the monogram is a fallback, not a backdrop: widgets render
  * on a transparent background by contract, so leaving it painted underneath
  * would show through the widget. It comes back — and the frame goes — only
@@ -230,7 +237,10 @@ body.pip-dragging .pip-grip{cursor:grabbing}
 .card-widget.has-frame .card-widget-default{display:none}
 .card-widget.has-frame.widget-failed .card-widget-default{display:flex}
 .card-widget.has-frame.widget-failed .card-widget-frame{display:none}
-.card-widget-monogram{display:flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:16px;background:hsl(var(--tile-hue) var(--tile-mono-fill));box-shadow:0 1px 4px hsl(var(--tile-hue) var(--tile-mono-shadow));color:hsl(var(--tile-hue) var(--tile-mono-ink));font-size:1.375rem;font-weight:600;letter-spacing:.5px}
+.card-widget-monogram{position:relative;z-index:1;display:flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:14px;background:hsl(var(--tile-hue) var(--tile-mono-fill));box-shadow:0 1px 3px hsl(var(--tile-hue) var(--tile-mono-shadow));color:hsl(var(--tile-hue) var(--tile-mono-ink));font-size:1.375rem;font-weight:600;letter-spacing:.5px}
+/* Forced colors repaint backgrounds with system colors, so noise would only
+ * dirty the canvas under the letters: drop it, and give the plate an edge. */
+@media (forced-colors:active){.grain::before{display:none}.card-widget-default{background:Canvas}.card-widget-monogram{border:1px solid CanvasText}}
 
 /* Collapsible section (<details>/<summary>) with a muted summary line — the
  * edit page's security section (av-p0a1) was the first user; the artifact
@@ -606,3 +616,8 @@ input[type=checkbox]:disabled{opacity:.55;cursor:not-allowed}
 .copy-field-status{margin:0;font-size:0.8125rem;color:var(--color-ink-soft)}
 .copy-field-status:not(:empty){margin-top:var(--space-2)}
 @media(max-width:600px){.copy-field-input{min-height:46px}.copy-field-action{width:44px}.copy-field-input{padding-right:50px}}
+/* Page headline (Exh-wjqh): the one Fraunces title per page. Apply to a single
+ * element; Exh-odyv and Exh-90b2 decide where. Weight 600 is the only instance
+ * fontsHead requests, so font-synthesis:none stops a heavier page rule from
+ * faking bold on it. */
+.font-headline{font-family:var(--font-display);font-weight:600;font-synthesis:none}

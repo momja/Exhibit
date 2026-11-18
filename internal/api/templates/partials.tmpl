@@ -20,6 +20,20 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Exhibit">{{end}}
 
+{{/* fontsHead loads the brand typefaces (Exh-wjqh), self-hosted from the app
+     origin like icons and htmx: no third-party host sees a page view, and no
+     third-party request can hold a page blank. web/fonts builds the files into
+     assets/fonts: Schibsted Grotesk as one variable woff2 (wght 400-800) and
+     Fraunces as a static instance pinned at opsz 72, wght 600, SOFT 100,
+     WONK 0, which has no variation axes (font-variation-settings cannot
+     change it; any other weight or setting means widening web/fonts/build.mjs,
+     the single source for those settings). fonts.css declares the @font-faces
+     with display=swap, and the system fallbacks in tokens.css keep text
+     readable until, or without, the files. The text face is preloaded: every
+     page uses it. App-origin pages only, never the render surface. */}}
+{{define "fontsHead"}}<link rel="preload" href="{{asset "fonts/schibsted-grotesk.woff2"}}" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="{{asset "fonts/fonts.css"}}">{{end}}
+
 {{/* tagDots renders a gallery card's tags as color alone (av-uvc6): one dot
      per tag, in the card's single meta row beside the title. The name is not
      drawn but is not lost either: it is the dot's title for a pointer and
@@ -258,7 +272,7 @@
      keeps its contents out of the tab order — the widget states a fact, it is
      not a control. The <title> is the accessible name every iframe needs.
      Data: widgetView (gallery.go). */}}
-{{define "cardWidget"}}<div class="card-widget{{if .URL}} has-frame{{end}}"{{if .ReloadURL}} data-gallery-widget data-widget-reload="{{.ReloadURL}}"{{end}}><div class="card-widget-default" style="--tile-hue:{{.Hue}}"><span class="card-widget-monogram">{{.Monogram}}</span></div>{{if .URL}}<iframe class="card-widget-frame" {{if .Wrapped}}srcdoc="{{.FrameDocument}}" data-widget-wrapper sandbox="allow-scripts allow-same-origin"{{else}}src="{{.URL}}" sandbox="allow-scripts"{{end}} loading="lazy" tabindex="-1" scrolling="no" title="{{.Title}} widget"></iframe>{{end}}</div>{{end}}
+{{define "cardWidget"}}<div class="card-widget{{if .URL}} has-frame{{end}}"{{if .ReloadURL}} data-gallery-widget data-widget-reload="{{.ReloadURL}}"{{end}}><div class="card-widget-default grain" style="--tile-hue:{{.Hue}}"><span class="card-widget-monogram">{{.Monogram}}</span></div>{{if .URL}}<iframe class="card-widget-frame" {{if .Wrapped}}srcdoc="{{.FrameDocument}}" data-widget-wrapper sandbox="allow-scripts allow-same-origin"{{else}}src="{{.URL}}" sandbox="allow-scripts"{{end}} loading="lazy" tabindex="-1" scrolling="no" title="{{.Title}} widget"></iframe>{{end}}</div>{{end}}
 
 {{/* capabilityPopover is the "receipt" for what was approved at ingest
      (spec 6.2) — capabilityCluster's aria-describedby target. One row per

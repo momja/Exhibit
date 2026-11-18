@@ -41,29 +41,43 @@ func Monogram(title string) string {
 	return string(letters)
 }
 
-// Hue derives a stable 0–359 hue from an artifact id, so every tile gets a
-// distinct-looking but unchanging tint. FNV-1a because the requirement is
-// "spread ids across the wheel", not secrecy.
+// Palette is the closed set of hues a default tile may wear (Exh-z8i2): the
+// logo's red, yellow and blue pigments, two greens, and the dusk indigo of the
+// dark paintings. Saturation and lightness come from the stylesheet's tile
+// tokens, so every entry is held to the same text contrast in both schemes.
+// Adding a hue means checking it in TestTilePaletteKeepsTextContrast.
+var Palette = [...]int{8, 40, 96, 165, 214, 290}
+
+// Hue picks a stable palette hue for an artifact id, so a tile keeps its face
+// between visits. FNV-1a because the requirement is "spread ids across the
+// palette", not secrecy.
 func Hue(artifactID string) int {
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(artifactID))
-	return int(h.Sum32() % 360)
+	return Palette[int(h.Sum32()%uint32(len(Palette)))]
 }
 
 // documentTmpl is the standalone default tile. It carries no script at all,
-// so the only thing its CSP has to permit is the inline style. The colors
-// mirror .card-widget-default and .card-widget-monogram in
-// web/gallery/components.css; change them together.
-var documentTmpl = template.Must(template.New("tile").Parse(`<!doctype html>
+// so the only thing its CSP has to permit is the inline style and the grain's
+// data: image. The colors mirror .card-widget-default, .grain and
+// .card-widget-monogram in web/gallery/components.css and the tile tokens in
+// tokens.css; change them together.
+const documentSource = `<!doctype html>
 <html><head><meta charset="utf-8"><title>{{.Title}}</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
+:root{color-scheme:light dark;--a:62% 88%;--b:58% 78%;--fill:60% 97%;--ink:55% 26%;--shadow:40% 30% / .18;--grain-opacity:.55}
+@media (prefers-color-scheme:dark){:root{--a:38% 30%;--b:36% 20%;--fill:34% 32%;--ink:60% 90%;--shadow:40% 8% / .5;--grain-opacity:.4}}
 html,body{margin:0;height:100%}
-body{display:flex;align-items:center;justify-content:center;font-family:system-ui,-apple-system,sans-serif;background:linear-gradient(140deg,hsl({{.Hue}} 58% 96%),hsl(calc({{.Hue}} + 28) 52% 89%))}
-span{display:flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:16px;background:hsl({{.Hue}} 60% 100% / .72);box-shadow:0 1px 4px hsl({{.Hue}} 40% 30% / .16);color:hsl({{.Hue}} 42% 34%);font-size:22px;font-weight:600;letter-spacing:.5px}
+body{position:relative;isolation:isolate;display:flex;align-items:center;justify-content:center;font-family:system-ui,-apple-system,sans-serif;background:linear-gradient(150deg,hsl({{.Hue}} var(--a)),hsl({{.Hue}} var(--b)))}
+body::before{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='.6 .6 .6 0 -.4 .6 .6 .6 0 -.4 .6 .6 .6 0 -.4 0 0 0 0 1'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");mix-blend-mode:overlay;opacity:var(--grain-opacity)}
+span{position:relative;z-index:1;display:flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:14px;background:hsl({{.Hue}} var(--fill));box-shadow:0 1px 3px hsl({{.Hue}} var(--shadow));color:hsl({{.Hue}} var(--ink));font-size:22px;font-weight:600;letter-spacing:.5px}
+@media (forced-colors:active){body{background:Canvas}body::before{display:none}span{border:1px solid CanvasText}}
 </style></head>
 <body><span aria-label="{{.Title}}">{{.Monogram}}</span></body></html>
-`))
+`
+
+var documentTmpl = template.Must(template.New("tile").Parse(documentSource))
 
 // Document renders the default tile as a complete HTML document for the
 // render origin. The title is artifact-chosen text and is escaped by

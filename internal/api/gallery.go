@@ -856,8 +856,9 @@ type widgetView struct {
 	// ReloadURL marks gallery widgets whose live documents are unloaded away
 	// from the viewport. Re-entry mints a fresh render credential here.
 	ReloadURL string
-	// Monogram and Hue drive the default tile. Hue is a plain 0–359 number the
-	// stylesheet feeds to hsl(), so the tint stays a presentation decision.
+	// Monogram and Hue drive the default tile. Hue is always one of tile.Palette; the
+	// stylesheet feeds it to hsl(), so saturation and lightness stay a
+	// presentation decision.
 	Monogram string
 	Hue      int
 	// Title is the owning artifact's title, used for the frame's accessible

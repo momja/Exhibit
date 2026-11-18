@@ -11,7 +11,7 @@
  * AA at 11-13px.
  */
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(--color-ink);min-height:100vh}
+body{background:var(--color-ground);color:var(--color-ink);min-height:100vh}
 
 /* Two columns on the gallery ground: the hung (crooked) frame with its wall
  * label on the left, the copy and the real controls on the right. The top/
