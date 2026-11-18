@@ -23,6 +23,12 @@ import (
 // Local Network Access is off. It refuses some requests to loopback, where
 // every test server is, and it is Chromium's protection rather than ours: an
 // operator's browser may not apply it, so code under test must stand without it.
+//
+// The Google Fonts hosts never resolve. The app self-hosts its fonts
+// (Exh-wjqh), and TestNoAppOriginMarkupReferencesGoogleFonts keeps it that way;
+// this is the second guard: a page that linked them again would get a fast
+// failure and the system-font fallback here, never a test that depends on the
+// internet or waits on a network round trip.
 func Start(t *testing.T, flags ...string) string {
 	t.Helper()
 	if testing.Short() {
@@ -42,6 +48,7 @@ func Start(t *testing.T, flags ...string) string {
 	ctx, cancel := context.WithCancel(context.Background())
 	args := append([]string{"--headless", "--no-sandbox", "--disable-gpu",
 		"--disable-features=LocalNetworkAccessChecks",
+		"--host-resolver-rules=MAP fonts.googleapis.com ~NOTFOUND, MAP fonts.gstatic.com ~NOTFOUND",
 		"--remote-debugging-port=0", "--user-data-dir=" + t.TempDir()}, flags...)
 	cmd := exec.CommandContext(ctx, bin, args...)
 	stderr, err := cmd.StderrPipe()

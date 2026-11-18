@@ -8,6 +8,7 @@
  * The .btn family, .card surface, and .spacer moved here from the three page
  * stylesheets, where they were triplicated verbatim; values are unchanged. */
 
+body{font-family:var(--font-sans)}
 :where(button,input,select,textarea){font-family:inherit}
 
 /* --- buttons ---------------------------------------------------------- */
@@ -587,3 +588,9 @@ input[type=checkbox]:disabled{opacity:.55;cursor:not-allowed}
 .form-help,.modal-check small{text-wrap:pretty}
 
 @media(max-width:767px){.capability-popover-manage{min-height:44px}}
+
+/* Page headline (Exh-wjqh): the one Fraunces title per page. Apply to a single
+ * element; Exh-odyv and Exh-90b2 decide where. Weight 600 is the only instance
+ * fontsHead requests, so font-synthesis:none stops a heavier page rule from
+ * faking bold on it. */
+.font-headline{font-family:var(--font-display);font-weight:600;font-synthesis:none}

@@ -131,6 +131,17 @@
 	--shadow-sheet:0 -4px 24px rgba(40,30,5,.25); /* a bottom sheet over the page */
 	--overlay:rgba(31,42,28,.45);
 
+	/* Typefaces (Exh-wjqh), self-hosted (web/fonts) and loaded by the fontsHead partial.
+	 * The fallbacks keep text readable when the fonts are blocked or slow. Code
+	 * and CodeMirror stay on their own monospace stacks. */
+	--font-sans:"Schibsted Grotesk",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+	--font-display:Fraunces,Georgia,serif;
+	/* Fraunces is shipped as ONE pinned static instance (opsz 72, wght 600,
+	 * SOFT 100, WONK 0) built by web/fonts/build.mjs, the single source for those
+	 * settings. A static instance has no variation axes, so font-variation-
+	 * settings cannot change it. Any other Fraunces weight or setting means
+	 * widening that build. */
+
 	/* Every form control sizes itself from one of these, never a literal px:
 	 * iOS zooms in on focusing a field under 16px and does not zoom back out
 	 * (av-3qmf). The -code- variant is the monospace fields. */
