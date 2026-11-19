@@ -11,7 +11,8 @@ import (
 )
 
 // Goldens were measured by substituting serveDoc verbatim from 99452599,
-// before running this fixture. Only the randomly minted public link is normalized.
+// before running this fixture, and re-measured when every render gained the
+// window.exhibit.ai stand-in and the framed AI bridge (Exh-zue3). Only the randomly minted public link is normalized.
 func TestLegacyDocumentBytes(t *testing.T) {
 	rd, _, link, _ := newShareWidgetFixture(t)
 	private := httptest.NewRecorder()
@@ -24,7 +25,7 @@ func TestLegacyDocumentBytes(t *testing.T) {
 		"share":                    serveShare(t, rd, link),
 		"version":                  serveVersion(vr, "abc", 1, versionToken("abc", 1, 1)),
 	}
-	want := map[string]string{"artifact-and-direct-open": "0ac8161dc2796bd644fa5415ab86df5149e55495e226ad2762b750f527e4bf14", "widget": "c54d487793fb8cc7e8ede1a0e072801b4916f5693a93103fd9cf28b56a29a2fa", "share-widget": "d4b47afa2d80d41b3bda68b96e811e789898e24dc7a2be6bcade842e7606d936", "share": "04e3480bbf1efaefa19583a24e4f2689fc2ec1a315e6e832c2c814aa931b3cd9", "version": "bbe7889c0101c2e3627c1386e98de8eca8c6a50340c62c2d4af6cb9993cb240e"}
+	want := map[string]string{"artifact-and-direct-open": "e76985eed05003624afcb1a0ffdca713e2838162e2ed94c02bd70f23cb3466af", "widget": "d8ae7c668c86b0f5f0de9063347ef8e1cd7d430825625867edbfdbbdee7d084c", "share-widget": "336a1672eb0029421354c517839d5ef5b9c093c11307168f1d044e84252aa7c1", "share": "56acf56a220747f093839a3d5229c13073fcef8755325be9424bfe7c4b07f9bc", "version": "5af46df8105df5f9ddbebe284a82a7efaf275a2e409211317ec4857f07a5ed62"}
 	for name, response := range cases {
 		bytes := strings.ReplaceAll(response.Body.String(), link, "PUBLIC-LINK") + "\n" + fmt.Sprint(response.Header())
 		got := fmt.Sprintf("%x", sha256.Sum256([]byte(bytes)))

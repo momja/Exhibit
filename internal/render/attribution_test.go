@@ -16,7 +16,7 @@ func TestShareAttributionOwnerChoiceAndLegacyBytes(t *testing.T) {
 	link, err := st.CreateAnonymousLink(context.Background(), 1, "attribution")
 	require.NoError(t, err)
 	baseline := serveShare(t, rd, link.ID)
-	require.Equal(t, "779292f5c5d37f06ea83999e7e139db1c8251bc71852a01351bdac22738bcc3a", fmt.Sprintf("%x", sha256.Sum256([]byte(strings.ReplaceAll(baseline.Body.String(), link.ID, "public")))))
+	require.Equal(t, "ce39f6dd8bd1b140aed769f32111c082cfb6b20bbacb3f847a5f18aa197d5372", fmt.Sprintf("%x", sha256.Sum256([]byte(strings.ReplaceAll(baseline.Body.String(), link.ID, "public")))))
 	require.Equal(t, "31b51fb4673416e2c321dae18b3e0f5e9a456a4df42f02d0ada2e094dc5198f9", fmt.Sprintf("%x", sha256.Sum256([]byte(fmt.Sprint(baseline.Header())))))
 	private := serve(t, rd, "attribution")
 	for _, instance := range []bool{false, true} {

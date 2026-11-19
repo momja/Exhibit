@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"errors"
+	"github.com/momja/Exhibit/internal/inference"
 	"io"
 	"net"
 	"net/http"
@@ -73,6 +74,9 @@ type Config struct {
 	// so the API surface and the page cannot disagree about which is in
 	// force. See agentplatform.go.
 	PlatformAgentKey *PlatformKey
+	// Inference is the artifact AI core (Exh-zue3). Nil, or a disabled
+	// service, makes every window.exhibit.ai call unavailable.
+	Inference *inference.Service
 	// Identity delegates login to an identity provider (av-30rj). Nil — the
 	// default — is a single-user instance: no /auth routes, no login gate,
 	// the static token and owner 1 exactly as before. Non-nil is the only
@@ -631,6 +635,13 @@ func (ro *Router) setupRoutes() {
 				r.Get("/relay-bundle", ro.exportRelayBundle)
 				r.Post("/relay", ro.performRelay)
 				r.Post("/navigation-check", ro.checkArtifactNavigation)
+				// Artifact AI calls (Exh-zue3), made by the host page for
+				// window.exhibit.ai in the frame. Not in agentSubResources:
+				// an agent has its own model and never spends a viewer's
+				// allowance through an artifact.
+				r.Post("/inference", ro.runInference)
+				r.Put("/inference/consent", ro.setInferenceConsent)
+				r.Delete("/inference/consent", ro.setInferenceConsent)
 				r.Get("/relay-grant", ro.getRelayGrant)
 				r.Put("/relay-grant", ro.setRelayGrant)
 				r.Get("/relay-schedules", ro.listRelaySchedules)
