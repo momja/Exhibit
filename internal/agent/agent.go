@@ -1501,3 +1501,22 @@ func paidByFor(platformPaid bool) string {
 	}
 	return store.PaidByUser
 }
+
+// MaterializeGuard writes the usage-policy screen (ext/guard.ts) and the
+// prompt templates it reads into dir, for another Pi extension that imports
+// it. The artifact inference worker screens platform-paid calls with the same
+// screen the agent uses (Exh-hwjg), so the two can never disagree about the
+// policy or how a verdict is reached.
+func MaterializeGuard(dir string) error {
+	src, err := extFS.ReadFile("ext/guard.ts")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(dir, "guard.ts"), src, 0o644); err != nil {
+		return fmt.Errorf("materialize guard: %w", err)
+	}
+	return materializeExtPrompts(filepath.Join(dir, "prompts"))
+}
