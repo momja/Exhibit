@@ -54,8 +54,8 @@ the bytes every deploy.
   `design_files/brand-refresh/tools/hero-export/`. `npm run export` rewrites the
   derivatives; `npm run check` re-encodes in memory and fails on any byte drift, an
   unlisted file, a missing file, or a size over the per-kind budget. Run `check` after
-  touching the masters, the encoder or its lockfile. Regenerate only on Linux x64 with
-  the sharp version in that lockfile.
+  touching the masters, the encoder or its lockfile. Use the sharp version in that
+  lockfile and the Linux architecture recorded in the production art README.
 - Masters are lossless WebP, not PNG, to keep the repository small; only the sky,
   clouds and hill layers are masters. See
   `design_files/brand-refresh/production/README.md`.

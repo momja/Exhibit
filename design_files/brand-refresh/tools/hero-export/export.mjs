@@ -5,8 +5,8 @@
 //   npm run check    re-encode in memory; fail if any committed byte would change
 //
 // Only sky, clouds and hill are masters. The composite and the phone crop are
-// assembled here (assemble.mjs). Byte equality needs Linux x64 and the sharp
-// version pinned in package-lock.json: libvips output is not portable.
+// assembled here (assemble.mjs). Byte equality needs the same Linux architecture
+// and the sharp version pinned in package-lock.json: libvips output is not portable.
 import sharp from 'sharp';
 import { mkdirSync, readFileSync, readdirSync, writeFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -23,12 +23,12 @@ const formats = ['webp', 'avif'];
 // the set the descent animation downloads in place of the composite's first
 // paint (the page needs both; they are not alternatives).
 const BUDGET = {
-  composite: { webp: 180_000, avif: 120_000 },
-  phone: { webp: 140_000, avif: 90_000 },
-  layers: { webp: 340_000, avif: 180_000 },
+  composite: { webp: 265_000, avif: 185_000 },
+  phone: { webp: 200_000, avif: 135_000 },
+  layers: { webp: 545_000, avif: 430_000 },
 };
 
-// Sequential encoding bounds memory and makes regeneration work on small builders.
+// Limit codec workers and only batch one kind of image at a time.
 sharp.concurrency(1);
 sharp.cache(false);
 
@@ -55,9 +55,11 @@ async function loadSources(mode) {
 
 async function encode(source, width, format) {
   const pipeline = sharp(source.input, { raw: source.raw }).resize({ width, kernel: 'lanczos3' });
+  // Limit the WebP fallback's cost on the two translucent layers.
+  const webp = source.raw.channels === 4 ? { quality: 70, alphaQuality: 50 } : { quality: 78 };
   const { data, info } = await (format === 'avif'
     ? pipeline.avif({ quality: 48, effort: 4, chromaSubsampling: '4:4:4' })
-    : pipeline.webp({ quality: 78, alphaQuality: 100, effort: 6 })).toBuffer({ resolveWithObject: true });
+    : pipeline.webp({ ...webp, effort: 6 })).toBuffer({ resolveWithObject: true });
   return { data, width: info.width, height: info.height };
 }
 
@@ -67,14 +69,15 @@ const largest = {};
 for (const mode of ['day', 'dusk']) {
   const sources = await loadSources(mode);
   for (const kind of Object.keys(widths)) {
-    for (const width of widths[kind]) {
-      for (const format of formats) {
-        const name = `${mode}-${kind}-${width}.${format}`;
-        const image = await encode(sources[kind], width, format);
-        encoded[name] = image.data;
-        manifest[name] = { width: image.width, height: image.height, bytes: image.data.length };
-        if (width === widths[kind].at(-1)) largest[`${mode}/${kind}/${format}`] = image.data.length;
-      }
+    const jobs = widths[kind].flatMap((width) => formats.map((format) => ({ width, format })));
+    const images = await Promise.all(jobs.map(async ({ width, format }) => ({
+      width, format, image: await encode(sources[kind], width, format),
+    })));
+    for (const { width, format, image } of images) {
+      const name = `${mode}-${kind}-${width}.${format}`;
+      encoded[name] = image.data;
+      manifest[name] = { width: image.width, height: image.height, bytes: image.data.length };
+      if (width === widths[kind].at(-1)) largest[`${mode}/${kind}/${format}`] = image.data.length;
     }
     console.log(`Encoded ${mode} ${kind}`);
   }

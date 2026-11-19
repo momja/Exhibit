@@ -15,15 +15,12 @@ import numpy as np
 from PIL import Image
 from scipy.ndimage import binary_dilation, binary_erosion, gaussian_filter, gaussian_filter1d
 import cv2
-from skimage.color import rgb2lab, lab2rgb, deltaE_ciede2000
-from pymatting import estimate_alpha_cf, estimate_foreground_ml
+from pymatting import estimate_alpha_cf
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'production'
 SIZE = (2560, 1440)
 cv2.setNumThreads(2)
-GRAIN_SEED = 6101
-GRAIN_SIGMA = .7 / 255
 
 EXT = 832  # 520/900 of the final height, matching descend.html
 
@@ -37,107 +34,6 @@ def rgb(path, size=None):
 
 def image(array):
     return Image.fromarray(np.uint8(np.clip(np.rint(array * 255), 0, 255)))
-
-
-def matte(source, mode, kind):
-    seed = Image.open(OUT / f'{mode}-{kind}-native.webp').convert('RGBA').resize(
-        (source.shape[1], source.shape[0]), Image.Resampling.LANCZOS)
-    alpha = np.asarray(seed)[..., 3] / 255
-    support = alpha > .5
-    radius = 12 if kind == 'hill' else 24
-    inside = binary_erosion(support, iterations=radius, border_value=1)
-    outside = ~binary_dilation(support, iterations=radius)
-    if kind == 'clouds':
-        # Extraction occasionally joins wisps with opaque source-blue pixels.
-        # Color only supplies sure trimap samples; CF still solves soft alpha.
-        red_minus_blue = source[..., 0] - source[..., 2]
-        inside &= red_minus_blue > (-.15 if mode == 'day' else -.22)
-        inside |= binary_erosion(support, iterations=1) & (red_minus_blue > (.03 if mode == 'day' else .08))
-        outside |= red_minus_blue < (-.35 if mode == 'day' else -.32)
-    trimap = np.full(alpha.shape, .5)
-    trimap[inside] = 1
-    trimap[outside] = 0
-    result = estimate_alpha_cf(source, trimap)
-    # Foreground estimation removes the old blue/pink sky from partial pixels.
-    foreground = estimate_foreground_ml(source, result)
-    return foreground, result
-
-
-def tone_layers(mode, plate, layers):
-    """Match robust Lab moments by semantic region; never filter alpha.
-
-    Work at delivery resolution. Sky row offsets retain its vertical gradient
-    and horizontal sunset variation. Shared scene-coordinate grain means a
-    feathered overlap has the same noise as either opaque layer.
-    """
-    mock = rgb(ROOT / 'paintings' / f'hero-{mode}.png', SIZE)
-    mock_lab = rgb2lab(mock)
-    masks = {}
-    for kind in ['clouds', 'hill']:
-        ref = Image.open(ROOT / 'layers' / f'{mode}-{kind}.webp').resize(SIZE, Image.Resampling.LANCZOS)
-        masks[kind] = np.asarray(ref)[..., 3] / 255
-    masks['sky'] = 1 - np.maximum(masks['clouds'], masks['hill'])
-    scene_mask = 1 - np.maximum(np.asarray(layers[0])[..., 3], np.asarray(layers[1])[..., 3]) / 255
-    rng = np.random.default_rng(GRAIN_SEED)
-    grain = rng.normal(0, GRAIN_SIGMA, (SIZE[1] + EXT, SIZE[0], 1))
-    adjusted = []
-    for kind, original in [('sky', plate), *zip(['clouds', 'hill'], layers)]:
-        pixels = np.asarray(original).copy()
-        colors = pixels[..., :3].astype(np.float32) / 255
-        # Bilateral range threshold rejects figure/CRT/poppy boundaries while
-        # averaging the lower-contrast brush ridges inside painted regions.
-        smooth = cv2.bilateralFilter(colors, 21, .10 if kind != 'hill' else .055, 8)
-        lab = rgb2lab(smooth)
-        support = scene_mask > .98 if kind == 'sky' else pixels[..., 3] > 250
-        reference = masks[kind] > .98
-        if kind == 'sky':
-            def row_fit(values, mask):
-                rows = np.full((SIZE[1], 3), np.nan)
-                for y in range(SIZE[1]):
-                    if mask[y].sum() > 20:
-                        rows[y] = np.median(values[y, mask[y]], axis=0)
-                valid = np.isfinite(rows[:, 0])
-                for c in range(3):
-                    rows[:, c] = np.interp(np.arange(SIZE[1]), np.flatnonzero(valid), rows[valid, c])
-                return gaussian_filter1d(rows, 40, axis=0)
-            source_rows = row_fit(lab, support)
-            target_rows = row_fit(mock_lab, reference)
-            lab += (target_rows - source_rows)[:, None, :]
-        else:
-            # Winsorization prevents tiny bright CRT cells and transparent
-            # fringes from driving an entire meadow/cloud colour transfer.
-            for c in range(3):
-                src = lab[..., c][support]
-                ref = mock_lab[..., c][reference]
-                src = np.clip(src, *np.percentile(src, [2, 98]))
-                ref = np.clip(ref, *np.percentile(ref, [2, 98]))
-                scale = np.clip(ref.std() / max(src.std(), .01), .65, 1.35)
-                lab[..., c] = (lab[..., c] - src.mean()) * scale + ref.mean()
-        colors = lab2rgb(lab)
-        pixels[..., :3] = np.asarray(image(colors + grain[EXT:]))
-        adjusted.append(Image.fromarray(pixels))
-    return adjusted, grain
-
-
-def tone_evidence(review, mode, before, after):
-    folder = review / 'tone'
-    folder.mkdir(exist_ok=True)
-    mock = Image.open(ROOT / 'paintings' / f'hero-{mode}.png').convert('RGB').resize((1600, 900), Image.Resampling.LANCZOS)
-    versions = [mock, before.convert('RGB').resize((1600, 900), Image.Resampling.LANCZOS),
-                after.convert('RGB').resize((1600, 900), Image.Resampling.LANCZOS)]
-    scores = [float(deltaE_ciede2000(rgb2lab(np.asarray(mock) / 255),
-              rgb2lab(np.asarray(v) / 255)).mean()) for v in versions[1:]]
-    # Full frames use the metric size; detail crops retain delivery pixels 1:1.
-    details = [v.convert('RGB').resize(SIZE, Image.Resampling.LANCZOS)
-               for v in [Image.open(ROOT / 'paintings' / f'hero-{mode}.png'), before, after]]
-    for label, box in [('full', (0, 0, 1600, 900)), ('cloud', (2048, 160, 2560, 672)),
-                       ('figure', (1856, 816, 2368, 1328))]:
-        width, height = box[2] - box[0], box[3] - box[1]
-        sheet = Image.new('RGB', (width * 3, height))
-        for i, version in enumerate(versions if label == 'full' else details):
-            sheet.paste(version.crop(box), (i * width, 0))
-        sheet.save(folder / f'{mode}-{label}.png')
-    return dict(before=scores[0], after=scores[1])
 
 
 LAYERS = ['clouds', 'hill']
@@ -172,61 +68,83 @@ def assemble(mode):
     return sky, layers, composite, phone
 
 
-def matte_and_tone(mode):
-    """Native inputs to toned sky, clouds and hill; returns the pre-tone composite too."""
-    print(f'{mode}: matting', flush=True)
-    source = rgb(OUT / f'{mode}-native.webp')
-    h, w = source.shape[:2]
-    foreground, hill = matte(source, mode, 'hill')
-    cloud_rgb, clouds = matte(source, mode, 'clouds')
-    clouds *= 1 - hill
-    # Generated painted-through plate, color-matched using uncovered source sky.
-    plate = rgb(OUT / f'{mode}-sky-native.webp', (w, h))
+def brushwork_layers(mode):
+    """Separate the approved repaint while preserving its original colors and coordinates."""
+    source = rgb(OUT / f'{mode}-brushwork.webp', (1600, 900))
+    height, width = source.shape[:2]
+
+    def seed(kind):
+        path = OUT / f'{mode}-{kind}-native.webp'
+        return np.asarray(Image.open(path).convert('RGBA').resize((width, height)))[..., 3] > 127
+
+    def solve(foreground, background):
+        trimap = np.full((height, width), .5)
+        trimap[foreground] = 1
+        trimap[background] = 0
+        return estimate_alpha_cf(source, trimap)
+
+    hill_seed = seed('hill')
+    hill_extent = binary_dilation(hill_seed, iterations=28)
+    hill = solve(binary_erosion(hill_seed, iterations=25, border_value=1), ~hill_extent)
+    cloud_seed = seed('clouds')
+    cloud_extent = binary_dilation(cloud_seed, iterations=40) & (hill < .98)
+
+    # Sample the unobstructed left sky by row. Repeat reflected brush texture
+    # in the occluded areas so the sky still reads as paint during the descent.
+    sample_width = width * 2 // 5
+    sky_sample = source[:, :sample_width]
+    clean = ~binary_dilation(hill_seed, iterations=37)[:, :sample_width]
+    rows = np.flatnonzero(clean.sum(axis=1) > 35)
+    medians = np.stack([np.median(sky_sample[y, clean[y]], axis=0) for y in rows])
+    sky_rows = gaussian_filter1d(np.column_stack([
+        np.interp(np.arange(height), rows, c) for c in medians.T
+    ]), 10, axis=0)
+    sky_delta = source - sky_rows[:, None]
+    chroma_delta = sky_delta[..., 0] - sky_delta[..., 2]
+    cloud_foreground = cloud_extent & (
+        (chroma_delta > (.22 if mode == 'day' else .052))
+        | (binary_erosion(cloud_seed, iterations=10) & (chroma_delta > .025))
+    )
+    cloud_background = ~cloud_extent | (chroma_delta < (.012 if mode == 'day' else .009))
+    clouds = solve(cloud_foreground, cloud_background) * (1 - hill)
+
+    repeat_x = np.arange(width) % (2 * (sample_width - 1))
+    repeat_x = np.minimum(repeat_x, 2 * (sample_width - 1) - repeat_x)
+    bottom = np.argmax(~clean[:, repeat_x], axis=0) - 1
+    y = np.arange(height)[:, None]
+    reflected_y = np.minimum(y, 2 * bottom - y)
+    texture = sky_delta[reflected_y, repeat_x] * .8
+    hidden_sky = np.clip(sky_rows[:, None] + texture, 0, 1)
     cover = np.maximum(hill, clouds)
-    # Clear the complete generated cloud support even where a faint source
-    # wisp has near-zero solved opacity, so no clouds remain in the sky plate.
-    cloud_seed = Image.open(OUT / f'{mode}-clouds-native.webp').convert('RGBA')
-    cloud_support = np.asarray(cloud_seed)[..., 3] > 2
-    cover = np.maximum(cover, cloud_support)
-    clean = ~binary_dilation(cover > .01, iterations=24)
-    # Fit a smooth per-row correction. Nearest-pixel extrapolation produces
-    # visible Voronoi facets behind large occlusions when the layers move.
-    row_weight = clean.sum(axis=1)
-    valid_rows = np.flatnonzero(row_weight > 20)
-    for channel in range(3):
-        delta = ((source[..., channel] - plate[..., channel]) * clean).sum(axis=1)
-        row_delta = delta / np.maximum(row_weight, 1)
-        correction = np.interp(np.arange(h), valid_rows, row_delta[valid_rows])
-        plate[..., channel] += gaussian_filter1d(correction, 35)[:, None]
-    plate = np.clip(plate, 0, 1)
-    # Keep unoccluded native sky, feather into the painted-through regions.
-    blend = gaussian_filter(binary_dilation(cover > .01, iterations=18).astype(float), 10)
-    plate = source * (1 - blend[..., None]) + plate * blend[..., None]
-    plate_image = image(plate).resize(SIZE, Image.Resampling.LANCZOS)
-    layers_before = [image(np.dstack([colors, alpha])).resize(SIZE, Image.Resampling.LANCZOS)
-                     for colors, alpha in [(cloud_rgb, clouds), (foreground, hill)]]
-    before = plate_image.convert('RGBA')
-    for layer in layers_before:
-        before = Image.alpha_composite(before, layer)
-    (plate_image, *layers), grain = tone_layers(mode, plate_image, layers_before)
-    alpha_error = max(int(np.abs(np.asarray(a)[..., 3].astype(int) -
-                                np.asarray(b)[..., 3].astype(int)).max())
-                      for a, b in zip(layers_before, layers))
-    assert alpha_error == 0
-    # Extend with reflected painted sky texture, progressively deepened. The
-    # mirrored join retains continuous underlying tone across the grain field.
-    base = np.asarray(plate_image).astype(float) / 255
-    # Strip reflected grain before deepening, then add equal-strength grain.
-    extension = (base[:EXT] - grain[EXT:EXT*2])[::-1].copy()
-    t = np.linspace(1, 0, EXT)[:, None, None] ** 1.5
+    # Some shaded wisps have sky-like chroma. Include them if they are visibly
+    # brighter than the adjacent sky, without copying the surrounding sky.
+    wisps = cloud_extent & (sky_delta[..., 0] > (.030 if mode == 'day' else .018))
+    fill = gaussian_filter(binary_dilation((cover > .025) | wisps, iterations=6).astype(float), 3)
+    sky = source * (1 - fill[..., None]) + hidden_sky * fill[..., None]
+
+    # Solve the source-over equation against the clean plate. Increase opacity
+    # where a low estimated alpha would require an out-of-gamut layer color.
+    alpha = 1 - (1 - clouds) * (1 - hill)
+    difference = source - sky
+    needed = np.where(difference > 0, difference / np.maximum(1 - sky, 1e-6),
+                      -difference / np.maximum(sky, 1e-6)).max(axis=2)
+    alpha = np.maximum(alpha, needed)
+    color = sky + difference / np.maximum(alpha[..., None], 1e-6)
+    hill_share = hill / np.maximum(cover, 1e-6)
+    hill_alpha = alpha * hill_share
+    cloud_alpha = (alpha - hill_alpha) / np.maximum(1 - hill_alpha, 1e-6)
+    for kind, opacity in [('clouds', cloud_alpha), ('hill', hill_alpha)]:
+        rgba = image(np.dstack([color, opacity])).resize(SIZE, Image.Resampling.LANCZOS)
+        pixels = np.asarray(rgba).copy()
+        pixels[pixels[..., 3] < 3] = 0
+        Image.fromarray(pixels).save(OUT / f'{mode}-{kind}.webp', **MASTER_KW)
+
+    sky = np.asarray(image(sky).resize(SIZE, Image.Resampling.LANCZOS)) / 255
+    fade = np.linspace(1, 0, EXT)[:, None, None] ** 1.5 * .60
     deep = np.array([.07, .20, .46] if mode == 'day' else [.025, .035, .10])
-    extension = extension * (1 - .65*t) + deep * .65*t
-    extension += grain[:EXT]
-    sky = image(np.concatenate([extension, base])).convert('RGBA')
-    sky.convert('RGB').save(OUT / f'{mode}-sky.webp', **MASTER_KW)
-    for kind, layer in zip(LAYERS, layers):
-        layer.save(OUT / f'{mode}-{kind}.webp', **MASTER_KW)
-    return before, alpha_error, (w, h)
+    extension = sky[:EXT][::-1] * (1 - fade) + deep * fade
+    image(np.concatenate([extension, sky])).save(OUT / f'{mode}-sky.webp', **MASTER_KW)
+    return Image.open(OUT / f'{mode}-brushwork.webp')
 
 
 def review_images(review, mode, sky, layers, composite, phone, recombined):
@@ -260,9 +178,7 @@ def review_images(review, mode, sky, layers, composite, phone, recombined):
 def input_files(modes):
     files = []
     for mode in modes:
-        files += [OUT / f'{mode}-{kind}.webp' for kind in ['native', 'sky-native', 'clouds-native', 'hill-native']]
-        files += [ROOT / 'paintings' / f'hero-{mode}.png']
-        files += [ROOT / 'layers' / f'{mode}-{kind}.webp' for kind in LAYERS]
+        files += [OUT / f'{mode}-{kind}.webp' for kind in ['brushwork', 'clouds-native', 'hill-native']]
     return files
 
 
@@ -273,7 +189,7 @@ def main():
                         help='Where review images are written (never inside the checkout)')
     parser.add_argument('--assemble-only', action='store_true',
                         help='Skip matting and toning: verify and hash the saved masters, '
-                             'refresh review images, keep the other recorded figures; refuses '
+                             'refresh review images, keep the recorded restoration measurements; refuses '
                              'if the masters differ from the recorded hashes')
     args = parser.parse_args()
     review = args.review_dir
@@ -284,7 +200,7 @@ def main():
     for mode in modes:
         entry = report.setdefault(mode, {})
         if args.assemble_only:
-            # The kept alpha, ΔE and restoration figures describe the masters
+            # The restoration figures describe the masters
             # they were measured on. Refuse unless those are the masters on disk.
             recorded = report.get('sha256', {})
             stale = [str(f.relative_to(ROOT))
@@ -299,8 +215,10 @@ def main():
             before = None
             w, h = entry['native']
         else:
-            before, alpha_error, (w, h) = matte_and_tone(mode)
-            entry['alpha_max_error'] = alpha_error
+            before = brushwork_layers(mode)
+            w, h = before.size
+            for field in ['alpha_max_error', 'delta_e_2000']:
+                entry.pop(field, None)
         # Measure the delivered masters, re-opened from disk, not work arrays.
         sky, layers, composite, phone = assemble(mode)
         recombined = sky.crop((0, EXT, 2560, 2272))
@@ -312,8 +230,7 @@ def main():
                       'composite_rgb_sha256': pixel_sha256(composite), 'phone_rgb_sha256': pixel_sha256(phone)})
         assert diff.max() == 0, 'Saved layers must recombine exactly'
         if before is not None:
-            entry['delta_e_2000'] = tone_evidence(review, mode, before, composite)
-            native_scaled = Image.open(OUT / f'{mode}-native.webp').convert('RGB').resize(SIZE, Image.Resampling.LANCZOS)
+            native_scaled = before.convert('RGB').resize(SIZE, Image.Resampling.LANCZOS)
             restoration_diff = np.abs(np.asarray(composite.convert('RGB')).astype(int) - np.asarray(native_scaled).astype(int))
             entry['restoration_max_error'] = int(restoration_diff.max())
             entry['restoration_mean_error'] = float(restoration_diff.mean())
@@ -322,6 +239,10 @@ def main():
     # Every input read and every master written, so a rerun can show what changed.
     outputs = [OUT / f'{mode}-{kind}.webp' for mode in modes for kind in ['sky', *LAYERS]]
     hashes = report.setdefault('sha256', {'inputs': {}, 'outputs': {}})
+    inputs = hashes.setdefault('inputs', {})
+    valid_inputs = {str(path.relative_to(ROOT)) for path in input_files(['day', 'dusk'])}
+    for stale in inputs.keys() - valid_inputs:
+        del inputs[stale]
     for group, files in [('inputs', input_files(modes)), ('outputs', outputs)]:
         hashes[group].update({str(f.relative_to(ROOT)): sha256(f) for f in files})
     verification_path.write_text(json.dumps(report, indent=2) + '\n')

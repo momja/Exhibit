@@ -2,281 +2,281 @@
   "day-composite-960.webp": {
     "width": 960,
     "height": 540,
-    "bytes": 37378
+    "bytes": 45760
   },
   "day-composite-960.avif": {
     "width": 960,
     "height": 540,
-    "bytes": 23297
+    "bytes": 27710
   },
   "day-composite-1600.webp": {
     "width": 1600,
     "height": 900,
-    "bytes": 82108
+    "bytes": 127352
   },
   "day-composite-1600.avif": {
     "width": 1600,
     "height": 900,
-    "bytes": 53811
+    "bytes": 80679
   },
   "day-composite-2560.webp": {
     "width": 2560,
     "height": 1440,
-    "bytes": 149422
+    "bytes": 252730
   },
   "day-composite-2560.avif": {
     "width": 2560,
     "height": 1440,
-    "bytes": 99112
+    "bytes": 174474
   },
   "day-sky-960.webp": {
     "width": 960,
     "height": 852,
-    "bytes": 6530
+    "bytes": 17380
   },
   "day-sky-960.avif": {
     "width": 960,
     "height": 852,
-    "bytes": 5057
+    "bytes": 12758
   },
   "day-sky-1600.webp": {
     "width": 1600,
     "height": 1420,
-    "bytes": 14418
+    "bytes": 69822
   },
   "day-sky-1600.avif": {
     "width": 1600,
     "height": 1420,
-    "bytes": 9990
+    "bytes": 49457
   },
   "day-sky-2560.webp": {
     "width": 2560,
     "height": 2272,
-    "bytes": 30274
+    "bytes": 179680
   },
   "day-sky-2560.avif": {
     "width": 2560,
     "height": 2272,
-    "bytes": 18810
+    "bytes": 144908
   },
   "day-clouds-960.webp": {
     "width": 960,
     "height": 540,
-    "bytes": 23180
+    "bytes": 36270
   },
   "day-clouds-960.avif": {
     "width": 960,
     "height": 540,
-    "bytes": 12660
+    "bytes": 27235
   },
   "day-clouds-1600.webp": {
     "width": 1600,
     "height": 900,
-    "bytes": 53066
+    "bytes": 92968
   },
   "day-clouds-1600.avif": {
     "width": 1600,
     "height": 900,
-    "bytes": 25513
+    "bytes": 66590
   },
   "day-clouds-2560.webp": {
     "width": 2560,
     "height": 1440,
-    "bytes": 98688
+    "bytes": 186522
   },
   "day-clouds-2560.avif": {
     "width": 2560,
     "height": 1440,
-    "bytes": 41552
+    "bytes": 125769
   },
   "day-hill-960.webp": {
     "width": 960,
     "height": 540,
-    "bytes": 38562
+    "bytes": 31338
   },
   "day-hill-960.avif": {
     "width": 960,
     "height": 540,
-    "bytes": 20686
+    "bytes": 25148
   },
   "day-hill-1600.webp": {
     "width": 1600,
     "height": 900,
-    "bytes": 87706
+    "bytes": 78562
   },
   "day-hill-1600.avif": {
     "width": 1600,
     "height": 900,
-    "bytes": 48230
+    "bytes": 59557
   },
   "day-hill-2560.webp": {
     "width": 2560,
     "height": 1440,
-    "bytes": 165784
+    "bytes": 149208
   },
   "day-hill-2560.avif": {
     "width": 2560,
     "height": 1440,
-    "bytes": 87330
+    "bytes": 110442
   },
   "day-phone-750.webp": {
     "width": 750,
     "height": 1625,
-    "bytes": 63882
+    "bytes": 99080
   },
   "day-phone-750.avif": {
     "width": 750,
     "height": 1625,
-    "bytes": 42257
+    "bytes": 66671
   },
   "day-phone-1170.webp": {
     "width": 1170,
     "height": 2535,
-    "bytes": 112634
+    "bytes": 183490
   },
   "day-phone-1170.avif": {
     "width": 1170,
     "height": 2535,
-    "bytes": 71206
+    "bytes": 125170
   },
   "dusk-composite-960.webp": {
     "width": 960,
     "height": 540,
-    "bytes": 23574
+    "bytes": 21826
   },
   "dusk-composite-960.avif": {
     "width": 960,
     "height": 540,
-    "bytes": 15991
+    "bytes": 15162
   },
   "dusk-composite-1600.webp": {
     "width": 1600,
     "height": 900,
-    "bytes": 53072
+    "bytes": 55648
   },
   "dusk-composite-1600.avif": {
     "width": 1600,
     "height": 900,
-    "bytes": 35538
+    "bytes": 40018
   },
   "dusk-composite-2560.webp": {
     "width": 2560,
     "height": 1440,
-    "bytes": 101012
+    "bytes": 116120
   },
   "dusk-composite-2560.avif": {
     "width": 2560,
     "height": 1440,
-    "bytes": 68438
+    "bytes": 89093
   },
   "dusk-sky-960.webp": {
     "width": 960,
     "height": 852,
-    "bytes": 7288
+    "bytes": 6302
   },
   "dusk-sky-960.avif": {
     "width": 960,
     "height": 852,
-    "bytes": 4808
+    "bytes": 4874
   },
   "dusk-sky-1600.webp": {
     "width": 1600,
     "height": 1420,
-    "bytes": 15018
+    "bytes": 18094
   },
   "dusk-sky-1600.avif": {
     "width": 1600,
     "height": 1420,
-    "bytes": 9392
+    "bytes": 12860
   },
   "dusk-sky-2560.webp": {
     "width": 2560,
     "height": 2272,
-    "bytes": 31228
+    "bytes": 57824
   },
   "dusk-sky-2560.avif": {
     "width": 2560,
     "height": 2272,
-    "bytes": 17069
+    "bytes": 46297
   },
   "dusk-clouds-960.webp": {
     "width": 960,
     "height": 540,
-    "bytes": 30486
+    "bytes": 40454
   },
   "dusk-clouds-960.avif": {
     "width": 960,
     "height": 540,
-    "bytes": 11807
+    "bytes": 29748
   },
   "dusk-clouds-1600.webp": {
     "width": 1600,
     "height": 900,
-    "bytes": 71332
+    "bytes": 101642
   },
   "dusk-clouds-1600.avif": {
     "width": 1600,
     "height": 900,
-    "bytes": 23760
+    "bytes": 71162
   },
   "dusk-clouds-2560.webp": {
     "width": 2560,
     "height": 1440,
-    "bytes": 147912
+    "bytes": 197378
   },
   "dusk-clouds-2560.avif": {
     "width": 2560,
     "height": 1440,
-    "bytes": 40606
+    "bytes": 133477
   },
   "dusk-hill-960.webp": {
     "width": 960,
     "height": 540,
-    "bytes": 23874
+    "bytes": 25974
   },
   "dusk-hill-960.avif": {
     "width": 960,
     "height": 540,
-    "bytes": 12911
+    "bytes": 20557
   },
   "dusk-hill-1600.webp": {
     "width": 1600,
     "height": 900,
-    "bytes": 56580
+    "bytes": 66114
   },
   "dusk-hill-1600.avif": {
     "width": 1600,
     "height": 900,
-    "bytes": 28628
+    "bytes": 48345
   },
   "dusk-hill-2560.webp": {
     "width": 2560,
     "height": 1440,
-    "bytes": 116086
+    "bytes": 124462
   },
   "dusk-hill-2560.avif": {
     "width": 2560,
     "height": 1440,
-    "bytes": 58756
+    "bytes": 93954
   },
   "dusk-phone-750.webp": {
     "width": 750,
     "height": 1625,
-    "bytes": 45756
+    "bytes": 45628
   },
   "dusk-phone-750.avif": {
     "width": 750,
     "height": 1625,
-    "bytes": 29971
+    "bytes": 34152
   },
   "dusk-phone-1170.webp": {
     "width": 1170,
     "height": 2535,
-    "bytes": 81224
+    "bytes": 90210
   },
   "dusk-phone-1170.avif": {
     "width": 1170,
     "height": 2535,
-    "bytes": 51911
+    "bytes": 67333
   }
 }

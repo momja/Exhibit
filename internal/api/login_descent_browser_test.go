@@ -59,6 +59,24 @@ func TestLoginDescentBrowser(t *testing.T) {
 			}
 			require.True(t, eval(`document.body.classList.contains('login-descend')`), "the first visit is marked to animate in both cases")
 			require.True(t, eval(`document.activeElement.id === 'username'`), "the form has focus on the first frame")
+			require.True(t, eval(`document.querySelector('.login-headline .sr-only').textContent === 'tools'`), "the accessible headline stays fixed")
+			if motion == "no-preference" {
+				require.True(t, eval(`(() => {
+					const track = document.querySelector('.login-headline-words');
+					const animation = track.getAnimations()[0];
+					const slotHeight = track.parentElement.getBoundingClientRect().height;
+					const frameMatches = (time, row) => {
+						animation.currentTime = time;
+						const offset = new DOMMatrix(getComputedStyle(track).transform).m42;
+						return Math.abs(offset + slotHeight * row) < 0.5;
+					};
+					const originalTime = animation.currentTime;
+					const matches = frameMatches(500, 0) && frameMatches(1500, 1) &&
+						frameMatches(2750, 2) && frameMatches(4050, 3) && frameMatches(4980, 4);
+					animation.currentTime = originalTime;
+					return matches && animation.effect.getTiming().duration < 5000;
+				})()`), "the carousel gives each word a stationary beat and returns to tools")
+			}
 			formRect := `JSON.stringify(document.querySelector('main.login').getBoundingClientRect())`
 			before, err := chromedp.Run(ctx, chromedp.Evaluate[string](formRect))
 			require.NoError(t, err)

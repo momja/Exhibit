@@ -1,11 +1,8 @@
 # Production hero art
 
-Assets for [Exh-qhvv](../../../.tickets/Exh-qhvv.md). No sign-in implementation
-is included. The approved paintings remain unchanged in `../paintings/`.
-The delivered web files, with exact dimensions and byte counts, are listed in
+The visible-brushwork daytime painting and its night companion are the sources
+for the sign-in scene. The exported assets are listed in
 [`web/hero-art/images/manifest.json`](../../../web/hero-art/images/manifest.json).
-This directory's inputs and masters are lossless WebP, checked against the PNGs they
-replaced pixel for pixel (decoded RGBA identical), which keeps the repository small.
 
 ## Files and coordinates
 
@@ -13,38 +10,21 @@ For each of `day` and `dusk`:
 
 | File | Pixels | Purpose |
 | --- | --- | --- |
-| `*-native.webp` | 1672×941 | Native image-tool restoration; retained as source |
-| `*-sky-native.webp` | 1672×941 | Image-tool painted-through sky |
-| `*-clouds-native.webp`, `*-hill-native.webp` | 1672×941 | Image-tool RGBA extraction inputs, refined before shipping |
-| `*-sky.webp` | 2560×2272 | Master: full sky, extended 832px upward |
-| `*-clouds.webp`, `*-hill.webp` | 2560×1440 | Masters: straight-alpha, matted layers |
+| `*-brushwork.webp` | 1672×941 | Source painting, retained as lossless WebP |
+| `*-clouds-native.webp`, `*-hill-native.webp` | 1672×941 | Silhouettes from the earlier paintings, used as matting guides |
+| `*-sky.webp` | 2560×2272 | Master with clean, extended sky |
+| `*-clouds.webp`, `*-hill.webp` | 2560×1440 | Straight-alpha layer masters |
 
-These three layers per mode are the only masters. The 2560×1440 composite
-(sky cropped at y=832, then clouds, then hill, source-over) and the 1170×2535 phone
-crop are *assembled* from them by `tools/hero-export/assemble.mjs`, which reproduces
-Pillow's compositing and Lanczos resize exactly (libvips differs by up to 70/255 on
-the phone upscale). Neither is stored; `production.py` rebuilds both for review and
-records their pixel hashes in `verification.json`.
+The composite is assembled from the three masters with the sky at `(0,-832)`,
+then the cloud and hill layers at `(0,0)`. The phone composition is assembled
+from the same layers, using the existing `(1540,192,960,2080)` crop. The sky
+extension and layer positions retain the existing descent geometry.
 
-The built-in image generator was asked for its highest available resolution,
-preferably 3840×2160. It returned **1672×941 for every input**; these are not native
-2560px paintings. Production masters use Pillow Lanczos resampling to 2560×1440
-(a negligible aspect correction from the tool's almost-16:9 output).
-
-At rest, place the sky at `(0,-832)` and the other layers at `(0,0)`. Composite
-clouds over sky, then hill over both, with standard source-over alpha. The full
-sky extends behind all objects. Scale all positions together for other widths.
-The prototype's 520/760/1000px starting offsets become **832/1216/1600px** at
-production width. `verification.json` records comparison against the saved masters.
-The canonical composite is assembled from the refined layers; zero error means
-those delivered masters agree, not that generation preserved the mock pixelwise.
-
-The phone image crops the extended assembled scene at `(1540,192,960,2080)`
-before resizing. Its top half is sky for the sign-in content; the complete
-figure, CRT, desk and chair remain in its lower portion. This is an art-directed
-crop from the extended scene, rather than a center crop of the desktop image.
-The figure sits nearer the horizontal center than in the early phone mock,
-which keeps the complete desk and CRT inside the narrower portrait frame.
+The lower sky plate reflects texture from the unobstructed part of each source
+across the areas hidden by clouds and landscape. Matting separates the silhouettes
+at source resolution. Foreground colors are solved against the clean sky so the
+resting desktop composite closely matches the source painting. Renders and
+`verification.json` record the color differences after resampling.
 
 ## Regenerate
 
@@ -53,7 +33,7 @@ From the repository root (Python dependencies stay outside the checkout):
 ```sh
 python3 -m venv /tmp/exhibit-art-venv
 /tmp/exhibit-art-venv/bin/pip install -r design_files/brand-refresh/tools/production-requirements.txt
-# Full matting and toning from the retained native inputs, writing the three masters per mode:
+# Rebuild the three masters from the retained source paintings and silhouette guides:
 NUMBA_NUM_THREADS=2 OPENBLAS_NUM_THREADS=2 /tmp/exhibit-art-venv/bin/python design_files/brand-refresh/tools/production.py
 # Or, without redoing the matting, only verify, hash and review the saved masters:
 /tmp/exhibit-art-venv/bin/python design_files/brand-refresh/tools/production.py --assemble-only  # refuses if the masters differ from the hashes in verification.json
@@ -69,27 +49,12 @@ go test ./internal/api/...
 review images, and records the SHA-256 of every input and master in
 `verification.json` under `sha256`.
 
-Rerunning the matting recomputes the masters from the native inputs and the mock
-references; it was last run before the masters moved to WebP and the history was
-squashed, so a matting rerun will not necessarily reproduce today's bytes. The
-committed masters are the reference: `--assemble-only` and `npm run check` must
-pass against them. An earlier `--tone-from-ref` option that replayed the tone pass from
-a Git revision of the pre-tone PNG layers has been removed; those PNGs are not in
-this repository's history.
+Use the sharp version pinned in `hero-export/package-lock.json`. These derivatives
+were encoded on Linux arm64. Use the same Linux architecture for a byte-for-byte
+check, since encoder output can differ across architectures.
 
-**Regenerate the derivatives only on Linux x64 with the sharp version pinned in
-`hero-export/package-lock.json`.** libvips encoder output is not portable across
-platforms or versions, so any other machine will report drift in `npm run check`
-even though the images look the same.
-
-Generation is intentionally not part of the build. The retained native WebPs
-make the matting/export reproducible without a service call. Closed-form
-matting uses generated silhouettes to define a foreground/background/unknown
-trimap; multilevel foreground estimation decontaminates partially covered
-pixels. There is no hard-threshold final alpha. Sky holes use the generated
-painted-through plate, matched to uncovered source sky and feathered into it.
-The upper extension reflects existing painted texture and deepens gradually;
-it is not an independently generated new scene.
+Generation is separate from the build. The source paintings and guides are
+retained, so matting and export run without a generation service.
 
 `production.py` writes review images only to its `--review-dir` (default `/tmp/exhibit-review/Exh-qhvv/`):
 composites, phone crops, saved-layer recombinations, clouds/hill on checkerboard,
@@ -101,16 +66,14 @@ These files are deliberately untracked.
 `tools/hero-export/export.mjs` encodes desktop images/layers at 960, 1600 and 2560px,
 and portrait images at 750 and 1170px, in WebP and AVIF. Alpha is retained.
 The committed `web/hero-art/images/manifest.json` lists every filename, pixel
-size and byte count (56 files, 2,737,171 bytes in all). Export enforces a small budget
+size and byte count (56 files). Export enforces a small budget
 table per kind and format at each kind's largest width: composite, phone, and the
-sky+clouds+hill layer total. It uses one libvips worker with its operation cache
-disabled to bound memory on the shared server.
+sky+clouds+hill layer total. The more textured brushwork needs larger ceilings
+than the earlier paintings. Each encode uses one libvips worker with its
+operation cache disabled.
 
-Load only the active colour mode and one appropriate srcset width, but note that a
-page needs **both** the static composite and the animated layers: the composite
-paints first, and the layers take over for the descent animation. They are not
-alternatives. At 2560px the layer set is about 1.5-1.7x the composite in AVIF and
-2.0-2.9x in WebP (1.6x and 2.4x summed over both modes), so budget for both.
+During a descent visit the page loads both the final composite and one set of
+layers for the active color scheme. Repeat visits load only the composite.
 
 Why derivatives are committed, and how drift is guarded, is in `docs/build_assets.md`
 ("Committed derivatives"). The `web/hero-art` workspace has no dependencies; the asset
@@ -119,7 +82,18 @@ build discovers it, copies the manifest's files verbatim into ignored
 existing Go embed serves them at `/assets/hero-art/<filename>`, or through the
 versioned asset helper. Builds do not re-encode art or need access to design masters.
 
-## Image generation prompts and fidelity
+## Brushwork sources
+
+The daytime source is the visible-brushwork study, which retained the original
+composition and added dry bristle edges, scumbled sky, and more individually
+painted grass and poppies. The nighttime image was generated from that study
+with a lighting-only brief: indigo sky, faint stars, muted mauve clouds, a cool
+meadow, and the monitor lighting the figure. Earlier native sources document the
+previous paintings.
+
+The following notes record the previous generation and tone pass.
+
+## Earlier paintings and layer guides
 
 Built-in `image_gen.imagegen` was used, with the original paintings as edit
 targets for restoration and each restored native painting as the edit target

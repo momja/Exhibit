@@ -986,6 +986,10 @@ phones the painting owns a band at the bottom of the page and the content
 reserves it, so a short screen scrolls rather than covering the figure. The
 OAuth consent page keeps the plain card (`.login-painted` scopes the art).
 
+The last word of the headline rotates once in a fixed CSS slot and settles
+back on “tools” in under five seconds. Assistive technology and reduced-motion
+users get the static headline.
+
 **Sign-in descent** (Exh-vsw0): on a visit the server marks, the scenery moves
 for 3.6s (`cubic-bezier(.5,0,.15,1)`) as a camera coming down out of the sky.
 The page is scriptless except for that visit's one external module
@@ -1025,9 +1029,9 @@ container so the frame is plain `cqw`/`cqh` arithmetic. The layers fade in over
 300ms at the start and cover the (invisible) composite. Nothing above the text
 changes state when the motion ends (the layers keep `will-change: transform`),
 so text anti-aliasing and the panel shadow are identical across the end of the
-animation (measured on the natural timeline). Only `.login-scene` moves: the
-form never moves, fades or loses focus, and the grain and shade stay fixed above
-the art.
+animation (measured on the natural timeline). The descent moves only the
+scenery. The form never moves, fades or loses focus, and the grain and shade
+stay fixed above the art.
 
 Hosted sign-in sets `data-descent-after="clerk"`: the module waits for
 `exhibit:clerk-loaded` (dispatched by `clerk-client.js` after `Clerk.load`) before

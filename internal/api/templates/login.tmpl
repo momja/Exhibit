@@ -21,8 +21,8 @@
      descent (Exh-vsw0). If so, the sky, cloud and hill layers are emitted as
      empty divs (their images are CSS backgrounds in login-descent.css, so a
      visit that does not animate downloads none of them) and the composite is
-     hidden until they settle on top of it. Only .login-scene ever moves;
-     .login-content never does.
+     hidden until they settle on top of it. The scene moves independently of
+     the form. The headline rotates words inside a fixed-height CSS slot.
 
      Only the active colour mode and one width download: sources match in order,
      so the first matching media query and a supported type win. Light is the
@@ -60,7 +60,9 @@
 {{/* Headline and tagline, over the painting. Copy overlaps Exh-s7kn's onboarding
      copy; see the note on Exh-90b2. */}}
 {{define "loginIntro"}}<div class="login-intro">
-  <p class="login-headline font-headline">A shelf for <em>small</em> tools.</p>
+  <p class="login-headline font-headline">A space for <span class="login-headline-ending"><em>your</em> <span class="sr-only">tools</span><span class="login-headline-carousel" aria-hidden="true"><span class="login-headline-window"><span class="login-headline-words">
+    <span>tools</span><span>apps</span><span>art</span><span>games</span><span>tools</span>
+  </span></span></span></span></p>
   <p class="login-tagline">Saved as files, rendered anywhere, yours to keep.</p>
 </div>{{end}}
 

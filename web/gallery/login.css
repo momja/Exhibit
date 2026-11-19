@@ -72,6 +72,26 @@
 .login-intro{max-width:34rem}
 .login-headline em{font-style:italic;font-weight:inherit}
 .login-headline{font-size:clamp(44px,6.4vw,92px);line-height:.95;letter-spacing:-.02em;color:var(--color-on-painting);text-shadow:0 2px 18px var(--painting-text-shadow);text-wrap:balance}
+.login-headline-ending{white-space:nowrap}
+.login-headline-carousel{display:inline-block;position:relative;width:3em}
+/* The hidden word supplies the surrounding text's baseline. The clip has
+ * extra room above and below it for Fraunces's ascenders and descenders. */
+.login-headline-carousel::before{content:"tools";visibility:hidden}
+.login-headline-window{position:absolute;inset:-.14em 0 auto;height:1.30em;overflow:hidden}
+.login-headline-words{position:absolute;inset:0 0 auto;display:grid;grid-auto-rows:1.30em;line-height:.95}
+.login-headline-words span{padding-block-start:.14em;padding-inline-start:.02em}
+/* One pass, including pauses, fits under five seconds. The last frame is the
+ * original word and reduced motion keeps the first frame. */
+@media (prefers-reduced-motion:no-preference){
+  .login-headline-words{animation:login-headline-words 4.98s cubic-bezier(.22,.77,.31,1) both}
+}
+@keyframes login-headline-words{
+  0%,12%{transform:translateY(0)}
+  23%,38%{transform:translateY(-20%)}
+  49%,64%{transform:translateY(-40%)}
+  75%,89%{transform:translateY(-60%)}
+  100%{transform:translateY(-80%)}
+}
 .login-tagline{margin-top:14px;max-width:26ch;font-size:1.1875rem;font-weight:700;line-height:1.35;color:var(--color-on-painting);text-shadow:0 1px 8px var(--painting-text-shadow)}
 .login-painted .login{max-width:340px;align-items:stretch;padding:22px 24px 24px}
 .login-painted .login-sub{margin:0;font-weight:700;color:var(--color-ink)}
@@ -97,7 +117,7 @@
   .login-scene::after{background:linear-gradient(var(--painting-shade) 0,var(--painting-shade) 30%,transparent 62%)}
   .login-painted .app-header{position:static;padding-inline:20px;padding-top:6px;min-height:0;height:var(--header-height)}
   .login-painted .app-header-slot{min-height:0}
-  
+
   .login-painted .login-content{padding:2vh 20px calc(var(--login-painting-h) - 12px);gap:18px}
   .login-headline{font-size:clamp(40px,12vw,56px)}
   .login-tagline{margin-top:10px}
