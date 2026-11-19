@@ -1,0 +1,15 @@
+{
+  "command": [
+    "bash",
+    "-c",
+    "node --experimental-vm-modules --test web/gallery/*.test.mjs"
+  ],
+  "cwd": ".",
+  "head": "e439f22ff452d9f98eb9d90f716ec95bfdda959e",
+  "startedAt": "2026-11-05T18:45:02.424624+00:00",
+  "seconds": 16.71,
+  "exitCode": 0,
+  "sourceFingerprint": "b242d0432fd608bc915891a342025e35d2ff19dfb027f4959cc82849b778e851",
+  "sourceUnchanged": true,
+  "log": "/tmp/exhibit-zrjo-tags10-r35-node.log"
+}

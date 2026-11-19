@@ -4,6 +4,8 @@ import (
 	"embed"
 	"html/template"
 	"strings"
+
+	"github.com/momja/Exhibit/internal/color"
 )
 
 // templatesFS carries the gallery page templates in the binary. Unlike the
@@ -24,6 +26,8 @@ var templatesFS embed.FS
 var pageTemplates = template.Must(template.New("").Funcs(template.FuncMap{
 	"asset":         assetURL,
 	"agentMarkdown": agentMarkdown,
+	"tagColorName":  color.PresetName,
+	"tagColors":     newTagColorPickerView,
 }).ParseFS(templatesFS, "templates/*.tmpl"))
 
 // renderPage executes one of the named page templates to a string.

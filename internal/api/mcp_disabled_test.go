@@ -61,7 +61,7 @@ func TestAgentGrantsRemainRevocableAfterMCPIsDisabled(t *testing.T) {
 		assert.NotContains(t, page, "data-mcp-url")
 		assert.NotContains(t, page, `id="agent-mcp-url"`)
 		assert.NotContains(t, page, `id="agent-mcp-command"`)
-		assert.NotContains(t, page, "For clients without browser sign-in")
+		assert.NotContains(t, page, "Use a token instead")
 		assert.NotContains(t, page, issued.Token)
 	}
 	w = doJSON(t, r, http.MethodGet, "/api/agent-grants", nil)
@@ -148,7 +148,7 @@ func TestEnabledMCPPanelOffersRemoteConnectionConfiguration(t *testing.T) {
 		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 		page := w.Body.String()
 		assert.Contains(t, page, `data-mcp-url="`+r.cfg.MCPURL+`"`)
-		for _, id := range []string{"agent-grant-form", "agent-grant-token", "agent-grant-copy", "agent-grant-remote-command", "agent-grant-remote-config"} {
+		for _, id := range []string{"agent-grant-form", "agent-grant-token", "agent-grant-token-copy", "agent-grant-remote-command", "agent-grant-remote-config"} {
 			assert.Contains(t, page, `id="`+id+`"`)
 		}
 		assert.Contains(t, page, "Claude Code")

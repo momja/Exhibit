@@ -1,0 +1,8 @@
+{
+  "command": "go test -short ./...",
+  "candidate": "240px desktop rail; application commit recorded after freeze",
+  "exitCode": 0,
+  "log": "/tmp/exhibit-zrjo-rail-go.log",
+  "application": "0110960247e5fdece7f88699c85afb865824f8e6",
+  "savedLog": "visual-validation-go.txt"
+}

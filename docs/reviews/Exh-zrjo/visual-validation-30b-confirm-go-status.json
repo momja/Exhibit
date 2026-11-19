@@ -1,0 +1,6 @@
+{
+  "command": "go test -short ./...",
+  "application": "30bdaa5dfdbed35f3e14cf3e0c2183fffe5bf6d9",
+  "exitCode": 0,
+  "log": "/tmp/exhibit-zrjo-editor-chrome-go-confirm.log"
+}

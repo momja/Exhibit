@@ -1,0 +1,46 @@
+
+> test
+> playwright test --grep history shares desktop columns
+
+
+Running 1 test using 1 worker
+
+(node:32795) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  1 [chromium] › specs/ui-feedback.spec.ts:73:1 › history shares desktop columns and fits a narrow phone with enlarged text (1.5s)
+
+
+  1) [chromium] › specs/ui-feedback.spec.ts:73:1 › history shares desktop columns and fits a narrow phone with enlarged text
+
+    Error: date alignment 1280px light
+
+    expect(received).toBeLessThan(expected)
+
+    Expected: < 1
+    Received:   108.453125
+
+       96 |         };
+       97 |       });
+    >  98 |       expect(Math.max(...columns.dates) - Math.min(...columns.dates), `date alignment ${width}px ${colorScheme}`).toBeLessThan(1);
+          |                                                                                                                   ^
+       99 |       expect(Math.max(...columns.actions) - Math.min(...columns.actions), `action alignment ${width}px ${colorScheme}`).toBeLessThan(1);
+      100 |       expect(columns.actionPairsFit).toBe(true);
+      101 |     }
+        at /home/maxomdal/.t3/worktrees/Exhibit/feature-Exh-zrjo-ui-council/e2e/specs/ui-feedback.spec.ts:98:115
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/ui-feedback-history-shares-33319-ow-phone-with-enlarged-text-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/ui-feedback-history-shares-33319-ow-phone-with-enlarged-text-chromium/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/ui-feedback-history-shares-33319-ow-phone-with-enlarged-text-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/ui-feedback-history-shares-33319-ow-phone-with-enlarged-text-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [chromium] › specs/ui-feedback.spec.ts:73:1 › history shares desktop columns and fits a narrow phone with enlarged text

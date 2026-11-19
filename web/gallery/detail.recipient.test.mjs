@@ -128,7 +128,7 @@ test("a blocked origin is explained by name, and never prompted for", async () =
     "a silent block is the failure this ticket exists to prevent");
   assert.equal(
     byId("origin-blocked-headline").textContent,
-    "This tool tried to reach https://api.example.com. Its owner has not allowed that."
+    "This artifact tried to reach https://api.example.com. The owner has not allowed it."
   );
   assert.deepEqual(api.calls, [], "explaining decides nothing, so it writes nothing");
 });
@@ -141,7 +141,7 @@ test("the explanation names every blocked origin, not just the first", async () 
 
   assert.equal(
     byId("origin-blocked-headline").textContent,
-    "This tool tried to reach 2 origins its owner has not allowed.",
+    "This artifact tried to reach 2 sites the owner has not allowed.",
     "a tool reaching several origins has several things wrong with it, and naming " +
     "one leaves the visitor reporting a list they cannot see the end of"
   );

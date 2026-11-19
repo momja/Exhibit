@@ -29,34 +29,33 @@
 {{template "appHeader" .Header}}
 <main>
 <div class="lede">
-  <h2>Three ways in.</h2>
-  <p>However it arrives, it lands in your library as one self-contained file you own.</p>
+  <h2>Add to Gallery</h2>
 </div>
 
 {{/* Every tile carries data-mode: the agent tile used to be a bare link to
      /agent and is now the panel's default mode, so the brief below it is
      filled in before the session starts rather than after. */}}
 <div class="routes" role="group" aria-label="Creation method">
-  <button type="button" class="route is-selected" data-mode="agent" aria-pressed="true" onclick="setMode('agent')">
-    <span class="route-icon" aria-hidden="true"><i class="ph ph-robot"></i></span>
+  <button type="button" class="route is-selected" data-mode="agent" aria-pressed="true">
+    <span class="route-icon" aria-hidden="true"><i class="ph ph-robot" aria-hidden="true"></i></span>
     <b><span class="route-label-wide">Build with agent</span><span class="route-label-compact">Agent</span></b>
-    <span class="route-note">Describe the tool and iterate with an assistant until it works.</span>
+    <span class="route-note">Describe what you want to build.</span>
   </button>
-  <button type="button" class="route" data-mode="paste" aria-pressed="false" onclick="setMode('paste')">
-    <span class="route-icon" aria-hidden="true"><i class="ph ph-code"></i></span>
+  <button type="button" class="route" data-mode="paste" aria-pressed="false">
+    <span class="route-icon" aria-hidden="true"><i class="ph ph-code" aria-hidden="true"></i></span>
     <b><span class="route-label-wide">Paste HTML</span><span class="route-label-compact">Paste</span></b>
-    <span class="route-note">Drop in source you already have from a chat or your editor.</span>
+    <span class="route-note">Save HTML you already have.</span>
   </button>
-  <button type="button" class="route" data-mode="url" aria-pressed="false" onclick="setMode('url')">
-    <span class="route-icon" aria-hidden="true"><i class="ph ph-globe"></i></span>
+  <button type="button" class="route" data-mode="url" aria-pressed="false">
+    <span class="route-icon" aria-hidden="true"><i class="ph ph-globe" aria-hidden="true"></i></span>
     <b><span class="route-label-wide">From URL</span><span class="route-label-compact">URL</span></b>
-    <span class="route-note">Fetch a page once and keep your own copy. Assets inlined.</span>
+    <span class="route-note">Save a copy of a web page.</span>
   </button>
 </div>
 {{/* Phones show only the selected route note, outside the compact buttons.
      The initial note matches the default agent route; setMode copies the
      selected tile's server-rendered text without replacing any form fields. */}}
-<p class="route-description" id="route-description" aria-live="polite">Describe the tool and iterate with an assistant until it works.</p>
+<p class="route-description" id="route-description" aria-live="polite">Describe what you want to build.</p>
 
 {{/* The agent brief. Deliberately a form of named fields rather than one
      freeform prompt box: the answers are what the agent surface builds its
@@ -66,24 +65,26 @@
 
      It is a real <form>, so the browser does the empty-description check and
      Enter in the title submits; startAgent takes over from there. */}}
-<form class="card ingest-panel" id="agent-panel" onsubmit="startAgent(event)">
+<form class="card ingest-panel" id="agent-panel" novalidate>
   <div class="ingest-field">
     <label class="ingest-label" for="agent-title">Title <span class="ingest-label-opt">optional</span></label>
     <input class="field" type="text" id="agent-title" name="title" placeholder="Session timer">
   </div>
   <div class="ingest-field">
-    <label class="ingest-label" for="agent-description">Description</label>
-    <textarea id="agent-description" name="description" required placeholder="What should the tool do? Say what you want on screen, and what it should remember between visits."></textarea>
+    <label class="ingest-label" for="agent-description">What should it do?</label>
+    <textarea id="agent-description" name="description" required aria-describedby="agent-description-help agent-description-error" placeholder="A timer with work and break sessions…"></textarea>
+    <p class="text-sm muted" id="agent-description-help">Describe what you want on screen and what it should remember between visits.</p>
+    <p class="field-error" id="agent-description-error" role="alert" hidden>Describe what you want the artifact to do.</p>
   </div>
 
   <div class="ingest-foot">
     <span class="spacer"></span>
     <a class="btn btn-sec" href="/">Cancel</a>
-    <button class="btn" type="submit"><i class="ph ph-robot"></i> Start building</button>
+    <button class="btn" type="submit"><i class="ph ph-robot" aria-hidden="true"></i> Start building</button>
   </div>
 </form>
 
-<div class="card ingest-panel" id="ingest-panel" hidden>
+<form class="card ingest-panel" id="ingest-panel" novalidate hidden>
   <div class="ingest-field">
     <label class="ingest-label" for="title">Title <span class="ingest-label-opt">optional</span></label>
     <input class="field" type="text" id="title" placeholder="Untitled">
@@ -94,12 +95,14 @@
        the CodeMirror island mounted over #body is never fought over (its base
        theme sets .cm-editor{display:flex!important}). */}}
   <div class="ingest-field" id="source-field">
-    <label class="ingest-label" for="body">Source</label>
-    <textarea id="body" placeholder="Paste HTML artifact source here…"></textarea>
+    <label class="ingest-label" for="body">HTML source</label>
+    <textarea id="body" placeholder="Paste HTML…" aria-label="HTML source" aria-describedby="body-error"></textarea>
+    <p class="field-error" id="body-error" role="alert" hidden>Paste HTML first.</p>
   </div>
   <div class="ingest-field" id="url-field" hidden>
     <label class="ingest-label" for="url-input">Page URL</label>
-    <input class="field" type="text" id="url-input" placeholder="https://example.com/tool.html">
+    <input class="field" type="url" id="url-input" placeholder="https://example.com/tool.html" aria-describedby="url-input-error">
+    <p class="field-error" id="url-input-error" role="alert" hidden>Enter a URL first.</p>
   </div>
 
   {{/* URL mode only, and it must stay that way: POST /api/artifacts rejects
@@ -108,25 +111,24 @@
        page's references against. Pasted HTML has no such base. */}}
   <label class="snapshot-row" id="snapshot-row" hidden>
     <input type="checkbox" id="snapshot-toggle" checked>
-    <span>Snapshot assets into the file (recommended) — fetches the page&#39;s images, styles and scripts and inlines them so the artifact stays self-contained</span>
+    <span>Save images, styles, and scripts with the page (recommended)<small class="text-sm muted">Some files may still require network access.</small></span>
   </label>
 
   <div id="scan-result">
     <div id="snapshot-report"></div>
     <div id="network-approval" hx-get="/partials/network-approval"
          hx-trigger="exhibit:network-approval-changed from:body"
-         hx-vals='js:{artifact: pendingIngestArtifactId, mode: "new"}'
+         hx-vals='js:{artifact: window.pendingIngestArtifactId, mode: "new"}'
          hx-swap="innerHTML" hx-sync="this:replace"></div>
   </div>
-  <div id="status"></div>
+  <div id="status" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <div class="ingest-foot">
-    <span class="muted text-sm">Network origins are surfaced for approval before anything runs.</span>
     <span class="spacer"></span>
     <a class="btn btn-sec" href="/">Cancel</a>
-    <button class="btn" type="button" onclick="ingest()"><i class="ph ph-plus"></i> Add to library</button>
+    <button class="btn" type="submit"><i class="ph ph-plus" aria-hidden="true"></i> Add to Gallery</button>
   </div>
-</div>
+</form>
 </main>
 
 <script src="{{asset "editor.js"}}"></script>
@@ -143,6 +145,6 @@ const TOKEN = {{.Token}};
 const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
 </script>
 <script src="{{asset "gallery/api.js"}}"></script>
-<script src="{{asset "gallery/new.js"}}"></script>
+<script type="module" src="{{asset "gallery/new.js"}}"></script>
 </body>
 </html>{{end}}

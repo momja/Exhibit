@@ -1,0 +1,18 @@
+
+> test
+> playwright test --grep a tag mutation stays locked|tag refresh honors|tag refresh renders|tag editing keeps color|pending creation submits once|Back from a completed import|persisted-page recovery
+
+
+Running 7 tests using 1 worker
+
+(node:331872) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium] › specs/new-history.spec.ts:3:1 › Back from a completed import restores a usable creation page (1.7s)
+  ✓  2 [chromium] › specs/new-history.spec.ts:17:1 › persisted-page recovery resets a completed import and preserves unfinished approval (1.5s)
+  ✓  3 [chromium] › specs/tags.spec.ts:3:1 › a tag mutation stays locked through refresh failure and retries only the fragment (1.7s)
+  ✓  4 [chromium] › specs/tags.spec.ts:44:1 › tag refresh honors session expiry through htmx login recovery (1.1s)
+  ✓  5 [chromium] › specs/tags.spec.ts:53:1 › tag refresh renders a missing-artifact notice without a script error (999ms)
+  ✓  6 [chromium] › specs/tags.spec.ts:72:1 › tag editing keeps color samples intact, controls aligned and validation local in both schemes (15.8s)
+  ✓  7 [chromium] › specs/ui-feedback.spec.ts:41:1 › pending creation submits once, preserves input, and recovers from a refusal (1.2s)
+
+  7 passed (26.8s)

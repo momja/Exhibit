@@ -1,0 +1,8 @@
+{
+  "command": "npm test --prefix e2e",
+  "application": "d30dbbe92f9f5535a33f59be25f7c9f9c4be4511",
+  "exitCode": 1,
+  "seconds": 1.32,
+  "log": "/tmp/exhibit-zrjo-nine-r25-e2e.log",
+  "applicationUnchanged": true
+}

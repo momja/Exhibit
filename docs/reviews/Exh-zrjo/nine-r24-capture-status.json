@@ -1,0 +1,8 @@
+{
+  "command": "node e2e/capture-ui.mjs docs/screenshots/Exh-zrjo/nine-round-24",
+  "application": "329c50aa704256090eaa1354eac734d5f04a2339",
+  "exitCode": 0,
+  "seconds": 313.98,
+  "log": "/tmp/exhibit-zrjo-nine-r24-capture.log",
+  "applicationUnchanged": true
+}

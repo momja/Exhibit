@@ -125,7 +125,8 @@ type Artifact struct {
 	//
 	// The owner's share panel writes it through PATCH (av-6xjd); what the
 	// value *means* at render time is av-v991's.
-	ShareStateMode string `json:"share_state_mode"`
+	ShareStateMode   string `json:"share_state_mode"`
+	ShareAttribution string `json:"share_attribution"`
 	// ShareGrantCount and SharePublicLink are the artifact's sharing state as
 	// the gallery card reads it (av-6xjd) — how many accounts hold a grant,
 	// and whether its one anonymous link exists.
@@ -451,6 +452,14 @@ type Store interface {
 	// own artifacts, in the same order and with the same search/paging as
 	// ListArtifacts. Like GetArtifactReadableBy, it includes disabled owners.
 	ListArtifactsSharedWith(ctx context.Context, viewer ViewerID, opts SharedListOptions) ([]*SharedArtifact, error)
+	// SearchArtifactsReadableBy searches owned artifacts and incoming grants in
+	// one stable page. Anonymous links alone do not authorize discovery.
+	SearchArtifactsReadableBy(ctx context.Context, viewer ViewerID, query string, limit, offset int) ([]*SharedArtifact, error)
+	ListViewerGallery(ctx context.Context, viewer ViewerID, opts ViewerGalleryOptions) ([]*SharedArtifact, error)
+	SetArtifactStarred(ctx context.Context, viewer ViewerID, id string, starred bool) error
+	RecordArtifactOpened(ctx context.Context, viewer ViewerID, id string) error
+	ArtifactPreferences(ctx context.Context, viewer ViewerID, ids []string) (map[string]ArtifactPreference, error)
+	ListArtifactActivity(ctx context.Context, ownerID int64, limit, offset int) ([]ArtifactActivity, error)
 	// SharedWithOwners counts incoming artifacts per owner, ordered by display
 	// name then ID. SpaceCounts counts incoming artifacts and owned artifacts
 	// with any share, respectively; neither count depends on list filters.
@@ -912,4 +921,19 @@ type Store interface {
 	// ErrNotFound when there is no such account. sqlite_account.go says what
 	// it deletes and what the schema's cascades delete for it.
 	DeleteAccount(ctx context.Context, userID int64) ([]string, error)
+}
+
+// ValidShareAttribution validates the owner-controlled anonymous-share branding policy.
+func ValidShareAttribution(v string) bool { return v == "inherit" || v == "show" || v == "hide" }
+
+// ShowShareAttribution gives an explicit owner choice precedence over the instance default.
+func (a *Artifact) ShowShareAttribution(instance bool) bool {
+	switch a.ShareAttribution {
+	case "show":
+		return true
+	case "hide":
+		return false
+	default:
+		return instance
+	}
 }

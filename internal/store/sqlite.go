@@ -127,7 +127,7 @@ func scanArtifact(rows interface{ Scan(...any) error }, extra ...any) (*Artifact
 	var a Artifact
 	// Scan timestamps as any — the modernc sqlite driver may return them as time.Time or string
 	var createdAt, updatedAt any
-	columns := []any{&a.ID, &a.OwnerID, &a.Title, &a.SourceBlobID, &a.SourceURL, &a.Tier, &createdAt, &updatedAt, &a.DownloadsApproved, &a.ClipboardApproved, &a.LinksApproved, &a.CameraApproved, &a.MicrophoneApproved, &a.GeolocationApproved, &a.WidgetBlobID, &a.ShareStateMode, &a.ShareGrantCount, &a.SharePublicLink, &a.VersionSeq}
+	columns := []any{&a.ID, &a.OwnerID, &a.Title, &a.SourceBlobID, &a.SourceURL, &a.Tier, &createdAt, &updatedAt, &a.DownloadsApproved, &a.ClipboardApproved, &a.LinksApproved, &a.CameraApproved, &a.MicrophoneApproved, &a.GeolocationApproved, &a.WidgetBlobID, &a.ShareStateMode, &a.ShareAttribution, &a.ShareGrantCount, &a.SharePublicLink, &a.VersionSeq}
 	err := rows.Scan(append(columns, extra...)...)
 	if err != nil {
 		return nil, err
@@ -149,8 +149,8 @@ func scanArtifact(rows interface{ Scan(...any) error }, extra ...any) (*Artifact
 //
 // Sharing indicators are derived from indexed tables on every read (Exh-grj9),
 // so badges follow link/grant writes and cascades without rollup triggers.
-const artifactCols = "id, owner_id, title, source_blob_id, source_url, tier, created_at, updated_at, downloads_approved, clipboard_approved, links_approved, camera_approved, microphone_approved, geolocation_approved, widget_blob_id, share_state_mode, (SELECT COUNT(*) FROM share_grants g WHERE g.artifact_id = artifacts.id), EXISTS (SELECT 1 FROM share_links l WHERE l.artifact_id = artifacts.id), (SELECT MAX(seq) FROM artifact_versions WHERE artifact_id = artifacts.id)"
-const artifactColsA = "a.id, a.owner_id, a.title, a.source_blob_id, a.source_url, a.tier, a.created_at, a.updated_at, a.downloads_approved, a.clipboard_approved, a.links_approved, a.camera_approved, a.microphone_approved, a.geolocation_approved, a.widget_blob_id, a.share_state_mode, (SELECT COUNT(*) FROM share_grants g WHERE g.artifact_id = a.id), EXISTS (SELECT 1 FROM share_links l WHERE l.artifact_id = a.id), (SELECT MAX(seq) FROM artifact_versions WHERE artifact_id = a.id)"
+const artifactCols = "id, owner_id, title, source_blob_id, source_url, tier, created_at, updated_at, downloads_approved, clipboard_approved, links_approved, camera_approved, microphone_approved, geolocation_approved, widget_blob_id, share_state_mode, share_attribution, (SELECT COUNT(*) FROM share_grants g WHERE g.artifact_id = artifacts.id), EXISTS (SELECT 1 FROM share_links l WHERE l.artifact_id = artifacts.id), (SELECT MAX(seq) FROM artifact_versions WHERE artifact_id = artifacts.id)"
+const artifactColsA = "a.id, a.owner_id, a.title, a.source_blob_id, a.source_url, a.tier, a.created_at, a.updated_at, a.downloads_approved, a.clipboard_approved, a.links_approved, a.camera_approved, a.microphone_approved, a.geolocation_approved, a.widget_blob_id, a.share_state_mode, a.share_attribution, (SELECT COUNT(*) FROM share_grants g WHERE g.artifact_id = a.id), EXISTS (SELECT 1 FROM share_links l WHERE l.artifact_id = a.id), (SELECT MAX(seq) FROM artifact_versions WHERE artifact_id = a.id)"
 
 func (s *SQLiteStore) PutArtifact(ctx context.Context, a *Artifact) error {
 	now := a.CreatedAt
@@ -477,7 +477,8 @@ var updatableArtifactColumns = map[string]bool{
 	// merely allowed, because unlike a title this column is read as an enum by
 	// the render path, and an unrecognized value there is a branch nobody
 	// wrote.
-	"share_state_mode": true,
+	"share_state_mode":  true,
+	"share_attribution": true,
 }
 
 func (s *SQLiteStore) UpdateArtifact(ctx context.Context, ownerID int64, id string, updates map[string]any) error {
@@ -540,6 +541,12 @@ func updateArtifactTx(ctx context.Context, tx *sql.Tx, ownerID int64, id string,
 			// that later fails the bool scan and bricks reads of the artifact.
 			if _, ok := v.(bool); !ok {
 				return fmt.Errorf("%s must be a boolean", k)
+			}
+		}
+		if k == "share_attribution" {
+			mode, ok := v.(string)
+			if !ok || !ValidShareAttribution(mode) {
+				return fmt.Errorf("share_attribution must be inherit, show or hide")
 			}
 		}
 		if k == "share_state_mode" {

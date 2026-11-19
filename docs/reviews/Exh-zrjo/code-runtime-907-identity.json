@@ -1,0 +1,36 @@
+{
+  "candidate": "907cb944a9a296cd0aae3dd59fb739fa1f22c365",
+  "pr273Base": "ab0135c902559d5912deec420947d6ab3cbdbcf6",
+  "assetVersion": "acd0d10600c5",
+  "scope": [
+    "internal",
+    "web",
+    "e2e",
+    "cmd",
+    "scripts",
+    "Makefile",
+    "go.mod",
+    "go.sum"
+  ],
+  "scopeDiff": "",
+  "sourceFingerprint": "91bc194e315c78831812269e1ac40bcab89c0741d4384ff2ac81bbfa2a7957ef",
+  "binarySha256": "7a536d85d341e10dcd1f52edec899dce647dd9f5c43f4f0df1b6365ed9adb6d8",
+  "main": {
+    "pid": 338379,
+    "executableSha256": "7a536d85d341e10dcd1f52edec899dce647dd9f5c43f4f0df1b6365ed9adb6d8"
+  },
+  "sample": {
+    "pid": 338399,
+    "executableSha256": "7a536d85d341e10dcd1f52edec899dce647dd9f5c43f4f0df1b6365ed9adb6d8",
+    "sourceCommit": "907cb944a9a296cd0aae3dd59fb739fa1f22c365"
+  },
+  "buildReceipt": "code-validation-build-verified-status.json",
+  "previousVerifiedSource": "8a4c0fe1e07a43a7bd09b94de1d9ad3754262913",
+  "previousToCurrentDiffPaths": [
+    "internal/api/gallery_test.go",
+    "internal/api/templates/edit.tmpl"
+  ],
+  "previousToCurrentDiff": "diff --git a/internal/api/gallery_test.go b/internal/api/gallery_test.go\nindex cedae242..846564b7 100644\n--- a/internal/api/gallery_test.go\n+++ b/internal/api/gallery_test.go\n@@ -108,7 +108,9 @@ func TestEditPageRendersTagsPanel(t *testing.T) {\n \n \tassert.Contains(t, page, `<details class=\"details-panel\" id=\"tags-panel\" data-artifact-id=\"`+id+`\">`)\n \tassert.Contains(t, page, `hx-get=\"/partials/tag-panel?artifact=`+id+`\"`)\n-\tassert.Contains(t, page, `hx-trigger=\"exhibit:tags-changed from:body\"`)\n+\t// Mutations and GET-only recovery refresh the same stable native fieldset.\n+\tassert.Contains(t, page, `<fieldset id=\"tags-body\"`)\n+\tassert.Contains(t, page, `hx-trigger=\"exhibit:tags-changed from:body, click from:#tag-refresh\"`)\n \tassert.Contains(t, page, `data-action=\"edit-tag\" data-tag-id=\"`+charts.ID+`\" data-tag-name=\"charts\" data-tag-color=\"#ffffff\"`)\n \tassert.Contains(t, page, `data-action=\"detach-tag\" data-tag-id=\"`+charts.ID+`\" aria-label=\"Remove tag charts from this artifact\"`)\n \t// The dropdown offers what is not yet attached.\ndiff --git a/internal/api/templates/edit.tmpl b/internal/api/templates/edit.tmpl\nindex 3965fbf4..7afbfde3 100644\n--- a/internal/api/templates/edit.tmpl\n+++ b/internal/api/templates/edit.tmpl\n@@ -45,7 +45,7 @@\n            hx-swap=\"innerHTML\">{{template \"tagPanelBody\" .TagPanel}}</fieldset>\n       <div id=\"tag-refresh-notice\" hidden>\n         <p class=\"field-error\" role=\"alert\">Tags could not refresh. Refresh the tags to continue.</p>\n-        <button type=\"button\" class=\"btn btn-secondary\" id=\"tag-refresh\">Refresh tags</button>\n+        <button type=\"button\" class=\"btn btn-sec\" id=\"tag-refresh\">Refresh tags</button>\n       </div>\n       {{template \"editTagModal\" .Presets}}\n     </div>\n",
+  "javascriptDeltaSince479NodeAndFull29BrowserPass": "",
+  "note": "All paths are declared and the complete current scope is compared without exclusions. The two-file delta is retained, not treated as empty. Current source and binary were frozen before Go confirmation."
+}

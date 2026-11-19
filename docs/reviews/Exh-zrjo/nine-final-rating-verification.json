@@ -1,0 +1,108 @@
+{
+  "application": "d30dbbe92f9f5535a33f59be25f7c9f9c4be4511",
+  "assetVersion": "e29fcce0e122",
+  "qualifyingJointRounds": [
+    25,
+    26
+  ],
+  "threshold": 9,
+  "verifiedScoreCount": 48,
+  "minimum": 9,
+  "allRatingsReadFromOriginalTables": true,
+  "records": [
+    {
+      "round": 25,
+      "reviewer": "sol",
+      "taskId": "node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r25-sol-visual-nine",
+      "report": "round-25-sol-visual.md",
+      "light": [
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0
+      ],
+      "dark": [
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0
+      ]
+    },
+    {
+      "round": 25,
+      "reviewer": "opus",
+      "taskId": "node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r25-opus-visual-nine",
+      "report": "round-25-opus-visual.md",
+      "light": [
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0
+      ],
+      "dark": [
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0
+      ]
+    },
+    {
+      "round": 26,
+      "reviewer": "sol",
+      "taskId": "node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r26-sol-visual-nine",
+      "report": "round-26-sol-visual.md",
+      "light": [
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0
+      ],
+      "dark": [
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0
+      ]
+    },
+    {
+      "round": 26,
+      "reviewer": "opus",
+      "taskId": "node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r26-opus-visual-nine",
+      "report": "round-26-opus-visual.md",
+      "light": [
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0
+      ],
+      "dark": [
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0
+      ]
+    }
+  ],
+  "runtimeDiffOnlyValidationTest": [
+    "internal/api/gallery_test.go"
+  ],
+  "checksAllPass": true,
+  "captureCount": 244,
+  "scopeAudit": "nine-round-26-scope-audit.json"
+}

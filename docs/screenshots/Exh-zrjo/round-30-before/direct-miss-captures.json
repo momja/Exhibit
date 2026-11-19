@@ -1,0 +1,12 @@
+[
+  {
+    "file": "before-search-miss-390-light.png",
+    "width": 390,
+    "scheme": "light"
+  },
+  {
+    "file": "before-search-miss-390-dark.png",
+    "width": 390,
+    "scheme": "dark"
+  }
+]

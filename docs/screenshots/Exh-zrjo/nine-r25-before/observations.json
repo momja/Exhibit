@@ -1,0 +1,66 @@
+[
+  {
+    "width": 1280,
+    "scheme": "light",
+    "path": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw2v6b4p-d4b1d62a.png",
+    "dark": false,
+    "heading": [
+      "12px",
+      "700"
+    ],
+    "label": [
+      "16px",
+      "400"
+    ],
+    "addClass": "btn btn-sm",
+    "overflow": false
+  },
+  {
+    "width": 1280,
+    "scheme": "dark",
+    "path": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw2v6bfb-505b79c3.png",
+    "dark": true,
+    "heading": [
+      "12px",
+      "700"
+    ],
+    "label": [
+      "16px",
+      "400"
+    ],
+    "addClass": "btn btn-sm",
+    "overflow": false
+  },
+  {
+    "width": 320,
+    "scheme": "light",
+    "path": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw2v6bsz-47525d88.png",
+    "dark": false,
+    "heading": [
+      "12px",
+      "700"
+    ],
+    "label": [
+      "16px",
+      "400"
+    ],
+    "addClass": "btn btn-sm",
+    "overflow": false
+  },
+  {
+    "width": 320,
+    "scheme": "dark",
+    "path": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw2v6c2n-04af7e3a.png",
+    "dark": true,
+    "heading": [
+      "12px",
+      "700"
+    ],
+    "label": [
+      "16px",
+      "400"
+    ],
+    "addClass": "btn btn-sm",
+    "overflow": false
+  }
+]

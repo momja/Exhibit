@@ -149,7 +149,7 @@ for (const olderRead of ['response', 'JSON body', 'network error', 'HTTP error']
     await settle();
     assert.deepEqual(keys(), ['imported']);
     assert.equal(page.byId('state-status').textContent, '');
-    assert.equal(page.byId('state-summary-text').textContent, 'Stored state · 1 key');
+    assert.equal(page.byId('state-summary-text').textContent, 'Saved data · 1 key');
     assert.equal(calls, 2);
   });
 }

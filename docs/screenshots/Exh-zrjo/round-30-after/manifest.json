@@ -1,0 +1,583 @@
+{
+  "applicationCommit": "42c94eb1cb12a74108885cc1cbb7aaf7d11f5721",
+  "assetVersion": "aa7a00afd7a2",
+  "method": "own T3tabs, current live schemes/matchMedia/geometry/containment",
+  "captures": [
+    {
+      "file": "starred-1280-light.png",
+      "width": 1280,
+      "scheme": "light",
+      "proof": {
+        "dark": false,
+        "overflow": false,
+        "asset": "http://t3code:18380/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "No starred artifacts yet",
+        "headingWeight": "600",
+        "helper": "Choose Star in an artifact\u2019s action menu to keep it here.",
+        "helperWeight": "400",
+        "action": {
+          "label": "Browse your artifacts",
+          "path": "/search",
+          "height": 44
+        }
+      }
+    },
+    {
+      "file": "shared-1280-light.png",
+      "width": 1280,
+      "scheme": "light",
+      "proof": {
+        "dark": false,
+        "overflow": false,
+        "asset": "http://t3code:18380/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "Nothing shared yet",
+        "headingWeight": "600",
+        "helper": "Share one of your artifacts, or ask someone to share with you.",
+        "helperWeight": "400",
+        "action": null
+      }
+    },
+    {
+      "file": "welcome-1280-light.png",
+      "width": 1280,
+      "scheme": "light",
+      "proof": {
+        "dark": false,
+        "overflow": false,
+        "asset": "http://t3code:18380/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "Welcome to Exhibit",
+        "headingWeight": "600",
+        "helper": "Build with an agent, paste HTML, or start from a URL.",
+        "helperWeight": "400",
+        "action": {
+          "label": "Create your first artifact",
+          "path": "/new",
+          "height": 44
+        }
+      }
+    },
+    {
+      "file": "miss-1280-light.png",
+      "width": 1280,
+      "scheme": "light",
+      "proof": {
+        "dark": false,
+        "overflow": false,
+        "asset": "http://t3code:18280/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "No artifacts match your search.",
+        "headingWeight": "600",
+        "helper": "Try another title, keyword, or tag.",
+        "helperWeight": "400",
+        "action": {
+          "label": "Clear search",
+          "path": "/search",
+          "height": 44
+        }
+      }
+    },
+    {
+      "file": "starred-1280-dark.png",
+      "width": 1280,
+      "scheme": "dark",
+      "proof": {
+        "dark": true,
+        "overflow": false,
+        "asset": "http://t3code:18380/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "No starred artifacts yet",
+        "headingWeight": "600",
+        "helper": "Choose Star in an artifact\u2019s action menu to keep it here.",
+        "helperWeight": "400",
+        "action": {
+          "label": "Browse your artifacts",
+          "path": "/search",
+          "height": 44
+        }
+      }
+    },
+    {
+      "file": "shared-1280-dark.png",
+      "width": 1280,
+      "scheme": "dark",
+      "proof": {
+        "dark": true,
+        "overflow": false,
+        "asset": "http://t3code:18380/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "Nothing shared yet",
+        "headingWeight": "600",
+        "helper": "Share one of your artifacts, or ask someone to share with you.",
+        "helperWeight": "400",
+        "action": null
+      }
+    },
+    {
+      "file": "welcome-1280-dark.png",
+      "width": 1280,
+      "scheme": "dark",
+      "proof": {
+        "dark": true,
+        "overflow": false,
+        "asset": "http://t3code:18380/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "Welcome to Exhibit",
+        "headingWeight": "600",
+        "helper": "Build with an agent, paste HTML, or start from a URL.",
+        "helperWeight": "400",
+        "action": {
+          "label": "Create your first artifact",
+          "path": "/new",
+          "height": 44
+        }
+      }
+    },
+    {
+      "file": "miss-1280-dark.png",
+      "width": 1280,
+      "scheme": "dark",
+      "proof": {
+        "dark": true,
+        "overflow": false,
+        "asset": "http://t3code:18280/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "No artifacts match your search.",
+        "headingWeight": "600",
+        "helper": "Try another title, keyword, or tag.",
+        "helperWeight": "400",
+        "action": {
+          "label": "Clear search",
+          "path": "/search",
+          "height": 44
+        }
+      }
+    },
+    {
+      "file": "starred-768-light.png",
+      "width": 768,
+      "scheme": "light",
+      "proof": {
+        "dark": false,
+        "overflow": false,
+        "asset": "http://t3code:18380/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "No starred artifacts yet",
+        "headingWeight": "600",
+        "helper": "Choose Star in an artifact\u2019s action menu to keep it here.",
+        "helperWeight": "400",
+        "action": {
+          "label": "Browse your artifacts",
+          "path": "/search",
+          "height": 44
+        }
+      }
+    },
+    {
+      "file": "shared-768-light.png",
+      "width": 768,
+      "scheme": "light",
+      "proof": {
+        "dark": false,
+        "overflow": false,
+        "asset": "http://t3code:18380/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "Nothing shared yet",
+        "headingWeight": "600",
+        "helper": "Share one of your artifacts, or ask someone to share with you.",
+        "helperWeight": "400",
+        "action": null
+      }
+    },
+    {
+      "file": "welcome-768-light.png",
+      "width": 768,
+      "scheme": "light",
+      "proof": {
+        "dark": false,
+        "overflow": false,
+        "asset": "http://t3code:18380/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "Welcome to Exhibit",
+        "headingWeight": "600",
+        "helper": "Build with an agent, paste HTML, or start from a URL.",
+        "helperWeight": "400",
+        "action": {
+          "label": "Create your first artifact",
+          "path": "/new",
+          "height": 44
+        }
+      }
+    },
+    {
+      "file": "miss-768-light.png",
+      "width": 768,
+      "scheme": "light",
+      "proof": {
+        "dark": false,
+        "overflow": false,
+        "asset": "http://t3code:18280/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "No artifacts match your search.",
+        "headingWeight": "600",
+        "helper": "Try another title, keyword, or tag.",
+        "helperWeight": "400",
+        "action": {
+          "label": "Clear search",
+          "path": "/search",
+          "height": 44
+        }
+      }
+    },
+    {
+      "file": "starred-768-dark.png",
+      "width": 768,
+      "scheme": "dark",
+      "proof": {
+        "dark": true,
+        "overflow": false,
+        "asset": "http://t3code:18380/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "No starred artifacts yet",
+        "headingWeight": "600",
+        "helper": "Choose Star in an artifact\u2019s action menu to keep it here.",
+        "helperWeight": "400",
+        "action": {
+          "label": "Browse your artifacts",
+          "path": "/search",
+          "height": 44
+        }
+      }
+    },
+    {
+      "file": "shared-768-dark.png",
+      "width": 768,
+      "scheme": "dark",
+      "proof": {
+        "dark": true,
+        "overflow": false,
+        "asset": "http://t3code:18380/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "Nothing shared yet",
+        "headingWeight": "600",
+        "helper": "Share one of your artifacts, or ask someone to share with you.",
+        "helperWeight": "400",
+        "action": null
+      }
+    },
+    {
+      "file": "welcome-768-dark.png",
+      "width": 768,
+      "scheme": "dark",
+      "proof": {
+        "dark": true,
+        "overflow": false,
+        "asset": "http://t3code:18380/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "Welcome to Exhibit",
+        "headingWeight": "600",
+        "helper": "Build with an agent, paste HTML, or start from a URL.",
+        "helperWeight": "400",
+        "action": {
+          "label": "Create your first artifact",
+          "path": "/new",
+          "height": 44
+        }
+      }
+    },
+    {
+      "file": "miss-768-dark.png",
+      "width": 768,
+      "scheme": "dark",
+      "proof": {
+        "dark": true,
+        "overflow": false,
+        "asset": "http://t3code:18280/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "No artifacts match your search.",
+        "headingWeight": "600",
+        "helper": "Try another title, keyword, or tag.",
+        "helperWeight": "400",
+        "action": {
+          "label": "Clear search",
+          "path": "/search",
+          "height": 44
+        }
+      }
+    },
+    {
+      "file": "starred-390-light.png",
+      "width": 390,
+      "scheme": "light",
+      "proof": {
+        "dark": false,
+        "overflow": false,
+        "asset": "http://t3code:18380/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "No starred artifacts yet",
+        "headingWeight": "600",
+        "helper": "Choose Star in an artifact\u2019s action menu to keep it here.",
+        "helperWeight": "400",
+        "action": {
+          "label": "Browse your artifacts",
+          "path": "/search",
+          "height": 44
+        }
+      }
+    },
+    {
+      "file": "shared-390-light.png",
+      "width": 390,
+      "scheme": "light",
+      "proof": {
+        "dark": false,
+        "overflow": false,
+        "asset": "http://t3code:18380/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "Nothing shared yet",
+        "headingWeight": "600",
+        "helper": "Share one of your artifacts, or ask someone to share with you.",
+        "helperWeight": "400",
+        "action": null
+      }
+    },
+    {
+      "file": "welcome-390-light.png",
+      "width": 390,
+      "scheme": "light",
+      "proof": {
+        "dark": false,
+        "overflow": false,
+        "asset": "http://t3code:18380/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "Welcome to Exhibit",
+        "headingWeight": "600",
+        "helper": "Build with an agent, paste HTML, or start from a URL.",
+        "helperWeight": "400",
+        "action": {
+          "label": "Create your first artifact",
+          "path": "/new",
+          "height": 44
+        }
+      }
+    },
+    {
+      "file": "miss-390-light.png",
+      "width": 390,
+      "scheme": "light",
+      "proof": {
+        "dark": false,
+        "overflow": false,
+        "asset": "http://t3code:18280/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "No artifacts match your search.",
+        "headingWeight": "600",
+        "helper": "Try another title, keyword, or tag.",
+        "helperWeight": "400",
+        "action": {
+          "label": "Clear search",
+          "path": "/search",
+          "height": 44
+        }
+      }
+    },
+    {
+      "file": "starred-390-dark.png",
+      "width": 390,
+      "scheme": "dark",
+      "proof": {
+        "dark": true,
+        "overflow": false,
+        "asset": "http://t3code:18380/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "No starred artifacts yet",
+        "headingWeight": "600",
+        "helper": "Choose Star in an artifact\u2019s action menu to keep it here.",
+        "helperWeight": "400",
+        "action": {
+          "label": "Browse your artifacts",
+          "path": "/search",
+          "height": 44
+        }
+      }
+    },
+    {
+      "file": "shared-390-dark.png",
+      "width": 390,
+      "scheme": "dark",
+      "proof": {
+        "dark": true,
+        "overflow": false,
+        "asset": "http://t3code:18380/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "Nothing shared yet",
+        "headingWeight": "600",
+        "helper": "Share one of your artifacts, or ask someone to share with you.",
+        "helperWeight": "400",
+        "action": null
+      }
+    },
+    {
+      "file": "welcome-390-dark.png",
+      "width": 390,
+      "scheme": "dark",
+      "proof": {
+        "dark": true,
+        "overflow": false,
+        "asset": "http://t3code:18380/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "Welcome to Exhibit",
+        "headingWeight": "600",
+        "helper": "Build with an agent, paste HTML, or start from a URL.",
+        "helperWeight": "400",
+        "action": {
+          "label": "Create your first artifact",
+          "path": "/new",
+          "height": 44
+        }
+      }
+    },
+    {
+      "file": "miss-390-dark.png",
+      "width": 390,
+      "scheme": "dark",
+      "proof": {
+        "dark": true,
+        "overflow": false,
+        "asset": "http://t3code:18280/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "No artifacts match your search.",
+        "headingWeight": "600",
+        "helper": "Try another title, keyword, or tag.",
+        "helperWeight": "400",
+        "action": {
+          "label": "Clear search",
+          "path": "/search",
+          "height": 44
+        }
+      }
+    },
+    {
+      "file": "starred-320-light.png",
+      "width": 320,
+      "scheme": "light",
+      "proof": {
+        "dark": false,
+        "overflow": false,
+        "asset": "http://t3code:18380/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "No starred artifacts yet",
+        "headingWeight": "600",
+        "helper": "Choose Star in an artifact\u2019s action menu to keep it here.",
+        "helperWeight": "400",
+        "action": {
+          "label": "Browse your artifacts",
+          "path": "/search",
+          "height": 44
+        }
+      }
+    },
+    {
+      "file": "shared-320-light.png",
+      "width": 320,
+      "scheme": "light",
+      "proof": {
+        "dark": false,
+        "overflow": false,
+        "asset": "http://t3code:18380/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "Nothing shared yet",
+        "headingWeight": "600",
+        "helper": "Share one of your artifacts, or ask someone to share with you.",
+        "helperWeight": "400",
+        "action": null
+      }
+    },
+    {
+      "file": "welcome-320-light.png",
+      "width": 320,
+      "scheme": "light",
+      "proof": {
+        "dark": false,
+        "overflow": false,
+        "asset": "http://t3code:18380/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "Welcome to Exhibit",
+        "headingWeight": "600",
+        "helper": "Build with an agent, paste HTML, or start from a URL.",
+        "helperWeight": "400",
+        "action": {
+          "label": "Create your first artifact",
+          "path": "/new",
+          "height": 44
+        }
+      }
+    },
+    {
+      "file": "miss-320-light.png",
+      "width": 320,
+      "scheme": "light",
+      "proof": {
+        "dark": false,
+        "overflow": false,
+        "asset": "http://t3code:18280/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "No artifacts match your search.",
+        "headingWeight": "600",
+        "helper": "Try another title, keyword, or tag.",
+        "helperWeight": "400",
+        "action": {
+          "label": "Clear search",
+          "path": "/search",
+          "height": 44
+        }
+      }
+    },
+    {
+      "file": "starred-320-dark.png",
+      "width": 320,
+      "scheme": "dark",
+      "proof": {
+        "dark": true,
+        "overflow": false,
+        "asset": "http://t3code:18380/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "No starred artifacts yet",
+        "headingWeight": "600",
+        "helper": "Choose Star in an artifact\u2019s action menu to keep it here.",
+        "helperWeight": "400",
+        "action": {
+          "label": "Browse your artifacts",
+          "path": "/search",
+          "height": 44
+        }
+      }
+    },
+    {
+      "file": "shared-320-dark.png",
+      "width": 320,
+      "scheme": "dark",
+      "proof": {
+        "dark": true,
+        "overflow": false,
+        "asset": "http://t3code:18380/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "Nothing shared yet",
+        "headingWeight": "600",
+        "helper": "Share one of your artifacts, or ask someone to share with you.",
+        "helperWeight": "400",
+        "action": null
+      }
+    },
+    {
+      "file": "welcome-320-dark.png",
+      "width": 320,
+      "scheme": "dark",
+      "proof": {
+        "dark": true,
+        "overflow": false,
+        "asset": "http://t3code:18380/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "Welcome to Exhibit",
+        "headingWeight": "600",
+        "helper": "Build with an agent, paste HTML, or start from a URL.",
+        "helperWeight": "400",
+        "action": {
+          "label": "Create your first artifact",
+          "path": "/new",
+          "height": 44
+        }
+      }
+    },
+    {
+      "file": "miss-320-dark.png",
+      "width": 320,
+      "scheme": "dark",
+      "proof": {
+        "dark": true,
+        "overflow": false,
+        "asset": "http://t3code:18280/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "No artifacts match your search.",
+        "headingWeight": "600",
+        "helper": "Try another title, keyword, or tag.",
+        "helperWeight": "400",
+        "action": {
+          "label": "Clear search",
+          "path": "/search",
+          "height": 44
+        }
+      }
+    }
+  ]
+}

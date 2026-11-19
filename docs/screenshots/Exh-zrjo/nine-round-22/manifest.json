@@ -1,0 +1,2866 @@
+{
+  "capturedAt": "2026-11-04T20:51:05.451Z",
+  "captures": [
+    {
+      "file": "gallery-1280-light.png",
+      "route": "/",
+      "width": 1280,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "search-1280-light.png",
+      "route": "/search",
+      "width": 1280,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Search · Exhibit"
+    },
+    {
+      "file": "search-results-1280-light.png",
+      "route": "/search?q=run",
+      "width": 1280,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Search · Exhibit"
+    },
+    {
+      "file": "global-search-empty-1280-light.png",
+      "route": "/search?q=not-in-this-library",
+      "width": 1280,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Search · Exhibit"
+    },
+    {
+      "file": "add-1280-light.png",
+      "route": "/new",
+      "width": 1280,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "settings-1280-light.png",
+      "route": "/settings",
+      "width": 1280,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Settings — Exhibit"
+    },
+    {
+      "file": "editor-1280-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 1280,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "viewer-1280-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 1280,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "shared-1280-light.png",
+      "route": "/shared",
+      "width": 1280,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Shared with me · Exhibit"
+    },
+    {
+      "file": "shared-by-me-1280-light.png",
+      "route": "/shared-by-me",
+      "width": 1280,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Shared by me · Exhibit"
+    },
+    {
+      "file": "search-empty-1280-light.png",
+      "route": "/?q=not-in-this-library",
+      "width": 1280,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "filters-1280-light.png",
+      "route": "/?tag=Health",
+      "width": 1280,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "filters-empty-1280-light.png",
+      "route": "/?tag=Health&tag=Reading",
+      "width": 1280,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "gallery-1280-dark.png",
+      "route": "/",
+      "width": 1280,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "search-1280-dark.png",
+      "route": "/search",
+      "width": 1280,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Search · Exhibit"
+    },
+    {
+      "file": "search-results-1280-dark.png",
+      "route": "/search?q=run",
+      "width": 1280,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Search · Exhibit"
+    },
+    {
+      "file": "global-search-empty-1280-dark.png",
+      "route": "/search?q=not-in-this-library",
+      "width": 1280,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Search · Exhibit"
+    },
+    {
+      "file": "add-1280-dark.png",
+      "route": "/new",
+      "width": 1280,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "settings-1280-dark.png",
+      "route": "/settings",
+      "width": 1280,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Settings — Exhibit"
+    },
+    {
+      "file": "editor-1280-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 1280,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "viewer-1280-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 1280,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "shared-1280-dark.png",
+      "route": "/shared",
+      "width": 1280,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Shared with me · Exhibit"
+    },
+    {
+      "file": "shared-by-me-1280-dark.png",
+      "route": "/shared-by-me",
+      "width": 1280,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Shared by me · Exhibit"
+    },
+    {
+      "file": "search-empty-1280-dark.png",
+      "route": "/?q=not-in-this-library",
+      "width": 1280,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "filters-1280-dark.png",
+      "route": "/?tag=Health",
+      "width": 1280,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "filters-empty-1280-dark.png",
+      "route": "/?tag=Health&tag=Reading",
+      "width": 1280,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "gallery-390-light.png",
+      "route": "/",
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "search-390-light.png",
+      "route": "/search",
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Search · Exhibit"
+    },
+    {
+      "file": "search-results-390-light.png",
+      "route": "/search?q=run",
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Search · Exhibit"
+    },
+    {
+      "file": "global-search-empty-390-light.png",
+      "route": "/search?q=not-in-this-library",
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Search · Exhibit"
+    },
+    {
+      "file": "add-390-light.png",
+      "route": "/new",
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "settings-390-light.png",
+      "route": "/settings",
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Settings — Exhibit"
+    },
+    {
+      "file": "editor-390-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "viewer-390-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "shared-390-light.png",
+      "route": "/shared",
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Shared with me · Exhibit"
+    },
+    {
+      "file": "shared-by-me-390-light.png",
+      "route": "/shared-by-me",
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Shared by me · Exhibit"
+    },
+    {
+      "file": "search-empty-390-light.png",
+      "route": "/?q=not-in-this-library",
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "filters-390-light.png",
+      "route": "/?tag=Health",
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "filters-empty-390-light.png",
+      "route": "/?tag=Health&tag=Reading",
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "gallery-390-dark.png",
+      "route": "/",
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "search-390-dark.png",
+      "route": "/search",
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Search · Exhibit"
+    },
+    {
+      "file": "search-results-390-dark.png",
+      "route": "/search?q=run",
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Search · Exhibit"
+    },
+    {
+      "file": "global-search-empty-390-dark.png",
+      "route": "/search?q=not-in-this-library",
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Search · Exhibit"
+    },
+    {
+      "file": "add-390-dark.png",
+      "route": "/new",
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "settings-390-dark.png",
+      "route": "/settings",
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Settings — Exhibit"
+    },
+    {
+      "file": "editor-390-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "viewer-390-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "shared-390-dark.png",
+      "route": "/shared",
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Shared with me · Exhibit"
+    },
+    {
+      "file": "shared-by-me-390-dark.png",
+      "route": "/shared-by-me",
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Shared by me · Exhibit"
+    },
+    {
+      "file": "search-empty-390-dark.png",
+      "route": "/?q=not-in-this-library",
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "filters-390-dark.png",
+      "route": "/?tag=Health",
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "filters-empty-390-dark.png",
+      "route": "/?tag=Health&tag=Reading",
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "gallery-768-light.png",
+      "route": "/",
+      "width": 768,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "shared-768-light.png",
+      "route": "/shared",
+      "width": 768,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Shared with me · Exhibit"
+    },
+    {
+      "file": "shared-by-me-768-light.png",
+      "route": "/shared-by-me",
+      "width": 768,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Shared by me · Exhibit"
+    },
+    {
+      "file": "gallery-768-dark.png",
+      "route": "/",
+      "width": 768,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "shared-768-dark.png",
+      "route": "/shared",
+      "width": 768,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Shared with me · Exhibit"
+    },
+    {
+      "file": "shared-by-me-768-dark.png",
+      "route": "/shared-by-me",
+      "width": 768,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Shared by me · Exhibit"
+    },
+    {
+      "file": "add-paste-390-light.png",
+      "route": "/new",
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "add-url-390-light.png",
+      "route": "/new",
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "duplicate-390-light.png",
+      "route": "/",
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "card-menu-1280-light.png",
+      "route": "/",
+      "width": 1280,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "share-390-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "history-320-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 320,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "add-error-320-light.png",
+      "route": "/new",
+      "width": 320,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "viewer-320-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 320,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "source-selection-1280-light.png",
+      "route": "/new",
+      "width": 1280,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-word-selection-1280-light.png",
+      "route": "/new",
+      "width": 1280,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-occurrences-1280-light.png",
+      "route": "/new",
+      "width": 1280,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-find-1280-light.png",
+      "route": "/new",
+      "width": 1280,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-go-line-1280-light.png",
+      "route": "/new",
+      "width": 1280,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-completion-1280-light.png",
+      "route": "/new",
+      "width": 1280,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-selection-390-light.png",
+      "route": "/new",
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-word-selection-390-light.png",
+      "route": "/new",
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-occurrences-390-light.png",
+      "route": "/new",
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-find-390-light.png",
+      "route": "/new",
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-go-line-390-light.png",
+      "route": "/new",
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-completion-390-light.png",
+      "route": "/new",
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-selection-320-light.png",
+      "route": "/new",
+      "width": 320,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-word-selection-320-light.png",
+      "route": "/new",
+      "width": 320,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-occurrences-320-light.png",
+      "route": "/new",
+      "width": 320,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-find-320-light.png",
+      "route": "/new",
+      "width": 320,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-go-line-320-light.png",
+      "route": "/new",
+      "width": 320,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-completion-320-light.png",
+      "route": "/new",
+      "width": 320,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "add-paste-390-dark.png",
+      "route": "/new",
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "add-url-390-dark.png",
+      "route": "/new",
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "duplicate-390-dark.png",
+      "route": "/",
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "card-menu-1280-dark.png",
+      "route": "/",
+      "width": 1280,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "share-390-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "history-320-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 320,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "add-error-320-dark.png",
+      "route": "/new",
+      "width": 320,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "viewer-320-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 320,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "source-selection-1280-dark.png",
+      "route": "/new",
+      "width": 1280,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-word-selection-1280-dark.png",
+      "route": "/new",
+      "width": 1280,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-occurrences-1280-dark.png",
+      "route": "/new",
+      "width": 1280,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-find-1280-dark.png",
+      "route": "/new",
+      "width": 1280,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-go-line-1280-dark.png",
+      "route": "/new",
+      "width": 1280,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-completion-1280-dark.png",
+      "route": "/new",
+      "width": 1280,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-selection-390-dark.png",
+      "route": "/new",
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-word-selection-390-dark.png",
+      "route": "/new",
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-occurrences-390-dark.png",
+      "route": "/new",
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-find-390-dark.png",
+      "route": "/new",
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-go-line-390-dark.png",
+      "route": "/new",
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-completion-390-dark.png",
+      "route": "/new",
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-selection-320-dark.png",
+      "route": "/new",
+      "width": 320,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-word-selection-320-dark.png",
+      "route": "/new",
+      "width": 320,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-occurrences-320-dark.png",
+      "route": "/new",
+      "width": 320,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-find-320-dark.png",
+      "route": "/new",
+      "width": 320,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-go-line-320-dark.png",
+      "route": "/new",
+      "width": 320,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "source-completion-320-dark.png",
+      "route": "/new",
+      "width": 320,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "duplicate-1280-light.png",
+      "route": "/",
+      "width": 1280,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "tag-dialog-1280-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 1280,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "share-1280-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 1280,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "share-bottom-1280-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 1280,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "history-1280-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 1280,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "card-posture-1280-light.png",
+      "route": "/",
+      "width": 1280,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "viewer-posture-1280-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 1280,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "editor-tags-1280-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 1280,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "editor-state-1280-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 1280,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "editor-assets-1280-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 1280,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "editor-widget-1280-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 1280,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "add-768-light.png",
+      "route": "/new",
+      "width": 768,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "settings-768-light.png",
+      "route": "/settings",
+      "width": 768,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Settings — Exhibit"
+    },
+    {
+      "file": "global-search-empty-768-light.png",
+      "route": "/search?q=not-in-this-library",
+      "width": 768,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Search · Exhibit"
+    },
+    {
+      "file": "duplicate-768-light.png",
+      "route": "/",
+      "width": 768,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "tag-dialog-768-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 768,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "share-768-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 768,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "share-bottom-768-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 768,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "history-768-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 768,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "card-posture-768-light.png",
+      "route": "/",
+      "width": 768,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "viewer-posture-768-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 768,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "editor-tags-768-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 768,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "editor-state-768-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 768,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "editor-assets-768-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 768,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "editor-widget-768-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 768,
+      "height": 800,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "tag-dialog-390-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "share-bottom-390-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "history-390-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "card-posture-390-light.png",
+      "route": "/",
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "viewer-posture-390-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "editor-tags-390-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "editor-state-390-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "editor-assets-390-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "editor-widget-390-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "filter-sheet-390-light.png",
+      "route": "/",
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "add-paste-footer-390-light.png",
+      "route": "/new",
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "add-320-light.png",
+      "route": "/new",
+      "width": 320,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "settings-320-light.png",
+      "route": "/settings",
+      "width": 320,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Settings — Exhibit"
+    },
+    {
+      "file": "global-search-empty-320-light.png",
+      "route": "/search?q=not-in-this-library",
+      "width": 320,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Search · Exhibit"
+    },
+    {
+      "file": "duplicate-320-light.png",
+      "route": "/",
+      "width": 320,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "tag-dialog-320-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 320,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "share-320-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 320,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "share-bottom-320-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 320,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "card-posture-320-light.png",
+      "route": "/",
+      "width": 320,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "viewer-posture-320-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 320,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "editor-tags-320-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 320,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "editor-state-320-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 320,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "editor-assets-320-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 320,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "editor-widget-320-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 320,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "filter-sheet-320-light.png",
+      "route": "/",
+      "width": 320,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "add-paste-footer-320-light.png",
+      "route": "/new",
+      "width": 320,
+      "height": 844,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "share-short-320-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 320,
+      "height": 640,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "share-short-390-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 390,
+      "height": 640,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "share-short-640-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 640,
+      "height": 360,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "share-short-1280-light.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 1280,
+      "height": 400,
+      "scheme": "light",
+      "media": {
+        "dark": false,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "duplicate-1280-dark.png",
+      "route": "/",
+      "width": 1280,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "tag-dialog-1280-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 1280,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "share-1280-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 1280,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "share-bottom-1280-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 1280,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "history-1280-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 1280,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "card-posture-1280-dark.png",
+      "route": "/",
+      "width": 1280,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "viewer-posture-1280-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 1280,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "editor-tags-1280-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 1280,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "editor-state-1280-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 1280,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "editor-assets-1280-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 1280,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "editor-widget-1280-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 1280,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "add-768-dark.png",
+      "route": "/new",
+      "width": 768,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "settings-768-dark.png",
+      "route": "/settings",
+      "width": 768,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Settings — Exhibit"
+    },
+    {
+      "file": "global-search-empty-768-dark.png",
+      "route": "/search?q=not-in-this-library",
+      "width": 768,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Search · Exhibit"
+    },
+    {
+      "file": "duplicate-768-dark.png",
+      "route": "/",
+      "width": 768,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "tag-dialog-768-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 768,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "share-768-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 768,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "share-bottom-768-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 768,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "history-768-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 768,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "card-posture-768-dark.png",
+      "route": "/",
+      "width": 768,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "viewer-posture-768-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 768,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "editor-tags-768-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 768,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "editor-state-768-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 768,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "editor-assets-768-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 768,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "editor-widget-768-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 768,
+      "height": 800,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "tag-dialog-390-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "share-bottom-390-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "history-390-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "card-posture-390-dark.png",
+      "route": "/",
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "viewer-posture-390-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "editor-tags-390-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "editor-state-390-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "editor-assets-390-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "editor-widget-390-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "filter-sheet-390-dark.png",
+      "route": "/",
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "add-paste-footer-390-dark.png",
+      "route": "/new",
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "add-320-dark.png",
+      "route": "/new",
+      "width": 320,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "settings-320-dark.png",
+      "route": "/settings",
+      "width": 320,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Settings — Exhibit"
+    },
+    {
+      "file": "global-search-empty-320-dark.png",
+      "route": "/search?q=not-in-this-library",
+      "width": 320,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Search · Exhibit"
+    },
+    {
+      "file": "duplicate-320-dark.png",
+      "route": "/",
+      "width": 320,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "tag-dialog-320-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 320,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "share-320-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 320,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "share-bottom-320-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 320,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "card-posture-320-dark.png",
+      "route": "/",
+      "width": 320,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "viewer-posture-320-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 320,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "editor-tags-320-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 320,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "editor-state-320-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 320,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "editor-assets-320-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 320,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "editor-widget-320-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit",
+      "width": 320,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Edit: Run Log — Exhibit"
+    },
+    {
+      "file": "filter-sheet-320-dark.png",
+      "route": "/",
+      "width": 320,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Exhibit"
+    },
+    {
+      "file": "add-paste-footer-320-dark.png",
+      "route": "/new",
+      "width": 320,
+      "height": 844,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Add artifact — Exhibit"
+    },
+    {
+      "file": "share-short-320-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 320,
+      "height": 640,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "share-short-390-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 390,
+      "height": 640,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "share-short-640-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 640,
+      "height": 360,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    },
+    {
+      "file": "share-short-1280-dark.png",
+      "route": "/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332",
+      "width": 1280,
+      "height": 400,
+      "scheme": "dark",
+      "media": {
+        "dark": true,
+        "scheme": "light dark"
+      },
+      "assetVersion": "/assets/v/f1b6e9fd582c/phosphor/regular.css",
+      "title": "Run Log — Exhibit"
+    }
+  ],
+  "errors": []
+}

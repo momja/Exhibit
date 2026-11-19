@@ -1,0 +1,31 @@
+
+Running 24 tests using 1 worker
+
+(node:290341) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   1 [chromium] › specs/duplicate.spec.ts:23:1 › keyboard focus stays in the modal and every cancellation path restores the menu trigger (8.6s)
+  ✓   2 [chromium] › specs/duplicate.spec.ts:50:1 › save refreshes server-rendered cards and replacement components work across two cycles (2.5s)
+  ✓   3 [chromium] › specs/duplicate.spec.ts:87:1 › Escape, backdrop, and repeated submission cannot dismiss or duplicate an in-flight save (2.4s)
+  ✓   4 [chromium] › specs/duplicate.spec.ts:123:1 › a committed save with a lost response retries the same identity and creates only one copy (1.4s)
+  ✓   5 [chromium] › specs/duplicate.spec.ts:157:1 › a definite refusal leaves editable input and permits a corrected save (1.2s)
+  ✓   6 [chromium] › specs/editor-save-feedback.spec.ts:3:1 › sticky editor Save names its action and shows pending and persisted outcomes (7.3s)
+  ✓   7 [chromium] › specs/editor-save-feedback.spec.ts:64:1 › failed editor Save keeps its explanation visible and supports a successful retry (2.4s)
+  ✓   8 [chromium] › specs/editor-tools.spec.ts:3:1 › expanded editor tools keep descriptions with actions and consistent operable controls (6.4s)
+  ✓   9 [chromium] › specs/posture-popover.spec.ts:3:1 › posture receipt stays within the viewport through keyboard, resize and server-rendered replacement (6.3s)
+  ✓  10 [chromium] › specs/share-opening.spec.ts:4:3 › Share opens at the beginning and waits for deliberate text entry (mouse) (8.7s)
+  ✓  11 [chromium] › specs/share-opening.spec.ts:4:3 › Share opens at the beginning and waits for deliberate text entry (touch) (10.1s)
+  ✓  12 [chromium] › specs/state.spec.ts:7:1 › localStorage survives reload and a fresh owner browser context through server state (2.4s)
+  ✓  13 [chromium] › specs/tags.spec.ts:3:1 › tag editing keeps color samples intact, controls aligned and validation local in both schemes (22.0s)
+  ✓  14 [chromium] › specs/tags.spec.ts:132:1 › partial tag creation retains nearby attach error and retries the same tag (4.3s)
+  ✓  15 [chromium] › specs/tags.spec.ts:173:1 › tag changes persist with clear pending, local failure and retry feedback without page Save (12.8s)
+  ✓  16 [chromium] › specs/ui-appearance.spec.ts:3:1 › source editor remains legible through actual light/dark changes (1.6s)
+  ✓  17 [chromium] › specs/ui-appearance.spec.ts:44:1 › source syntax stays differentiated and readable in both color schemes (7.1s)
+  ✓  18 [chromium] › specs/ui-appearance.spec.ts:106:1 › word selection remains visible on the active source line (11.1s)
+  ✓  19 [chromium] › specs/ui-appearance.spec.ts:191:1 › source find and line-navigation controls follow the shared UI in both themes (13.1s)
+  ✓  20 [chromium] › specs/ui-appearance.spec.ts:253:1 › phone share controls and choices compose cleanly in both themes (2.3s)
+  ✓  21 [chromium] › specs/ui-appearance.spec.ts:286:1 › scrolling Share body clips choices behind the pinned actions (3.9s)
+  ✓  22 [chromium] › specs/ui-feedback.spec.ts:3:1 › creation validation names and focuses the field for each method (1.6s)
+  ✓  23 [chromium] › specs/ui-feedback.spec.ts:41:1 › pending creation submits once, preserves input, and recovers from a refusal (1.4s)
+  ✓  24 [chromium] › specs/ui-feedback.spec.ts:73:1 › history shares desktop columns and fits a narrow phone with enlarged text (3.3s)
+
+  24 passed (2.5m)

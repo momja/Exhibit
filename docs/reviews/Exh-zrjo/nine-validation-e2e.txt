@@ -1,0 +1,29 @@
+
+> test
+> playwright test
+
+
+Running 18 tests using 1 worker
+
+(node:103420) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   1 [chromium] › specs/duplicate.spec.ts:23:1 › keyboard focus stays in the modal and every cancellation path restores the menu trigger (4.2s)
+  ✓   2 [chromium] › specs/duplicate.spec.ts:50:1 › save refreshes server-rendered cards and replacement components work across two cycles (1.8s)
+  ✓   3 [chromium] › specs/duplicate.spec.ts:87:1 › Escape, backdrop, and repeated submission cannot dismiss or duplicate an in-flight save (1.1s)
+  ✓   4 [chromium] › specs/duplicate.spec.ts:123:1 › a committed save with a lost response retries the same identity and creates only one copy (1.3s)
+  ✓   5 [chromium] › specs/duplicate.spec.ts:157:1 › a definite refusal leaves editable input and permits a corrected save (1.4s)
+  ✓   6 [chromium] › specs/editor-tools.spec.ts:3:1 › expanded editor tools keep descriptions with actions and consistent operable controls (5.8s)
+  ✓   7 [chromium] › specs/posture-popover.spec.ts:3:1 › posture receipt stays within the viewport through keyboard, resize and server-rendered replacement (6.9s)
+  ✓   8 [chromium] › specs/share-opening.spec.ts:3:1 › Share opens at the beginning on short screens and text entry waits for a deliberate action (17.4s)
+  ✓   9 [chromium] › specs/state.spec.ts:7:1 › localStorage survives reload and a fresh owner browser context through server state (2.1s)
+  ✓  10 [chromium] › specs/ui-appearance.spec.ts:3:1 › source editor remains legible through actual light/dark changes (1.3s)
+  ✓  11 [chromium] › specs/ui-appearance.spec.ts:44:1 › source syntax stays differentiated and readable in both color schemes (4.7s)
+  ✓  12 [chromium] › specs/ui-appearance.spec.ts:106:1 › word selection remains visible on the active source line (6.5s)
+  ✓  13 [chromium] › specs/ui-appearance.spec.ts:191:1 › source find and line-navigation controls follow the shared UI in both themes (9.8s)
+  ✓  14 [chromium] › specs/ui-appearance.spec.ts:253:1 › phone share controls and choices compose cleanly in both themes (2.0s)
+  ✓  15 [chromium] › specs/ui-appearance.spec.ts:286:1 › scrolling Share body clips choices behind the pinned actions (2.9s)
+  ✓  16 [chromium] › specs/ui-feedback.spec.ts:3:1 › creation validation names and focuses the field for each method (1.3s)
+  ✓  17 [chromium] › specs/ui-feedback.spec.ts:41:1 › pending creation submits once, preserves input, and recovers from a refusal (991ms)
+  ✓  18 [chromium] › specs/ui-feedback.spec.ts:73:1 › history shares desktop columns and fits a narrow phone with enlarged text (3.0s)
+
+  18 passed (1.3m)

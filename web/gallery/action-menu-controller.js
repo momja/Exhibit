@@ -1,4 +1,6 @@
 import { Controller } from '../stimulus/stimulus.js';
+import { moveMenuFocus } from './menu-focus.js';
+import { consumeOutsidePress } from './outside-press.js';
 
 // Markup comes from the actionMenu Go partial. Each instance owns only its
 // open/focus state; feature actions are bubbling events, not API calls here.
@@ -7,9 +9,15 @@ export default class extends Controller {
 
   connect() {
     this.close();
+    this.releaseOutsidePress = consumeOutsidePress({
+      isOpen: () => this.hasMenuTarget && !this.menuTarget.hidden,
+      contains: target => this.element.contains(target),
+      dismiss: () => this.close(),
+    });
   }
 
   disconnect() {
+    this.releaseOutsidePress();
     this.close();
   }
 
@@ -43,10 +51,6 @@ export default class extends Controller {
     if (event.target !== this.element) this.close();
   }
 
-  dismiss(event) {
-    if (!this.element.contains(event.target)) this.close();
-  }
-
   focusOut(event) {
     // Safari may report no destination while tapping a menu item. Let that
     // click finish; a known destination outside the component dismisses it.
@@ -78,6 +82,7 @@ export default class extends Controller {
       return;
     }
     if (this.menuTarget.hidden) return;
+    if (moveMenuFocus(event, this.items)) return;
     if (key === 'Escape') {
       event.preventDefault();
       event.stopPropagation();
@@ -85,13 +90,6 @@ export default class extends Controller {
     } else if (key === 'Tab') {
       // Continue the browser's tab sequence from the visible trigger.
       this.close(true);
-    } else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(key)) {
-      event.preventDefault();
-      const items = this.items;
-      const current = items.indexOf(document.activeElement);
-      const next = key === 'Home' ? 0 : key === 'End' ? items.length - 1
-        : (current + (key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
-      items[next]?.focus();
     } else if (key === ' ' && event.target.closest('a')) {
       event.preventDefault();
       event.target.closest('a').click();

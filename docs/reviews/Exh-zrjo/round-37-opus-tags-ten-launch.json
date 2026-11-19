@@ -1,0 +1,19 @@
+{
+  "taskId": "node:delegated-task:command%3Amcp%3Acfaf7639-87c2-4c24-af58-fe176ad56b8c%3Adelegate-task%3AExh-zrjo-r37-opus-tags-ten-confirmation",
+  "childThreadId": "thread:delegated-task:command%3Amcp%3Acfaf7639-87c2-4c24-af58-fe176ad56b8c%3Adelegate-task%3AExh-zrjo-r37-opus-tags-ten-confirmation",
+  "childRunId": "run:thread:thread%3Adelegated-task%3Acommand%253Amcp%253Acfaf7639-87c2-4c24-af58-fe176ad56b8c%253Adelegate-task%253AExh-zrjo-r37-opus-tags-ten-confirmation:ordinal:1",
+  "childNodeId": "node:delegated-task:command%3Amcp%3Acfaf7639-87c2-4c24-af58-fe176ad56b8c%3Adelegate-task%3AExh-zrjo-r37-opus-tags-ten-confirmation",
+  "status": "running",
+  "workState": "working",
+  "hasPendingChildRuns": false,
+  "latestTerminalRunId": null,
+  "latestTerminalStatus": null,
+  "latestTerminalSummary": null,
+  "latestTerminalResultContextTransferId": null,
+  "providerInstanceId": "claudeAgent",
+  "model": "claude-opus-5-5",
+  "summary": null,
+  "resultContextTransferId": null,
+  "hasPendingQuestion": false,
+  "waitTimedOut": false
+}

@@ -1,0 +1,172 @@
+{
+  "applicationCommit": "575559b5abaadc997a6faf62be3669e4881cfe27",
+  "assetVersion": "2f37c8103d52",
+  "captures": [
+    {
+      "file": "before-search-miss-390-light.png",
+      "width": 390,
+      "scheme": "light"
+    },
+    {
+      "file": "before-search-miss-390-dark.png",
+      "width": 390,
+      "scheme": "dark"
+    },
+    {
+      "file": "welcome-1280-light.png",
+      "source": "docs/screenshots/Exh-zrjo/stack-empty-states/after-search-1280-light.png",
+      "width": 1280,
+      "scheme": "light"
+    },
+    {
+      "file": "starred-1280-light.png",
+      "source": "docs/screenshots/Exh-zrjo/stack-empty-states/after-starred-1280-light.png",
+      "width": 1280,
+      "scheme": "light"
+    },
+    {
+      "file": "shared-1280-light.png",
+      "source": "docs/screenshots/Exh-zrjo/stack-empty-states/after-shared-1280-light.png",
+      "width": 1280,
+      "scheme": "light"
+    },
+    {
+      "file": "welcome-1280-dark.png",
+      "source": "docs/screenshots/Exh-zrjo/stack-empty-states/after-search-1280-dark.png",
+      "width": 1280,
+      "scheme": "dark"
+    },
+    {
+      "file": "starred-1280-dark.png",
+      "source": "docs/screenshots/Exh-zrjo/stack-empty-states/after-starred-1280-dark.png",
+      "width": 1280,
+      "scheme": "dark"
+    },
+    {
+      "file": "shared-1280-dark.png",
+      "source": "docs/screenshots/Exh-zrjo/stack-empty-states/after-shared-1280-dark.png",
+      "width": 1280,
+      "scheme": "dark"
+    },
+    {
+      "file": "welcome-768-light.png",
+      "source": "docs/screenshots/Exh-zrjo/stack-empty-states/after-search-768-light.png",
+      "width": 768,
+      "scheme": "light"
+    },
+    {
+      "file": "starred-768-light.png",
+      "source": "docs/screenshots/Exh-zrjo/stack-empty-states/after-starred-768-light.png",
+      "width": 768,
+      "scheme": "light"
+    },
+    {
+      "file": "shared-768-light.png",
+      "source": "docs/screenshots/Exh-zrjo/stack-empty-states/after-shared-768-light.png",
+      "width": 768,
+      "scheme": "light"
+    },
+    {
+      "file": "welcome-768-dark.png",
+      "source": "docs/screenshots/Exh-zrjo/stack-empty-states/after-search-768-dark.png",
+      "width": 768,
+      "scheme": "dark"
+    },
+    {
+      "file": "starred-768-dark.png",
+      "source": "docs/screenshots/Exh-zrjo/stack-empty-states/after-starred-768-dark.png",
+      "width": 768,
+      "scheme": "dark"
+    },
+    {
+      "file": "shared-768-dark.png",
+      "source": "docs/screenshots/Exh-zrjo/stack-empty-states/after-shared-768-dark.png",
+      "width": 768,
+      "scheme": "dark"
+    },
+    {
+      "file": "welcome-390-light.png",
+      "source": "docs/screenshots/Exh-zrjo/stack-empty-states/after-search-390-light.png",
+      "width": 390,
+      "scheme": "light"
+    },
+    {
+      "file": "starred-390-light.png",
+      "source": "docs/screenshots/Exh-zrjo/stack-empty-states/after-starred-390-light.png",
+      "width": 390,
+      "scheme": "light"
+    },
+    {
+      "file": "shared-390-light.png",
+      "source": "docs/screenshots/Exh-zrjo/stack-empty-states/after-shared-390-light.png",
+      "width": 390,
+      "scheme": "light"
+    },
+    {
+      "file": "welcome-390-dark.png",
+      "source": "docs/screenshots/Exh-zrjo/stack-empty-states/after-search-390-dark.png",
+      "width": 390,
+      "scheme": "dark"
+    },
+    {
+      "file": "starred-390-dark.png",
+      "source": "docs/screenshots/Exh-zrjo/stack-empty-states/after-starred-390-dark.png",
+      "width": 390,
+      "scheme": "dark"
+    },
+    {
+      "file": "shared-390-dark.png",
+      "source": "docs/screenshots/Exh-zrjo/stack-empty-states/after-shared-390-dark.png",
+      "width": 390,
+      "scheme": "dark"
+    },
+    {
+      "file": "welcome-320-light.png",
+      "source": "docs/screenshots/Exh-zrjo/stack-empty-states/after-search-320-light.png",
+      "width": 320,
+      "scheme": "light"
+    },
+    {
+      "file": "starred-320-light.png",
+      "source": "docs/screenshots/Exh-zrjo/stack-empty-states/after-starred-320-light.png",
+      "width": 320,
+      "scheme": "light"
+    },
+    {
+      "file": "shared-320-light.png",
+      "source": "docs/screenshots/Exh-zrjo/stack-empty-states/after-shared-320-light.png",
+      "width": 320,
+      "scheme": "light"
+    },
+    {
+      "file": "welcome-320-dark.png",
+      "source": "docs/screenshots/Exh-zrjo/stack-empty-states/after-search-320-dark.png",
+      "width": 320,
+      "scheme": "dark"
+    },
+    {
+      "file": "starred-320-dark.png",
+      "source": "docs/screenshots/Exh-zrjo/stack-empty-states/after-starred-320-dark.png",
+      "width": 320,
+      "scheme": "dark"
+    },
+    {
+      "file": "shared-320-dark.png",
+      "source": "docs/screenshots/Exh-zrjo/stack-empty-states/after-shared-320-dark.png",
+      "width": 320,
+      "scheme": "dark"
+    },
+    {
+      "file": "save-error-320-light.png",
+      "source": "docs/screenshots/Exh-zrjo/followup-save-states-pr273/save-error-320-light.png",
+      "width": 320,
+      "scheme": "light"
+    },
+    {
+      "file": "save-error-320-dark.png",
+      "source": "docs/screenshots/Exh-zrjo/followup-save-states-pr273/save-error-320-dark.png",
+      "width": 320,
+      "scheme": "dark"
+    }
+  ]
+}

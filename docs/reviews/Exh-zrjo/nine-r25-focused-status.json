@@ -1,0 +1,8 @@
+{
+  "command": "go test ./internal/api -run Test(EditOriginsPartialRendersSavedAndDraftDecisions|EditNavigation|TagModalBrowser|ShareModalBrowser|MobileTargetsBrowser) -count=1",
+  "application": "d30dbbe92f9f5535a33f59be25f7c9f9c4be4511",
+  "exitCode": 0,
+  "seconds": 24.32,
+  "log": "/tmp/exhibit-zrjo-nine-r25-focused.log",
+  "applicationUnchanged": true
+}

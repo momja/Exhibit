@@ -229,6 +229,12 @@ func TestLibraryGrantRefusesOtherRouteFamilies(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "A", a.Title)
 	assert.Equal(t, "own", a.ShareStateMode)
+	w = doWithToken(t, r, "PATCH", "/api/artifacts/"+id, issued.Token, map[string]string{"share_attribution": "hide", "title": "hijacked"})
+	require.Equal(t, 400, w.Code, w.Body.String())
+	a, err = r.cfg.Store.GetArtifact(context.Background(), defaultOwnerID, id)
+	require.NoError(t, err)
+	assert.Equal(t, "A", a.Title)
+	assert.Equal(t, "inherit", a.ShareAttribution)
 }
 
 func TestAgentGrantRevocationAndDigestOnlyStorage(t *testing.T) {
@@ -330,7 +336,7 @@ func TestAgentGrantsPanelIsTheOwners(t *testing.T) {
 	for _, path := range []string{"/settings", "/profile"} {
 		w = doJSON(t, r, "GET", path, nil)
 		require.Equal(t, 200, w.Code, w.Body.String())
-		for _, id := range []string{"agent-grants-panel", "agent-grants-body", "agent-grant-form", "agent-grant-issued", "agent-grant-token", "agent-grant-copy", "agent-grant-label"} {
+		for _, id := range []string{"agent-grants-panel", "agent-grants-body", "agent-grant-form", "agent-grant-issued", "agent-grant-token", "agent-grant-token-copy", "agent-grant-label"} {
 			assert.Contains(t, w.Body.String(), `id="`+id+`"`)
 		}
 		assert.Contains(t, w.Body.String(), "Connected agents")

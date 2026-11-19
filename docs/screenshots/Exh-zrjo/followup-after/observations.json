@@ -1,0 +1,104 @@
+[
+  {
+    "width": 1280,
+    "scheme": "light",
+    "path": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw2ykykl-349b72ab.png",
+    "dark": false,
+    "badge": [
+      "3px",
+      "3px",
+      "4px"
+    ],
+    "saveText": "Save",
+    "saveDisabled": true,
+    "saveIcon": "\"\ue248\"",
+    "saveStatus": "Saved",
+    "overflow": false,
+    "asset": "/assets/v/b2069bfa62d2/phosphor/regular.css"
+  },
+  {
+    "width": 1280,
+    "scheme": "dark",
+    "path": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw2ykz0x-d687de1f.png",
+    "dark": true,
+    "badge": [
+      "3px",
+      "3px",
+      "4px"
+    ],
+    "saveText": "Save",
+    "saveDisabled": true,
+    "saveIcon": "\"\ue248\"",
+    "saveStatus": "Saved",
+    "overflow": false,
+    "asset": "/assets/v/b2069bfa62d2/phosphor/regular.css"
+  },
+  {
+    "width": 390,
+    "scheme": "light",
+    "path": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw2ykzg2-69bc2014.png",
+    "dark": false,
+    "badge": [
+      "3px",
+      "3px",
+      "4px"
+    ],
+    "saveText": "Save",
+    "saveDisabled": true,
+    "saveIcon": "\"\ue248\"",
+    "saveStatus": "Saved",
+    "overflow": false,
+    "asset": "/assets/v/b2069bfa62d2/phosphor/regular.css"
+  },
+  {
+    "width": 390,
+    "scheme": "dark",
+    "path": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw2ykzrk-a90f3190.png",
+    "dark": true,
+    "badge": [
+      "3px",
+      "3px",
+      "4px"
+    ],
+    "saveText": "Save",
+    "saveDisabled": true,
+    "saveIcon": "\"\ue248\"",
+    "saveStatus": "Saved",
+    "overflow": false,
+    "asset": "/assets/v/b2069bfa62d2/phosphor/regular.css"
+  },
+  {
+    "width": 320,
+    "scheme": "light",
+    "path": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw2yl09h-5b87696f.png",
+    "dark": false,
+    "badge": [
+      "3px",
+      "3px",
+      "4px"
+    ],
+    "saveText": "Save",
+    "saveDisabled": true,
+    "saveIcon": "\"\ue248\"",
+    "saveStatus": "Saved",
+    "overflow": false,
+    "asset": "/assets/v/b2069bfa62d2/phosphor/regular.css"
+  },
+  {
+    "width": 320,
+    "scheme": "dark",
+    "path": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw2yl0la-79cf2806.png",
+    "dark": true,
+    "badge": [
+      "3px",
+      "3px",
+      "4px"
+    ],
+    "saveText": "Save",
+    "saveDisabled": true,
+    "saveIcon": "\"\ue248\"",
+    "saveStatus": "Saved",
+    "overflow": false,
+    "asset": "/assets/v/b2069bfa62d2/phosphor/regular.css"
+  }
+]

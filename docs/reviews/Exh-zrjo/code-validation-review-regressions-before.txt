@@ -1,0 +1,196 @@
+
+> test
+> playwright test --grep tag refresh honors|tag refresh renders|tag editing keeps color
+
+
+Running 3 tests using 1 worker
+
+(node:330766) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  1 [chromium] › specs/tags.spec.ts:39:1 › tag refresh honors session expiry through htmx login recovery (11.2s)
+(node:330847) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  2 [chromium] › specs/tags.spec.ts:48:1 › tag refresh renders a missing-artifact notice without a script error (11.2s)
+(node:330941) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  3 [chromium] › specs/tags.spec.ts:67:1 › tag editing keeps color samples intact, controls aligned and validation local in both schemes (12.0s)
+
+
+  1) [chromium] › specs/tags.spec.ts:39:1 › tag refresh honors session expiry through htmx login recovery 
+
+    Error: expect(page).toHaveURL(expected) failed
+
+    Expected pattern: /\/auth\/login\?/
+    Received string:  "http://127.0.0.1:18080/artifacts/fabc725e-cda9-4e7c-9331-48338396ab7b/edit?return_to=%2Fsearch"
+    Timeout: 10000ms
+
+    Call log:
+      - Expect "toHaveURL" with timeout 10000ms
+        23 × locator resolved to <html lang="en">…</html>
+           - unexpected value "http://127.0.0.1:18080/artifacts/fabc725e-cda9-4e7c-9331-48338396ab7b/edit?return_to=%2Fsearch"
+
+
+      43 |   await context.clearCookies();
+      44 |   await page.evaluate(() => document.body.dispatchEvent(new CustomEvent('exhibit:tags-changed')));
+    > 45 |   await expect(page).toHaveURL(/\/auth\/login\?/);
+         |                      ^
+      46 | });
+      47 |
+      48 | test('tag refresh renders a missing-artifact notice without a script error', async ({ page, api }) => {
+        at /home/maxomdal/.t3/worktrees/Exhibit/feature-Exh-zrjo-ui-council/e2e/specs/tags.spec.ts:45:22
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/tags-tag-refresh-honors-se-bffe7-through-htmx-login-recovery-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/tags-tag-refresh-honors-se-bffe7-through-htmx-login-recovery-chromium/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/tags-tag-refresh-honors-se-bffe7-through-htmx-login-recovery-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/tags-tag-refresh-honors-se-bffe7-through-htmx-login-recovery-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [chromium] › specs/tags.spec.ts:48:1 › tag refresh renders a missing-artifact notice without a script error 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator: locator('#tags-body')
+    Timeout: 10000ms
+    - Expected  -  1
+    + Received  + 29
+
+    - Artifact not found. It may have been deleted.
+    +
+    +   This artifact has no tags.
+    +   
+    +   Create your first tag below.
+    +   
+    +   
+    +     Create new tag
+    +     
+    +       Name
+    +       
+    +       Up to 60 characters.
+    +     
+    +     
+    +   ColorGray
+    +   
+    +   Custom color
+    +   
+    +     
+    +     
+    +   
+    +   
+    +     Use the picker or a six-digit hex color.
+    +     
+    +   
+    +
+    +      Create and add tag
+    +     
+    +   
+    +
+
+    Call log:
+      - Expect "toHaveText" locator('#tags-body') with timeout 10000ms
+      - waiting for locator('#tags-body')
+        23 × locator resolved to <fieldset disabled id="tags-body" class="tag-fields" hx-swap="innerHTML" hx-sync="this:replace" data-htmx-powered="true" aria-label="Tag controls" hx-trigger="exhibit:tags-changed from:body, click from:#tag-refresh" hx-get="/partials/tag-panel?artifact=362407ea-6792-4240-b606-0d958753bf7e">…</fieldset>
+           - unexpected value "
+      This artifact has no tags.
+      
+      Create your first tag below.
+      
+      
+        Create new tag
+        
+          Name
+          
+          Up to 60 characters.
+        
+        
+      ColorGray
+      
+      Custom color
+      
+        
+        
+      
+      
+        Use the picker or a six-digit hex color.
+        
+      
+    
+         Create and add tag
+        
+      
+    "
+
+
+      59 |     removed = true;
+      60 |     await page.evaluate(() => document.body.dispatchEvent(new CustomEvent('exhibit:tags-changed')));
+    > 61 |     await expect(page.locator('#tags-body')).toHaveText('Artifact not found. It may have been deleted.');
+         |                                              ^
+      62 |     await expect(page.locator('#tag-add-name')).toHaveCount(0);
+      63 |     expect(errors).toEqual([]);
+      64 |   } finally { if (!removed) await api.delete(`/api/artifacts/${artifact.id}`); }
+        at /home/maxomdal/.t3/worktrees/Exhibit/feature-Exh-zrjo-ui-council/e2e/specs/tags.spec.ts:61:46
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/tags-tag-refresh-renders-a-b3bea-tice-without-a-script-error-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/tags-tag-refresh-renders-a-b3bea-tice-without-a-script-error-chromium/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/tags-tag-refresh-renders-a-b3bea-tice-without-a-script-error-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/tags-tag-refresh-renders-a-b3bea-tice-without-a-script-error-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) [chromium] › specs/tags.spec.ts:67:1 › tag editing keeps color samples intact, controls aligned and validation local in both schemes 
+
+    Error: expect(locator).toHaveValue(expected) failed
+
+    Locator:  locator('#tag-edit-modal').locator('#tag-edit-color-hex')
+    Expected: "#8a5db0"
+    Received: "#377a64"
+    Timeout:  10000ms
+
+    Call log:
+      - Expect "toHaveValue" locator('#tag-edit-modal').locator('#tag-edit-color-hex') with timeout 10000ms
+      - waiting for locator('#tag-edit-modal').locator('#tag-edit-color-hex')
+        23 × locator resolved to <input type="text" class="field" maxlength="7" value="#6b7280" autocomplete="off" spellcheck="false" aria-invalid="false" placeholder="#rrggbb" autocapitalize="none" id="tag-edit-color-hex" data-color-picker-target="hex" data-action="input->color-picker#input" aria-describedby="tag-edit-color-hint tag-edit-color-error"/>
+           - unexpected value "#377a64"
+
+
+      114 |           input.dispatchEvent(new Event('input', { bubbles: true }));
+      115 |         });
+    > 116 |         await expect(modal.locator('#tag-edit-color-hex')).toHaveValue('#8a5db0');
+          |                                                            ^
+      117 |         await expect(modal.locator('.color-selection')).toHaveText('Custom');
+      118 |         await green.click();
+      119 |         await green.press('ArrowRight');
+        at /home/maxomdal/.t3/worktrees/Exhibit/feature-Exh-zrjo-ui-council/e2e/specs/tags.spec.ts:116:60
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/tags-tag-editing-keeps-col-056a0-ation-local-in-both-schemes-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/tags-tag-editing-keeps-col-056a0-ation-local-in-both-schemes-chromium/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/tags-tag-editing-keeps-col-056a0-ation-local-in-both-schemes-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/tags-tag-editing-keeps-col-056a0-ation-local-in-both-schemes-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3 failed
+    [chromium] › specs/tags.spec.ts:39:1 › tag refresh honors session expiry through htmx login recovery 
+    [chromium] › specs/tags.spec.ts:48:1 › tag refresh renders a missing-artifact notice without a script error 
+    [chromium] › specs/tags.spec.ts:67:1 › tag editing keeps color samples intact, controls aligned and validation local in both schemes 

@@ -13,6 +13,7 @@ function initializeSharePanel() {
   const byId = (id) => panel.querySelector('#' + id);
   const readSaved = () => ({
     mode: byId('share-state-mode').dataset.savedMode,
+    attribution: byId('share-attribution').value,
     linkID: byId('share-link-toggle').dataset.shareId || ''
   });
   let saved = readSaved();
@@ -28,6 +29,7 @@ function initializeSharePanel() {
   }
 
   function restoreFields() {
+    byId('share-attribution').value = saved.attribution;
     byId('share-state-own').checked = saved.mode === 'own';
     byId('share-state-shared').checked = saved.mode === 'shared';
     byId('share-link-toggle').checked = !!saved.linkID;
@@ -67,7 +69,9 @@ function initializeSharePanel() {
     if (input) input.value = '';
   });
   document.getElementById('share-open').addEventListener('click', event => {
-    dialog.show(event.currentTarget);
+    if (dialog.show(event.currentTarget)) {
+      panel.querySelector('.modal-body')?.scrollTo({ top: 0 });
+    }
     if (needsRefresh) refresh();
     else status('');
   });
@@ -147,6 +151,14 @@ function initializeSharePanel() {
       restoreFields();
       return;
     }
+    if (e.target.id === 'share-attribution') {
+      const mode = e.target.value;
+      if (!['inherit', 'show', 'hide'].includes(mode) || mode === saved.attribution) return;
+      return mutate(async () => {
+        await request('/api/artifacts/' + encodeURIComponent(artifactID), { method: 'PATCH', body: JSON.stringify({ share_attribution: mode }) });
+        saved.attribution = mode;
+      }, 'Could not change attribution. Your previous setting is restored; try again.');
+    }
     if (e.target.id === 'share-link-toggle') {
       const enabled = !!e.target.checked;
       if (enabled === !!saved.linkID) return;
@@ -172,19 +184,6 @@ function initializeSharePanel() {
     }
   });
 
-  function copyField(id, what) {
-    const field = byId(id);
-    if (!field) return;
-    field.select();
-    if (!navigator.clipboard) {
-      status('Select the ' + what.toLowerCase() + ' and copy it.');
-      return;
-    }
-    return navigator.clipboard.writeText(field.value)
-      .then(() => status('✓ ' + what + ' copied'))
-      .catch(() => status('Select the ' + what.toLowerCase() + ' and copy it.'));
-  }
-
   panel.addEventListener('click', function(e) {
     if (dialog.pending || needsRefresh) return;
     const target = e.target;
@@ -203,8 +202,6 @@ function initializeSharePanel() {
         saved.linkID = data.share.id;
       }, 'Could not replace the link. Try again.');
     }
-    if (button.id === 'share-link-copy') return copyField('share-link-url', 'Link');
-    if (button.id === 'share-widget-copy') return copyField('share-widget-embed', 'Embed code');
   });
 
   // htmx 4 exposes response metadata under detail.ctx and uses colon-separated

@@ -1,0 +1,43 @@
+
+> test
+> playwright test --grep persisted-page recovery
+
+
+Running 1 test using 1 worker
+
+(node:325060) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  1 [chromium] › specs/new-history.spec.ts:17:1 › persisted-page recovery resets a completed import and preserves unfinished approval (30.3s)
+
+
+  1) [chromium] › specs/new-history.spec.ts:17:1 › persisted-page recovery resets a completed import and preserves unfinished approval 
+
+    Test timeout of 30000ms exceeded.
+
+    Error: page.waitForRequest: Test timeout of 30000ms exceeded.
+
+      31 |     await expect(page.locator('[data-mode=paste]')).toBeDisabled();
+      32 |     if (complete) {
+    > 33 |       const reload = page.waitForRequest(request => request.isNavigationRequest() && new URL(request.url()).pathname === '/new');
+         |                           ^
+      34 |       await page.evaluate(() => dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })));
+      35 |       await reload;
+      36 |       await expect(page.locator('[data-mode=paste]')).toBeEnabled();
+        at /home/maxomdal/.t3/worktrees/Exhibit/feature-Exh-zrjo-ui-council/e2e/specs/new-history.spec.ts:33:27
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/new-history-persisted-page-0e19a-eserves-unfinished-approval-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/new-history-persisted-page-0e19a-eserves-unfinished-approval-chromium/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/new-history-persisted-page-0e19a-eserves-unfinished-approval-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/new-history-persisted-page-0e19a-eserves-unfinished-approval-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [chromium] › specs/new-history.spec.ts:17:1 › persisted-page recovery resets a completed import and preserves unfinished approval 

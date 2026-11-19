@@ -147,7 +147,7 @@ htmx, Copy, history and continuation at desktop, 390px, and 320px widths. Captur
 its screenshots with:
 
 ```sh
-AGENT_MARKDOWN_SCREENSHOT_DIR="$PWD/docs/screenshots/Exh-1e7n" \
+AGENT_MARKDOWN_SCREENSHOT_DIR="/tmp/exhibit-review/agent-markdown" \
   go test ./internal/api -run '^TestAgentMarkdownBrowser$' -count=1
 ```
 

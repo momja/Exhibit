@@ -1,0 +1,28 @@
+{
+  "application": "d30dbbe92f9f5535a33f59be25f7c9f9c4be4511",
+  "initialE2E": {
+    "wrapperExitCode": 143,
+    "completedCasesObserved": 7,
+    "noFinalChildExitReceipt": true,
+    "countedAsFinalPass": false,
+    "log": "/tmp/exhibit-zrjo-r25-e2e.log"
+  },
+  "initialFocusedGo": {
+    "wrapperExitCode": 143,
+    "successLineSeconds": 25.058,
+    "noFinalChildExitReceipt": true,
+    "countedAsFinalPass": false,
+    "log": "/tmp/exhibit-zrjo-r25-focused.log"
+  },
+  "firstDurableAttempt": {
+    "e2eExitCode": 1,
+    "seconds": 1.32,
+    "cause": "Playwright refused occupied18080 left by interrupted prior scratch server",
+    "countedAsPass": false,
+    "verifiedScratchServerPID": 101866,
+    "verifiedScratchWrapperPID": 101855,
+    "removedWithWrapperSIGTERM": true,
+    "scratchDataDir": "/tmp/exhibit-e2e-REPiXl",
+    "newSequencePID": 103375
+  }
+}

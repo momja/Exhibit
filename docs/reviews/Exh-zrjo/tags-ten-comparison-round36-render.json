@@ -1,0 +1,73 @@
+{
+  "previews": [
+    {
+      "width": 728,
+      "contentHeight": 708,
+      "capturedHeight": 708,
+      "consoleMessages": [],
+      "screenshot": {
+        "mimeType": "image/png",
+        "width": 728,
+        "height": 708
+      }
+    },
+    {
+      "width": 360,
+      "contentHeight": 1334,
+      "capturedHeight": 1334,
+      "consoleMessages": [],
+      "screenshot": {
+        "mimeType": "image/png",
+        "width": 360,
+        "height": 1334
+      }
+    }
+  ],
+  "render": {
+    "htmlRender": {
+      "attachmentId": "096f4939-b5a7-46dd-a015-84f12c84336e-3f77eb88-6423-44a2-9d65-de8c7fb73226-html",
+      "title": "Tag controls: shared column alignment",
+      "height": 1800,
+      "heights": [
+        [
+          320,
+          1218
+        ],
+        [
+          375,
+          1360
+        ],
+        [
+          430,
+          1520
+        ],
+        [
+          520,
+          575
+        ],
+        [
+          640,
+          662
+        ],
+        [
+          728,
+          708
+        ],
+        [
+          860,
+          804
+        ],
+        [
+          1000,
+          906
+        ],
+        [
+          1144,
+          1010
+        ]
+      ],
+      "outline": "t0,1,74,4,1;t0,9,38,14,3;t41,9,17,14,3;t0,28,24,4,1;m75,26,15,7,1;m0,22,263,164,1;t93,28,24,4,1;m167,26,15,7,1;m48,22,263,164,1;t0,168,180,8,2"
+    },
+    "message": "Shown to the reader above your reply. Don't mention or describe the page; reply with only what it doesn't already say."
+  }
+}

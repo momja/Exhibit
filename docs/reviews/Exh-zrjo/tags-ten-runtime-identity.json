@@ -1,0 +1,23 @@
+{
+  "applicationCommit": "f58de10bf88acff268b9339e0c7dae406a93c664",
+  "assetVersion": "4beedb277545",
+  "sourceFingerprint": "1fc8899f65781b39212653be286d8064d2ea02bcfd772558ad9a2033ac71992a",
+  "scope": [
+    "internal",
+    "web",
+    "e2e",
+    "cmd",
+    "scripts",
+    "Makefile",
+    "go.mod",
+    "go.sum"
+  ],
+  "scopedDiff": "",
+  "binarySha256": "7be17fc28c646d805fb5deaa0accd791bc338a837d11c7900c44a6ce5e5d7458",
+  "mainPID": 305222,
+  "mainExecutableSha256": "7be17fc28c646d805fb5deaa0accd791bc338a837d11c7900c44a6ce5e5d7458",
+  "playgroundPID": 305238,
+  "playgroundExecutableSha256": "7be17fc28c646d805fb5deaa0accd791bc338a837d11c7900c44a6ce5e5d7458",
+  "vcsStamp": false,
+  "proof": "Full asset/server build receipt on this commit, empty full source scope, current assets and matching process executables. No binary VCS stamp."
+}

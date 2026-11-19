@@ -127,7 +127,8 @@ type Config struct {
 	// It is carried here only to reach the render surface, which is where the
 	// shares-only decision is argued: see render.Config.EmbedOrigins. Read
 	// from the environment by EmbedOriginsFromEnv (embedorigins.go).
-	EmbedOrigins []string
+	EmbedOrigins            []string
+	ShareAttributionEnabled bool
 	// Chromium is the operator's headless browser, shared by every server
 	// feature that needs one; link previews of shares (av-rclm) are the first.
 	// nil — no CHROMIUM_CDP_URL — means there is none, and each feature falls
@@ -453,10 +454,20 @@ func (ro *Router) setupRoutes() {
 
 		// Gallery UI
 		r.Get("/", ro.galleryIndex)
+		r.Get("/activity", func(w http.ResponseWriter, r *http.Request) { ro.serveGalleryPage(w, r, activityGallery) })
+		r.Get("/partials/gallery-grid/activity", func(w http.ResponseWriter, r *http.Request) { ro.serveGalleryGrid(w, r, activityGallery) })
+		r.Get("/search", func(w http.ResponseWriter, r *http.Request) { ro.serveGalleryPage(w, r, searchGallery) })
+		r.Get("/partials/gallery-grid/search", func(w http.ResponseWriter, r *http.Request) { ro.serveGalleryGrid(w, r, searchGallery) })
 		r.Get("/shared", func(w http.ResponseWriter, r *http.Request) { ro.serveGalleryPage(w, r, sharedGallery) })
-		r.Get("/shared-by-me", func(w http.ResponseWriter, r *http.Request) { ro.serveGalleryPage(w, r, sharedByGallery) })
+		r.Get("/shared-by-me", func(w http.ResponseWriter, r *http.Request) {
+			destination := "/shared"
+			if r.URL.RawQuery != "" {
+				destination += "?" + r.URL.RawQuery
+			}
+			http.Redirect(w, r, destination, http.StatusFound)
+		})
 		r.Get("/partials/gallery-grid/shared", func(w http.ResponseWriter, r *http.Request) { ro.serveGalleryGrid(w, r, sharedGallery) })
-		r.Get("/partials/gallery-grid/shared-by-me", func(w http.ResponseWriter, r *http.Request) { ro.serveGalleryGrid(w, r, sharedByGallery) })
+		r.Get("/partials/gallery-grid/shared-by-me", func(w http.ResponseWriter, r *http.Request) { ro.serveGalleryGrid(w, r, sharedGallery) })
 		r.Get("/artifacts/{artifactID}/widget/viewer/open", ro.openReadableGalleryWidget)
 		r.Get("/new", ro.galleryNew)
 		r.Get("/artifacts/{artifactID}", ro.galleryDetail)
@@ -585,6 +596,8 @@ func (ro *Router) setupRoutes() {
 				r.Patch("/", ro.updateArtifact)
 				r.Post("/refetch", ro.refetchArtifact)
 				r.Post("/duplicate", ro.duplicateArtifact)
+				r.Put("/starred", ro.starArtifact)
+				r.Post("/opened", ro.artifactOpened)
 				r.Delete("/", ro.deleteArtifact)
 				// Version history (store/versions.go). Written as a side effect
 				// of every change to the body or widget, so the only mutation
@@ -781,7 +794,8 @@ func (ro *Router) RenderHandler() http.Handler {
 		FaviconSVG: exhibitLogoSVG,
 		// Empty on every instance that has not asked to restrict framing,
 		// which leaves a share's frame-ancestors open (av-q3iy).
-		EmbedOrigins: ro.cfg.EmbedOrigins,
+		EmbedOrigins:            ro.cfg.EmbedOrigins,
+		ShareAttributionEnabled: ro.cfg.ShareAttributionEnabled,
 		// Link previews (av-rclm): the logo card every preview falls back to,
 		// and the browser that draws a live share's widget, if any.
 		PreviewImagePNG: previewImagePNG(),

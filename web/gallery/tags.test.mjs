@@ -22,13 +22,22 @@ async function loadTags({ responses = [], initial = {}, confirmed = true } = {})
   }, {
     "tags-panel": { dataset: { artifactId: ID } },
     "tag-create-error": { hidden: true },
+    "tag-add-color-hex": { value: "#6b7280" },
     "tag-edit-modal": { hidden: true },
     "tag-add-error": { hidden: true },
     "tag-edit-error": { hidden: true },
     ...initial
   });
   page.byId('tags-panel').querySelector = selector => page.byId(selector.slice(1));
-  nativeDialog(page, page.byId('tag-edit-modal'), ['tag-edit-save', 'tag-edit-delete', 'tag-edit-cancel'].map(page.byId));
+  nativeDialog(page, page.byId('tag-edit-modal'), ['tag-edit-save', 'tag-edit-delete', 'tag-edit-cancel', 'tag-delete-cancel', 'tag-edit-confirm-delete'].map(page.byId));
+  for (const id of ['tag-add-name', 'tag-edit-name', 'tag-add-color-hex', 'tag-edit-color-hex']) {
+    const attributes = new Map(), element = page.byId(id);
+    element.setAttribute = (name, value) => attributes.set(name, String(value));
+    element.getAttribute = name => attributes.get(name) ?? null;
+    element.removeAttribute = name => attributes.delete(name);
+  }
+  page.byId('tags-panel').querySelectorAll = () => [];
+  page.byId('tag-edit-modal').querySelector = selector => selector === '[data-controller~=color-picker]' ? page.byId('tag-edit-colors') : null;
   page.window.apiFetch = api.apiFetch;
   await page.loadModule(TAGS_JS);
   page.window.location.reload = () => { reloads++; };
@@ -91,12 +100,17 @@ test("add with nothing chosen sends nothing and says why", async () => {
 
 test("a refused create is reported and never attaches", async () => {
   const t = await loadTags({
-    initial: { "tag-add-select": { value: "" }, "tag-add-name": { value: "dup" }, "tag-add-color-hex": { value: "" } },
+    initial: { "tag-add-select": { value: "" }, "tag-add-name": { value: "dup" }, "tag-add-color-hex": { value: "#6b7280" } },
     responses: [{ ok: false, status: 409, json: async () => ({ error: "tag exists" }) }]
   });
   await t.clickById("tag-create-confirm");
   assert.equal(t.api.calls.length, 1);
-  assert.equal(t.byId("tag-create-error").textContent, "tag exists");
+  assert.equal(t.byId("tag-create-name-error").textContent, "tag exists");
+  assert.equal(t.byId("tag-create-confirm").disabled, true, "known duplicate blocks a repeat submit");
+  await t.clickById("tag-create-confirm");
+  assert.equal(t.api.calls.length, 1);
+  t.byId("tag-add-name").value = "corrected name";
+  await t.byId("tags-panel").dispatchEvent({ type: "input", target: t.byId("tag-add-name") });
   assert.equal(t.byId("tag-create-confirm").disabled, false);
 });
 
@@ -115,13 +129,42 @@ test("the edit dialog renames the tag library-wide and re-renders the panel", as
   assert.deepEqual(t.events, ["exhibit:tags-changed"]);
 });
 
-test("deleting a tag asks first, and a declined confirm sends nothing", async () => {
+test("Edit Enter keeps a rejected name blocked until its value changes", async () => {
+  const t = await loadTags({ responses: [{ ok: false, status: 409, json: async () => ({ error: 'tag exists' }) }] });
+  await t.clickAction('edit-tag', { tagId: 'tag-1', tagName: 'charts', tagColor: '#ffffff' });
+  const modal = t.byId('tag-edit-modal'), name = t.byId('tag-edit-name');
+  name.value = 'existing name';
+  await t.byId('tags-panel').dispatchEvent({ type: 'input', target: name });
+  await modal.dispatchEvent({ type: 'click', target: { closest: selector => selector === '#tag-edit-save' ? {} : null } });
+  assert.equal(t.api.calls.length, 1);
+  assert.equal(t.byId('tag-edit-save').disabled, true);
+  for (const id of ['tag-edit-name', 'tag-edit-color-hex']) {
+    await t.byId('tags-panel').dispatchEvent({ type: 'keydown', key: 'Enter', target: t.byId(id), preventDefault() {} });
+    assert.equal(t.api.calls.length, 1, 'unchanged rejected name sends no repeated PATCH');
+    assert.equal(t.byId('tag-edit-name-error').textContent, 'tag exists');
+    assert.equal(name.focused, true);
+  }
+  name.value = 'new name';
+  await t.byId('tags-panel').dispatchEvent({ type: 'input', target: name });
+  assert.equal(t.byId('tag-edit-name-error').hidden, true);
+  assert.equal(t.byId('tag-edit-save').disabled, false);
+  await t.byId('tags-panel').dispatchEvent({ type: 'keydown', key: 'Enter', target: name, preventDefault() {} });
+  assert.equal(t.api.calls.length, 2);
+  assert.equal(modal.open, false);
+});
+
+test("deleting shows a local confirmation, and Keep tag sends nothing", async () => {
   const t = await loadTags({ confirmed: false });
   await t.clickAction("edit-tag", { tagId: "tag-1", tagName: "charts", tagColor: "#ffffff" });
   const modal = t.byId("tag-edit-modal");
   await modal.dispatchEvent({ type: "click", target: { closest: (sel) => (sel === "#tag-edit-delete" ? {} : null) } });
   assert.equal(t.api.calls.length, 0);
   assert.equal(modal.open, true);
+  assert.equal(t.byId("tag-delete-fields").hidden, false);
+  await modal.dispatchEvent({ type: "click", target: { closest: sel => sel === "#tag-delete-cancel" ? {} : null } });
+  assert.equal(t.byId("tag-delete-fields").hidden, true);
+  assert.equal(t.byId("tag-edit-fields").hidden, false);
+  assert.equal(t.api.calls.length, 0);
 });
 
 test("creating validates its own name even when an existing tag is selected", async () => {
@@ -130,7 +173,8 @@ test("creating validates its own name even when an existing tag is selected", as
   } });
   await t.clickById("tag-create-confirm");
   assert.equal(t.api.calls.length, 0);
-  assert.equal(t.byId("tag-create-error").textContent, "Name is required.");
+  assert.equal(t.byId("tag-create-name-error").textContent, "Name is required.");
+  assert.equal(t.byId("tag-add-name").focused, true);
   assert.equal(t.byId("tag-add-error").hidden, true);
 });
 
@@ -155,6 +199,13 @@ test("attachment errors after creation survive the panel refresh", async () => {
     ]
   });
   await t.clickById("tag-create-confirm");
-  assert.equal(t.byId("tag-add-error").textContent, "Could not attach");
+  assert.equal(t.byId("tag-add-error").textContent, "Tag created, but not added. Could not attach");
+  t.byId("tag-add-error").textContent = "";
+  t.byId("tag-add-select").options = [{ value: "new-tag" }];
+  await t.byId("tags-panel").dispatchEvent({type: "htmx:after:swap", target: t.byId('tags-body'), detail: { ctx: { response: { status: 200 } } }});
+  assert.equal(t.byId("tag-add-error").textContent, "Tag created, but not added. Could not attach", "nearby feedback survives replacing its markup");
+  assert.equal(t.byId("tag-add-select").value, "new-tag");
+  assert.equal(t.byId("tag-add-select").focused, true);
+  assert.equal(t.byId("tag-add-confirm").disabled, false);
   assert.deepEqual(t.events, ["exhibit:tags-changed"]);
 });

@@ -1,0 +1,14 @@
+{
+  "command": [
+    "make",
+    "build"
+  ],
+  "cwd": "/home/maxomdal/.t3/worktrees/Exhibit/feature-Exh-zrjo-ui-council",
+  "head": "2e2fc9bc6aa0dcdb03dfa829921479a4c56045e4",
+  "startedAt": "2026-11-06T01:11:25.005173+00:00",
+  "seconds": 17.03,
+  "exitCode": 0,
+  "sourceFingerprint": "eff596e1702ffdcd8d83993190dce5960381487fd0b164372500c7a487d17785",
+  "sourceUnchanged": true,
+  "log": "/tmp/exhibit-zrjo-tags10-simplicity-build-confirm.log"
+}

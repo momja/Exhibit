@@ -101,7 +101,7 @@ console.log(`Vendored Phosphor Icons (regular) -> ${path.relative(process.cwd(),
 
 // Clerk's SVG icon slots use same-origin masks, generated from the same pinned
 // Phosphor package as the gallery font. Keep this list explicit and small.
-const maskNames = ['arrow-right', 'eye', 'eye-slash', 'fingerprint', 'gear', 'pencil-simple', 'plus', 'shield-check', 'sign-out', 'user-circle'];
+const maskNames = ['arrow-right', 'eye', 'eye-slash', 'fingerprint', 'gear', 'pencil-simple', 'plus', 'shield-check', 'sign-out', 'user-circle', 'user-gear'];
 const selection = JSON.parse(readFileSync(path.join(src, 'selection.json'), 'utf8'));
 for (const name of maskNames) {
   const entry = selection.icons.find(entry => entry.properties.name.split(', ').includes(name));

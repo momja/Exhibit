@@ -461,7 +461,27 @@ func (ro *Router) failLogin(w http.ResponseWriter, msg string, attrs ...slog.Att
 		args = append(args, a)
 	}
 	slog.Warn("login failed", args...)
-	http.Error(w, msg, http.StatusBadRequest)
+	message := "Could not sign in. Return to sign in and try again."
+	switch msg {
+	case "login expired — start again", "login state mismatch", "identity provider returned no code":
+		message = "Your sign-in attempt expired or could not be verified. Start sign-in again."
+	case "identity provider refused the login":
+		message = "Your sign-in provider declined the request. Return to sign in to try again."
+	case "this account cannot sign in":
+		message = "This account cannot sign in. Contact the person who manages this Exhibit instance."
+	}
+	page, err := renderPage("loginFailure", loginPageData{
+		Header: authPageHeader("Sign-in failed"), Favicon: template.URL(exhibitLogoDataURI), Error: message,
+	})
+	if err != nil {
+		slog.Error("render sign-in failure", slog.String("err", err.Error()))
+		http.Error(w, message, http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusBadRequest)
+	fmt.Fprint(w, page)
 }
 
 // sessionUser resolves a request's session cookie to an owner id. A missing,

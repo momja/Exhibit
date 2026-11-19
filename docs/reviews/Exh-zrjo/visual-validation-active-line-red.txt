@@ -1,0 +1,46 @@
+
+> test
+> playwright test --grep word selection remains
+
+
+Running 1 test using 1 worker
+
+(node:4139244) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  1 [chromium] › specs/ui-appearance.spec.ts:96:1 › word selection remains visible on the active source line (1.4s)
+
+
+  1) [chromium] › specs/ui-appearance.spec.ts:96:1 › word selection remains visible on the active source line
+
+    Error: /new 1280px light: {"layerIncluded":true,"selected":[240,243,248],"unselected":[240,243,248],"difference":0,"contrast":5.0721380903384965}
+
+    expect(received).toBeGreaterThan(expected)
+
+    Expected: > 15
+    Received:   0
+
+      162 |         });
+      163 |         expect(paint.layerIncluded).toBe(true);
+    > 164 |         expect(paint.difference, `${route} ${width}px ${colorScheme}: ${JSON.stringify(paint)}`).toBeGreaterThan(15);
+          |                                                                                                  ^
+      165 |         expect(paint.contrast).toBeGreaterThanOrEqual(4.5);
+      166 |         await expect(source).toContainText('Preserve this selection through theme changes');
+      167 |       }
+        at /home/maxomdal/.t3/worktrees/Exhibit/feature-Exh-zrjo-ui-council/e2e/specs/ui-appearance.spec.ts:164:98
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/ui-appearance-word-selecti-adfd6-e-on-the-active-source-line-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/ui-appearance-word-selecti-adfd6-e-on-the-active-source-line-chromium/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/ui-appearance-word-selecti-adfd6-e-on-the-active-source-line-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/ui-appearance-word-selecti-adfd6-e-on-the-active-source-line-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [chromium] › specs/ui-appearance.spec.ts:96:1 › word selection remains visible on the active source line

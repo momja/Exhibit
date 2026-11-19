@@ -29,7 +29,7 @@ func TestDisabledConnectionManagerKeepsRetainedDataControlsAvailable(t *testing.
 		w := doJSON(t, ro, http.MethodGet, path, nil)
 		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 		body := w.Body.String()
-		assert.Contains(t, body, "Saved results are separate")
+		assert.Contains(t, body, "Saved data")
 		assert.NotContains(t, body, "Saved data protection")
 		assert.Contains(t, body, `data-action="connections#clearData"`)
 		assert.NotContains(t, body, "never-render-this-secret")

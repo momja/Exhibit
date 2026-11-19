@@ -5,7 +5,7 @@ import { loadPageScript, permissionDialog } from './testdom.mjs';
 const asset = name => fileURLToPath(new URL('../../internal/api/assets/gallery/' + name, import.meta.url));
 const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
 const json = body => ({ok: true, status: 201, json: async () => body});
-async function boot(start, {prompt = () => json({}), restore = () => json({}), ticket = () => json({}), byok = false} = {}) {
+async function boot(start, {prompt = () => json({}), restore = () => json({}), ticket = () => json({}), byok = false, chatData = {}} = {}) {
   const calls = [];
   const streams = [];
   const timers = new Map();
@@ -29,6 +29,8 @@ async function boot(start, {prompt = () => json({}), restore = () => json({}), t
     matchMedia: () => ({matches: false, addEventListener() {}}),
     CustomEvent: class { constructor(type) { this.type = type; } },
   });
+  Object.assign(page.byId('pane-chat').dataset, chatData);
+  if (chatData.agentConversation) page.byId('pane-chat').classList.add('history-open');
   const {resumeConversation} = await page.loadModule(asset('agent.js'), ['resumeConversation']);
   await flush();
   const tick = async delay => {
@@ -50,7 +52,7 @@ test('a provider authentication failure after source preparation appears once wh
   await page.window.send();
   emit(page, {type: 'agent_start'});
   emit(page, {type: 'exhibit_source_prepared'});
-  assert.ok(page.byId('messages').children.some(message => message.textContent === 'Prepared artifact source.'));
+  assert.equal(page.byId('messages').children.some(message => message.textContent === 'Prepared artifact source.'), false);
   const message = {role: 'assistant', stopReason: 'error', content: [],
     errorMessage: '401: {"message":"User not found.","code":401}'};
   emit(page, {type: 'message_start', message});
@@ -767,4 +769,145 @@ test('late rollback cannot detach a newer attach to the same historical session 
   await page.window.send();
   assert.equal(prompts(page)[0].path, '/api/agent/sessions/same-conversation/prompt');
   assert.equal(deletes(page).length, 0);
+});
+
+
+test('an Activity link observes the live conversation without starting or closing its process', async () => {
+  const page = await boot(() => { throw new Error('must not start'); }, {
+    chatData: {agentLiveSession: 'running-chat'}, ticket: () => json({sse_ticket: 'viewer-ticket'}),
+  });
+  assert.equal(starts(page).length, 0);
+  assert.equal(page.calls.filter(call => call.path === '/api/agent/sessions/running-chat/ticket').length, 1);
+  assert.equal(page.streams.length, 1);
+  emit(page, {type: 'message_end', message: {role: 'user', content: [{type: 'text', text: 'Make the chart green'}]}});
+  assert.ok(page.byId('messages').children.some(message => message.className === 'msg user' && message.textContent === 'Make the chart green'));
+  await page.dispatchOnWindow('pagehide');
+  assert.equal(deletes(page).length, 0, 'leaving the Activity observer must not stop running work');
+  assert.equal(page.streams[0].closed, true);
+});
+
+test('sending while an Activity connection loads waits for that conversation', async () => {
+  let finishTicket;
+  const page = await boot(() => json({id: 'wrong-conversation'}), {
+    chatData: {agentLiveSession: 'running-chat'},
+    ticket: () => new Promise(resolve => { finishTicket = resolve; }),
+  });
+  await page.type('Follow up here');
+  await page.tick(300);
+  const sent = page.window.send();
+  await flush();
+  assert.equal(starts(page).length, 0, 'typing and Send must not start a different conversation');
+  assert.equal(prompts(page).length, 0, 'the draft waits for the live connection');
+  assert.equal(page.byId('input').value, 'Follow up here');
+  finishTicket(json({sse_ticket: 'viewer-ticket'}));
+  await sent;
+  assert.equal(prompts(page)[0].path, '/api/agent/sessions/running-chat/prompt');
+  assert.equal(page.streams.length, 1, 'boot and Send share one connection');
+});
+
+test('a failed Activity connection retains the draft and retries the selected conversation', async () => {
+  let attempts = 0;
+  const page = await boot(() => json({id: 'wrong-conversation'}), {
+    chatData: {agentLiveSession: 'running-chat'},
+    ticket: () => ++attempts < 3
+      ? {ok: false, status: 503, json: async () => ({})} : json({sse_ticket: 'viewer-ticket'}),
+  });
+  await page.type('Keep this reply');
+  await page.window.send();
+  assert.equal(starts(page).length, 0);
+  assert.equal(prompts(page).length, 0);
+  assert.equal(page.byId('input').value, 'Keep this reply');
+  await page.window.send();
+  assert.equal(prompts(page)[0].path, '/api/agent/sessions/running-chat/prompt');
+  assert.equal(attempts, 3);
+});
+
+test('a late Activity ticket cannot replace an explicitly continued conversation', async () => {
+  let finishTicket;
+  const page = await boot(body => json({id: body.resume_session_id}), {
+    chatData: {agentLiveSession: 'running-chat'},
+    ticket: () => new Promise(resolve => { finishTicket = resolve; }),
+  });
+  await page.resume('selected-history', 0);
+  finishTicket(json({sse_ticket: 'late-ticket'}));
+  await flush();
+  assert.equal(page.streams.length, 1);
+  await page.type('Continue the selected history');
+  await page.window.send();
+  assert.equal(prompts(page)[0].path, '/api/agent/sessions/selected-history/prompt');
+  assert.equal(deletes(page).length, 0);
+});
+
+test('Activity replies appear once and messages sent from another panel still appear', async () => {
+  const page = await boot(() => json({id: 'wrong-conversation'}), {
+    chatData: {agentLiveSession: 'running-chat'}, ticket: () => json({sse_ticket: 'viewer-ticket'}),
+  });
+  const message = {type: 'message_end', message: {role: 'user', content: 'Follow up'}};
+  const userMessages = () => page.byId('messages').children.filter(message => message.className === 'msg user');
+  await page.type('Follow up');
+  await page.window.send();
+  emit(page, message);
+  assert.equal(userMessages().length, 1);
+  emit(page, {type: 'agent_settled'});
+  // Identical text from another panel is a distinct message, not a duplicate.
+  emit(page, message);
+  assert.equal(userMessages().length, 2);
+});
+
+test('a rejected Activity reply keeps its draft available to retry', async () => {
+  const page = await boot(() => json({id: 'wrong-conversation'}), {
+    chatData: {agentLiveSession: 'running-chat'}, ticket: () => json({sse_ticket: 'viewer-ticket'}),
+    prompt: () => ({ok: false, status: 409, json: async () => ({error: 'Try again shortly.'})}),
+  });
+  await page.type('Preserve this reply');
+  await page.window.send();
+  assert.equal(page.byId('input').value, 'Preserve this reply');
+  assert.equal(page.byId('messages').children.filter(message => message.className === 'msg user').length, 0);
+  assert.equal(errors(page)[0].textContent, 'Try again shortly.');
+});
+
+test('leaving Activity cancels a waiting Send and ignores a late connection ticket', async () => {
+  let finishTicket;
+  const page = await boot(() => json({id: 'wrong-conversation'}), {
+    chatData: {agentLiveSession: 'running-chat'},
+    ticket: () => new Promise(resolve => { finishTicket = resolve; }),
+  });
+  await page.type('Unsent draft');
+  const sent = page.window.send();
+  await page.dispatchOnWindow('pagehide');
+  await sent;
+  finishTicket(json({sse_ticket: 'late-ticket'}));
+  await flush();
+  assert.equal(page.streams.length, 0);
+  assert.equal(starts(page).length, 0);
+  assert.equal(prompts(page).length, 0);
+  assert.equal(deletes(page).length, 0);
+  assert.equal(page.byId('input').value, 'Unsent draft');
+});
+
+test('browser history restoration reconnects Activity and replaces the replayed transcript', async () => {
+  const page = await boot(() => json({id: 'wrong-conversation'}), {
+    chatData: {agentLiveSession: 'running-chat'}, ticket: () => json({sse_ticket: 'viewer-ticket'}),
+  });
+  const replay = {type: 'message_end', message: {role: 'user', content: 'Earlier request'}};
+  emit(page, replay);
+  await page.dispatchOnWindow('pagehide', {persisted: true});
+  await page.dispatchOnWindow('pageshow', {persisted: true});
+  assert.equal(page.streams.length, 2);
+  assert.equal(page.streams[0].closed, true);
+  assert.equal(page.streams[1].closed, false);
+  emit(page, replay);
+  assert.equal(page.byId('messages').children.filter(message => message.className === 'msg user').length, 1);
+  await page.type('Reply after Back');
+  await page.window.send();
+  assert.equal(prompts(page)[0].path, '/api/agent/sessions/running-chat/prompt');
+  assert.equal(starts(page).length, 0);
+  assert.equal(deletes(page).length, 0);
+});
+
+test('opening a saved conversation from Activity never starts or resumes an agent', async () => {
+  const page = await boot(() => { throw new Error('must not start'); }, {chatData: {agentConversation: 'true'}});
+  assert.equal(starts(page).length, 0);
+  assert.equal(page.streams.length, 0);
+  assert.ok(page.byId('pane-chat').classList.contains('history-open'));
 });

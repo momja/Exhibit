@@ -126,7 +126,7 @@ func TestDetailPageRendersMediaGate(t *testing.T) {
 	assert.Contains(t, page, `id="media-block"`)
 	// The copy must say where the grant is actually spent. An "Allow" that
 	// appeared to enable the preview would be the worst available answer.
-	assert.Contains(t, page, "Browsers cannot give a capture device to this embedded preview")
+	assert.Contains(t, page, "Allowing opens this artifact in a new tab to use the requested device.")
 
 	assert.Contains(t, page, "let cameraApproved = false;")
 	assert.Contains(t, page, "let microphoneApproved = false;")

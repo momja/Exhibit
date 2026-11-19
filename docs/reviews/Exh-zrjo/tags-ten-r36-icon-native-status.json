@@ -1,0 +1,19 @@
+{
+  "command": [
+    "go",
+    "test",
+    "./internal/api",
+    "-run",
+    "^(TestIconRegistryCoversUsage|TestServedCSSCoversUsage|TestTagModalBrowser)$",
+    "-count=1",
+    "-v"
+  ],
+  "cwd": ".",
+  "head": "f58de10bf88acff268b9339e0c7dae406a93c664",
+  "startedAt": "2026-11-05T21:44:45.180219+00:00",
+  "seconds": 20.14,
+  "exitCode": 0,
+  "sourceFingerprint": "1fc8899f65781b39212653be286d8064d2ea02bcfd772558ad9a2033ac71992a",
+  "sourceUnchanged": true,
+  "log": "/tmp/exhibit-zrjo-tags10-r36-icon-native.log"
+}

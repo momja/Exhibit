@@ -1,0 +1,142 @@
+{
+  "applicationCommit": "42c94eb1cb12a74108885cc1cbb7aaf7d11f5721",
+  "assetVersion": "aa7a00afd7a2",
+  "validationBaseline": "c1156ef15c7f5caa282b1068214492bce42018e1",
+  "categories": [
+    "Typography",
+    "Composition and spacing",
+    "Color harmony",
+    "Contrast and emphasis",
+    "Component visual consistency",
+    "Responsive visual polish",
+    "Save discoverability and feedback"
+  ],
+  "actualScoreCount": 56,
+  "allScoresAtLeast9": true,
+  "reports": [
+    {
+      "round": 30,
+      "reviewer": "sol",
+      "report": "round-30-sol-followup.md",
+      "light": [
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0
+      ],
+      "dark": [
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0
+      ],
+      "count": 14,
+      "allAtLeast9": true
+    },
+    {
+      "round": 30,
+      "reviewer": "opus",
+      "report": "round-30-opus-followup.md",
+      "light": [
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0
+      ],
+      "dark": [
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0
+      ],
+      "count": 14,
+      "allAtLeast9": true
+    },
+    {
+      "round": 31,
+      "reviewer": "sol",
+      "report": "round-31-sol-followup.md",
+      "light": [
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0
+      ],
+      "dark": [
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0
+      ],
+      "count": 14,
+      "allAtLeast9": true
+    },
+    {
+      "round": 31,
+      "reviewer": "opus",
+      "report": "round-31-opus-followup.md",
+      "light": [
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0
+      ],
+      "dark": [
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0
+      ],
+      "count": 14,
+      "allAtLeast9": true
+    }
+  ],
+  "jointPassingStreak": 1,
+  "completed": false,
+  "qualification": "pending_required_live_coverage_provider_quota",
+  "coverageAddendum": {
+    "taskId": "node:delegated-task:command%3Amcp%3A77879691-97b1-4203-b1da-d57eb27f78e1%3Adelegate-task%3AExh-zrjo-r31-opus-live-coverage-addendum-pr273",
+    "clientRequestId": "Exh-zrjo-r31-opus-live-coverage-addendum-pr273",
+    "status": "failed_without_report",
+    "launchRecord": "round-31-opus-live-coverage-launch.json",
+    "safeBrief": "round-31-opus-live-coverage-brief.md plus followup-round-31-brief.md",
+    "report": "round-31-opus-live-coverage-addendum.md",
+    "reason": "Original actual scores pass but mandatory actual-render matrix is incomplete; frame measurements and unviewed resizes do not qualify.",
+    "recordedAt": "2026-11-05T11:08:57.710033+00:00",
+    "taskStatus": "failed",
+    "error": "Claude API rate limit reached. Try again later.",
+    "resetAt": "2026-11-05T15:50:00.000Z",
+    "reportProduced": false,
+    "scoresProduced": false,
+    "statusRecord": "round-31-opus-live-coverage-status.json",
+    "quotaRecord": "round-31-opus-live-coverage-quota.json",
+    "partialActivityRecord": "round-31-opus-live-coverage-partial.json",
+    "failureRecord": "round-31-opus-live-coverage-unavailable.md",
+    "retryScheduled": false
+  },
+  "recordedAt": "2026-11-05T11:08:57.710033+00:00"
+}

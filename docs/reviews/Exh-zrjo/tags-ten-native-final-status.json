@@ -1,0 +1,19 @@
+{
+  "command": [
+    "go",
+    "test",
+    "./internal/api",
+    "-run",
+    "^TestTagModalBrowser$",
+    "-count=1",
+    "-v"
+  ],
+  "cwd": ".",
+  "head": "72be0ccc60f8b8820ad0715c5113f5a6f0cb44aa",
+  "startedAt": "2026-11-05T17:33:02.839622+00:00",
+  "seconds": 14.19,
+  "exitCode": 0,
+  "sourceFingerprint": "bb765bccfabd9fcadb5267385cb04d21aa676e57a41fbe035d6157ed103e2d98",
+  "sourceUnchanged": true,
+  "log": "/tmp/exhibit-zrjo-tags10-native-final.log"
+}

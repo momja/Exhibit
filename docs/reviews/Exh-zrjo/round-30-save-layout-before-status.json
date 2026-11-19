@@ -1,0 +1,16 @@
+{
+  "command": [
+    "npm",
+    "test",
+    "--prefix",
+    "e2e",
+    "--",
+    "--grep",
+    "sticky editor Save names"
+  ],
+  "head": "5c293c145c02466545046dfb6aad9e40469a65f5",
+  "exitCode": 1,
+  "seconds": 15.99,
+  "runtimeAndValidationUnchanged": true,
+  "log": "/tmp/exhibit-zrjo-pr273-save-layout-before.log"
+}

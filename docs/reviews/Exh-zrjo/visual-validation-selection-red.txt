@@ -1,0 +1,90 @@
+
+> test
+> playwright test --grep source syntax stays
+
+
+Running 1 test using 1 worker
+
+(node:4129394) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  1 [chromium] › specs/ui-appearance.spec.ts:40:1 › source syntax stays differentiated and readable in both color schemes (1.2s)
+
+
+  1) [chromium] › specs/ui-appearance.spec.ts:40:1 › source syntax stays differentiated and readable in both color schemes
+
+    Error: 1280px light selection rgb(215, 212, 240)
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 42
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "ratio": 3.9127682069594316,
+    +     "text": "<!doctype html>",
+    +   },
+    +   Object {
+    +     "ratio": 3.9127682069594316,
+    +     "text": "<!-- Preserve syntax and this draft across theme changes -->",
+    +   },
+    +   Object {
+    +     "ratio": 4.092551638611728,
+    +     "text": "section",
+    +   },
+    +   Object {
+    +     "ratio": 4.092551638611728,
+    +     "text": "section",
+    +   },
+    +   Object {
+    +     "ratio": 4.092551638611728,
+    +     "text": "style",
+    +   },
+    +   Object {
+    +     "ratio": 4.092551638611728,
+    +     "text": "style",
+    +   },
+    +   Object {
+    +     "ratio": 4.092551638611728,
+    +     "text": "script",
+    +   },
+    +   Object {
+    +     "ratio": 4.170480642885988,
+    +     "text": "/value+/",
+    +   },
+    +   Object {
+    +     "ratio": 4.170480642885988,
+    +     "text": "\\n",
+    +   },
+    +   Object {
+    +     "ratio": 4.092551638611728,
+    +     "text": "script",
+    +   },
+    + ]
+
+      84 |     expect(appearance.tag).not.toBe(appearance.string);
+      85 |     expect(appearance.selectionBackground).not.toBe('rgba(0, 0, 0, 0)');
+    > 86 |     expect(appearance.lowContrast, `${width}px ${colorScheme} selection ${appearance.selectionBackground}`).toEqual([]);
+         |                                                                                                             ^
+      87 |     await expect(source).toContainText('Preserve syntax and this draft across theme changes');
+      88 |     }
+      89 |   }
+        at /home/maxomdal/.t3/worktrees/Exhibit/feature-Exh-zrjo-ui-council/e2e/specs/ui-appearance.spec.ts:86:109
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/ui-appearance-source-synta-8eff7-dable-in-both-color-schemes-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/ui-appearance-source-synta-8eff7-dable-in-both-color-schemes-chromium/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/ui-appearance-source-synta-8eff7-dable-in-both-color-schemes-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/ui-appearance-source-synta-8eff7-dable-in-both-color-schemes-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [chromium] › specs/ui-appearance.spec.ts:40:1 › source syntax stays differentiated and readable in both color schemes

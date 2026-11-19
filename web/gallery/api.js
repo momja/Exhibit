@@ -69,7 +69,7 @@
   // words. Degrading to read-only must not look like a network failure.
   function refused(message) {
     return new Response(
-      JSON.stringify({error: message || 'This library is read-only — sign in to make changes.'}),
+      JSON.stringify({error: message || 'This Gallery is read-only — sign in to make changes.'}),
       {status: 403, statusText: 'Forbidden', headers: {'Content-Type': 'application/json'}}
     );
   }

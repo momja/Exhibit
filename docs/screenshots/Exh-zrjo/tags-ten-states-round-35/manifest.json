@@ -1,0 +1,111 @@
+{
+  "application": "235a5c9ecddd7494a20eaef32e55c0320994adad",
+  "asset": "b1f015b9d4bf",
+  "type": "Parent disposable Playwright outcomes/drafts; not reviewer live coverage",
+  "shots": [
+    {
+      "file": "tag-edit-1280-light.png",
+      "source": "e2e/test-results/tags-tag-editing-keeps-col-056a0-ation-local-in-both-schemes-chromium/tag-edit-1280-light.png"
+    },
+    {
+      "file": "tag-edit-390-dark.png",
+      "source": "e2e/test-results/tags-tag-editing-keeps-col-056a0-ation-local-in-both-schemes-chromium/tag-edit-390-dark.png"
+    },
+    {
+      "file": "tag-edit-320-light.png",
+      "source": "e2e/test-results/tags-tag-editing-keeps-col-056a0-ation-local-in-both-schemes-chromium/tag-edit-320-light.png"
+    },
+    {
+      "file": "tag-edit-390-light.png",
+      "source": "e2e/test-results/tags-tag-editing-keeps-col-056a0-ation-local-in-both-schemes-chromium/tag-edit-390-light.png"
+    },
+    {
+      "file": "tag-edit-1280-dark.png",
+      "source": "e2e/test-results/tags-tag-editing-keeps-col-056a0-ation-local-in-both-schemes-chromium/tag-edit-1280-dark.png"
+    },
+    {
+      "file": "tag-edit-320-dark.png",
+      "source": "e2e/test-results/tags-tag-editing-keeps-col-056a0-ation-local-in-both-schemes-chromium/tag-edit-320-dark.png"
+    },
+    {
+      "file": "tag-edit-768-dark.png",
+      "source": "e2e/test-results/tags-tag-editing-keeps-col-056a0-ation-local-in-both-schemes-chromium/tag-edit-768-dark.png"
+    },
+    {
+      "file": "tag-edit-768-light.png",
+      "source": "e2e/test-results/tags-tag-editing-keeps-col-056a0-ation-local-in-both-schemes-chromium/tag-edit-768-light.png"
+    },
+    {
+      "file": "tag-save-error-light.png",
+      "source": "e2e/test-results/tags-tag-changes-persist-w-b38e2--feedback-without-page-Save-chromium/tag-save-error-light.png"
+    },
+    {
+      "file": "tag-edit-name-error-light.png",
+      "source": "e2e/test-results/tags-tag-changes-persist-w-b38e2--feedback-without-page-Save-chromium/tag-edit-name-error-light.png"
+    },
+    {
+      "file": "tag-saved-light.png",
+      "source": "e2e/test-results/tags-tag-changes-persist-w-b38e2--feedback-without-page-Save-chromium/tag-saved-light.png"
+    },
+    {
+      "file": "tag-delete-error-dark.png",
+      "source": "e2e/test-results/tags-tag-changes-persist-w-b38e2--feedback-without-page-Save-chromium/tag-delete-error-dark.png"
+    },
+    {
+      "file": "tag-adding-dark.png",
+      "source": "e2e/test-results/tags-tag-changes-persist-w-b38e2--feedback-without-page-Save-chromium/tag-adding-dark.png"
+    },
+    {
+      "file": "tag-deleted-dark.png",
+      "source": "e2e/test-results/tags-tag-changes-persist-w-b38e2--feedback-without-page-Save-chromium/tag-deleted-dark.png"
+    },
+    {
+      "file": "tag-save-error-dark.png",
+      "source": "e2e/test-results/tags-tag-changes-persist-w-b38e2--feedback-without-page-Save-chromium/tag-save-error-dark.png"
+    },
+    {
+      "file": "tag-saving-light.png",
+      "source": "e2e/test-results/tags-tag-changes-persist-w-b38e2--feedback-without-page-Save-chromium/tag-saving-light.png"
+    },
+    {
+      "file": "tag-saving-dark.png",
+      "source": "e2e/test-results/tags-tag-changes-persist-w-b38e2--feedback-without-page-Save-chromium/tag-saving-dark.png"
+    },
+    {
+      "file": "tag-saved-dark.png",
+      "source": "e2e/test-results/tags-tag-changes-persist-w-b38e2--feedback-without-page-Save-chromium/tag-saved-dark.png"
+    },
+    {
+      "file": "tag-deleted-light.png",
+      "source": "e2e/test-results/tags-tag-changes-persist-w-b38e2--feedback-without-page-Save-chromium/tag-deleted-light.png"
+    },
+    {
+      "file": "tag-delete-error-light.png",
+      "source": "e2e/test-results/tags-tag-changes-persist-w-b38e2--feedback-without-page-Save-chromium/tag-delete-error-light.png"
+    },
+    {
+      "file": "tag-edit-name-error-dark.png",
+      "source": "e2e/test-results/tags-tag-changes-persist-w-b38e2--feedback-without-page-Save-chromium/tag-edit-name-error-dark.png"
+    },
+    {
+      "file": "tag-name-error-light.png",
+      "source": "e2e/test-results/tags-tag-changes-persist-w-b38e2--feedback-without-page-Save-chromium/tag-name-error-light.png"
+    },
+    {
+      "file": "tag-adding-light.png",
+      "source": "e2e/test-results/tags-tag-changes-persist-w-b38e2--feedback-without-page-Save-chromium/tag-adding-light.png"
+    },
+    {
+      "file": "tag-name-error-dark.png",
+      "source": "e2e/test-results/tags-tag-changes-persist-w-b38e2--feedback-without-page-Save-chromium/tag-name-error-dark.png"
+    },
+    {
+      "file": "tag-partial-create-error-light.png",
+      "source": "e2e/test-results/tags-partial-tag-creation--1e28d-or-and-retries-the-same-tag-chromium/tag-partial-create-error-light.png"
+    },
+    {
+      "file": "tag-partial-create-error-dark.png",
+      "source": "e2e/test-results/tags-partial-tag-creation--1e28d-or-and-retries-the-same-tag-chromium/tag-partial-create-error-dark.png"
+    }
+  ]
+}

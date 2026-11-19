@@ -1,0 +1,12 @@
+{
+  "command": "go test -short ./...",
+  "application": "5f1021e3495ad3639e0c5e51859124e44edc79f8",
+  "exitCode": 0,
+  "seconds": 409.34,
+  "log": "/tmp/exhibit-zrjo-nine-r23-go-confirm.log",
+  "applicationUnchanged": true,
+  "validationOnlyChanges": [
+    "internal/api/state_test.go"
+  ],
+  "validationCommit": "a6af997999c0ccbe6ffe3f3454331ef09fa9ae23"
+}

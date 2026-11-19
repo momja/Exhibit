@@ -1,0 +1,15 @@
+{
+  "command": [
+    "go",
+    "test",
+    "./internal/api",
+    "-run",
+    "^Test(GalleryEmptyPresentationBrowser|GalleryEmptySpacesBrowser|SharedGalleryRecipientBrowser|SharedGalleryEmptyStates|GalleryPersonalStarAPI|GalleryEmptyStateLinksToNewPage|GallerySearchFragmentResetsPagingAndEscapesQuery|AppHeaderBrowser|TagModalBrowser|EditNavigationPermissionSavesBrowser|EditorModalLifecycleBrowser)$",
+    "-count=1"
+  ],
+  "head": "5c293c145c02466545046dfb6aad9e40469a65f5",
+  "exitCode": 0,
+  "seconds": 43.23,
+  "runtimeAndValidationUnchanged": true,
+  "log": "/tmp/exhibit-zrjo-pr273-grammar-focused.log"
+}

@@ -1,0 +1,11 @@
+{
+  "command": [
+    "make",
+    "e2e"
+  ],
+  "head": "575559b5abaadc997a6faf62be3669e4881cfe27",
+  "exitCode": 0,
+  "seconds": 140.55,
+  "runtimeAndValidationUnchanged": true,
+  "log": "/tmp/exhibit-zrjo-pr273-empty-e2e-confirm.log"
+}

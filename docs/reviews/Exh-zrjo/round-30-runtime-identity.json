@@ -1,0 +1,17 @@
+{
+  "applicationCommit": "42c94eb1cb12a74108885cc1cbb7aaf7d11f5721",
+  "assetVersion": "aa7a00afd7a2",
+  "serverBinarySha256": "9d4943dc5055211d8076931d3ca474888e41797fee72ebccad665a86426e74f0",
+  "processes": [
+    {
+      "fixture": "populated",
+      "pid": 221361,
+      "executableSha256": "9d4943dc5055211d8076931d3ca474888e41797fee72ebccad665a86426e74f0"
+    },
+    {
+      "fixture": "empty",
+      "pid": 221370,
+      "executableSha256": "9d4943dc5055211d8076931d3ca474888e41797fee72ebccad665a86426e74f0"
+    }
+  ]
+}

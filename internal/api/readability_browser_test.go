@@ -22,10 +22,11 @@ import (
 func TestReadabilityBrowser(t *testing.T) {
 	ro := newTestRouter(t)
 	for _, title := range []string{
-		"A long primary title that should remain fully readable alongside card metadata controls",
-		"AnUnbrokenArtifactNameThatMustWrapWithoutPushingControlsOffTheCardOrClippingTheLastLine",
+		"A long primary title that should fade on one line alongside card metadata controls",
+		"AnUnbrokenArtifactNameThatMustFadeWithoutPushingControlsOffTheCardOrAddingAnotherLine",
 	} {
-		createArtifact(t, ro, map[string]any{"title": title, "body": "<h1>Readability</h1>"})
+		id := createArtifact(t, ro, map[string]any{"title": title, "body": "<h1>Readability</h1>"})
+		require.NoError(t, ro.cfg.Store.SetArtifactStarred(t.Context(), store.ViewerID(1), id, true))
 	}
 	app := httptest.NewServer(ro)
 	defer app.Close()
@@ -51,15 +52,21 @@ func TestReadabilityBrowser(t *testing.T) {
 			require.NoError(t, err)
 			_, err = chromedp.Call(ctx, emulation.SetTouchEmulationEnabled, emulation.SetTouchEmulationEnabledParams{Enabled: width < 768})
 			require.NoError(t, err)
-			for _, path := range []string{"/", "/new"} {
+			for _, path := range []string{"/search", "/new"} {
 				t.Run(fmt.Sprintf("%s/%d%s", theme, width, path), func(t *testing.T) {
 					require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(app.URL+path), chromedp.WaitVisible(chromedp.CSS("main"))))
+					if path == "/search" {
+						require.NoError(t, chromedp.Do(ctx, chromedp.WaitVisible(chromedp.CSS(".card-title"))))
+					}
 					check(t, readabilityContrastChecks)
 					for _, percent := range []int{100, 200} {
 						// A larger root font models text-only enlargement, not a wider layout
 						// viewport or a page-scale transform that leaves text metrics unchanged.
 						require.NoError(t, chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](fmt.Sprintf(`document.documentElement.style.fontSize = '%d%%'`, percent))))
 						check(t, readabilityLayoutChecks)
+						if path == "/search" && percent == 100 {
+							modalBrowser{t, ctx}.capture("Exh-e736/gallery-"+theme, width)
+						}
 					}
 				})
 			}
@@ -105,7 +112,16 @@ const readabilityLayoutChecks = `(() => {
  for (const title of document.querySelectorAll('.card-title')) {
   const row = title.closest('.card-meta'), style = getComputedStyle(title);
   if (!fits(title,row)) failures.push('title outside metadata row');
-  if (phone && (title.scrollWidth > title.clientWidth + 1 || style.whiteSpace === 'nowrap' || parseFloat(style.fontSize) < root)) failures.push('mobile title clipped or too small');
+  if (style.whiteSpace !== 'nowrap' || style.overflowX !== 'hidden' || !style.maskImage.includes('linear-gradient')) failures.push('title must clip on one line with a fade');
+  if (title.textContent !== title.title) failures.push('full title tooltip missing');
+  if (phone && parseFloat(style.fontSize) < root) failures.push('mobile title too small');
+  const lineHeight = parseFloat(style.lineHeight), padding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+  if (title.clientHeight > Math.max(phone ? 44 : 0, lineHeight + padding) + 1) failures.push('title reserves more than one line');
+  const star = row.querySelector('.card-star'), actions = row.querySelector('.card-actions');
+  if (star && actions) {
+   const a = star.getBoundingClientRect(), b = actions.getBoundingClientRect();
+   if (Math.abs((a.top + a.height/2) - (b.top + b.height/2)) > 1) failures.push('star is not centered with card actions');
+  }
   for (const control of row.querySelectorAll('button,[role=button]')) {
    if (control.getBoundingClientRect().width && !fits(control,row)) failures.push('metadata control outside its row');
   }
@@ -220,9 +236,12 @@ func TestEnlargedComposerNoticesBrowser(t *testing.T) {
 				checkControls()
 				// Native focus must reveal both account actions without moving the
 				// input or Send out of view. The warning and request text stay present.
+				// Notices scroll in their own capped region, so enlarged text can make
+				// an item taller than that region. A focused item must then fill all of
+				// it, unobstructed, and the rest is reached by scrolling.
 				for _, selector := range []string{"#agent-network-warnings strong", "#agent-network-warnings li:last-child", "#agent-connection-requests a:first-of-type", "#agent-connection-requests a:last-of-type"} {
 					b.eval(fmt.Sprintf(`{const item=document.querySelector(%q);item.focus();item.scrollIntoView({block:'nearest'})}`, selector))
-					b.check(fmt.Sprintf(`(() => {const item=document.querySelector(%q),box=item.getBoundingClientRect();return box.top>=0 && box.bottom<=innerHeight && [box.top+1,box.y+box.height/2,box.bottom-1].every(y=>item.contains(document.elementFromPoint(box.x+box.width/2,y)))})()`, selector))
+					b.check(fmt.Sprintf(`(() => {const item=document.querySelector(%q),box=item.getBoundingClientRect(),region=item.closest('.composer-notices')?.getBoundingClientRect()??{top:0,bottom:innerHeight,height:innerHeight};const top=Math.max(box.top,region.top,0),bottom=Math.min(box.bottom,region.bottom,innerHeight);return bottom-top>=Math.min(box.height,region.height)-1 && [top+1,(top+bottom)/2,bottom-1].every(y=>item.contains(document.elementFromPoint(box.x+box.width/2,y)))})()`, selector))
 					checkControls()
 				}
 				b.check(`document.querySelector('.connection-request-notice').textContent.includes('Show my saved reading list') && document.querySelector('[data-network-warning="no_cors"]').textContent.includes('opaque, unreadable')`)

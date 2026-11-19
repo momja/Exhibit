@@ -1,0 +1,16 @@
+{
+  "command": [
+    "go",
+    "test",
+    "-short",
+    "./..."
+  ],
+  "cwd": ".",
+  "head": "bbcba3ab6f5209161fb5f5c45fc3613d2b0214a2",
+  "startedAt": "2026-11-05T18:46:29.010598+00:00",
+  "seconds": 443.14,
+  "exitCode": 0,
+  "sourceFingerprint": "b242d0432fd608bc915891a342025e35d2ff19dfb027f4959cc82849b778e851",
+  "sourceUnchanged": true,
+  "log": "/tmp/exhibit-zrjo-tags10-r35-go-final.log"
+}

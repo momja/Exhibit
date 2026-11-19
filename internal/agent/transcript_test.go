@@ -91,7 +91,7 @@ func TestToolLabelsMatchTheLiveChat(t *testing.T) {
 	for name, want := range map[string]string{
 		"get_artifact":   "Reading artifact source",
 		"write_artifact": "Writing artifact",
-		"get_state":      "Reading artifact state",
+		"get_state":      "Reading saved data",
 		"get_selection":  "Reading selected elements",
 		"set_widget":     "Saving widget",
 		"unheard_of":     "unheard_of",
@@ -100,9 +100,9 @@ func TestToolLabelsMatchTheLiveChat(t *testing.T) {
 	}
 	assert.Equal(t, `Creating "Weather"`, toolLabel("create_artifact", map[string]any{"title": "Weather"}))
 	assert.Equal(t, `Creating "artifact"`, toolLabel("create_artifact", nil))
-	assert.Equal(t, `Setting state key "count"`, toolLabel("set_state", map[string]any{"key": "count"}))
-	assert.Equal(t, `Deleting state key "count"`, toolLabel("delete_state", map[string]any{"key": "count"}))
-	assert.Equal(t, "Erasing all state", toolLabel("delete_state", map[string]any{}))
+	assert.Equal(t, `Setting saved data key "count"`, toolLabel("set_state", map[string]any{"key": "count"}))
+	assert.Equal(t, `Deleting saved data key "count"`, toolLabel("delete_state", map[string]any{"key": "count"}))
+	assert.Equal(t, "Erasing saved data", toolLabel("delete_state", map[string]any{}))
 }
 
 func TestConversationTitle(t *testing.T) {
@@ -155,14 +155,13 @@ func TestReadSessionFileReturnsOnlyWholeLines(t *testing.T) {
 	assert.Equal(t, "", got)
 }
 
-func TestPreparedSourceProjectionNamesHostPreparationAndHidesSource(t *testing.T) {
+func TestPreparedSourceProjectionHidesPreparationNoiseAndSource(t *testing.T) {
 	file := `{"type":"message","message":{"role":"user","content":"make it green"}}
 {"type":"custom","customType":"exhibit_source_read","data":{"snapshot":{"artifact":{"body":"PRIVATE SOURCE"}},"callId":"exhibit_source_1"}}
 {"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"Done"}]}}
 `
 	assert.Equal(t, []TranscriptMessage{
 		{Role: "user", Text: "make it green"},
-		{Role: "tool", Text: "Prepared artifact source"},
 		{Role: "assistant", Text: "Done"},
 	}, ProjectSessionFile(file))
 }

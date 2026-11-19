@@ -8,7 +8,7 @@ import { loadPageScript } from "./testdom.mjs";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const INDEX_JS = path.join(here, "../../internal/api/assets/gallery/index.js");
 
-async function loadIndex({ multiple = false } = {}) {
+async function loadIndex({ multiple = false, search = true } = {}) {
   // The harness makes bare elements; the shortcut tells a field from the page
   // by tagName, so the search box needs the one a browser would give it.
   const page = loadPageScript([], { TOKEN: "", READ_ONLY: false, Event }, {
@@ -23,8 +23,8 @@ async function loadIndex({ multiple = false } = {}) {
     const clear = page.byId(prefix + '-clear');
     const error = page.byId(prefix + '-error');
     root.querySelector = (selector) => ({
-      '[data-gallery-search]': form, '[data-gallery-query]': input,
-      '[data-gallery-clear]': clear, '[data-gallery-search-error]': error
+      '[data-gallery-search]': search ? form : null, '[data-gallery-query]': search ? input : null,
+      '[data-gallery-clear]': search ? clear : null, '[data-gallery-search-error]': error
     })[selector] || null;
     root.closest = () => root;
     form.closest = (selector) => selector === '[data-gallery]' ? root : null;
@@ -35,7 +35,7 @@ async function loadIndex({ multiple = false } = {}) {
   const { root, input, form, clear } = first;
   page.document.querySelectorAll = () => second ? [root, second.root] : [root];
   const { initializeGallery } = await page.loadModule(path.join(here, '../../internal/api/assets/gallery/gallery.js'));
-  initializeGallery(root);
+  const controller = initializeGallery(root);
   if (second) initializeGallery(second.root);
   page.document.querySelector = () => root;
   await page.loadModule(INDEX_JS);
@@ -48,7 +48,7 @@ async function loadIndex({ multiple = false } = {}) {
     page.pressKey(key, ev);
     return ev;
   };
-  return { ...page, root, form, clear, input, press, second };
+  return { ...page, root, form, clear, input, press, second, controller };
 }
 
 test("/ from the page focuses search, selects the query, and keeps the slash out of it", async () => {
@@ -169,4 +169,59 @@ test('an artifact change clears a filtered gallery and invalidates in-flight old
   const stale = htmxEvent('htmx:before:swap', ctx);
   await root.dispatchEvent(stale);
   assert.equal(stale.defaultPrevented, true);
+});
+
+test('/ opens the Search tab when the gallery header field is hidden', async () => {
+  const { root, input, press } = await loadIndex();
+  input.getClientRects = () => [];
+  let clicks = 0;
+  const querySelector = root.querySelector;
+  root.querySelector = selector => selector === '[data-gallery-space-link][href="/search"]'
+    ? { click() { clicks++; } } : querySelector(selector);
+  const event = press('/');
+  assert.equal(clicks, 1);
+  assert.equal(input.focused, false);
+  assert.equal(event.prevented, true);
+});
+
+
+test('an artifact change refreshes dedicated Search without clearing its query', async () => {
+  const { root, form, input } = await loadIndex();
+  form.dataset.galleryPreserveQuery = 'true';
+  input.value = 'chart';
+  await input.dispatchEvent({ type: 'input' });
+  let requested = 0;
+  form.addEventListener('exhibit:gallery-search', () => requested++);
+  await root.dispatchEvent({ type: 'exhibit:artifacts-changed' });
+  assert.equal(input.value, 'chart');
+  assert.equal(requested, 1);
+  await form.dispatchEvent({ type: 'submit' });
+});
+
+test('Activity paging displays connection failures and hides them on retry without a search form', async () => {
+  const {root, byId, controller} = await loadIndex({search: false});
+  const error = byId('activity-load-error');
+  error.hidden = true;
+  const more = {querySelector: () => error};
+  const source = {closest: selector => selector === '[data-gallery]' ? root : selector === '.gallery-more' ? more : null};
+  const request = () => ({sourceElement: source,
+    request: {action: '/partials/gallery-grid/activity?offset=24', signal: {aborted: false}}});
+  const failed = request();
+  await root.dispatchEvent(htmxEvent('htmx:before:request', failed));
+  await root.dispatchEvent(htmxEvent('htmx:error', failed));
+  assert.equal(error.hidden, false);
+  const retry = request();
+  await root.dispatchEvent(htmxEvent('htmx:before:request', retry));
+  assert.equal(error.hidden, true);
+  controller.suspend();
+  await root.dispatchEvent(htmxEvent('htmx:error', retry));
+  assert.equal(error.hidden, true, 'a suspended page ignores stale errors');
+  const staleSwap = htmxEvent('htmx:before:swap', retry);
+  await root.dispatchEvent(staleSwap);
+  assert.equal(staleSwap.defaultPrevented, true);
+  controller.disconnect();
+  const disconnected = request();
+  await root.dispatchEvent(htmxEvent('htmx:before:request', disconnected));
+  await root.dispatchEvent(htmxEvent('htmx:error', disconnected));
+  assert.equal(error.hidden, true, 'disconnect removes the paging handlers');
 });

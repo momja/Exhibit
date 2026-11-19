@@ -1,0 +1,157 @@
+{
+  "categories": [
+    "Visual hierarchy",
+    "Component consistency",
+    "Navigation/discoverability",
+    "Workflow feedback",
+    "Accessibility",
+    "Responsive behavior"
+  ],
+  "threshold": 8,
+  "requiredConsecutivePassingRounds": 2,
+  "passingStreak": 2,
+  "rounds": [
+    {
+      "round": 1,
+      "build": "0831c8a9",
+      "passed": false,
+      "reviewers": [
+        {
+          "reviewer": "sol",
+          "model": "gpt-6.1-sol",
+          "taskId": "node:delegated-task:command%3Amcp%3A52c201fa-5413-436b-9b37-7898e9ae852d%3Adelegate-task%3AExh-zrjo-r1-sol",
+          "scores": [
+            7,
+            7,
+            7,
+            6,
+            6,
+            7
+          ],
+          "report": "round-1-sol.md"
+        },
+        {
+          "reviewer": "opus",
+          "model": "claude-opus-5-5",
+          "taskId": "node:delegated-task:command%3Amcp%3A52c201fa-5413-436b-9b37-7898e9ae852d%3Adelegate-task%3AExh-zrjo-r1-opus",
+          "scores": [
+            6,
+            6,
+            7,
+            5,
+            6,
+            7
+          ],
+          "report": "round-1-opus.md"
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "build": "baf7a0c1",
+      "passed": false,
+      "reviewers": [
+        {
+          "reviewer": "sol",
+          "model": "gpt-6.1-sol",
+          "taskId": "node:delegated-task:command%3Amcp%3A52c201fa-5413-436b-9b37-7898e9ae852d%3Adelegate-task%3AExh-zrjo-r2-sol",
+          "scores": [
+            8,
+            8,
+            8,
+            7,
+            8,
+            8
+          ],
+          "report": "round-2-sol.md"
+        },
+        {
+          "reviewer": "opus",
+          "model": "claude-opus-5-5",
+          "taskId": "node:delegated-task:command%3Amcp%3A52c201fa-5413-436b-9b37-7898e9ae852d%3Adelegate-task%3AExh-zrjo-r2-opus",
+          "scores": [
+            8,
+            8,
+            8,
+            7,
+            8,
+            8
+          ],
+          "report": "round-2-opus.md"
+        }
+      ]
+    },
+    {
+      "round": 3,
+      "build": "006b14ef",
+      "passed": true,
+      "reviewers": [
+        {
+          "reviewer": "sol",
+          "model": "gpt-6.1-sol",
+          "taskId": "node:delegated-task:command%3Amcp%3A52c201fa-5413-436b-9b37-7898e9ae852d%3Adelegate-task%3AExh-zrjo-r3-sol",
+          "scores": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ],
+          "report": "round-3-sol.md"
+        },
+        {
+          "reviewer": "opus",
+          "model": "claude-opus-5-5",
+          "taskId": "node:delegated-task:command%3Amcp%3A52c201fa-5413-436b-9b37-7898e9ae852d%3Adelegate-task%3AExh-zrjo-r3-opus",
+          "scores": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ],
+          "report": "round-3-opus.md"
+        }
+      ]
+    },
+    {
+      "round": 4,
+      "build": "006b14ef",
+      "passed": true,
+      "reviewers": [
+        {
+          "reviewer": "sol",
+          "model": "gpt-6.1-sol",
+          "taskId": "node:delegated-task:command%3Amcp%3A52c201fa-5413-436b-9b37-7898e9ae852d%3Adelegate-task%3AExh-zrjo-r4-sol",
+          "scores": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ],
+          "report": "round-4-sol.md"
+        },
+        {
+          "reviewer": "opus",
+          "model": "claude-opus-5-5",
+          "taskId": "node:delegated-task:command%3Amcp%3A52c201fa-5413-436b-9b37-7898e9ae852d%3Adelegate-task%3AExh-zrjo-r4-opus",
+          "scores": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ],
+          "report": "round-4-opus.md"
+        }
+      ]
+    }
+  ],
+  "completed": true,
+  "validation": "validation.md"
+}

@@ -1,0 +1,20 @@
+{
+  "verifiedAt": "2026-11-05T04:25:12.018369+00:00",
+  "applicationCommit": "575559b5abaadc997a6faf62be3669e4881cfe27",
+  "basePR": "https://github.com/momja/Exhibit/pull/273",
+  "baseCommit": "ab0135c902559d5912deec420947d6ab3cbdbcf6",
+  "baseIsAncestor": true,
+  "backupBranch": "feature/Exh-zrjo/ui-council-before-pr273-20261105",
+  "backupHead": "a8f9d14e691abe355a38c7a37ab3c515329c9547",
+  "strictRuntimeAndValidationDiffEmpty": true,
+  "mainBranch": "main",
+  "mainClean": true,
+  "jointStreak": 0,
+  "completed": false,
+  "pending": [
+    "independent Opus29 after actual quota reset",
+    "two actual joint9passes"
+  ],
+  "validationStatus": "all_pass",
+  "sol29": "completed_all14_9"
+}

@@ -84,7 +84,8 @@ type Config struct {
 	// third-party page has business holding one. They are framed by the app
 	// origin alone whatever this holds — neither opened by an empty value nor
 	// narrowed by a populated one.
-	EmbedOrigins []string
+	EmbedOrigins            []string
+	ShareAttributionEnabled bool
 	// PreviewImagePNG is the generic link-preview card (av-rclm): Exhibit's
 	// logo at the size of a widget snapshot. It is what a share's og:image
 	// shows when there is no snapshot to show, and what /og.png serves. The
@@ -285,7 +286,7 @@ func (rd *Renderer) ServeShare(w http.ResponseWriter, r *http.Request) {
 	// only render URL a person pastes into a chat, and the only one a crawler
 	// may open with no credential.
 	rd.serveDoc(w, r, a,
-		document{blobID: a.SourceBlobID, kind: kindArtifact, headMeta: rd.previewTags(a, shareID), publicShare: true},
+		document{blobID: a.SourceBlobID, kind: kindArtifact, headMeta: rd.previewTags(a, shareID), publicShare: true, attribution: a.ShowShareAttribution(rd.cfg.ShareAttributionEnabled)},
 		rendertoken.Claims{OwnerID: a.OwnerID, ViewerID: a.OwnerID},
 		shareFrameAncestors(rd.cfg.AppOrigin, rd.cfg.EmbedOrigins))
 }
@@ -522,6 +523,7 @@ type document struct {
 	kind        docKind
 	state       map[string]string
 	publicShare bool
+	attribution bool
 	// headMeta is markup for the very top of <head>: a share's link-preview
 	// tags (av-rclm), and empty on every other route.
 	headMeta string
@@ -568,7 +570,7 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'")
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusForbidden)
-		_, _ = fmt.Fprintf(w, `<!doctype html><html><head><meta charset="utf-8"><title>Open through Exhibit</title></head><body><h1>Open this connected app through Exhibit</h1><p>Use its isolated preview to access connected accounts and private saved data.</p><p><a href="%s/artifacts/%s">Return to the app</a></p></body></html>`, stdhtml.EscapeString(strings.TrimSuffix(rd.cfg.AppOrigin, "/")), stdhtml.EscapeString(url.PathEscape(a.ID)))
+		_, _ = fmt.Fprintf(w, `<!doctype html><html><head><meta charset="utf-8"><title>Open through Exhibit</title></head><body><h1>Open this artifact in Exhibit</h1><p>Connected accounts and private saved data are available in the Exhibit preview.</p><p><a href="%s/artifacts/%s">Open in Exhibit</a></p></body></html>`, stdhtml.EscapeString(strings.TrimSuffix(rd.cfg.AppOrigin, "/")), stdhtml.EscapeString(url.PathEscape(a.ID)))
 		return
 	}
 	rc, err := rd.cfg.Blob.Get(r.Context(), doc.blobID)
@@ -626,6 +628,9 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 		// could keep data that no restore would ever undo. The directive gives it
 		// an opaque origin however it is loaded, and is the same two tokens the
 		// frame is given.
+		csp += "; " + versionSandbox
+	}
+	if doc.attribution {
 		csp += "; " + versionSandbox
 	}
 	w.Header().Set("Content-Security-Policy", csp)
@@ -712,14 +717,25 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 	if !widget {
 		body = injectFavicon(body, artifacticon.DataURI(a.Tags))
 	}
-	out := injectPreamble(body, a.ID, rd.cfg.AppOrigin, state, origins, widget, viewer.Anonymous, versionView, manifest, a.VersionSeq)
+	out := injectPreambleWithHostMode(body, a.ID, rd.cfg.AppOrigin, state, origins, widget, viewer.Anonymous, versionView, manifest, doc.attribution, a.VersionSeq)
 	if rd.cfg.RelayEnabled && !widget && !versionView && !viewer.Anonymous && doc.headMeta == "" {
 		out = injectRelay(out, rd.cfg.AppOrigin, a.ID, allowed)
 	}
-	if doc.headMeta != "" {
+	if doc.headMeta != "" && !doc.attribution {
 		// Ahead of the preamble, and of any og: tags the artifact wrote for
 		// itself: a crawler reads the first, and may read no further.
 		out = prependToHead(out, doc.headMeta)
+	}
+	if doc.attribution {
+		// Public shares have no principal or navigation-check authority. Only
+		// unprotected data may use the local wrapper, and only with the owner's
+		// persisted link approval. Missing/failed policy resolution fails closed.
+		navigationAllowed := false
+		if doc.publicShare && a.LinksApproved && rd.cfg.DocumentPolicy != nil {
+			_, privateData, policyErr := rd.cfg.DocumentPolicy(r.Context(), a.OwnerID, a.ID)
+			navigationAllowed = policyErr == nil && !privateData
+		}
+		out = rd.attributedShare(out, a, doc.headMeta, navigationAllowed)
 	}
 	slog.DebugContext(r.Context(), "rendered artifact",
 		slog.String("artifact_id", a.ID),
@@ -1461,7 +1477,10 @@ const shimTemplate = `<script>
 // top-level (a direct render-origin visit or a share) there is no host frame
 // and no sandbox — the document has a real origin where all of this works
 // natively — so none of it installs.
-const bridgeScript = `
+const bridgeScript = frameLocalScript + capabilityBridgeScript
+
+// frameLocalScript needs no host; attributed shares retain only these local shims.
+const frameLocalScript = `
   if (window.parent !== window) {
     // ---- sessionStorage ----
     // Its own, purely in-memory Storage object: separate cache, no persist
@@ -1566,7 +1585,9 @@ const bridgeScript = `
       return new Uint8Array(out);
     }
 
-    // ---- Unsupported-capability diagnostic (av-yvtb) ----
+`
+
+const capabilityBridgeScript = `    // ---- Unsupported-capability diagnostic (av-yvtb) ----
     // Some browser capabilities cannot work inside this opaque-origin sandbox no
     // matter the CSP, and fail silently rather than throwing something the
     // artifact surfaces. We detect those cases and post a GENERIC
@@ -2490,6 +2511,19 @@ const widgetHealthScript = `<script>
 // data the shim must hold before the artifact's first line runs, not a mode
 // flag.
 func injectPreamble(body, artifactID, appOrigin string, state map[string]string, origins originPolicy, widget, anonymous, versionView bool, assetManifest map[string]string, versionSeq ...int) string {
+	return injectPreambleWithHostMode(body, artifactID, appOrigin, state, origins, widget, anonymous, versionView, assetManifest, false, versionSeq...)
+}
+
+// injectPreambleWithHostMode explicitly distinguishes an attributed public share
+// from an app-hosted frame. Public shares inline the owner's saved state but
+// have no authenticated viewer/host to persist through or answer capabilities.
+// Native unsupported APIs reject under browser policy; no host reply is awaited.
+func injectPreambleWithHostMode(body, artifactID, appOrigin string, state map[string]string, origins originPolicy, widget, anonymous, versionView bool, assetManifest map[string]string, noHost bool, versionSeq ...int) string {
+	bridges := bridgeScript
+	if noHost {
+		bridges = frameLocalScript + "\n  }\n"
+		anonymous = true
+	}
 	if state == nil {
 		state = map[string]string{}
 	}
@@ -2519,7 +2553,6 @@ func injectPreamble(body, artifactID, appOrigin string, state map[string]string,
 	if err != nil {
 		blockedJSON = []byte("[]")
 	}
-	bridges := bridgeScript
 	if widget {
 		bridges = ""
 	}
@@ -2534,7 +2567,7 @@ func injectPreamble(body, artifactID, appOrigin string, state map[string]string,
 		// pointer-events:none, so there is nothing to point at.
 		shim += "\n" + widgetBaseCSS
 		shim += "\n" + fmt.Sprintf(widgetHealthScript, appOrigin)
-	} else {
+	} else if !noHost {
 		// The snippet element-picker (Exh-edjk) rides along with the shim: inert
 		// until the app-origin host activates it, so it costs nothing for plain
 		// renders and share views.

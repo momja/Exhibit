@@ -1,0 +1,12 @@
+✔ deleting shows a local confirmation, and Keep tag sends nothing (10.954004ms)
+✔ creating validates its own name even when an existing tag is selected (7.001964ms)
+✔ Enter in the new tag name creates without consulting the dropdown (7.529292ms)
+✔ attachment errors after creation survive the panel refresh (8.651612ms)
+ℹ tests 479
+ℹ suites 0
+ℹ pass 479
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 16113.793396

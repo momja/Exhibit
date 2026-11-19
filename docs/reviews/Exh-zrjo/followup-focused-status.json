@@ -1,0 +1,8 @@
+{
+  "command": "go test ./internal/api -run Test(AppHeaderBrowser|TagModalBrowser|EditNavigation.*Browser|EditorModal.*Browser|IconRegistryCoversUsage)$ -count=1",
+  "application": "947758e0ed4fee4f3590aa2837981218118520d0",
+  "exitCode": 0,
+  "seconds": 31.53,
+  "log": "/tmp/exhibit-zrjo-followup-focused.log",
+  "applicationUnchanged": true
+}

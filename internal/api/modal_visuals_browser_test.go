@@ -9,16 +9,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Compare shipped content to a plain shared dialog under the same page CSS.
-// Width, scrolling and content layouts deliberately are not identical: those
-// exceptions are documented in ui-components.md. Typography/forms/actions are.
+// Compare shipped content to the corresponding shared dialog shell under the
+// same page CSS. Content may scroll independently of a sheet's fixed actions;
+// typography, fields and footer spacing still come from the shared component.
 func checkModalVisuals(t *testing.T, ctx context.Context, selector string) {
 	t.Helper()
 	differences, err := chromedp.Run(ctx, chromedp.Evaluate[[]string](fmt.Sprintf(`(() => {
  const dialog = document.querySelector(%q);
  const reference = document.createElement('dialog');
  reference.className = 'modal-dialog';
- reference.innerHTML = '<h2>Heading</h2><label for="visual-reference">Caption</label><input id="visual-reference" type="text"><p>Body copy</p><label class="modal-check"><input type="checkbox">Option</label><div class="modal-actions"><button class="btn">Save</button></div><div class="modal-error">Error</div>';
+ const body = '<label for="visual-reference">Caption</label><input id="visual-reference" type="text"><p>Body copy</p><p class="form-help">Helper copy</p><label class="modal-check"><input type="checkbox">Option</label><div class="modal-error">Error</div>';
+ const footer = '<div class="modal-actions"><button class="btn">Save</button></div>';
+ if (dialog.classList.contains('modal-sheet')) {
+   reference.classList.add('modal-sheet');
+   reference.innerHTML = '<div class="modal-header"><h2>Heading</h2></div><div class="modal-body"><fieldset class="modal-fields">'+body+'</fieldset></div>'+footer.replace('modal-actions','modal-actions modal-footer');
+ } else reference.innerHTML = '<h2>Heading</h2>'+body+footer;
  document.body.append(reference);
  const differences = [];
  function compare(actual, baseline, properties) {
@@ -31,11 +36,11 @@ func checkModalVisuals(t *testing.T, ctx context.Context, selector string) {
    compare(dialog, reference, ['paddingTop','paddingRight','paddingBottom','paddingLeft','borderRadius']);
  compare(dialog.querySelector('h2'), reference.querySelector('h2'), ['fontSize','fontWeight','marginBottom']);
  for (const caption of dialog.querySelectorAll('label[for]'))
-   compare(caption, reference.querySelector('label[for]'), ['fontSize','fontWeight','textTransform','color','marginTop','marginBottom']);
+   compare(caption, reference.querySelector('label[for]'), ['fontSize','fontWeight','textTransform','color','marginBottom']);
  for (const field of dialog.querySelectorAll('input[type=text]:not([readonly]),input[type=password],select'))
    compare(field, reference.querySelector('input'), ['paddingTop','paddingRight','borderRadius','fontSize','backgroundColor']);
  for (const p of dialog.querySelectorAll('p:not(.modal-error):not([data-permission-status])'))
-   compare(p, reference.querySelector('p'), ['fontSize','lineHeight','color']);
+   compare(p, reference.querySelector(p.classList.contains('form-help') ? '.form-help' : 'p'), ['fontSize','lineHeight','color']);
  for (const check of dialog.querySelectorAll('.modal-check'))
    compare(check, reference.querySelector('.modal-check'), ['display','fontSize','gap','alignItems']);
  for (const footer of dialog.querySelectorAll('.modal-actions'))

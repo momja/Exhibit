@@ -1,0 +1,110 @@
+[
+  {
+    "width": 1280,
+    "scheme": "light",
+    "path": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw2xwjpf-fac5907f.png",
+    "dark": false,
+    "badge": [
+      "0px",
+      "0px",
+      "50%"
+    ],
+    "pill": {
+      "width": 138.40625,
+      "height": 36
+    },
+    "saveText": "Save changes",
+    "saveStatusInHeader": false,
+    "asset": "/assets/v/e29fcce0e122/phosphor/regular.css"
+  },
+  {
+    "width": 1280,
+    "scheme": "dark",
+    "path": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw2xwjzs-60007821.png",
+    "dark": true,
+    "badge": [
+      "0px",
+      "0px",
+      "50%"
+    ],
+    "pill": {
+      "width": 138.40625,
+      "height": 36
+    },
+    "saveText": "Save changes",
+    "saveStatusInHeader": false,
+    "asset": "/assets/v/e29fcce0e122/phosphor/regular.css"
+  },
+  {
+    "width": 390,
+    "scheme": "light",
+    "path": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw2xwkar-503aba83.png",
+    "dark": false,
+    "badge": [
+      "0px",
+      "0px",
+      "50%"
+    ],
+    "pill": {
+      "width": 162.40625,
+      "height": 48
+    },
+    "saveText": "Save changes",
+    "saveStatusInHeader": false,
+    "asset": "/assets/v/e29fcce0e122/phosphor/regular.css"
+  },
+  {
+    "width": 390,
+    "scheme": "dark",
+    "path": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw2xwkk4-1a83afef.png",
+    "dark": true,
+    "badge": [
+      "0px",
+      "0px",
+      "50%"
+    ],
+    "pill": {
+      "width": 162.40625,
+      "height": 48
+    },
+    "saveText": "Save changes",
+    "saveStatusInHeader": false,
+    "asset": "/assets/v/e29fcce0e122/phosphor/regular.css"
+  },
+  {
+    "width": 320,
+    "scheme": "light",
+    "path": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw2xwkw3-9522da85.png",
+    "dark": false,
+    "badge": [
+      "0px",
+      "0px",
+      "50%"
+    ],
+    "pill": {
+      "width": 162.40625,
+      "height": 48
+    },
+    "saveText": "Save changes",
+    "saveStatusInHeader": false,
+    "asset": "/assets/v/e29fcce0e122/phosphor/regular.css"
+  },
+  {
+    "width": 320,
+    "scheme": "dark",
+    "path": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw2xwl5n-974b8245.png",
+    "dark": true,
+    "badge": [
+      "0px",
+      "0px",
+      "50%"
+    ],
+    "pill": {
+      "width": 162.40625,
+      "height": 48
+    },
+    "saveText": "Save changes",
+    "saveStatusInHeader": false,
+    "asset": "/assets/v/e29fcce0e122/phosphor/regular.css"
+  }
+]

@@ -1,0 +1,13 @@
+
+> test
+> playwright test --grep word selection remains|source find and line-navigation
+
+
+Running 2 tests using 1 worker
+
+(node:27206) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium] › specs/ui-appearance.spec.ts:106:1 › word selection remains visible on the active source line (6.8s)
+  ✓  2 [chromium] › specs/ui-appearance.spec.ts:191:1 › source find and line-navigation controls follow the shared UI in both themes (8.7s)
+
+  2 passed (17.7s)

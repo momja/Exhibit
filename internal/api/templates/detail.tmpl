@@ -51,7 +51,7 @@
     {{/* The default headline, true of everything the sandbox itself causes. A
          capability that opening the artifact directly does NOT fix — a blocked
          redirect (av-kmwj) — replaces it from CAPABILITY_COPY. */}}
-    <span id="capability-warning-headline">This artifact uses unsupported browser capabilities. Open it directly to run it.</span>
+    <span id="capability-warning-headline">{{if .ConnectionProtected}}This feature is unavailable in the connected preview.{{else}}This artifact needs a feature the preview can’t provide. Open it in a new tab to use it.{{end}}</span>
     {{/* detail.js fills #capability-warning-detail with the specific failure once
          the shim reports it (the capability and, when known, its resource). */}}
     <details class="banner-details">
@@ -91,7 +91,7 @@
     <span id="origin-blocked-headline"></span>
     <details class="banner-details">
       <summary>Details</summary>
-      <p>Only this artifact's owner can change what it is allowed to contact, so it cannot be approved from here — the tool is running exactly as they set it up. If it needs one of these, ask them to add it to the artifact's allowlist.</p>
+      <p>Only the owner can allow new sites for this artifact. Ask them to review the sites listed below.</p>
       <div id="origin-blocked-list"></div>
     </details>
   </div>
@@ -112,9 +112,9 @@
 <div id="state-changed-banner" class="banner banner-info" role="status" hidden>
   <i class="ph ph-arrows-clockwise" aria-hidden="true"></i>
   <div class="banner-body">
-    <span>This tool's saved data changed somewhere else. It is running with what it loaded.</span>
+    <span>This artifact’s saved data changed elsewhere. Reload to use the latest data; unsaved input may be lost.</span>
   </div>
-  <button type="button" class="banner-action" id="state-changed-reload"><i class="ph ph-arrow-clockwise" aria-hidden="true"></i> Reload the tool</button>
+  <button type="button" class="banner-action" id="state-changed-reload"><i class="ph ph-arrow-clockwise" aria-hidden="true"></i> Reload artifact</button>
 </div>
 {{/* Status from the page's own requests: an approval that failed to save, a
      refetch in progress or its result. Empty most of the time, and an empty
@@ -143,7 +143,7 @@
   data-controller="modal">
     <h2 id="dl-title">Allow downloads?</h2>
     <p><strong>{{.Title}}</strong> wants to download <code id="dl-filename"></code>.</p>
-    <p>Allowing lets this artifact save files to your device from now on. You can revoke this at any time from its security settings.</p>
+    <p>Allowing lets this artifact save files to your device from now on. You can change this under Edit → Permissions.</p>
     <p data-permission-status role="status" aria-live="polite"></p>
     <div class="modal-actions">
       <span class="spacer"></span>
@@ -156,7 +156,7 @@
   data-controller="modal">
     <h2 id="clip-title">Allow clipboard access?</h2>
     <p><strong>{{.Title}}</strong> wants to <span id="clip-direction">use</span> your clipboard.</p>
-    <p>Allowing lets this artifact read and write your clipboard from now on. You can revoke this at any time from its security settings.</p>
+    <p>Allowing lets this artifact read and write your clipboard from now on. You can change this under Edit → Permissions.</p>
     <p data-permission-status role="status" aria-live="polite"></p>
     <div class="modal-actions">
       <span class="spacer"></span>
@@ -168,7 +168,7 @@
 <dialog id="link-modal" class="modal-dialog" aria-labelledby="link-title"
   data-controller="modal">
     <h2 id="link-title">Allow opening links?</h2>
-    <p>You are opening a link to <code id="link-host">example.com</code>. Exhibit cannot verify the safety of external sites. Make sure you trust this destination before allowing links. You can revoke this at any time from its security settings.</p>
+    <p>You are opening a link to <code id="link-host">example.com</code>. Allowing lets this artifact open external links from now on, including links to other sites. Only allow sites you trust; Exhibit cannot verify their safety. You can change this under Edit → Permissions.</p>
     <p data-permission-status role="status" aria-live="polite"></p>
     <div class="modal-actions">
       <span class="spacer"></span>
@@ -192,7 +192,7 @@
   data-controller="modal">
     <h2 id="media-title">Allow device access?</h2>
     <p><strong>{{.Title}}</strong> wants to use <span id="media-devices">your camera</span>.</p>
-    <p>Browsers cannot give a capture device to this embedded preview, so allowing opens the artifact in its own tab, where it can use the device. Your browser will ask for its own permission there. The approval is remembered for this artifact and can be revoked at any time from its security settings.</p>
+    <p>Allowing opens this artifact in a new tab to use the requested device. Your browser will also ask for permission. Exhibit remembers your approval; you can change it under Edit → Permissions.</p>
     <p data-permission-status role="status" aria-live="polite"></p>
     <div class="modal-actions">
       <span class="spacer"></span>
@@ -213,7 +213,7 @@
   data-controller="modal">
     <h2 id="geo-title">Allow location access?</h2>
     <p><strong>{{.Title}}</strong> wants to know your location.</p>
-    <p>The embedded preview does not share your location with artifacts, so allowing opens the artifact in its own tab, where it can ask for it. Your browser will ask for its own permission there. The approval is remembered for this artifact and can be revoked at any time from its security settings.</p>
+    <p>The preview does not share your location. Allowing opens this artifact in a new tab, where your browser will also ask for permission. Exhibit remembers your approval; you can change it under Edit → Permissions.</p>
     <p data-permission-status role="status" aria-live="polite"></p>
     <div class="modal-actions">
       <span class="spacer"></span>
@@ -283,6 +283,7 @@ let geolocationApproved = {{if .Capability.GeolocationApproved}}true{{else}}fals
 {{/* The runtime network prompt (av-kmwj), shared with the agent chat page
      (av-6xvs). Before detail.js, which installs it at load. */}}
 {{template "componentScripts"}}
+{{if .StateWritable}}<script type="module" src="{{asset "gallery/artifact-opened.js"}}" data-artifact-opened="{{.ID}}"></script>{{end}}
 <script type="module" src="{{asset "gallery/detail.js"}}"></script>
 <script type="module" src="{{asset "gallery/direct-open.js"}}"></script>
 {{/* The share panel's script, loaded only where the panel exists. It resolves

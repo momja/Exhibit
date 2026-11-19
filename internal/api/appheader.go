@@ -37,7 +37,7 @@ type appHeaderAction struct {
 func galleryHeader(grid galleryGridData, isAdmin bool, clerk *clerkView) appHeaderView {
 	title := grid.Title
 	if title == "" {
-		title = "Gallery"
+		title = "Library"
 	}
 	header := appHeaderView{
 		Title: title, HideTitle: true, Logo: template.HTML(exhibitLogoSVG),
@@ -49,13 +49,13 @@ func galleryHeader(grid galleryGridData, isAdmin bool, clerk *clerkView) appHead
 		})
 	}
 	header.Actions = append(header.Actions,
-		appHeaderAction{Label: "Add artifact", Icon: "ph-plus", Href: "/new", IconOnly: true},
+		appHeaderAction{Label: "Add artifact", Icon: "ph-plus", Href: "/new", Primary: true},
 	)
 	return header
 }
 
 func subpageHeader(title string) appHeaderView {
-	return appHeaderView{Title: title, Back: &appHeaderBack{URL: "/", Label: "Gallery", CollapseLabel: true}}
+	return appHeaderView{Title: title, HideTitle: true, Back: &appHeaderBack{URL: "/", Label: "Library"}}
 }
 
 func editorHeader(id string, navigation editNavigation) appHeaderView {
@@ -63,7 +63,7 @@ func editorHeader(id string, navigation editNavigation) appHeaderView {
 		Back: &appHeaderBack{URL: navigation.URL, Label: navigation.Label},
 		Actions: []appHeaderAction{
 			{Label: "View artifact", Icon: "ph-eye", Href: "/artifacts/" + id},
-			{Label: "Save changes", Icon: "ph-check", ID: "save-button", Primary: true, SaveEditor: true},
+			{Label: "Save", Icon: "ph-floppy-disk", ID: "save-button", Primary: true, SaveEditor: true},
 		},
 	}
 }

@@ -1,0 +1,16 @@
+{
+  "command": [
+    "npx",
+    "--no-install",
+    "playwright",
+    "test"
+  ],
+  "cwd": "e2e",
+  "head": "f58de10bf88acff268b9339e0c7dae406a93c664",
+  "startedAt": "2026-11-05T21:44:44.007546+00:00",
+  "seconds": 119.39,
+  "exitCode": 0,
+  "sourceFingerprint": "1fc8899f65781b39212653be286d8064d2ea02bcfd772558ad9a2033ac71992a",
+  "sourceUnchanged": true,
+  "log": "/tmp/exhibit-zrjo-tags10-r36-e2e-final.log"
+}

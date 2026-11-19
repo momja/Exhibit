@@ -100,10 +100,8 @@ func TestClerkPlaceholderBrowser(t *testing.T) {
 	browser, err := chromium.New(chromiumtest.Start(t))
 	require.NoError(t, err)
 	for _, width := range []int64{1280, 768, 767, 390, 320} {
-		controlSize := 32
-		if width < 768 {
-			controlSize = 44
-		}
+		// Header targets are 44px at every width (Exh-zrjo).
+		controlSize := 44
 		for _, theme := range []string{"light", "dark"} {
 			t.Run(fmt.Sprintf("%d/%s", width, theme), func(t *testing.T) {
 				ctx, cancel, err := browser.Tab(context.Background())

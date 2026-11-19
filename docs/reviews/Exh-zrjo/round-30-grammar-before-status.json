@@ -1,0 +1,15 @@
+{
+  "command": [
+    "go",
+    "test",
+    "./internal/api",
+    "-run",
+    "^TestGalleryEmptyPresentationBrowser$",
+    "-count=1"
+  ],
+  "head": "5c293c145c02466545046dfb6aad9e40469a65f5",
+  "exitCode": 1,
+  "seconds": 14.68,
+  "runtimeAndValidationUnchanged": true,
+  "log": "/tmp/exhibit-zrjo-pr273-grammar-before.log"
+}

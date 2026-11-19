@@ -346,6 +346,10 @@ func ErrorStatus(err error) int {
 		return 403
 	case errors.Is(err, store.ErrConnectionSharing), errors.Is(err, store.ErrConnectionOverlap):
 		return 409
+	case errors.As(err, new(*CredentialOriginError)):
+		// The save is refused, but the refusal is answerable: the same request
+		// with confirm_origin_mismatch set succeeds.
+		return 409
 	case errors.Is(err, ErrInvalid):
 		return 400
 	default:

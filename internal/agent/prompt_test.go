@@ -57,6 +57,29 @@ func TestSystemPromptDescribesOnlyEnabledNetworkCapabilities(t *testing.T) {
 	assert.NotContains(t, widget, "list_connections()")
 }
 
+// The prompt used to demand that all CSS and JavaScript be inline, and the
+// agent never reached for a library even when hand-rolling one made a worse
+// tool (Exh-l0wi). Libraries are allowed, used sparingly and pinned, and
+// nothing in any mode's prompt bars them by default.
+func TestSystemPromptAllowsPinnedThirdPartyLibraries(t *testing.T) {
+	for name, opts := range map[string]CreateOpts{
+		"relay disabled": {},
+		"relay enabled":  {NetworkRelayEnabled: true, ConnectionsEnabled: true},
+		"edit":           {ArtifactID: "a"},
+		"widget only":    {WidgetOnly: true},
+	} {
+		prompt := buildSystemPrompt("", opts)
+		assert.Contains(t, prompt, "Third-party libraries, fonts and other resources are allowed", name)
+		assert.Contains(t, prompt, "Do not load one for what a few lines of plain HTML, CSS and JavaScript already do well", name)
+		assert.Contains(t, prompt, "exact version pinned in the URL", name)
+		assert.Contains(t, prompt, "blocked until the user approves it", name)
+		assert.Contains(t, prompt, "only from an origin the artifact itself already uses", name)
+		assert.NotContains(t, prompt, "all CSS and JavaScript inline", name)
+		assert.NotContains(t, prompt, "no external references", name)
+		assert.NotContains(t, prompt, "zero external references", name)
+	}
+}
+
 // Untrusted text reaches the model only as a tool result, so the prompt tells it
 // so. The contract is static: it names no per-session secret, because the
 // boundary is the conversation's structure and not a marker inside a string.

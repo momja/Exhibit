@@ -1,0 +1,15 @@
+{
+  "command": [
+    "go",
+    "test",
+    "./internal/api",
+    "-run",
+    "Test(GalleryPersonalStarAPI|ActivityOwnerScopeAndConversationLinks|PersonalStarsOnANoLoginInstance|GalleryRedesignBrowser|GallerySpaceNavigation.*Browser|GallerySpacesBrowser|GalleryEmptySpacesBrowser|SearchTabBrowser|SharedGalleryRecipientBrowser|AppHeader.*Browser|AuthAppHeaderBrowser|FloatingAppHeaderBrowser|EditNavigation.*Browser|TagModalBrowser|EditorModalLifecycleBrowser|AgentComposerBrowser|AgentMarkdownBrowser|AgentPanesBrowser)$",
+    "-count=1"
+  ],
+  "head": "c20f6f72f9a18182e91bfcd3a71e4c9d2180e9ac",
+  "exitCode": 0,
+  "seconds": 104.59,
+  "runtimeAndValidationUnchanged": true,
+  "log": "/tmp/exhibit-zrjo-pr273-native.log"
+}

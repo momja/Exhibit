@@ -1,0 +1,15 @@
+{
+  "command": [
+    "sh",
+    "-c",
+    "node web/gallery/build.mjs && go build -o bin/server ./cmd/server"
+  ],
+  "cwd": ".",
+  "head": "72be0ccc60f8b8820ad0715c5113f5a6f0cb44aa",
+  "startedAt": "2026-11-05T17:24:46.797895+00:00",
+  "seconds": 8.08,
+  "exitCode": 0,
+  "sourceFingerprint": "bb765bccfabd9fcadb5267385cb04d21aa676e57a41fbe035d6157ed103e2d98",
+  "sourceUnchanged": true,
+  "log": "/tmp/exhibit-zrjo-tags10-build.log"
+}

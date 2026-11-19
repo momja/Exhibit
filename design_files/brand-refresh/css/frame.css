@@ -1,0 +1,10 @@
+/* Hard frames, soft insides. Layered after pal.css. */
+html[data-pal]{--frame:#1f2a1c;--tile-a:58% 72%;--tile-b:56% 60%;--mono-solid:45% 95%;--tile-mono-ink:55% 24%;--grain:.75;
+	--shadow-card:none;--shadow-card-hover:4px 4px 0 var(--frame)}
+@media (prefers-color-scheme:dark){html[data-pal]{--frame:#0a0c1c;--tile-a:46% 40%;--tile-b:44% 28%;--mono-solid:30% 20%;--tile-mono-ink:60% 88%;--grain:.5;--shadow-card:none;--shadow-card-hover:4px 4px 0 var(--frame)}}
+html[data-pal] .gallery-title{font-variation-settings:"SOFT" 100,"WONK" 0,"opsz" 72}
+html[data-pal] .card{border-radius:3px;outline:2px solid var(--frame);outline-offset:-2px}
+html[data-pal] .card-widget{border-radius:0;border-bottom:2px solid var(--frame)}
+html[data-pal] .card-widget-monogram{border-radius:3px;outline:2px solid var(--frame)}
+html[data-pal] .btn{border-radius:3px}
+html[data-pal] header svg.logo{overflow:visible}

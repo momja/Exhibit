@@ -109,7 +109,7 @@ func TestDetailPageRendersGeolocationGate(t *testing.T) {
 	assert.Contains(t, page, `id="geo-block"`)
 	// The copy says where the approval is spent, and does not claim browsers
 	// are unable to share a location here, which would be false of Chromium.
-	assert.Contains(t, page, "The embedded preview does not share your location with artifacts")
+	assert.Contains(t, page, "The preview does not share your location.")
 	assert.Contains(t, page, "let geolocationApproved = false;")
 
 	a.GeolocationApproved = true

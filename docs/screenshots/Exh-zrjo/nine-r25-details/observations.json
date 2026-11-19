@@ -1,0 +1,82 @@
+[
+  {
+    "width": 1280,
+    "scheme": "light",
+    "path": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw2vgxj7-062a884e.png",
+    "dark": false,
+    "asset": "/assets/v/e29fcce0e122/phosphor/regular.css",
+    "heading": [
+      "14px",
+      "600"
+    ],
+    "label": [
+      "13px",
+      "600"
+    ],
+    "addClass": "btn btn-sm btn-sec",
+    "placeholderWidth": 137.853515625,
+    "inputInnerWidth": 276,
+    "empty": "No origins approved.",
+    "overflow": false
+  },
+  {
+    "width": 1280,
+    "scheme": "dark",
+    "path": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw2vgxsd-6ba17b34.png",
+    "dark": true,
+    "asset": "/assets/v/e29fcce0e122/phosphor/regular.css",
+    "heading": [
+      "14px",
+      "600"
+    ],
+    "label": [
+      "13px",
+      "600"
+    ],
+    "addClass": "btn btn-sm btn-sec",
+    "placeholderWidth": 137.853515625,
+    "inputInnerWidth": 276,
+    "empty": "No origins approved.",
+    "overflow": false
+  },
+  {
+    "width": 320,
+    "scheme": "light",
+    "path": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw2vgy2e-b33226aa.png",
+    "dark": false,
+    "asset": "/assets/v/e29fcce0e122/phosphor/regular.css",
+    "heading": [
+      "14px",
+      "600"
+    ],
+    "label": [
+      "14px",
+      "600"
+    ],
+    "addClass": "btn btn-sm btn-sec",
+    "placeholderWidth": 137.853515625,
+    "inputInnerWidth": 162,
+    "empty": "No origins approved.",
+    "overflow": false
+  },
+  {
+    "width": 320,
+    "scheme": "dark",
+    "path": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw2vgya8-05971fbd.png",
+    "dark": true,
+    "asset": "/assets/v/e29fcce0e122/phosphor/regular.css",
+    "heading": [
+      "14px",
+      "600"
+    ],
+    "label": [
+      "14px",
+      "600"
+    ],
+    "addClass": "btn btn-sm btn-sec",
+    "placeholderWidth": 137.853515625,
+    "inputInnerWidth": 162,
+    "empty": "No origins approved.",
+    "overflow": false
+  }
+]

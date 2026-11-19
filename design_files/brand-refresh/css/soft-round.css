@@ -1,0 +1,7 @@
+/* Back to the app's own card shape: rounded, full-bleed tile, soft shadow, no ink lines */
+html[data-pal]{--shadow-card:0 1px 0 rgba(60,45,10,.10),0 0 0 1px rgba(60,45,10,.07);--shadow-card-hover:0 3px 10px rgba(60,45,10,.14),0 0 0 1px rgba(60,45,10,.09)}
+@media (prefers-color-scheme:dark){html[data-pal]{--shadow-card:0 1px 0 rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.06);--shadow-card-hover:0 3px 10px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.1)}}
+html[data-pal] .card{border-radius:var(--radius-lg);outline:0}
+html[data-pal] .card-widget{border-radius:calc(var(--radius-lg) - 1px) calc(var(--radius-lg) - 1px) 0 0;border-bottom:1px solid var(--color-hairline)}
+html[data-pal] .card-widget-monogram{outline:0;border-radius:14px;box-shadow:0 1px 3px hsl(var(--tile-hue) 40% 30% / .18)}
+html[data-pal] .btn{border-radius:var(--radius-md)}

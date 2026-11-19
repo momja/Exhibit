@@ -1,0 +1,11 @@
+{
+  "command": [
+    "make",
+    "build"
+  ],
+  "head": "c20f6f72f9a18182e91bfcd3a71e4c9d2180e9ac",
+  "exitCode": 0,
+  "seconds": 17.85,
+  "runtimeAndValidationUnchanged": true,
+  "log": "/tmp/exhibit-zrjo-pr273-build-confirm.log"
+}

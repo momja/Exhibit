@@ -24,11 +24,11 @@ func TestDirectOpenPromptForEveryViewer(t *testing.T) {
 		assert.Contains(t, page, `data-artifact="art-1" data-viewer="42" data-open-url="/artifacts/art-1/open"`)
 		assert.Contains(t, page, `aria-labelledby="direct-open-title" aria-describedby="direct-open-body"`)
 		assert.Contains(t, page, `<dialog id="direct-open-modal"`)
-		assert.Contains(t, page, `Open outside the preview sandbox?</h2>`)
-		assert.Contains(t, page, `This tool will run as a regular web page. It can download files, navigate to external sites, and use browser features restricted in the preview, subject to your browser’s normal controls.</p>`)
+		assert.Contains(t, page, `Open in a new tab?</h2>`)
+		assert.Contains(t, page, `This artifact will run outside the preview sandbox as a regular web page. It can download files, navigate to external sites, and use browser features restricted in the preview, subject to your browser’s normal controls.</p>`)
 		assert.Contains(t, page, `<input type="checkbox" id="direct-open-remember"> Do not ask again for this artifact`)
 		assert.Contains(t, page, `id="direct-open-cancel" autofocus data-modal-dismiss>Cancel</button>`)
-		assert.Contains(t, page, `id="direct-open-confirm">Open directly</button>`)
+		assert.Contains(t, page, `id="direct-open-confirm">Open in new tab</button>`)
 		for _, id := range []string{"direct-open-toolbar", "direct-open-banner"} {
 			assert.Contains(t, page, `id="`+id+`"`)
 		}
@@ -37,7 +37,7 @@ func TestDirectOpenPromptForEveryViewer(t *testing.T) {
 		if readOnly {
 			assert.NotContains(t, page, `href="/api/artifacts/art-1/export"`)
 		} else {
-			assert.Contains(t, page, `download title="Downloads this tool and its assets, without its saved data or connected accounts"`)
+			assert.Contains(t, page, `download title="Downloads this artifact and its assets, without saved data or connected accounts"`)
 		}
 		protected, err := renderDetailPage(a, urls, creds, nil, detailNetworkPolicy{Protected: true})
 		require.NoError(t, err)

@@ -60,10 +60,7 @@ function mountEditorWhenOpen(panelID, textareaID) {
 function setSource(textareaID, text) {
   const textarea = document.getElementById(textareaID);
   if (textarea) textarea.value = text;
-  const view = editors[textareaID];
-  if (view) {
-    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text } });
-  }
+  editors[textareaID]?.setValue(text);
 }
 
 mountEditorWhenOpen('source-panel', 'body');
@@ -189,14 +186,10 @@ function renderSecurityPanel() {
   ({blocked, unapproved} = originGroups(allowlist, savedArtifact.blocked, forgotten));
   document.body.dispatchEvent(new CustomEvent('exhibit:origin-draft-changed'));
 
+  const allowedFeatures = [downloadsApproved, clipboardApproved, linksApproved, cameraApproved, microphoneApproved, geolocationApproved].filter(Boolean).length;
   document.getElementById('security-summary-text').textContent =
-    allowlist.length + (allowlist.length === 1 ? ' origin' : ' origins') +
-    ' · downloads: ' + (downloadsApproved ? 'always allow' : 'ask first') +
-    ' · clipboard: ' + (clipboardApproved ? 'always allow' : 'ask first') +
-    ' · links: ' + (linksApproved ? 'always allow' : 'ask first') +
-    ' · camera: ' + (cameraApproved ? 'always allow' : 'ask first') +
-    ' · microphone: ' + (microphoneApproved ? 'always allow' : 'ask first') +
-    ' · location: ' + (geolocationApproved ? 'always allow' : 'ask first');
+    '· ' + allowlist.length + (allowlist.length === 1 ? ' site' : ' sites') +
+    ' · ' + allowedFeatures + (allowedFeatures === 1 ? ' feature allowed' : ' features allowed');
   editorChanged();
 }
 
@@ -247,7 +240,7 @@ async function save() {
   const title = document.getElementById('title').value.trim();
   const body  = document.getElementById('body').value;
   const status = document.getElementById('status');
-  if (!body.trim()) { status.textContent = 'Body cannot be empty.'; return false; }
+  if (!body.trim()) { status.textContent = 'HTML source cannot be empty.'; return false; }
   status.textContent = 'Saving…';
   document.getElementById('scan-result').style.display = 'none';
   document.getElementById('source-network-warnings').hidden = false;
@@ -275,7 +268,7 @@ async function save() {
   if (!resp.ok) {
     status.textContent = resp.status === 409
       ? '✗ Source changed elsewhere. Your edits are still here. Copy them before reloading, then compare and retry.'
-      : '✗ Error: ' + (data.error || resp.statusText);
+      : 'Couldn’t save: ' + (data.error || resp.statusText);
     return false;
   }
   document.getElementById('body').dataset.revision = data.artifact?.source_revision;
@@ -309,14 +302,14 @@ async function save() {
       document.getElementById('widget-status').textContent;
     return false;
   }
-  status.textContent = '✓ Saved';
+  status.textContent = 'Saved';
   // If the edited body changed the network footprint, the server re-ran the
   // scan and returned it. Re-run the explicit-approval flow so the user can
   // review/enable new origins — the same gate ingest uses. The allowlist is
   // never seeded from the scan; only the origins the user selects are written.
   if (pendingSourceFootprint.length > 0 || pendingSourceWarnings.length > 0) {
     showApproval();
-    status.textContent = 'Saved. Review network access below before leaving.';
+    status.textContent = 'Saved. Review network access before leaving.';
     editorChanged();
     return false;
   }
@@ -341,7 +334,7 @@ async function forgetBlockedOrigins(status, submitted) {
       method: 'DELETE'
     }).catch(() => null);
     if (!r || !r.ok) {
-      status.textContent = '✗ Saved, but could not forget ' + origin;
+      status.textContent = 'Saved, but couldn’t reset the block on ' + origin + '.';
       return false;
     }
     forgotten = forgotten.filter(o => o !== origin);
@@ -370,7 +363,7 @@ async function approveOrigins() {
     method: 'PATCH',
     body: JSON.stringify({network_allowlist: merged})
   });
-  if (!r.ok) { status.textContent = '✗ Failed to update allowlist'; return; }
+  if (!r.ok) { status.textContent = 'Couldn’t update allowed sites.'; return; }
   applySavedAllowlist(previousAllowlist, merged);
   savedArtifact.allowlist = [...merged];
   Object.assign(savedArtifact, originGroups(merged, savedArtifact.blocked));
@@ -383,7 +376,7 @@ function finishEdit() {
   pendingSourceWarnings = [];
   document.getElementById('source-network-warnings').hidden = false;
   document.getElementById('scan-result').style.display = 'none';
-  document.getElementById('status').textContent = '✓ Saved';
+  document.getElementById('status').textContent = 'Saved';
   editorChanged();
 }
 
@@ -392,7 +385,7 @@ function esc(s) {
 }
 
 async function deleteArtifact() {
-  if (!confirm('Are you sure you want to delete this artifact? The action cannot be reversed and all data will be lost.')) return;
+  if (!confirm('Delete “' + TITLE + '”? Its versions, saved data, and share links will be deleted. This cannot be undone.')) return;
   const status = document.getElementById('status');
   status.textContent = 'Deleting…';
   try {
@@ -401,13 +394,13 @@ async function deleteArtifact() {
     });
     if (!resp.ok) {
       const txt = await resp.text().catch(() => '');
-      status.textContent = '✗ Error: ' + (txt.trim() || resp.statusText);
+      status.textContent = 'Couldn’t delete the artifact: ' + (txt.trim() || resp.statusText);
       return;
     }
     document.body.dispatchEvent(new CustomEvent('exhibit:editor-exit'));
     window.location.href = '/';
   } catch (e) {
-    status.textContent = '✗ Error: ' + e.message;
+    status.textContent = 'Couldn’t delete the artifact: ' + e.message;
   }
 }
 
@@ -436,7 +429,7 @@ const widgetPanel = (function() {
   function setHasWidget(has) {
     hasWidget = has;
     const summary = document.getElementById('widget-summary-text');
-    if (summary) summary.textContent = has ? 'custom tile' : 'default tile';
+    if (summary) summary.textContent = has ? 'custom' : 'default';
     const label = document.getElementById('widget-generate-label');
     if (label) label.textContent = has ? 'Regenerate' : 'Generate widget';
   }
@@ -446,7 +439,7 @@ const widgetPanel = (function() {
     const body = submitted.trim();
     if (!body) {
       if (!hasWidget) { savedWidget = submitted; return true; }
-      status.textContent = '✗ Widget source cannot be empty. Use Remove to restore the default tile.';
+      status.textContent = '✗ Widget HTML cannot be empty. Choose Remove to use the default widget.';
       return false;
     }
     status.textContent = 'Saving…';
@@ -468,8 +461,8 @@ const widgetPanel = (function() {
       // is already blocked at render — a fact to report, not a pending
       // approval. The allowlist panel above is where it would be granted.
       status.textContent = (data.unapproved_origins || []).length
-        ? '✓ Saved — but ' + data.unapproved_origins.join(', ') + ' is not on the allowlist and will be blocked.'
-        : '✓ Saved';
+        ? 'Saved. Network access to ' + data.unapproved_origins.join(', ') + ' is blocked. Allow these sites under Permissions.'
+        : 'Saved';
       setHasWidget(true);
       refreshPreview();
       editorChanged();
@@ -481,7 +474,7 @@ const widgetPanel = (function() {
   }
 
   removeBtn.addEventListener('click', async function() {
-    if (!confirm('Remove this artifact’s widget? Its card falls back to the default tile.')) return;
+    if (!confirm('Remove this artifact’s custom widget? Its Gallery card will use the default widget.')) return;
     status.textContent = 'Removing…';
     try {
       const r = await apiFetch('/api/artifacts/' + ID + '/widget', {
@@ -497,7 +490,7 @@ const widgetPanel = (function() {
       src.dataset.revision = r.headers.get('X-Widget-Revision');
       setSource('widget-src', '');
       savedWidget = '';
-      status.textContent = '✓ Removed';
+      status.textContent = 'Removed';
       setHasWidget(false);
       refreshPreview();
       editorChanged();
@@ -520,7 +513,7 @@ const widgetPanel = (function() {
       const generationBuffer = src.value;
       generateBtn.disabled = true;
       saveBtn.disabled = true;
-      status.textContent = 'Generating… the agent is reading the artifact and writing its tile.';
+      status.textContent = 'Generating widget…';
 
       let events = null, timer = null;
       function finish(message) {
@@ -577,8 +570,8 @@ const widgetPanel = (function() {
             setHasWidget(true);
             refreshPreview();
             finish((ev.unapproved || []).length
-              ? '✓ Generated — but ' + ev.unapproved.join(', ') + ' is not on the allowlist and will be blocked.'
-              : '✓ Generated');
+              ? 'Widget generated. Network access to ' + ev.unapproved.join(', ') + ' is blocked. Allow these sites under Permissions.'
+              : 'Widget generated');
             // One-shot session: the work is done, so don't leave a subprocess
             // alive until the idle reaper gets to it.
             apiFetch('/api/agent/sessions/' + encodeURIComponent(sessionId), {
@@ -613,7 +606,7 @@ const widgetPanel = (function() {
 })();
 
 savedArtifact = artifactDraft();
-registerEditorSection('artifact', {isDirty: artifactDirty, save, discard: discardArtifact});
+registerEditorSection('artifact', {isDirty: artifactDirty, save, discard: discardArtifact, saveMessage: () => document.getElementById('status').textContent});
 renderSecurityPanel();
 // Legacy entry links can use the same-origin referrer on their first request.
 // Record the server's validated answer in the URL before a reload or bookmark.
@@ -622,12 +615,6 @@ if (document.body.dataset.editorReturnUrl && window.history?.replaceState) {
   address.searchParams.set('return_to', document.body.dataset.editorReturnUrl);
   window.history.replaceState(window.history.state, '', address);
 }
-document.querySelectorAll('[data-save-editor]').forEach(button => button.addEventListener('click', async () => {
-  const buttons = document.querySelectorAll('[data-save-editor]');
-  buttons.forEach(control => { control.disabled = true; });
-  try { await saveEditorChanges(); }
-  finally { buttons.forEach(control => { control.disabled = false; }); }
-}));
 document.querySelector('[data-delete-artifact]')?.addEventListener('click', deleteArtifact);
 document.getElementById('title').addEventListener('input', () => {
   document.getElementById('edit-title').textContent = document.getElementById('title').value || 'Untitled';

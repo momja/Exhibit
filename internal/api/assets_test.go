@@ -70,13 +70,13 @@ func TestGalleryPagesLoadPhosphorIconsFromAppOrigin(t *testing.T) {
 		assert.Contains(t, page, stylesheetTag, path)
 	}
 
-	// The documented markup pattern — <i class="ph ph-<name>"></i> — renders
+	// The documented markup pattern — <i class="ph ph-<name>" aria-hidden="true"></i> — renders
 	// somewhere in the gallery, using the icon set this ticket introduces.
 	req := httptest.NewRequest("GET", "/artifacts/"+id+"/edit", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	page := w.Body.String()
-	assert.Contains(t, page, `<i class="ph ph-check"></i>`)
+	assert.Contains(t, page, `<i class="ph ph-floppy-disk" aria-hidden="true"></i>`)
 	assert.Contains(t, page, `<i class="ph ph-x"></i>`)
 	assert.Contains(t, page, `<i class="ph ph-trash"></i>`)
 }
@@ -104,7 +104,7 @@ func TestGalleryEditPageMountsEditor(t *testing.T) {
 	editJS, err := embeddedAssets.ReadFile("assets/gallery/edit.js")
 	require.NoError(t, err)
 	assert.Contains(t, string(editJS), "ArtifactEditor.mount")
-	assert.Contains(t, page, `<textarea id="body" data-revision="`)
+	assert.Contains(t, page, `<textarea id="body" aria-label="Artifact source" data-revision="`)
 }
 
 // The ingest page — /new since av-qo0j, the gallery index before it — loads
@@ -120,7 +120,7 @@ func TestNewPageMountsEditor(t *testing.T) {
 
 	page := w.Body.String()
 	assert.Contains(t, page, `<script src="`+assetURL("editor.js")+`"></script>`)
-	assert.Contains(t, page, `<script src="`+assetURL("gallery/new.js")+`"></script>`)
+	assert.Contains(t, page, `<script type="module" src="`+assetURL("gallery/new.js")+`"></script>`)
 	newJS, err := embeddedAssets.ReadFile("assets/gallery/new.js")
 	require.NoError(t, err)
 	assert.Contains(t, string(newJS), "ArtifactEditor.mount(document.getElementById('body'))")

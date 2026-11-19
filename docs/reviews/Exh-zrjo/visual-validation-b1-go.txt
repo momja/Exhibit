@@ -1,0 +1,33 @@
+?   	github.com/momja/Exhibit/cmd/exhibit-mcp	[no test files]
+?   	github.com/momja/Exhibit/cmd/exhibit-run	[no test files]
+?   	github.com/momja/Exhibit/cmd/mockllm	[no test files]
+?   	github.com/momja/Exhibit/cmd/server	[no test files]
+ok  	github.com/momja/Exhibit/internal/agent	51.915s
+?   	github.com/momja/Exhibit/internal/agentguidance	[no test files]
+ok  	github.com/momja/Exhibit/internal/agentscope	(cached)
+ok  	github.com/momja/Exhibit/internal/api	419.897s
+ok  	github.com/momja/Exhibit/internal/artifacticon	(cached)
+ok  	github.com/momja/Exhibit/internal/auth	(cached)
+ok  	github.com/momja/Exhibit/internal/blob	(cached)
+?   	github.com/momja/Exhibit/internal/blob/blobtest	[no test files]
+ok  	github.com/momja/Exhibit/internal/bundle	2.801s
+ok  	github.com/momja/Exhibit/internal/chromium	(cached)
+?   	github.com/momja/Exhibit/internal/chromium/chromiumtest	[no test files]
+ok  	github.com/momja/Exhibit/internal/color	(cached)
+ok  	github.com/momja/Exhibit/internal/connectors	(cached)
+ok  	github.com/momja/Exhibit/internal/egress	(cached)
+ok  	github.com/momja/Exhibit/internal/export	(cached)
+?   	github.com/momja/Exhibit/internal/humanize	[no test files]
+ok  	github.com/momja/Exhibit/internal/logging	(cached)
+ok  	github.com/momja/Exhibit/internal/mcpserver	5.137s
+ok  	github.com/momja/Exhibit/internal/mockllm	(cached)
+ok  	github.com/momja/Exhibit/internal/ogsnap	(cached)
+ok  	github.com/momja/Exhibit/internal/origin	(cached)
+ok  	github.com/momja/Exhibit/internal/render	(cached)
+ok  	github.com/momja/Exhibit/internal/rendertoken	(cached)
+ok  	github.com/momja/Exhibit/internal/scanner	(cached)
+ok  	github.com/momja/Exhibit/internal/secrets	(cached)
+ok  	github.com/momja/Exhibit/internal/snapshot	(cached)
+ok  	github.com/momja/Exhibit/internal/store	176.467s
+ok  	github.com/momja/Exhibit/internal/tile	(cached)
+?   	github.com/momja/Exhibit/web/editor/node_modules/flatted/golang/pkg/flatted	[no test files]

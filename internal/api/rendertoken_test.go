@@ -131,7 +131,7 @@ func TestEveryEmbeddingSurfaceMintsItsFramesInOnePass(t *testing.T) {
 	require.Equal(t, http.StatusOK, putWidgetReq(t, r, id, "<b>42 km</b>").Code)
 
 	for _, tc := range []struct{ name, path, wantFrame string }{
-		{"gallery card", "/", "http://render.test/w/" + id + "?t="},
+		{"gallery card", "/search", "http://render.test/w/" + id + "?t="},
 		{"artifact detail", "/artifacts/" + id, "http://render.test/a/" + id + "?t="},
 		{"edit page widget panel", "/artifacts/" + id + "/edit", "http://render.test/w/" + id + "?t="},
 		{"agent preview pane", "/agent?artifact=" + id, "http://render.test/a/" + id + "?t="},
@@ -149,7 +149,7 @@ func TestEveryEmbeddingSurfaceMintsItsFramesInOnePass(t *testing.T) {
 		other := createTestArtifact(t, r, "Extra")
 		require.Equal(t, http.StatusOK, putWidgetReq(t, r, other, "<b>x</b>").Code)
 	}
-	gallery := getPage(t, r, "/")
+	gallery := getPage(t, r, "/search")
 	assert.Equal(t, 6, strings.Count(gallery, "http://render.test/w/"),
 		"every card with a widget should carry its own minted frame URL")
 }

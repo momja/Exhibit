@@ -1,0 +1,85 @@
+sh scripts/build-assets.sh
+>> building assets in web/editor
+
+added 111 packages, and audited 112 packages in 2s
+
+24 packages are looking for funding
+  run `npm fund` for details
+
+2 high severity vulnerabilities
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+npm warn install-scripts 1 package has install scripts not yet covered by allowScripts:
+npm warn install-scripts   esbuild@0.25.12 (postinstall: node install.js)
+npm warn install-scripts
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+
+> build
+> esbuild editor.js --bundle --minify --format=iife --target=es2020 --outfile=../../internal/api/assets/editor.js
+
+
+  ../../internal/api/assets/editor.js  562.9kb
+
+⚡ Done in 94ms
+>> building assets in web/gallery
+
+up to date, audited 1 package in 392ms
+
+found 0 vulnerabilities
+
+> build
+> node build.mjs
+
+Copied gallery page assets -> ../../internal/api/assets/gallery
+>> building assets in web/htmx
+
+added 1 package, and audited 2 packages in 561ms
+
+found 0 vulnerabilities
+
+> build
+> node build.mjs
+
+Vendored htmx -> ../../internal/api/assets/htmx
+>> building assets in web/icons
+
+added 1 package, and audited 2 packages in 999ms
+
+found 0 vulnerabilities
+
+> build
+> node build.mjs
+
+Vendored Phosphor Icons (regular) -> ../../internal/api/assets/phosphor (80/80 registry classes matched, 80 rules kept, 1450 dropped, font subset)
+>> building assets in web/pwa-icons
+
+added 8 packages, and audited 9 packages in 1s
+
+5 packages are looking for funding
+  run `npm fund` for details
+
+1 high severity vulnerability
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+
+> build
+> node build.mjs
+
+Rendered PWA icons -> ../../internal/api/assets/icons
+>> building assets in web/stimulus
+
+added 1 package, and audited 2 packages in 634ms
+
+found 0 vulnerabilities
+
+> build
+> node build.mjs
+
+Vendored Stimulus ES module and license
+go build -o bin/server ./cmd/server

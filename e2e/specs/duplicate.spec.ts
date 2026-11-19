@@ -24,8 +24,8 @@ test('keyboard focus stays in the modal and every cancellation path restores the
   const artifact = await artifacts.create('<h1>Cancellation fixture</h1>');
   const mutations: string[] = [];
   page.on('request', request => { if (isDuplicate(request)) mutations.push(request.url()); });
-  await page.goto('/');
-  for (const dismiss of ['Escape', 'Cancel', 'backdrop']) {
+  await page.goto('/search');
+  for (const dismiss of ['Escape', 'Cancel', 'Close', 'backdrop']) {
     const { trigger, dialog, input } = await openDuplicate(page, artifact.title);
     for (const key of ['Tab', 'Shift+Tab']) {
       for (let step = 0; step < 6; step++) {
@@ -39,6 +39,7 @@ test('keyboard focus stays in the modal and every cancellation path restores the
     await expect(input).toHaveValue('Unsaved working title');
     if (dismiss === 'Escape') await page.keyboard.press('Escape');
     else if (dismiss === 'Cancel') await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+    else if (dismiss === 'Close') await dialog.getByRole('button', { name: 'Close', exact: true }).click();
     else await page.mouse.click(8, 8);
     await expect(dialog).not.toBeVisible();
     await expect(trigger).toBeFocused();
@@ -48,7 +49,7 @@ test('keyboard focus stays in the modal and every cancellation path restores the
 
 test('save refreshes server-rendered cards and replacement components work across two cycles', async ({ page, artifacts }) => {
   let artifact = await artifacts.create('<h1>Replacement fixture</h1>');
-  await page.goto('/');
+  await page.goto('/search');
   const documentRequests: string[] = [];
   const mutations: string[] = [];
   page.on('request', request => {
@@ -61,7 +62,7 @@ test('save refreshes server-rendered cards and replacement components work acros
     const title = `E2E copy ${randomUUID()}`;
     await input.fill(title);
     const saved = page.waitForResponse(response => isDuplicate(response.request()));
-    const refreshed = page.waitForResponse(response => new URL(response.url()).pathname === '/partials/gallery-grid');
+    const refreshed = page.waitForResponse(response => new URL(response.url()).pathname === '/partials/gallery-grid/search');
     await dialog.getByRole('button', { name: 'Duplicate artifact', exact: true }).click();
     const response = await saved;
     expect(response.status()).toBe(201);
@@ -93,7 +94,7 @@ test('Escape, backdrop, and repeated submission cannot dismiss or duplicate an i
     await gate;
     await route.continue();
   });
-  await page.goto('/');
+  await page.goto('/search');
   const { dialog, input } = await openDuplicate(page, artifact.title);
   try {
     const requested = page.waitForRequest(isDuplicate);
@@ -101,6 +102,7 @@ test('Escape, backdrop, and repeated submission cannot dismiss or duplicate an i
     await requested;
     await expect(input).toBeDisabled();
     await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeDisabled();
+    await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeDisabled();
     await page.keyboard.press('Escape');
     await page.mouse.click(8, 8);
     await page.keyboard.press('Enter');
@@ -132,7 +134,7 @@ test('a committed save with a lost response retries the same identity and create
       await route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"Lost upstream response"}' });
     } else await route.continue();
   });
-  await page.goto('/');
+  await page.goto('/search');
   const { dialog, input } = await openDuplicate(page, artifact.title);
   const title = `E2E uncertain ${randomUUID()}`;
   await input.fill(title);
@@ -160,7 +162,7 @@ test('a definite refusal leaves editable input and permits a corrected save', as
     if (bodies.length === 1) await route.fulfill({ status: 413, contentType: 'application/json', body: '{"error":"Storage quota exceeded"}' });
     else await route.continue();
   });
-  await page.goto('/');
+  await page.goto('/search');
   const { dialog, input } = await openDuplicate(page, artifact.title);
   await dialog.getByRole('button', { name: 'Duplicate artifact', exact: true }).click();
   await expect(dialog.getByRole('status')).toHaveText('Storage quota exceeded');

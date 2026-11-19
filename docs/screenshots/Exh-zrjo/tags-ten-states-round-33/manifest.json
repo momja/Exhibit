@@ -1,0 +1,96 @@
+{
+  "applicationCommit": "72be0ccc60f8b8820ad0715c5113f5a6f0cb44aa",
+  "assetVersion": "bc262e992d4d",
+  "source": "Passing full23 E2E, disposable artifacts/tags at18080; two schemes emulated.14 real outcome captures plus8 discarded-working-copy sheet captures. Not reviewer persistence execution.",
+  "sourceFingerprint": "bb765bccfabd9fcadb5267385cb04d21aa676e57a41fbe035d6157ed103e2d98",
+  "captures": [
+    {
+      "file": "tag-adding-dark.png",
+      "original": "e2e/test-results/tags-tag-changes-persist-w-b38e2--feedback-without-page-Save-chromium/tag-adding-dark.png"
+    },
+    {
+      "file": "tag-adding-light.png",
+      "original": "e2e/test-results/tags-tag-changes-persist-w-b38e2--feedback-without-page-Save-chromium/tag-adding-light.png"
+    },
+    {
+      "file": "tag-delete-error-dark.png",
+      "original": "e2e/test-results/tags-tag-changes-persist-w-b38e2--feedback-without-page-Save-chromium/tag-delete-error-dark.png"
+    },
+    {
+      "file": "tag-delete-error-light.png",
+      "original": "e2e/test-results/tags-tag-changes-persist-w-b38e2--feedback-without-page-Save-chromium/tag-delete-error-light.png"
+    },
+    {
+      "file": "tag-deleted-dark.png",
+      "original": "e2e/test-results/tags-tag-changes-persist-w-b38e2--feedback-without-page-Save-chromium/tag-deleted-dark.png"
+    },
+    {
+      "file": "tag-deleted-light.png",
+      "original": "e2e/test-results/tags-tag-changes-persist-w-b38e2--feedback-without-page-Save-chromium/tag-deleted-light.png"
+    },
+    {
+      "file": "tag-name-error-dark.png",
+      "original": "e2e/test-results/tags-tag-changes-persist-w-b38e2--feedback-without-page-Save-chromium/tag-name-error-dark.png"
+    },
+    {
+      "file": "tag-name-error-light.png",
+      "original": "e2e/test-results/tags-tag-changes-persist-w-b38e2--feedback-without-page-Save-chromium/tag-name-error-light.png"
+    },
+    {
+      "file": "tag-save-error-dark.png",
+      "original": "e2e/test-results/tags-tag-changes-persist-w-b38e2--feedback-without-page-Save-chromium/tag-save-error-dark.png"
+    },
+    {
+      "file": "tag-save-error-light.png",
+      "original": "e2e/test-results/tags-tag-changes-persist-w-b38e2--feedback-without-page-Save-chromium/tag-save-error-light.png"
+    },
+    {
+      "file": "tag-saved-dark.png",
+      "original": "e2e/test-results/tags-tag-changes-persist-w-b38e2--feedback-without-page-Save-chromium/tag-saved-dark.png"
+    },
+    {
+      "file": "tag-saved-light.png",
+      "original": "e2e/test-results/tags-tag-changes-persist-w-b38e2--feedback-without-page-Save-chromium/tag-saved-light.png"
+    },
+    {
+      "file": "tag-saving-dark.png",
+      "original": "e2e/test-results/tags-tag-changes-persist-w-b38e2--feedback-without-page-Save-chromium/tag-saving-dark.png"
+    },
+    {
+      "file": "tag-saving-light.png",
+      "original": "e2e/test-results/tags-tag-changes-persist-w-b38e2--feedback-without-page-Save-chromium/tag-saving-light.png"
+    },
+    {
+      "file": "tag-edit-1280-dark.png",
+      "original": "e2e/test-results/tags-tag-editing-keeps-col-056a0-ation-local-in-both-schemes-chromium/tag-edit-1280-dark.png"
+    },
+    {
+      "file": "tag-edit-1280-light.png",
+      "original": "e2e/test-results/tags-tag-editing-keeps-col-056a0-ation-local-in-both-schemes-chromium/tag-edit-1280-light.png"
+    },
+    {
+      "file": "tag-edit-320-dark.png",
+      "original": "e2e/test-results/tags-tag-editing-keeps-col-056a0-ation-local-in-both-schemes-chromium/tag-edit-320-dark.png"
+    },
+    {
+      "file": "tag-edit-320-light.png",
+      "original": "e2e/test-results/tags-tag-editing-keeps-col-056a0-ation-local-in-both-schemes-chromium/tag-edit-320-light.png"
+    },
+    {
+      "file": "tag-edit-390-dark.png",
+      "original": "e2e/test-results/tags-tag-editing-keeps-col-056a0-ation-local-in-both-schemes-chromium/tag-edit-390-dark.png"
+    },
+    {
+      "file": "tag-edit-390-light.png",
+      "original": "e2e/test-results/tags-tag-editing-keeps-col-056a0-ation-local-in-both-schemes-chromium/tag-edit-390-light.png"
+    },
+    {
+      "file": "tag-edit-768-dark.png",
+      "original": "e2e/test-results/tags-tag-editing-keeps-col-056a0-ation-local-in-both-schemes-chromium/tag-edit-768-dark.png"
+    },
+    {
+      "file": "tag-edit-768-light.png",
+      "original": "e2e/test-results/tags-tag-editing-keeps-col-056a0-ation-local-in-both-schemes-chromium/tag-edit-768-light.png"
+    }
+  ]
+}

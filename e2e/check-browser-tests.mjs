@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 // A green `go test` can include skipped browser tests. Require the existing
 // Stimulus integrations to actually pass, without changing their local opt-in.
 const required = new Set([
+  'TestSearchTabBrowser',
   'TestActionMenuBrowser',
   'TestGalleryActionMenuDuplicationBrowser',
   'TestTagModalBrowser',
@@ -11,6 +12,9 @@ const required = new Set([
   'TestShareModalTransactionsBrowser',
   'TestAgentKeyModalBrowser',
   'TestAgentPanesBrowser',
+  'TestAgentPreviewStampsMoveIndependentlyBrowser',
+  'TestAgentPreviewStalePaneBeforeWidgetSaveBrowser',
+  'TestAgentPreviewSaveBurstsCoalesceBrowser',
   'TestAgentPaneBreakpointFocusBrowser',
   'TestAgentPaneInitialLayoutBrowser',
   'TestAgentPaneRelayConsentBrowser',

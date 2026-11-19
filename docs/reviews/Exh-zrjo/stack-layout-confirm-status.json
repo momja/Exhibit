@@ -1,0 +1,15 @@
+{
+  "command": [
+    "go",
+    "test",
+    "./internal/api",
+    "-run",
+    "^TestGallerySpacesBrowser$",
+    "-count=1"
+  ],
+  "head": "68655f3a78724ee0ed90f6fa820dd1b12a169432",
+  "exitCode": 0,
+  "seconds": 42.03,
+  "runtimeAndValidationUnchanged": true,
+  "log": "/tmp/exhibit-zrjo-pr273-layout-confirm.log"
+}

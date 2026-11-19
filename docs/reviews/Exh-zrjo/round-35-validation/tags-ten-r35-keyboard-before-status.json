@@ -1,0 +1,19 @@
+{
+  "command": [
+    "npx",
+    "--no-install",
+    "playwright",
+    "test",
+    "specs/tags.spec.ts",
+    "--grep",
+    "tag changes persist"
+  ],
+  "cwd": "e2e",
+  "head": "e439f22ff452d9f98eb9d90f716ec95bfdda959e",
+  "startedAt": "2026-11-05T18:43:31.361458+00:00",
+  "seconds": 8.02,
+  "exitCode": 1,
+  "sourceFingerprint": "14f928e8fe9dd23fa7778d6bf6f40daf0960e4df3469eff52453c48f3b43ea78",
+  "sourceUnchanged": true,
+  "log": "/tmp/exhibit-zrjo-tags10-r35-keyboard-before.log"
+}

@@ -1,6 +1,6 @@
 ---
 id: Exh-l0wi
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-02T14:57:13Z

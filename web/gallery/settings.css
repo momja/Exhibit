@@ -9,13 +9,13 @@
  * internal/api/admin.go for where that authority actually lives. */
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(--color-ink);min-height:100vh}
-main{padding:var(--space-8);max-width:900px;margin:0 auto}
+main{padding:var(--page-top) var(--page-gutter);max-width:900px;margin:0 auto}
 
 /* --- lede -------------------------------------------------------------- */
-.lede h2{font-size:28px;font-weight:650;letter-spacing:-.025em}
-.lede p{font-size:14px;color:var(--color-muted);margin-top:7px;line-height:1.55;max-width:620px}
+.lede h2{font-size:var(--page-title-size);line-height:1.25;font-weight:650;letter-spacing:-.025em}
+.lede p{font-size:0.875rem;color:var(--color-muted);margin-top:7px;line-height:1.55;max-width:620px}
 .settings>.card{margin-top:26px}
-.settings-h3{font-size:15px;font-weight:600;margin-bottom:var(--space-6)}
+.settings-h3{font-size:0.9375rem;font-weight:600;margin-bottom:var(--space-6)}
 
 /* --- the account table ------------------------------------------------- */
 /* The table is the page. It scrolls inside its own wrapper rather than
@@ -27,10 +27,10 @@ main{padding:var(--space-8);max-width:900px;margin:0 auto}
  * a width:100% table meets a narrow container by crushing whichever column can
  * still give — the account name, the one column nobody can afford to lose —
  * instead of overflowing into the scroll this wrapper exists for. */
-.settings-table{width:100%;min-width:660px;border-collapse:collapse;font-size:13px}
+.settings-table{width:100%;min-width:660px;border-collapse:collapse;font-size:0.8125rem}
 /* Headers take the cells' horizontal padding, not just the vertical: with a
  * column added they otherwise run into each other as one word. */
-.settings-table th{text-align:left;font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--color-label);padding:0 var(--space-5) var(--space-3) 0;border-bottom:1px solid var(--color-hairline);white-space:nowrap}
+.settings-table th{text-align:left;font-size:var(--text-label);font-weight:600;letter-spacing:0;text-transform:none;color:var(--color-label);padding:0 var(--space-5) var(--space-3) 0;border-bottom:1px solid var(--color-hairline);white-space:nowrap}
 .settings-table td{padding:var(--space-5) var(--space-5) var(--space-5) 0;border-bottom:1px solid var(--color-hairline);vertical-align:middle}
 .settings-table tr:last-child td{border-bottom:none}
 .settings-name{font-weight:600;color:var(--color-ink-soft);word-break:break-all}
@@ -63,12 +63,12 @@ main{padding:var(--space-8);max-width:900px;margin:0 auto}
  * the limit above it and may be long — it wraps rather than widening the
  * table's scroll. */
 .settings-ref{margin-top:2px;white-space:normal;word-break:break-all;max-width:220px}
-.settings-h4{font-size:13px;font-weight:600;margin:var(--space-7) 0 var(--space-5)}
+.settings-h4{font-size:0.8125rem;font-weight:600;margin:var(--space-7) 0 var(--space-5)}
 
 /* --- the add-account form ---------------------------------------------- */
 .settings-form{display:flex;flex-direction:column;gap:var(--space-3)}
-.settings-label{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--color-label);margin-top:var(--space-3)}
-.settings-check{display:flex;align-items:center;gap:var(--space-3);font-size:13px;color:var(--color-ink-mid);margin-top:var(--space-5);cursor:pointer}
+.settings-label{font-size:var(--text-label);font-weight:600;letter-spacing:0;text-transform:none;color:var(--color-label);margin-top:var(--space-3)}
+.settings-check{display:flex;align-items:center;gap:var(--space-3);font-size:0.8125rem;color:var(--color-ink-mid);margin-top:var(--space-5);cursor:pointer}
 .settings-foot{display:flex;align-items:center;gap:var(--space-5);margin-top:var(--space-6);flex-wrap:wrap}
 .settings-foot .muted{line-height:1.5;max-width:420px}
 
@@ -78,12 +78,12 @@ main{padding:var(--space-8);max-width:900px;margin:0 auto}
  * about themselves, not an admin reading across a directory — and a table of
  * one row is a table pretending. The labels reuse .settings-label's type so
  * the two pages read as one surface. */
-.settings-facts{display:grid;grid-template-columns:auto 1fr;gap:var(--space-4) var(--space-7);align-items:baseline}
-.settings-facts dt{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--color-label);white-space:nowrap}
+.settings-facts{display:grid;grid-template-columns:8rem minmax(0,1fr);gap:var(--space-4) var(--space-7);align-items:baseline}
+.settings-facts dt{font-size:.6875rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--color-label);white-space:nowrap}
 /* An email address or a provider subject can be long and carries no spaces to
  * break at, so it wraps mid-string rather than widening the card past the
  * viewport — the same reason .settings-name does. */
-.settings-facts dd{font-size:14px;color:var(--color-ink-soft);word-break:break-all}
+.settings-facts dd{font-size:0.875rem;font-weight:500;color:var(--color-ink-soft);word-break:break-all}
 .settings-facts dd i{color:var(--color-muted);margin-right:var(--space-1)}
 
 /* --- danger zone (/profile, av-qo05) ----------------------------------- */
@@ -91,13 +91,13 @@ main{padding:var(--space-8);max-width:900px;margin:0 auto}
  * read, not after. The card keeps the shared .card surface and adds a
  * danger-tinted edge and heading, so it is still one of the page's sections
  * rather than a second component that happens to be red. */
-.card-danger{border:1px solid var(--color-danger);box-shadow:none}
+.card-danger{border:1px solid var(--color-danger-tint-border);box-shadow:none}
 .settings-h3-danger{display:flex;align-items:center;gap:var(--space-3);color:var(--color-danger-hover)}
 /* Body copy inside a card, danger-tinted or not. One rule with two names,
  * because the two are the same paragraph: the danger zone's weight comes from
  * the card's border and its heading, never from its sentences being a
  * different size. */
-.settings-copy,.settings-danger-copy{font-size:13px;color:var(--color-ink-soft);line-height:1.55;max-width:620px}
+.settings-copy,.settings-danger-copy{font-size:0.8125rem;color:var(--color-ink-soft);line-height:1.55;max-width:620px}
 .settings-danger-copy+.settings-danger-copy{margin-top:var(--space-5)}
 /* The reason beside a disabled control shares the button's .settings-foot row
  * and wraps under it on a narrow screen. A control that cannot act is useless
@@ -126,12 +126,12 @@ main{padding:var(--space-8);max-width:900px;margin:0 auto}
 /* One live region for every outcome on the page, success or refusal. The
  * refusals here are worth reading in full (the last-admin one explains what
  * to do instead), so it is a block of text rather than a toast that leaves. */
-.settings-status{margin-top:var(--space-6);padding:var(--space-5) var(--space-6);border-radius:var(--radius-md);font-size:13px;line-height:1.5;background:var(--color-panel);border:1px solid var(--color-hairline);color:var(--color-ink-soft)}
+.settings-status{margin-top:var(--space-6);padding:var(--space-5) var(--space-6);border-radius:var(--radius-md);font-size:0.8125rem;line-height:1.5;background:var(--color-panel);border:1px solid var(--color-hairline);color:var(--color-ink-soft)}
 .settings-status[hidden]{display:none}
 .settings-status.is-error{border-color:var(--color-danger);color:var(--color-danger-hover)}
 
 @media (max-width:640px){
-  main{padding:var(--space-5)}
+  main{padding:var(--page-top) var(--page-gutter)}
 }
 
 /* Shared button display rules must not reveal deferred account actions. */
@@ -141,12 +141,20 @@ main{padding:var(--space-8);max-width:900px;margin:0 auto}
  * stays in a separate browser-only region until dismissed. */
 .agent-grants-list{margin-top:var(--space-6)}
 .agent-grants-table{min-width:620px}
-.agent-grants-table td{font-size:12px}
+.agent-grants-table td{font-size:0.75rem}
 .agent-grants-table .settings-name{max-width:190px}
 .agent-grant-form{margin-top:var(--space-6)}
 .agent-grant-create{display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap;margin-top:var(--space-3)}
 .agent-grant-create .field{flex:1;min-width:180px}
-.agent-grant-token{font-family:monospace;font-size:12px}
+.agent-grant-token{font-family:monospace;font-size:0.75rem}
 .agent-grant-issued{border-top:1px solid var(--color-hairline);margin-top:var(--space-6)}
 .agent-grant-issued[hidden]{display:none}
-.agent-grant-command{background:var(--color-ground);border-radius:var(--radius-sm);padding:var(--space-4);margin:var(--space-3) 0 var(--space-5);font-size:12px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
+.agent-grant-command{background:var(--color-ground);border-radius:var(--radius-sm);padding:var(--space-4);margin:var(--space-3) 0 var(--space-5);font-size:0.75rem;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
+
+.settings-h3{display:flex;align-items:center;gap:8px}
+@media(max-width:640px){
+  .settings-facts{grid-template-columns:minmax(0,1fr);gap:6px}
+  .settings-facts dt:not(:first-child){margin-top:8px}
+}
+
+.settings-facts .settings-name{font-weight:inherit}

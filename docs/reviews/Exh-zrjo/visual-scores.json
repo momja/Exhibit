@@ -1,0 +1,665 @@
+{
+  "base": "44def51a",
+  "rubric": "visual-brief.md",
+  "categories": [
+    "Typography",
+    "Composition and spacing",
+    "Color harmony",
+    "Contrast and emphasis",
+    "Component visual consistency",
+    "Responsive visual polish"
+  ],
+  "threshold": 8,
+  "requiredJointConsecutivePasses": 2,
+  "jointPassingStreak": 2,
+  "rounds": [
+    {
+      "round": 5,
+      "build": "a65a7cfe",
+      "jointPass": false,
+      "reviewers": [
+        {
+          "reviewer": "sol",
+          "model": "gpt-6.1-sol",
+          "light": [
+            8,
+            7.5,
+            8,
+            7.5,
+            8,
+            7.5
+          ],
+          "dark": [
+            8,
+            7.5,
+            8,
+            7,
+            8,
+            7.5
+          ],
+          "taskId": "node:delegated-task:command%3Amcp%3A52c201fa-5413-436b-9b37-7898e9ae852d%3Adelegate-task%3AExh-zrjo-r5-sol-visual",
+          "report": "round-5-sol-visual.md"
+        },
+        {
+          "reviewer": "opus",
+          "model": "claude-opus-5-5",
+          "light": [
+            7,
+            7,
+            8,
+            7,
+            7,
+            7
+          ],
+          "dark": [
+            7,
+            7,
+            6,
+            6,
+            6,
+            7
+          ],
+          "taskId": "node:delegated-task:command%3Amcp%3A52c201fa-5413-436b-9b37-7898e9ae852d%3Adelegate-task%3AExh-zrjo-r5-opus-visual",
+          "report": "round-5-opus-visual.md"
+        }
+      ]
+    },
+    {
+      "round": 6,
+      "build": "7eaf8354",
+      "jointPass": false,
+      "reviewers": [
+        {
+          "reviewer": "sol",
+          "model": "gpt-6.1-sol",
+          "light": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ],
+          "dark": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ],
+          "taskId": "node:delegated-task:command%3Amcp%3A52c201fa-5413-436b-9b37-7898e9ae852d%3Adelegate-task%3AExh-zrjo-r6-sol-visual",
+          "report": "round-6-sol-visual.md"
+        },
+        {
+          "reviewer": "opus",
+          "model": "claude-opus-5-5",
+          "light": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            7.5
+          ],
+          "dark": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            7.5
+          ],
+          "taskId": "node:delegated-task:command%3Amcp%3A52c201fa-5413-436b-9b37-7898e9ae852d%3Adelegate-task%3AExh-zrjo-r6-opus-visual",
+          "report": "round-6-opus-visual.md"
+        }
+      ]
+    },
+    {
+      "round": 7,
+      "build": "a242183a",
+      "jointPass": false,
+      "reviewers": [
+        {
+          "reviewer": "sol",
+          "model": "gpt-6.1-sol",
+          "light": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ],
+          "dark": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ],
+          "taskId": "node:delegated-task:command%3Amcp%3A52c201fa-5413-436b-9b37-7898e9ae852d%3Adelegate-task%3AExh-zrjo-r7-sol-visual",
+          "report": "round-7-sol-visual.md"
+        },
+        {
+          "reviewer": "opus",
+          "model": "claude-opus-5-5",
+          "light": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            7.5
+          ],
+          "dark": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            7.5
+          ],
+          "taskId": "node:delegated-task:command%3Amcp%3A52c201fa-5413-436b-9b37-7898e9ae852d%3Adelegate-task%3AExh-zrjo-r7-opus-visual",
+          "report": "round-7-opus-visual.md"
+        }
+      ]
+    },
+    {
+      "round": 8,
+      "build": "4d725ba2",
+      "jointPass": true,
+      "reviewers": [
+        {
+          "reviewer": "sol",
+          "model": "gpt-6.1-sol",
+          "light": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ],
+          "dark": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ],
+          "taskId": "node:delegated-task:command%3Amcp%3A52c201fa-5413-436b-9b37-7898e9ae852d%3Adelegate-task%3AExh-zrjo-r8-sol-visual",
+          "report": "round-8-sol-visual.md"
+        },
+        {
+          "reviewer": "opus",
+          "model": "claude-opus-5-5",
+          "light": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ],
+          "dark": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ],
+          "taskId": "node:delegated-task:command%3Amcp%3A52c201fa-5413-436b-9b37-7898e9ae852d%3Adelegate-task%3AExh-zrjo-r8-opus-visual",
+          "report": "round-8-opus-visual.md"
+        }
+      ]
+    },
+    {
+      "round": 9,
+      "build": "4d725ba2",
+      "jointPass": false,
+      "reviewers": [
+        {
+          "reviewer": "sol",
+          "model": "gpt-6.1-sol",
+          "light": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ],
+          "dark": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ],
+          "taskId": "node:delegated-task:command%3Amcp%3A52c201fa-5413-436b-9b37-7898e9ae852d%3Adelegate-task%3AExh-zrjo-r9-sol-visual",
+          "report": "round-9-sol-visual.md"
+        },
+        {
+          "reviewer": "opus",
+          "model": "claude-opus-5-5",
+          "light": [
+            8,
+            8,
+            8,
+            7.5,
+            7,
+            8
+          ],
+          "dark": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ],
+          "taskId": "node:delegated-task:command%3Amcp%3A52c201fa-5413-436b-9b37-7898e9ae852d%3Adelegate-task%3AExh-zrjo-r9-opus-visual",
+          "report": "round-9-opus-visual.md"
+        }
+      ]
+    },
+    {
+      "round": 10,
+      "build": "1c86da10",
+      "jointPass": false,
+      "completion": "incomplete-provider-unavailable",
+      "reviewers": [
+        {
+          "reviewer": "sol",
+          "model": "gpt-6.1-sol",
+          "light": [
+            8,
+            8,
+            8,
+            7.5,
+            8,
+            8
+          ],
+          "dark": [
+            8,
+            8,
+            8,
+            7.5,
+            8,
+            8
+          ],
+          "taskId": "node:delegated-task:command%3Amcp%3A52c201fa-5413-436b-9b37-7898e9ae852d%3Adelegate-task%3AExh-zrjo-r10-sol-visual",
+          "report": "round-10-sol-visual.md"
+        },
+        {
+          "reviewer": "opus",
+          "model": "claude-opus-5-5",
+          "status": "unavailable",
+          "light": null,
+          "dark": null,
+          "taskId": "node:delegated-task:command%3Amcp%3A52c201fa-5413-436b-9b37-7898e9ae852d%3Adelegate-task%3AExh-zrjo-r10-opus-visual",
+          "report": "round-10-opus-unavailable.md",
+          "resetAt": "2026-11-04T09:50:00Z"
+        }
+      ]
+    },
+    {
+      "round": 11,
+      "build": "7e96d783",
+      "reviewers": [
+        {
+          "reviewer": "sol",
+          "status": "completed",
+          "taskId": "node:delegated-task:command%3Amcp%3A52c201fa-5413-436b-9b37-7898e9ae852d%3Adelegate-task%3AExh-zrjo-r11-sol-visual",
+          "report": "round-11-sol-visual.md",
+          "model": "gpt-6.1-sol",
+          "light": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ],
+          "dark": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        {
+          "reviewer": "opus",
+          "status": "completed",
+          "taskId": "node:delegated-task:command%3Amcp%3A3717ad70-b182-48fe-bf4e-e065e91a0ffe%3Adelegate-task%3AExh-zrjo-r11-opus-visual",
+          "clientRequestId": "Exh-zrjo-r11-opus-visual",
+          "model": "claude-opus-5-5",
+          "report": "round-11-opus-visual.md",
+          "light": [
+            8,
+            8,
+            8,
+            7.5,
+            7.5,
+            8
+          ],
+          "dark": [
+            8,
+            8,
+            8,
+            7.5,
+            7.5,
+            8
+          ]
+        }
+      ],
+      "jointPass": false
+    },
+    {
+      "round": 12,
+      "build": "b1b43d96",
+      "reviewers": [
+        {
+          "reviewer": "sol",
+          "model": "gpt-6.1-sol",
+          "status": "completed",
+          "taskId": "node:delegated-task:command%3Amcp%3A3717ad70-b182-48fe-bf4e-e065e91a0ffe%3Adelegate-task%3AExh-zrjo-r12-sol-visual",
+          "report": "round-12-sol-visual.md",
+          "light": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ],
+          "dark": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        {
+          "reviewer": "opus",
+          "model": "claude-opus-5-5",
+          "status": "completed",
+          "taskId": "node:delegated-task:command%3Amcp%3A3717ad70-b182-48fe-bf4e-e065e91a0ffe%3Adelegate-task%3AExh-zrjo-r12-opus-visual",
+          "report": "round-12-opus-visual.md",
+          "light": [
+            8,
+            8,
+            8,
+            7.5,
+            7.5,
+            8
+          ],
+          "dark": [
+            8,
+            8,
+            8,
+            8,
+            7.5,
+            8
+          ]
+        }
+      ],
+      "jointPass": false
+    },
+    {
+      "round": 13,
+      "build": "30bdaa5d",
+      "reviewers": [
+        {
+          "reviewer": "sol",
+          "model": "gpt-6.1-sol",
+          "status": "completed",
+          "taskId": "node:delegated-task:command%3Amcp%3A3717ad70-b182-48fe-bf4e-e065e91a0ffe%3Adelegate-task%3AExh-zrjo-r13-sol-visual",
+          "report": "round-13-sol-visual.md",
+          "light": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ],
+          "dark": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        {
+          "reviewer": "opus",
+          "model": "claude-opus-5-5",
+          "status": "completed",
+          "taskId": "node:delegated-task:command%3Amcp%3A3717ad70-b182-48fe-bf4e-e065e91a0ffe%3Adelegate-task%3AExh-zrjo-r13-opus-visual",
+          "report": "round-13-opus-visual.md",
+          "light": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ],
+          "dark": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      ],
+      "jointPass": true
+    },
+    {
+      "round": 14,
+      "build": "30bdaa5d",
+      "reviewers": [
+        {
+          "reviewer": "sol",
+          "model": "gpt-6.1-sol",
+          "status": "completed",
+          "taskId": "node:delegated-task:command%3Amcp%3A3717ad70-b182-48fe-bf4e-e065e91a0ffe%3Adelegate-task%3AExh-zrjo-r14-sol-visual",
+          "report": "round-14-sol-visual.md",
+          "light": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ],
+          "dark": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        {
+          "reviewer": "opus",
+          "model": "claude-opus-5-5",
+          "status": "completed",
+          "taskId": "node:delegated-task:command%3Amcp%3A3717ad70-b182-48fe-bf4e-e065e91a0ffe%3Adelegate-task%3AExh-zrjo-r14-opus-visual",
+          "report": "round-14-opus-visual.md",
+          "light": [
+            8,
+            7.5,
+            8,
+            8,
+            8,
+            8
+          ],
+          "dark": [
+            8,
+            7.5,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      ],
+      "jointPass": false
+    },
+    {
+      "round": 15,
+      "build": "01109602",
+      "reviewers": [
+        {
+          "reviewer": "sol",
+          "model": "gpt-6.1-sol",
+          "status": "completed",
+          "taskId": "node:delegated-task:command%3Amcp%3A3717ad70-b182-48fe-bf4e-e065e91a0ffe%3Adelegate-task%3AExh-zrjo-r15-sol-visual",
+          "report": "round-15-sol-visual.md",
+          "light": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ],
+          "dark": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        {
+          "reviewer": "opus",
+          "model": "claude-opus-5-5",
+          "status": "completed",
+          "taskId": "node:delegated-task:command%3Amcp%3A3717ad70-b182-48fe-bf4e-e065e91a0ffe%3Adelegate-task%3AExh-zrjo-r15-opus-visual",
+          "report": "round-15-opus-visual.md",
+          "light": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ],
+          "dark": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        }
+      ],
+      "jointPass": true
+    },
+    {
+      "round": 16,
+      "build": "01109602",
+      "reviewers": [
+        {
+          "reviewer": "sol",
+          "model": "gpt-6.1-sol",
+          "status": "completed",
+          "taskId": "node:delegated-task:command%3Amcp%3A3717ad70-b182-48fe-bf4e-e065e91a0ffe%3Adelegate-task%3AExh-zrjo-r16-sol-visual",
+          "report": "round-16-sol-visual.md",
+          "light": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ],
+          "dark": [
+            8,
+            8,
+            8,
+            8,
+            8,
+            8
+          ]
+        },
+        {
+          "reviewer": "opus",
+          "model": "claude-opus-5-5",
+          "status": "completed",
+          "taskId": "node:delegated-task:command%3Amcp%3Ae85b66a1-80e4-4f18-b2f8-56ea71c8b568%3Adelegate-task%3AExh-zrjo-r16-opus-visual-after-reset-2026-11-04",
+          "report": "round-16-opus-visual.md",
+          "light": [
+            8.0,
+            8.0,
+            8.0,
+            8.0,
+            8.0,
+            8.0
+          ],
+          "dark": [
+            8.0,
+            8.0,
+            8.0,
+            8.0,
+            8.0,
+            8.0
+          ],
+          "scoresAvailable": true,
+          "attempts": [
+            {
+              "clientRequestId": "Exh-zrjo-r16-opus-visual",
+              "taskId": "node:delegated-task:command%3Amcp%3A3717ad70-b182-48fe-bf4e-e065e91a0ffe%3Adelegate-task%3AExh-zrjo-r16-opus-visual",
+              "status": "failed",
+              "scoresAvailable": false,
+              "error": "Claude API rate limit reached. Try again later.",
+              "light": null,
+              "dark": null,
+              "providerMessage": "You've hit your 5-hour limit \u00b7 resets 2:50pm (UTC)",
+              "resetAt": "2026-11-04T14:50:00Z"
+            },
+            {
+              "clientRequestId": "Exh-zrjo-r16-opus-visual-after-reset-2026-11-04",
+              "taskId": "node:delegated-task:command%3Amcp%3Ae85b66a1-80e4-4f18-b2f8-56ea71c8b568%3Adelegate-task%3AExh-zrjo-r16-opus-visual-after-reset-2026-11-04",
+              "status": "completed",
+              "scoresAvailable": true,
+              "report": "round-16-opus-visual.md"
+            }
+          ],
+          "continuation": {
+            "scheduledTaskId": "scheduled-task:command:mcp:3717ad70-b182-48fe-bf4e-e065e91a0ffe:schedule-task:Exh-zrjo-r16-opus-reset-2026-11-04",
+            "scheduledFor": "2026-11-04T14:51:00Z",
+            "deleted": true,
+            "deletedOn": "2026-11-04"
+          }
+        }
+      ],
+      "jointPass": true
+    }
+  ],
+  "completed": true,
+  "qualifyingRounds": [
+    15,
+    16
+  ],
+  "applicationCommit": "0110960247e5fdece7f88699c85afb865824f8e6",
+  "completedAt": "2026-11-04 14:59:18 UTC"
+}

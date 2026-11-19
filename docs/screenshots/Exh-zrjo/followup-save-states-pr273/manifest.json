@@ -1,0 +1,21 @@
+{
+  "applicationCommit": "575559b5abaadc997a6faf62be3669e4881cfe27",
+  "assetVersion": "2f37c8103d52",
+  "source": "passing21-case E2E on disposable artifacts; deliberate503 simulation",
+  "files": [
+    "save-error-320-dark.png",
+    "save-error-320-light.png",
+    "saved-1280-dark.png",
+    "saved-1280-light.png",
+    "saved-320-dark.png",
+    "saved-320-light.png",
+    "saved-390-dark.png",
+    "saved-390-light.png",
+    "saving-1280-dark.png",
+    "saving-1280-light.png",
+    "saving-320-dark.png",
+    "saving-320-light.png",
+    "saving-390-dark.png",
+    "saving-390-light.png"
+  ]
+}

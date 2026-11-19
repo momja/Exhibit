@@ -428,6 +428,10 @@ func TestCallbackRejectsBadFlows(t *testing.T) {
 		ro.ServeHTTP(w, req)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		assert.Equal(t, 0, idp.exchanges, "a mismatched state never reaches the provider")
+		assert.Contains(t, w.Body.String(), "Your sign-in attempt expired or could not be verified.")
+		assert.Contains(t, w.Body.String(), `href="/auth/login">Return to sign in</a>`)
+		assert.NotContains(t, w.Body.String(), "login state mismatch")
+		assert.Equal(t, "no-store", w.Header().Get("Cache-Control"))
 	})
 
 	t.Run("no flow cookies", func(t *testing.T) {

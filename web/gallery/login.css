@@ -22,7 +22,7 @@
 .login-error i{font-size:16px;flex:0 0 auto}
 
 .login-form{width:100%;margin-top:var(--space-7);display:flex;flex-direction:column;gap:var(--space-3)}
-.login-label{font-size:13px;font-weight:500;color:var(--color-ink-soft)}
+.login-label{font-size:var(--text-label);font-weight:600;line-height:1.5;color:var(--color-label)}
 /* The label of the second field needs air above it that the first does not. */
 .login-form .login-label+.field{margin-bottom:var(--space-3)}
 .login-submit{margin-top:var(--space-4);justify-content:center;padding:var(--space-4) 18px;font-size:15px}

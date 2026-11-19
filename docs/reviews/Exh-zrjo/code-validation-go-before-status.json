@@ -1,0 +1,16 @@
+{
+  "command": [
+    "go",
+    "test",
+    "-short",
+    "./..."
+  ],
+  "cwd": "/home/maxomdal/.t3/worktrees/Exhibit/feature-Exh-zrjo-ui-council",
+  "head": "8a4c0fe1e07a43a7bd09b94de1d9ad3754262913",
+  "startedAt": "2026-11-06T01:12:49.935710+00:00",
+  "seconds": 455.71,
+  "exitCode": 1,
+  "sourceFingerprint": "a3018c58107943ba64e101805327c2ce3e584fe0ff13fcaf2c468fbf04c213af",
+  "sourceUnchanged": true,
+  "log": "/tmp/exhibit-zrjo-tags10-simplicity-go-confirm.log"
+}

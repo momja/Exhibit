@@ -1,0 +1,90 @@
+
+> test
+> playwright test
+
+
+Running 14 tests using 1 worker
+
+(node:22138) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   1 [chromium] › specs/duplicate.spec.ts:23:1 › keyboard focus stays in the modal and every cancellation path restores the menu trigger (10.6s)
+  ✓   2 [chromium] › specs/duplicate.spec.ts:50:1 › save refreshes server-rendered cards and replacement components work across two cycles (4.2s)
+  ✓   3 [chromium] › specs/duplicate.spec.ts:87:1 › Escape, backdrop, and repeated submission cannot dismiss or duplicate an in-flight save (2.0s)
+  ✓   4 [chromium] › specs/duplicate.spec.ts:123:1 › a committed save with a lost response retries the same identity and creates only one copy (3.9s)
+  ✓   5 [chromium] › specs/duplicate.spec.ts:157:1 › a definite refusal leaves editable input and permits a corrected save (4.1s)
+  ✓   6 [chromium] › specs/state.spec.ts:7:1 › localStorage survives reload and a fresh owner browser context through server state (7.1s)
+  ✓   7 [chromium] › specs/ui-appearance.spec.ts:3:1 › source editor remains legible through actual light/dark changes (4.7s)
+  ✓   8 [chromium] › specs/ui-appearance.spec.ts:44:1 › source syntax stays differentiated and readable in both color schemes (18.2s)
+  ✘   9 [chromium] › specs/ui-appearance.spec.ts:106:1 › word selection remains visible on the active source line (33.0s)
+(node:23451) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  10 [chromium] › specs/ui-appearance.spec.ts:191:1 › source find and line-navigation controls follow the shared UI in both themes (32.3s)
+(node:23700) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  11 [chromium] › specs/ui-appearance.spec.ts:253:1 › phone share controls and choices compose cleanly in both themes (6.4s)
+  ✓  12 [chromium] › specs/ui-feedback.spec.ts:3:1 › creation validation names and focuses the field for each method (2.5s)
+  ✓  13 [chromium] › specs/ui-feedback.spec.ts:41:1 › pending creation submits once, preserves input, and recovers from a refusal (2.1s)
+  ✓  14 [chromium] › specs/ui-feedback.spec.ts:73:1 › history and viewer controls fit a narrow phone and enlarged text (4.9s)
+
+
+  1) [chromium] › specs/ui-appearance.spec.ts:106:1 › word selection remains visible on the active source line
+
+    Test timeout of 30000ms exceeded.
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/ui-appearance-word-selecti-adfd6-e-on-the-active-source-line-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/ui-appearance-word-selecti-adfd6-e-on-the-active-source-line-chromium/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/ui-appearance-word-selecti-adfd6-e-on-the-active-source-line-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/ui-appearance-word-selecti-adfd6-e-on-the-active-source-line-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [chromium] › specs/ui-appearance.spec.ts:191:1 › source find and line-navigation controls follow the shared UI in both themes
+
+    Test timeout of 30000ms exceeded.
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator: locator('.cm-editor').filter({ has: getByRole('textbox', { name: 'Artifact source', exact: true }) }).locator('.cm-dialog')
+    Expected: 0
+    Error: Test timeout of 30000ms exceeded.
+
+    Call log:
+      - Expect "toHaveCount" locator('.cm-editor').filter({ has: getByRole('textbox', { name: 'Artifact source', exact: true }) }).locator('.cm-dialog') with timeout 10000ms
+      - waiting for locator('.cm-editor').filter({ has: getByRole('textbox', { name: 'Artifact source', exact: true }) }).locator('.cm-dialog')
+      - Test timeout of 30000ms exceeded.
+
+
+      243 |         await dialog.locator('input[name=line]').fill('2');
+      244 |         await dialog.locator('input[name=line]').press('Enter');
+    > 245 |         await expect(dialog).toHaveCount(0);
+          |                              ^
+      246 |         await expect(source).toContainText('Preserve it twice');
+      247 |       }
+      248 |     }
+        at /home/maxomdal/.t3/worktrees/Exhibit/feature-Exh-zrjo-ui-council/e2e/specs/ui-appearance.spec.ts:245:30
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/ui-appearance-source-find--9a3a2-he-shared-UI-in-both-themes-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/ui-appearance-source-find--9a3a2-he-shared-UI-in-both-themes-chromium/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/ui-appearance-source-find--9a3a2-he-shared-UI-in-both-themes-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/ui-appearance-source-find--9a3a2-he-shared-UI-in-both-themes-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    [chromium] › specs/ui-appearance.spec.ts:106:1 › word selection remains visible on the active source line
+    [chromium] › specs/ui-appearance.spec.ts:191:1 › source find and line-navigation controls follow the shared UI in both themes
+  12 passed (2.5m)

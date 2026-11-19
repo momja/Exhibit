@@ -1,0 +1,11 @@
+{
+  "command": [
+    "make",
+    "build"
+  ],
+  "head": "287d95f78f143b7e08dfd54cfd2ffa9cd07ae9f9",
+  "exitCode": 0,
+  "seconds": 19.19,
+  "runtimeAndValidationUnchanged": true,
+  "log": "/tmp/exhibit-zrjo-pr273-empty-build.log"
+}

@@ -1,0 +1,17 @@
+{
+  "command": [
+    "npm",
+    "test",
+    "--",
+    "--grep",
+    "a tag mutation stays locked|tag refresh honors|tag refresh renders|tag editing keeps color|pending creation submits once|Back from a completed import|persisted-page recovery"
+  ],
+  "cwd": "/home/maxomdal/.t3/worktrees/Exhibit/feature-Exh-zrjo-ui-council/e2e",
+  "head": "2e2fc9bc6aa0dcdb03dfa829921479a4c56045e4",
+  "startedAt": "2026-11-06T01:11:49.914910+00:00",
+  "seconds": 28.23,
+  "exitCode": 0,
+  "sourceFingerprint": "a3018c58107943ba64e101805327c2ce3e584fe0ff13fcaf2c468fbf04c213af",
+  "sourceUnchanged": true,
+  "log": "/tmp/exhibit-zrjo-tags10-simplicity-regressions-confirm.log"
+}

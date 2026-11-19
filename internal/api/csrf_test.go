@@ -73,9 +73,13 @@ type getRoute struct {
 // to the mux without adding a row here fails the suite on purpose: the point is
 // that someone states, once, whether the new handler reads or writes.
 var appOriginGETRoutes = []getRoute{
+	{route: "/activity"},
+	{route: "/partials/gallery-grid/activity"},
 	{route: "/.well-known/oauth-authorization-server"},
 	// Consent GET only displays authority; approval is a protected POST.
 	{route: "/oauth/authorize"},
+	{route: "/search"},
+	{route: "/partials/gallery-grid/search"},
 	{route: "/shared"},
 	{route: "/shared-by-me"},
 	{route: "/partials/gallery-grid/shared"},

@@ -1,0 +1,108 @@
+{
+  "round": 29,
+  "applicationCommit": "575559b5abaadc997a6faf62be3669e4881cfe27",
+  "assetVersion": "2f37c8103d52",
+  "report": "round-29-sol-followup.md",
+  "taskId": "node:delegated-task:command%3Amcp%3Abb622e97-24f4-48e5-90ab-d51f24f155e2%3Adelegate-task%3AExh-zrjo-r29-sol-followup-pr273",
+  "categories": [
+    "Typography",
+    "Composition and spacing",
+    "Color harmony",
+    "Contrast and emphasis",
+    "Component visual consistency",
+    "Responsive visual polish",
+    "Save discoverability and feedback"
+  ],
+  "light": [
+    9.0,
+    9.0,
+    9.0,
+    9.0,
+    9.0,
+    9.0,
+    9.0
+  ],
+  "dark": [
+    9.0,
+    9.0,
+    9.0,
+    9.0,
+    9.0,
+    9.0,
+    9.0
+  ],
+  "verifiedActualScoreCount": 28,
+  "solPass": true,
+  "opusStatus": "completed",
+  "jointPass": false,
+  "jointPassingStreak": 0,
+  "completed": false,
+  "validationReceipts": [
+    {
+      "command": [
+        "go",
+        "test",
+        "-short",
+        "./..."
+      ],
+      "head": "575559b5abaadc997a6faf62be3669e4881cfe27",
+      "exitCode": 0,
+      "seconds": 503.36,
+      "runtimeAndValidationUnchanged": true,
+      "log": "/tmp/exhibit-zrjo-pr273-empty-go-confirm.log"
+    },
+    {
+      "command": [
+        "node",
+        "e2e/capture-ui.mjs",
+        "docs/screenshots/Exh-zrjo/followup-round-29"
+      ],
+      "head": "575559b5abaadc997a6faf62be3669e4881cfe27",
+      "exitCode": 0,
+      "seconds": 306.12,
+      "runtimeAndValidationUnchanged": true,
+      "log": "/tmp/exhibit-zrjo-pr273-empty-capture.log"
+    },
+    {
+      "command": [
+        "make",
+        "e2e"
+      ],
+      "head": "575559b5abaadc997a6faf62be3669e4881cfe27",
+      "exitCode": 0,
+      "seconds": 140.55,
+      "runtimeAndValidationUnchanged": true,
+      "log": "/tmp/exhibit-zrjo-pr273-empty-e2e-confirm.log"
+    }
+  ],
+  "captureCount": 244,
+  "captureWidths": [
+    320,
+    390,
+    640,
+    768,
+    1280
+  ],
+  "captureErrors": [],
+  "captureMediaAgrees": true,
+  "runtimeScope": "internal web e2e cmd scripts Makefile go.mod go.sum, no exclusions",
+  "opusLight": [
+    9.0,
+    9.0,
+    9.0,
+    9.0,
+    8.5,
+    9.0,
+    9.0
+  ],
+  "opusDark": [
+    9.0,
+    9.0,
+    9.0,
+    9.0,
+    8.5,
+    9.0,
+    9.0
+  ],
+  "reportArithmeticNote": "Opus narrative13of14 conflicts with its actual table:12scores9 plus2scores8.5. Table controls."
+}

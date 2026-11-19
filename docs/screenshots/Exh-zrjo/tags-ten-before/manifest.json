@@ -1,0 +1,119 @@
+{
+  "applicationCommit": "42c94eb1cb12a74108885cc1cbb7aaf7d11f5721",
+  "assetVersion": "aa7a00afd7a2",
+  "source": "Parent own T3 live tabs, actual scheme/resize; before focused10 refinements",
+  "captures": [
+    {
+      "width": 1280,
+      "scheme": "light",
+      "view": "tags",
+      "url": "http://t3code:18280/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit?return_to=%2Fsearch",
+      "screenshotPath": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw3rmzpa-b8abb6e1.png",
+      "proof": {
+        "width": 1280,
+        "dark": false,
+        "asset": "http://t3code:18280/assets/v/aa7a00afd7a2/htmx/htmx.min.js",
+        "overflow": 0
+      },
+      "file": "tags-1280-light.png"
+    },
+    {
+      "width": 1280,
+      "scheme": "light",
+      "view": "edit-tag",
+      "url": "http://t3code:18280/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit?return_to=%2Fsearch",
+      "screenshotPath": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw3rn043-138cbfcb.png",
+      "proof": {
+        "width": 1280,
+        "dark": false,
+        "asset": "http://t3code:18280/assets/v/aa7a00afd7a2/htmx/htmx.min.js",
+        "overflow": 0
+      },
+      "file": "edit-tag-1280-light.png"
+    },
+    {
+      "width": 1280,
+      "scheme": "dark",
+      "view": "tags",
+      "url": "http://t3code:18280/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit?return_to=%2Fsearch",
+      "screenshotPath": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw3rn0ie-4934f69e.png",
+      "proof": {
+        "width": 1280,
+        "dark": true,
+        "asset": "http://t3code:18280/assets/v/aa7a00afd7a2/htmx/htmx.min.js",
+        "overflow": 0
+      },
+      "file": "tags-1280-dark.png"
+    },
+    {
+      "width": 1280,
+      "scheme": "dark",
+      "view": "edit-tag",
+      "url": "http://t3code:18280/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit?return_to=%2Fsearch",
+      "screenshotPath": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw3rn0r5-7605ec9c.png",
+      "proof": {
+        "width": 1280,
+        "dark": true,
+        "asset": "http://t3code:18280/assets/v/aa7a00afd7a2/htmx/htmx.min.js",
+        "overflow": 0
+      },
+      "file": "edit-tag-1280-dark.png"
+    },
+    {
+      "width": 390,
+      "scheme": "light",
+      "view": "tags",
+      "url": "http://t3code:18280/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit?return_to=%2Fsearch",
+      "screenshotPath": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw3rn15t-456cff3a.png",
+      "proof": {
+        "width": 390,
+        "dark": false,
+        "asset": "http://t3code:18280/assets/v/aa7a00afd7a2/htmx/htmx.min.js",
+        "overflow": 0
+      },
+      "file": "tags-390-light.png"
+    },
+    {
+      "width": 390,
+      "scheme": "light",
+      "view": "edit-tag",
+      "url": "http://t3code:18280/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit?return_to=%2Fsearch",
+      "screenshotPath": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw3rn1he-9902c440.png",
+      "proof": {
+        "width": 390,
+        "dark": false,
+        "asset": "http://t3code:18280/assets/v/aa7a00afd7a2/htmx/htmx.min.js",
+        "overflow": 0
+      },
+      "file": "edit-tag-390-light.png"
+    },
+    {
+      "width": 390,
+      "scheme": "dark",
+      "view": "tags",
+      "url": "http://t3code:18280/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit?return_to=%2Fsearch",
+      "screenshotPath": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw3rn1ui-f0edfef0.png",
+      "proof": {
+        "width": 390,
+        "dark": true,
+        "asset": "http://t3code:18280/assets/v/aa7a00afd7a2/htmx/htmx.min.js",
+        "overflow": 0
+      },
+      "file": "tags-390-dark.png"
+    },
+    {
+      "width": 390,
+      "scheme": "dark",
+      "view": "edit-tag",
+      "url": "http://t3code:18280/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit?return_to=%2Fsearch",
+      "screenshotPath": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw3rn23s-8236d2ce.png",
+      "proof": {
+        "width": 390,
+        "dark": true,
+        "asset": "http://t3code:18280/assets/v/aa7a00afd7a2/htmx/htmx.min.js",
+        "overflow": 0
+      },
+      "file": "edit-tag-390-dark.png"
+    }
+  ]
+}

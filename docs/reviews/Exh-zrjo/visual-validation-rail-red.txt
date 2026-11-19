@@ -1,0 +1,106 @@
+2026/11/04 11:39:51 OK   001_initial.sql (4.68ms)
+2026/11/04 11:39:51 OK   002_source_url.sql (1.81ms)
+2026/11/04 11:39:51 OK   003_tag_color.sql (2.35ms)
+2026/11/04 11:39:51 OK   004_tag_name_unique.sql (2.01ms)
+2026/11/04 11:39:51 OK   005_downloads_approved.sql (1.9ms)
+2026/11/04 11:39:51 OK   006_clipboard_approved.sql (1.96ms)
+2026/11/04 11:39:51 OK   007_agent.sql (1.89ms)
+2026/11/04 11:39:51 OK   008_repair_downloads_approved.go (1.36ms)
+2026/11/04 11:39:51 OK   009_network_origins.sql (4.05ms)
+2026/11/04 11:39:51 OK   010_fts_source_tags.sql (5.56ms)
+2026/11/04 11:39:51 OK   011_widget.sql (2.21ms)
+2026/11/04 11:39:51 OK   012_repair_widget_blob_id.go (1.42ms)
+2026/11/04 11:39:51 OK   013_users_sessions.sql (2.3ms)
+2026/11/04 11:39:51 OK   014_state_principal.sql (4.54ms)
+2026/11/04 11:39:51 OK   015_drop_share_expiry.sql (4.55ms)
+2026/11/04 11:39:51 OK   016_user_credentials.sql (2.96ms)
+2026/11/04 11:39:51 OK   017_user_disabled.sql (2.17ms)
+2026/11/04 11:39:51 OK   018_links_approved.sql (2.09ms)
+2026/11/04 11:39:51 OK   021_blob_sizes.sql (1.82ms)
+2026/11/04 11:39:51 OK   022_entitlements.sql (3.86ms)
+2026/11/04 11:39:51 OK   023_normalize_network_origins.go (1.51ms)
+2026/11/04 11:39:51 OK   024_pending_blob_deletions.sql (1.89ms)
+2026/11/04 11:39:51 OK   025_artifact_assets.sql (2.29ms)
+2026/11/04 11:39:51 OK   026_blob_references_assets.sql (1.71ms)
+2026/11/04 11:39:51 OK   027_media_approved.sql (2.99ms)
+2026/11/04 11:39:51 OK   028_share_grants.sql (7.15ms)
+2026/11/04 11:39:51 OK   029_share_counts.sql (4.63ms)
+2026/11/04 11:39:51 OK   030_agent_usage.sql (2.55ms)
+2026/11/04 11:39:51 OK   031_geolocation_approved.sql (2.92ms)
+2026/11/04 11:39:51 OK   032_artifact_versions.sql (3.11ms)
+2026/11/04 11:39:51 OK   033_conversation_record.sql (5.09ms)
+2026/11/04 11:39:51 OK   034_asset_identities.sql (2.08ms)
+2026/11/04 11:39:51 OK   035_agent_authority.sql (3.21ms)
+2026/11/04 11:39:51 OK   036_hosted_account_deletions.sql (1.75ms)
+2026/11/04 11:39:51 OK   037_agent_thinking_level.sql (3.05ms)
+2026/11/04 11:39:51 OK   038_drop_agent_authority.sql (3.05ms)
+2026/11/04 11:39:51 OK   039_split_shares.sql (12.8ms)
+2026/11/04 11:39:51 OK   040_artifacts_owner.sql (1.92ms)
+2026/11/04 11:39:51 OK   041_gallery_filter_indexes.sql (2.44ms)
+2026/11/04 11:39:51 OK   042_clerk_identity_deletion.sql (4.12ms)
+2026/11/04 11:39:51 OK   043_agent_grants.sql (2.14ms)
+2026/11/04 11:39:51 OK   044_connections.sql (3.13ms)
+2026/11/04 11:39:51 OK   045_relay.sql (9.34ms)
+2026/11/04 11:39:51 OK   046_connection_requests.sql (2.25ms)
+2026/11/04 11:39:51 OK   047_connection_data_policies.sql (2.62ms)
+2026/11/04 11:39:51 OK   048_generic_basic_connections.sql (1.58ms)
+2026/11/04 11:39:51 OK   049_vendor_engines.sql (5.29ms)
+2026/11/04 11:39:51 OK   050_relay_single_consent.sql (16.11ms)
+2026/11/04 11:39:51 OK   051_personal_connections.sql (2.13ms)
+2026/11/04 11:39:51 OK   052_pending_vendor_connections.sql (2.77ms)
+2026/11/04 11:39:51 OK   053_connection_cache_bounds.sql (4ms)
+2026/11/04 11:39:51 goose: successfully migrated database to version: 53
+2026/11/04 11:39:51 INFO sqlite migrations applied duration=188.254474ms
+2026/11/04 11:39:51 INFO request method=GET path=/shared status=200 duration=13.492643ms
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/phosphor/regular.css status=200 duration=9.553728ms
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/gallery/tokens.css status=200 duration=4.29737ms
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/gallery/components.js status=200 duration=2.279642ms
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/gallery/api.js status=200 duration=1.334361ms
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/gallery/index.css status=200 duration=8.402533ms
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/gallery/controllers.js status=200 duration=838.824µs
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/gallery/index.js status=200 duration=277.663µs
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/htmx/htmx.min.js status=200 duration=12.917191ms
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/gallery/components.css status=200 duration=18.952875ms
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/phosphor/Phosphor.woff2 status=200 duration=160.706µs
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/gallery/action-menu-controller.js status=200 duration=432.246µs
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/stimulus/stimulus.js status=200 duration=8.978276ms
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/gallery/modal-controller.js status=200 duration=183.164µs
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/gallery/unsaved-changes-controller.js status=200 duration=259.289µs
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/gallery/relay-host-controller.js status=200 duration=820.741µs
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/gallery/connections-controller.js status=200 duration=588.868µs
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/gallery/clerk-controller.js status=200 duration=409.787µs
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/gallery/account-deletion-controller.js status=200 duration=391.704µs
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/gallery/filter-sheet-controller.js status=200 duration=1.189112ms
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/gallery/space-tabs-controller.js status=200 duration=283.205µs
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/gallery/floating-header-controller.js status=200 duration=103.249µs
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/gallery/gallery-space-controller.js status=200 duration=154.29µs
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/gallery/gallery-controller.js status=200 duration=371.58µs
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/gallery/scroll-chrome-controller.js status=200 duration=406.579µs
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/gallery/gallery.js status=200 duration=431.661µs
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/gallery/modal.js status=200 duration=528.786µs
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/gallery/api-module.js status=200 duration=246.455µs
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/gallery/editor-session.js status=200 duration=297.205µs
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/gallery/outside-press.js status=200 duration=249.081µs
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/gallery/relay-request.js status=200 duration=286.413µs
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/gallery/clerk-appearance.js status=200 duration=360.787µs
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/gallery/clerk-client.js status=200 duration=552.41µs
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/gallery/clerk-menu.js status=200 duration=229.247µs
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/gallery/pip.js status=200 duration=981.156µs
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/gallery/gallery-widgets.js status=200 duration=371.871µs
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/gallery/gallery-return.js status=200 duration=267.456µs
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/gallery/scroll-chrome.js status=200 duration=235.955µs
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/gallery/duplicate.js status=200 duration=1.96727ms
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/gallery/event-scope.js status=200 duration=1.34486ms
+2026/11/04 11:39:51 INFO request method=GET path=/assets/v/356ca1fa22d1/gallery/pip-placement.js status=200 duration=522.078µs
+--- FAIL: TestGallerySpacesBrowser (0.88s)
+    --- FAIL: TestGallerySpacesBrowser/desktop (0.88s)
+        galleryspaces_browser_test.go:63:
+                Error Trace:    /home/maxomdal/.t3/worktrees/Exhibit/feature-Exh-zrjo-ui-council/internal/api/galleryspaces_browser_test.go:57
+                                                        /home/maxomdal/.t3/worktrees/Exhibit/feature-Exh-zrjo-ui-council/internal/api/galleryspaces_browser_test.go:63
+                                                        /home/maxomdal/.t3/worktrees/Exhibit/feature-Exh-zrjo-ui-council/internal/api/galleryspaces_browser_test.go:83
+                Error:          Should be true
+                Test:           TestGallerySpacesBrowser/desktop
+                Messages:       desktop destination labels stay on one line alongside two-digit counts
+FAIL
+FAIL    github.com/momja/Exhibit/internal/api   0.907s
+FAIL

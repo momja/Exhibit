@@ -67,7 +67,7 @@ func TestPersonalConnectionsBrowser(t *testing.T) {
 			base := app.URL + "/connections?artifact=" + id
 			require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(base), chromedp.Poll[chromedp.Void](`document.querySelector('.connect-submit')?.textContent === 'Continue to GitHub'`)))
 			check(`!document.querySelector('#connection-origin, #connection-secret, #connection-header, [name="share_with_recipients"]') && Array.from(document.querySelector('#connection-kind').options).every(o => o.value === 'github')`, "ordinary setup contains named services and no custom credential or account-sharing inputs")
-			check(`document.querySelector('.connection-grant').textContent.includes('Allowed for your account only.') && document.body.textContent.includes('Saved results are separate') && document.documentElement.scrollWidth <= innerWidth`, "personal permission and saved results are distinct, with no horizontal overflow")
+			check(`document.querySelector('.connection-grant').textContent.includes('Allowed for your account only.') && document.body.textContent.includes('Saved data') && document.documentElement.scrollWidth <= innerWidth`, "personal permission and saved results are distinct, with no horizontal overflow")
 			check(fmt.Sprintf(`(() => { const link = document.querySelector('.connect-request a'); const url = new URL(link.href); return link.textContent === 'Connect account' && url.searchParams.get('artifact') === %q && url.searchParams.get('provider') === 'github'; })()`, id), "agent request offers a concrete setup action tied to the tool")
 			_, err = chromedp.RunResponse(ctx, chromedp.Click(chromedp.CSS(`.connect-request a`)))
 			require.NoError(t, err)

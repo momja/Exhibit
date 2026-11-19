@@ -1,0 +1,23 @@
+{
+  "applicationCommit": "235a5c9ecddd7494a20eaef32e55c0320994adad",
+  "assetVersion": "b1f015b9d4bf",
+  "sourceFingerprint": "b242d0432fd608bc915891a342025e35d2ff19dfb027f4959cc82849b778e851",
+  "scope": [
+    "internal",
+    "web",
+    "e2e",
+    "cmd",
+    "scripts",
+    "Makefile",
+    "go.mod",
+    "go.sum"
+  ],
+  "scopedDiff": "",
+  "binarySha256": "3e9cf847e05ddf4c9ed01fd8ca15d2151c6c6069db0373246ed47cb97cd6f1bb",
+  "mainPID": 290478,
+  "mainExecutableSha256": "3e9cf847e05ddf4c9ed01fd8ca15d2151c6c6069db0373246ed47cb97cd6f1bb",
+  "playgroundPID": 290564,
+  "playgroundExecutableSha256": "3e9cf847e05ddf4c9ed01fd8ca15d2151c6c6069db0373246ed47cb97cd6f1bb",
+  "vcsStamp": false,
+  "proof": "Clean entire scope plus identical current executables and versioned assets, not VCS extraction. Build occurred on parent HEAD before committing exactly this source."
+}

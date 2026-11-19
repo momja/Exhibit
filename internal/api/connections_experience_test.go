@@ -55,11 +55,56 @@ func TestConnectionRequestActionsKeepToolAndSelectExistingAccount(t *testing.T) 
 	w = doJSON(t, ro, http.MethodGet, "/connections?artifact="+id, nil)
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	assert.Contains(t, w.Body.String(), "connection="+connection.ID+"#connection-access")
-	assert.Contains(t, w.Body.String(), "Allow this tool")
+	assert.Contains(t, w.Body.String(), "Allow this artifact")
 	assert.NotContains(t, w.Body.String(), `name="sharing"`)
-	assert.Contains(t, w.Body.String(), "Saved results are separate")
+	assert.Contains(t, w.Body.String(), "Saved data")
 	w = doJSON(t, ro, http.MethodGet, "/partials/agent-connection-requests?artifact="+id, nil)
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	assert.Contains(t, w.Body.String(), "connection="+connection.ID+"#connection-access")
 	assert.Contains(t, w.Body.String(), request.Reason)
+}
+
+func TestArtifactConnectionsOnlySuggestAvailableNextSteps(t *testing.T) {
+	for _, tc := range []struct {
+		name                      string
+		custom, advanced, account bool
+	}{
+		{name: "no setup"},
+		{name: "custom setup only in advanced", custom: true},
+		{name: "available advanced setup", custom: true, advanced: true},
+		{name: "existing account", custom: true, account: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ro := newTestRouter(t)
+			ro.cfg.Relay.Enabled = true
+			ro.cfg.Connections = connectors.New(connectors.Config{CustomEnabled: tc.custom, Store: ro.cfg.Store.(*store.SQLiteStore), Box: ro.cfg.Secrets})
+			id := createOwnArtifact(t, ro)
+			if tc.account {
+				_, err := ro.cfg.Connections.Create(context.Background(), 1, connectors.CreateRequest{Name: "My account", Recipe: "bearer", Origin: "https://api.example.test", Secret: "fixture-only"}, connectors.UnlimitedLimits())
+				require.NoError(t, err)
+			}
+			for _, base := range []string{"/connections", "/partials/connections"} {
+				path := base + "?artifact=" + id
+				if tc.advanced {
+					path += "&advanced=1"
+				}
+				w := doJSON(t, ro, http.MethodGet, path, nil)
+				require.Equal(t, http.StatusOK, w.Code)
+				body := w.Body.String()
+				if tc.account {
+					assert.Contains(t, body, "Choose an account to review")
+					assert.Contains(t, body, `data-action="submit->connections#grant"`)
+				} else {
+					assert.NotContains(t, body, "Choose an account to review")
+					assert.NotContains(t, body, `data-action="submit->connections#grant"`)
+					if tc.custom && tc.advanced {
+						assert.Contains(t, body, "Connect your own account first")
+					} else {
+						assert.Contains(t, body, "No accounts are available for this artifact.")
+						assert.NotContains(t, body, "Connect your own account first")
+					}
+				}
+			}
+		})
+	}
 }

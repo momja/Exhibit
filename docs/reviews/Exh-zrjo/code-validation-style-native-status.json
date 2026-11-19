@@ -1,0 +1,18 @@
+{
+  "command": [
+    "go",
+    "test",
+    "./internal/api",
+    "-run",
+    "^Test(EditPageRendersTagsPanel|TagModalBrowser)$",
+    "-count=1"
+  ],
+  "cwd": "/home/maxomdal/.t3/worktrees/Exhibit/feature-Exh-zrjo-ui-council",
+  "head": "6a18f7b09cf0711ad9d0112100bfb035f6c5a2eb",
+  "startedAt": "2026-11-06T01:32:30.969719+00:00",
+  "seconds": 18.19,
+  "exitCode": 0,
+  "sourceFingerprint": "fa051558854645e516368832b47cac215cb67bc7c46d52bb637200dab94532e9",
+  "sourceUnchanged": true,
+  "log": "/tmp/exhibit-zrjo-tags10-simplicity-style-native.log"
+}

@@ -1,0 +1,9 @@
+{
+  "ticket": "/home/maxomdal/.t3/worktrees/Exhibit/feature-Exh-zrjo-ui-council/.tickets/Exh-zrjo.md",
+  "branch": "feature/Exh-zrjo/ui-council",
+  "command": "tk close Exh-zrjo",
+  "exitCode": 0,
+  "stdout": "Updated Exh-zrjo -> closed",
+  "recordedAt": "2026-11-05T22:23:47.199499+00:00",
+  "mainUntouched": true
+}

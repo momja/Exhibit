@@ -1,0 +1,430 @@
+{
+  "beforeApplication": "68655f3a78724ee0ed90f6fa820dd1b12a169432",
+  "afterApplication": "575559b5abaadc997a6faf62be3669e4881cfe27",
+  "assets": "2f37c8103d52",
+  "method": "own T3 tab, real schemes plus matchMedia/nooverflow, isolated empty fixture18380",
+  "captures": [
+    {
+      "file": "before-search-320-dark.png",
+      "scheme": "dark",
+      "width": 320,
+      "proof": {
+        "dark": true,
+        "overflow": false,
+        "main": "Search\n\nAll your artifacts, including those shared with you.\n\n0 artifacts.\n\nWelcome to Exhibit\n\nFind a tool by its title, contents, or tags.",
+        "emptyActions": []
+      }
+    },
+    {
+      "file": "before-starred-320-dark.png",
+      "scheme": "dark",
+      "width": 320,
+      "proof": {
+        "dark": true,
+        "overflow": false,
+        "main": "Starred\n\nYour go-to artifacts, most recently opened first.\n\n0 artifacts.\n\nKeep your favorites close. Choose Star in an artifact\u2019s action menu.\n\nOpen a tool, then choose Share to give someone access.\n\nBrowse your library",
+        "emptyActions": [
+          {
+            "label": "Browse your library",
+            "path": "/"
+          }
+        ]
+      }
+    },
+    {
+      "file": "before-search-320-light.png",
+      "scheme": "light",
+      "width": 320,
+      "proof": {
+        "dark": false,
+        "overflow": false,
+        "main": "Search\n\nAll your artifacts, including those shared with you.\n\n0 artifacts.\n\nWelcome to Exhibit\n\nFind a tool by its title, contents, or tags.",
+        "emptyActions": []
+      }
+    },
+    {
+      "file": "before-starred-320-light.png",
+      "scheme": "light",
+      "width": 320,
+      "proof": {
+        "dark": false,
+        "overflow": false,
+        "main": "Starred\n\nYour go-to artifacts, most recently opened first.\n\n0 artifacts.\n\nKeep your favorites close. Choose Star in an artifact\u2019s action menu.\n\nOpen a tool, then choose Share to give someone access.\n\nBrowse your library",
+        "emptyActions": [
+          {
+            "label": "Browse your library",
+            "path": "/"
+          }
+        ]
+      }
+    },
+    {
+      "file": "after-search-1280-light.png",
+      "width": 1280,
+      "scheme": "light",
+      "proof": {
+        "dark": false,
+        "overflow": false,
+        "main": "Search\n\nAll your artifacts, including those shared with you.\n\n/\n\n0 artifacts.\n\nWELCOME TO EXHIBIT\nCreate your first artifact",
+        "actions": [
+          {
+            "label": "Create your first artifact",
+            "path": "/new"
+          }
+        ],
+        "asset": "http://t3code:18380/assets/v/2f37c8103d52/phosphor/regular.css"
+      }
+    },
+    {
+      "file": "after-starred-1280-light.png",
+      "width": 1280,
+      "scheme": "light",
+      "proof": {
+        "dark": false,
+        "overflow": false,
+        "main": "Starred\n\nYour go-to artifacts, most recently opened first.\n\n0 artifacts.\n\nKeep your favorites close. Choose Star in an artifact\u2019s action menu.\n\nBrowse your artifacts",
+        "actions": [
+          {
+            "label": "Browse your artifacts",
+            "path": "/search"
+          }
+        ],
+        "asset": "http://t3code:18380/assets/v/2f37c8103d52/phosphor/regular.css"
+      }
+    },
+    {
+      "file": "after-shared-1280-light.png",
+      "width": 1280,
+      "scheme": "light",
+      "proof": {
+        "dark": false,
+        "overflow": false,
+        "main": "Shared\n\nArtifacts shared with you and artifacts you\u2019ve shared with others.\n\n0 artifacts.\n\nShared artifacts will appear here. Share one of yours, or ask someone to share with you.",
+        "actions": [],
+        "asset": "http://t3code:18380/assets/v/2f37c8103d52/phosphor/regular.css"
+      }
+    },
+    {
+      "file": "after-search-1280-dark.png",
+      "width": 1280,
+      "scheme": "dark",
+      "proof": {
+        "dark": true,
+        "overflow": false,
+        "main": "Search\n\nAll your artifacts, including those shared with you.\n\n/\n\n0 artifacts.\n\nWELCOME TO EXHIBIT\nCreate your first artifact",
+        "actions": [
+          {
+            "label": "Create your first artifact",
+            "path": "/new"
+          }
+        ],
+        "asset": "http://t3code:18380/assets/v/2f37c8103d52/phosphor/regular.css"
+      }
+    },
+    {
+      "file": "after-starred-1280-dark.png",
+      "width": 1280,
+      "scheme": "dark",
+      "proof": {
+        "dark": true,
+        "overflow": false,
+        "main": "Starred\n\nYour go-to artifacts, most recently opened first.\n\n0 artifacts.\n\nKeep your favorites close. Choose Star in an artifact\u2019s action menu.\n\nBrowse your artifacts",
+        "actions": [
+          {
+            "label": "Browse your artifacts",
+            "path": "/search"
+          }
+        ],
+        "asset": "http://t3code:18380/assets/v/2f37c8103d52/phosphor/regular.css"
+      }
+    },
+    {
+      "file": "after-shared-1280-dark.png",
+      "width": 1280,
+      "scheme": "dark",
+      "proof": {
+        "dark": true,
+        "overflow": false,
+        "main": "Shared\n\nArtifacts shared with you and artifacts you\u2019ve shared with others.\n\n0 artifacts.\n\nShared artifacts will appear here. Share one of yours, or ask someone to share with you.",
+        "actions": [],
+        "asset": "http://t3code:18380/assets/v/2f37c8103d52/phosphor/regular.css"
+      }
+    },
+    {
+      "file": "after-search-768-light.png",
+      "width": 768,
+      "scheme": "light",
+      "proof": {
+        "dark": false,
+        "overflow": false,
+        "main": "Search\n\nAll your artifacts, including those shared with you.\n\n/\n\n0 artifacts.\n\nWELCOME TO EXHIBIT\nCreate your first artifact",
+        "actions": [
+          {
+            "label": "Create your first artifact",
+            "path": "/new"
+          }
+        ],
+        "asset": "http://t3code:18380/assets/v/2f37c8103d52/phosphor/regular.css"
+      }
+    },
+    {
+      "file": "after-starred-768-light.png",
+      "width": 768,
+      "scheme": "light",
+      "proof": {
+        "dark": false,
+        "overflow": false,
+        "main": "Starred\n\nYour go-to artifacts, most recently opened first.\n\n0 artifacts.\n\nKeep your favorites close. Choose Star in an artifact\u2019s action menu.\n\nBrowse your artifacts",
+        "actions": [
+          {
+            "label": "Browse your artifacts",
+            "path": "/search"
+          }
+        ],
+        "asset": "http://t3code:18380/assets/v/2f37c8103d52/phosphor/regular.css"
+      }
+    },
+    {
+      "file": "after-shared-768-light.png",
+      "width": 768,
+      "scheme": "light",
+      "proof": {
+        "dark": false,
+        "overflow": false,
+        "main": "Shared\n\nArtifacts shared with you and artifacts you\u2019ve shared with others.\n\n0 artifacts.\n\nShared artifacts will appear here. Share one of yours, or ask someone to share with you.",
+        "actions": [],
+        "asset": "http://t3code:18380/assets/v/2f37c8103d52/phosphor/regular.css"
+      }
+    },
+    {
+      "file": "after-search-768-dark.png",
+      "width": 768,
+      "scheme": "dark",
+      "proof": {
+        "dark": true,
+        "overflow": false,
+        "main": "Search\n\nAll your artifacts, including those shared with you.\n\n/\n\n0 artifacts.\n\nWELCOME TO EXHIBIT\nCreate your first artifact",
+        "actions": [
+          {
+            "label": "Create your first artifact",
+            "path": "/new"
+          }
+        ],
+        "asset": "http://t3code:18380/assets/v/2f37c8103d52/phosphor/regular.css"
+      }
+    },
+    {
+      "file": "after-starred-768-dark.png",
+      "width": 768,
+      "scheme": "dark",
+      "proof": {
+        "dark": true,
+        "overflow": false,
+        "main": "Starred\n\nYour go-to artifacts, most recently opened first.\n\n0 artifacts.\n\nKeep your favorites close. Choose Star in an artifact\u2019s action menu.\n\nBrowse your artifacts",
+        "actions": [
+          {
+            "label": "Browse your artifacts",
+            "path": "/search"
+          }
+        ],
+        "asset": "http://t3code:18380/assets/v/2f37c8103d52/phosphor/regular.css"
+      }
+    },
+    {
+      "file": "after-shared-768-dark.png",
+      "width": 768,
+      "scheme": "dark",
+      "proof": {
+        "dark": true,
+        "overflow": false,
+        "main": "Shared\n\nArtifacts shared with you and artifacts you\u2019ve shared with others.\n\n0 artifacts.\n\nShared artifacts will appear here. Share one of yours, or ask someone to share with you.",
+        "actions": [],
+        "asset": "http://t3code:18380/assets/v/2f37c8103d52/phosphor/regular.css"
+      }
+    },
+    {
+      "file": "after-search-390-light.png",
+      "width": 390,
+      "scheme": "light",
+      "proof": {
+        "dark": false,
+        "overflow": false,
+        "main": "Search\n\nAll your artifacts, including those shared with you.\n\n0 artifacts.\n\nWELCOME TO EXHIBIT\nCreate your first artifact",
+        "actions": [
+          {
+            "label": "Create your first artifact",
+            "path": "/new"
+          }
+        ],
+        "asset": "http://t3code:18380/assets/v/2f37c8103d52/phosphor/regular.css"
+      }
+    },
+    {
+      "file": "after-starred-390-light.png",
+      "width": 390,
+      "scheme": "light",
+      "proof": {
+        "dark": false,
+        "overflow": false,
+        "main": "Starred\n\nYour go-to artifacts, most recently opened first.\n\n0 artifacts.\n\nKeep your favorites close. Choose Star in an artifact\u2019s action menu.\n\nBrowse your artifacts",
+        "actions": [
+          {
+            "label": "Browse your artifacts",
+            "path": "/search"
+          }
+        ],
+        "asset": "http://t3code:18380/assets/v/2f37c8103d52/phosphor/regular.css"
+      }
+    },
+    {
+      "file": "after-shared-390-light.png",
+      "width": 390,
+      "scheme": "light",
+      "proof": {
+        "dark": false,
+        "overflow": false,
+        "main": "Shared\n\nArtifacts shared with you and artifacts you\u2019ve shared with others.\n\n0 artifacts.\n\nShared artifacts will appear here. Share one of yours, or ask someone to share with you.",
+        "actions": [],
+        "asset": "http://t3code:18380/assets/v/2f37c8103d52/phosphor/regular.css"
+      }
+    },
+    {
+      "file": "after-search-390-dark.png",
+      "width": 390,
+      "scheme": "dark",
+      "proof": {
+        "dark": true,
+        "overflow": false,
+        "main": "Search\n\nAll your artifacts, including those shared with you.\n\n0 artifacts.\n\nWELCOME TO EXHIBIT\nCreate your first artifact",
+        "actions": [
+          {
+            "label": "Create your first artifact",
+            "path": "/new"
+          }
+        ],
+        "asset": "http://t3code:18380/assets/v/2f37c8103d52/phosphor/regular.css"
+      }
+    },
+    {
+      "file": "after-starred-390-dark.png",
+      "width": 390,
+      "scheme": "dark",
+      "proof": {
+        "dark": true,
+        "overflow": false,
+        "main": "Starred\n\nYour go-to artifacts, most recently opened first.\n\n0 artifacts.\n\nKeep your favorites close. Choose Star in an artifact\u2019s action menu.\n\nBrowse your artifacts",
+        "actions": [
+          {
+            "label": "Browse your artifacts",
+            "path": "/search"
+          }
+        ],
+        "asset": "http://t3code:18380/assets/v/2f37c8103d52/phosphor/regular.css"
+      }
+    },
+    {
+      "file": "after-shared-390-dark.png",
+      "width": 390,
+      "scheme": "dark",
+      "proof": {
+        "dark": true,
+        "overflow": false,
+        "main": "Shared\n\nArtifacts shared with you and artifacts you\u2019ve shared with others.\n\n0 artifacts.\n\nShared artifacts will appear here. Share one of yours, or ask someone to share with you.",
+        "actions": [],
+        "asset": "http://t3code:18380/assets/v/2f37c8103d52/phosphor/regular.css"
+      }
+    },
+    {
+      "file": "after-search-320-light.png",
+      "width": 320,
+      "scheme": "light",
+      "proof": {
+        "dark": false,
+        "overflow": false,
+        "main": "Search\n\nAll your artifacts, including those shared with you.\n\n0 artifacts.\n\nWELCOME TO EXHIBIT\nCreate your first artifact",
+        "actions": [
+          {
+            "label": "Create your first artifact",
+            "path": "/new"
+          }
+        ],
+        "asset": "http://t3code:18380/assets/v/2f37c8103d52/phosphor/regular.css"
+      }
+    },
+    {
+      "file": "after-starred-320-light.png",
+      "width": 320,
+      "scheme": "light",
+      "proof": {
+        "dark": false,
+        "overflow": false,
+        "main": "Starred\n\nYour go-to artifacts, most recently opened first.\n\n0 artifacts.\n\nKeep your favorites close. Choose Star in an artifact\u2019s action menu.\n\nBrowse your artifacts",
+        "actions": [
+          {
+            "label": "Browse your artifacts",
+            "path": "/search"
+          }
+        ],
+        "asset": "http://t3code:18380/assets/v/2f37c8103d52/phosphor/regular.css"
+      }
+    },
+    {
+      "file": "after-shared-320-light.png",
+      "width": 320,
+      "scheme": "light",
+      "proof": {
+        "dark": false,
+        "overflow": false,
+        "main": "Shared\n\nArtifacts shared with you and artifacts you\u2019ve shared with others.\n\n0 artifacts.\n\nShared artifacts will appear here. Share one of yours, or ask someone to share with you.",
+        "actions": [],
+        "asset": "http://t3code:18380/assets/v/2f37c8103d52/phosphor/regular.css"
+      }
+    },
+    {
+      "file": "after-search-320-dark.png",
+      "width": 320,
+      "scheme": "dark",
+      "proof": {
+        "dark": true,
+        "overflow": false,
+        "main": "Search\n\nAll your artifacts, including those shared with you.\n\n0 artifacts.\n\nWELCOME TO EXHIBIT\nCreate your first artifact",
+        "actions": [
+          {
+            "label": "Create your first artifact",
+            "path": "/new"
+          }
+        ],
+        "asset": "http://t3code:18380/assets/v/2f37c8103d52/phosphor/regular.css"
+      }
+    },
+    {
+      "file": "after-starred-320-dark.png",
+      "width": 320,
+      "scheme": "dark",
+      "proof": {
+        "dark": true,
+        "overflow": false,
+        "main": "Starred\n\nYour go-to artifacts, most recently opened first.\n\n0 artifacts.\n\nKeep your favorites close. Choose Star in an artifact\u2019s action menu.\n\nBrowse your artifacts",
+        "actions": [
+          {
+            "label": "Browse your artifacts",
+            "path": "/search"
+          }
+        ],
+        "asset": "http://t3code:18380/assets/v/2f37c8103d52/phosphor/regular.css"
+      }
+    },
+    {
+      "file": "after-shared-320-dark.png",
+      "width": 320,
+      "scheme": "dark",
+      "proof": {
+        "dark": true,
+        "overflow": false,
+        "main": "Shared\n\nArtifacts shared with you and artifacts you\u2019ve shared with others.\n\n0 artifacts.\n\nShared artifacts will appear here. Share one of yours, or ask someone to share with you.",
+        "actions": [],
+        "asset": "http://t3code:18380/assets/v/2f37c8103d52/phosphor/regular.css"
+      }
+    }
+  ]
+}

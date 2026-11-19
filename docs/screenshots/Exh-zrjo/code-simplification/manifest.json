@@ -1,0 +1,83 @@
+{
+  "applicationCommit": "8a4c0fe1e07a43a7bd09b94de1d9ad3754262913",
+  "assetVersion": "acd0d10600c5",
+  "views": [
+    {
+      "label": "phone-panel",
+      "url": "http://t3code:18280/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit?return_to=%2Fsearch",
+      "screenshot": {
+        "mimeType": "image/png",
+        "width": 780,
+        "height": 1688
+      },
+      "consoleEntries": [],
+      "sourceScreenshotPath": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw4a8ki0-229ad7ef.png",
+      "path": "docs/screenshots/Exh-zrjo/code-simplification/phone-panel.png",
+      "cssViewport": {
+        "width": 390,
+        "height": 844
+      },
+      "colorScheme": "dark",
+      "actualDark": true,
+      "documentOverflow": 0
+    },
+    {
+      "label": "phone-sheet",
+      "url": "http://t3code:18280/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit?return_to=%2Fsearch",
+      "screenshot": {
+        "mimeType": "image/png",
+        "width": 780,
+        "height": 1688
+      },
+      "consoleEntries": [],
+      "sourceScreenshotPath": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw4a95it-7428d8e7.png",
+      "path": "docs/screenshots/Exh-zrjo/code-simplification/phone-sheet.png",
+      "cssViewport": {
+        "width": 390,
+        "height": 844
+      },
+      "colorScheme": "dark",
+      "actualDark": true,
+      "documentOverflow": 0
+    },
+    {
+      "label": "desktop-panel",
+      "url": "http://t3code:18280/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit?return_to=%2Fsearch",
+      "screenshot": {
+        "mimeType": "image/png",
+        "width": 1280,
+        "height": 800
+      },
+      "consoleEntries": [],
+      "sourceScreenshotPath": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw4a9ioc-41627fa8.png",
+      "path": "docs/screenshots/Exh-zrjo/code-simplification/desktop-panel.png",
+      "cssViewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "colorScheme": "light",
+      "actualDark": false,
+      "documentOverflow": 0
+    },
+    {
+      "label": "desktop-sheet",
+      "url": "http://t3code:18280/artifacts/461183aa-ca77-41f8-a4c0-6bbbe189b332/edit?return_to=%2Fsearch",
+      "screenshot": {
+        "mimeType": "image/png",
+        "width": 1280,
+        "height": 800
+      },
+      "consoleEntries": [],
+      "sourceScreenshotPath": "/home/maxomdal/.t3/userdata/browser-artifacts/browser-screenshot-t3code-mw4a9i30-e3d92ffd.png",
+      "path": "docs/screenshots/Exh-zrjo/code-simplification/desktop-sheet.png",
+      "cssViewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "colorScheme": "light",
+      "actualDark": false,
+      "documentOverflow": 0
+    }
+  ],
+  "purpose": "Post-refactor smoke inspection; these are not new council ratings."
+}

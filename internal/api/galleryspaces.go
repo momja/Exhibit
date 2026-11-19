@@ -13,9 +13,10 @@ type gallerySpace struct {
 
 func newGallerySpaces(activePath string, sharedWith, sharedBy int) []gallerySpace {
 	spaces := []gallerySpace{
-		{Path: "/", Label: "Library", Icon: "ph-books"},
-		{Path: "/shared", Label: "Shared with me", Icon: "ph-tray-arrow-down", Count: sharedWith, ShowCount: true},
-		{Path: "/shared-by-me", Label: "Shared by me", Icon: "ph-share-network", Count: sharedBy, ShowCount: true},
+		{Path: "/", Label: "Starred", Icon: "ph-star"},
+		{Path: "/search", Label: "Search", Icon: "ph-magnifying-glass"},
+		{Path: "/shared", Label: "Shared", Icon: "ph-share-network", Count: sharedWith + sharedBy, ShowCount: true},
+		{Path: "/activity", Label: "Activity", Icon: "ph-clock-counter-clockwise"},
 	}
 	for i := range spaces {
 		spaces[i].Active = spaces[i].Path == activePath

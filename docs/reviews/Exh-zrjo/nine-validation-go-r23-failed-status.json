@@ -1,0 +1,8 @@
+{
+  "command": "go test -short ./...",
+  "application": "5f1021e3495ad3639e0c5e51859124e44edc79f8",
+  "exitCode": 1,
+  "seconds": 466.88,
+  "log": "/tmp/exhibit-zrjo-nine-r23-go.log",
+  "applicationUnchanged": true
+}

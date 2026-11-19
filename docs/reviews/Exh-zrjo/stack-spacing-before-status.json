@@ -1,0 +1,15 @@
+{
+  "command": [
+    "go",
+    "test",
+    "./internal/api",
+    "-run",
+    "^TestGallerySpacesBrowser/phone$",
+    "-count=1"
+  ],
+  "head": "c20f6f72f9a18182e91bfcd3a71e4c9d2180e9ac",
+  "exitCode": 1,
+  "seconds": 13.02,
+  "runtimeAndValidationUnchanged": true,
+  "log": "/tmp/exhibit-zrjo-pr273-spacing-before.log"
+}

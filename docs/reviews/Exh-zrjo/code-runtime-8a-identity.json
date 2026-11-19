@@ -1,0 +1,29 @@
+{
+  "candidate": "8a4c0fe1e07a43a7bd09b94de1d9ad3754262913",
+  "pr273Base": "ab0135c902559d5912deec420947d6ab3cbdbcf6",
+  "assetVersion": "acd0d10600c5",
+  "scope": [
+    "internal",
+    "web",
+    "e2e",
+    "cmd",
+    "scripts",
+    "Makefile",
+    "go.mod",
+    "go.sum"
+  ],
+  "scopeDiff": "",
+  "sourceFingerprint": "a3018c58107943ba64e101805327c2ce3e584fe0ff13fcaf2c468fbf04c213af",
+  "binarySha256": "c8cf0c99642ff112da4f28c906db9f5b5d58a7107f0e39f68b469e64599edbae",
+  "main": {
+    "pid": 333088,
+    "executableSha256": "c8cf0c99642ff112da4f28c906db9f5b5d58a7107f0e39f68b469e64599edbae"
+  },
+  "sample": {
+    "pid": 333097,
+    "executableSha256": "c8cf0c99642ff112da4f28c906db9f5b5d58a7107f0e39f68b469e64599edbae",
+    "sourceCommit": "8a4c0fe1e07a43a7bd09b94de1d9ad3754262913"
+  },
+  "buildReceipt": "code-validation-build-confirm-status.json",
+  "buildToCandidate": "The final build includes all current runtime code; the later scoped delta only extends the e2e test driver. No runtime changes or asset rebuild during Go confirmation."
+}

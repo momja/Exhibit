@@ -20,7 +20,7 @@ exportButton?.addEventListener('click', async () => {
     ), ID + '-localStorage.json');
     status.textContent = '';
   } catch (error) {
-    status.textContent = 'Could not export state: ' + error.message;
+    status.textContent = 'Could not export saved data: ' + error.message;
     status.classList.add('error');
   } finally {
     exportButton.disabled = false;

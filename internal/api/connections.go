@@ -29,6 +29,21 @@ func connectionError(w http.ResponseWriter, err error) {
 	if errors.Is(err, store.ErrNotFound) {
 		message = "connection or artifact not found"
 	}
+	// A destination mismatch is answerable rather than fatal: the response
+	// names the service the credential belongs to so the app can say what the
+	// warning is about, and the same create request with
+	// confirm_origin_mismatch succeeds.
+	var mismatch *connectors.CredentialOriginError
+	if errors.As(err, &mismatch) {
+		writeJSON(w, status, map[string]string{
+			"error":           message,
+			"code":            "credential_origin_mismatch",
+			"credential":      mismatch.Label,
+			"expected_origin": mismatch.Expected,
+			"origin":          mismatch.Origin,
+		})
+		return
+	}
 	if code := managedErrorCode(err); code != "" {
 		writeJSON(w, status, map[string]string{"error": vendorErrorMessage(code), "code": code})
 		return

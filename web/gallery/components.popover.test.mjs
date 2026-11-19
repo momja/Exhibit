@@ -21,6 +21,7 @@ function el(name, { classes = [], attrs = {} } = {}) {
       toggle: (c, on) => { on ? node.cls.add(c) : node.cls.delete(c); },
     },
     setAttribute(k, v) { node.attrs[k] = v; },
+    dispatchEvent() {},
     append(...kids) { for (const k of kids) { k.parent = node; node.children.push(k); } return node; },
     matches(sel) {
       if (sel.startsWith(".")) return node.cls.has(sel.slice(1));

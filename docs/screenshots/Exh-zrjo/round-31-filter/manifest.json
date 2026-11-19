@@ -1,0 +1,169 @@
+{
+  "productionApplication": "42c94eb1cb12a74108885cc1cbb7aaf7d11f5721",
+  "validationBaseline": "c1156ef15c7f5caa282b1068214492bce42018e1",
+  "assets": "aa7a00afd7a2",
+  "fixture": "parent preseeded unassigned Review empty tag, no artifacts",
+  "method": "own T3tab/actualschemes/matchMedia/realClearclick/headeridentity",
+  "captures": [
+    {
+      "file": "filter-only-1280-light.png",
+      "width": 1280,
+      "scheme": "light",
+      "proof": {
+        "dark": false,
+        "asset": "http://t3code:18380/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "No artifacts match your filters.",
+        "action": "Clear filters",
+        "href": "/search",
+        "overflow": false
+      },
+      "reset": {
+        "path": "/search",
+        "query": "",
+        "headerSame": true,
+        "welcome": true,
+        "action": "/new"
+      }
+    },
+    {
+      "file": "filter-only-1280-dark.png",
+      "width": 1280,
+      "scheme": "dark",
+      "proof": {
+        "dark": true,
+        "asset": "http://t3code:18380/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "No artifacts match your filters.",
+        "action": "Clear filters",
+        "href": "/search",
+        "overflow": false
+      },
+      "reset": {
+        "path": "/search",
+        "query": "",
+        "headerSame": true,
+        "welcome": true,
+        "action": "/new"
+      }
+    },
+    {
+      "file": "filter-only-768-light.png",
+      "width": 768,
+      "scheme": "light",
+      "proof": {
+        "dark": false,
+        "asset": "http://t3code:18380/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "No artifacts match your filters.",
+        "action": "Clear filters",
+        "href": "/search",
+        "overflow": false
+      },
+      "reset": {
+        "path": "/search",
+        "query": "",
+        "headerSame": true,
+        "welcome": true,
+        "action": "/new"
+      }
+    },
+    {
+      "file": "filter-only-768-dark.png",
+      "width": 768,
+      "scheme": "dark",
+      "proof": {
+        "dark": true,
+        "asset": "http://t3code:18380/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "No artifacts match your filters.",
+        "action": "Clear filters",
+        "href": "/search",
+        "overflow": false
+      },
+      "reset": {
+        "path": "/search",
+        "query": "",
+        "headerSame": true,
+        "welcome": true,
+        "action": "/new"
+      }
+    },
+    {
+      "file": "filter-only-390-light.png",
+      "width": 390,
+      "scheme": "light",
+      "proof": {
+        "dark": false,
+        "asset": "http://t3code:18380/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "No artifacts match your filters.",
+        "action": "Clear filters",
+        "href": "/search",
+        "overflow": false
+      },
+      "reset": {
+        "path": "/search",
+        "query": "",
+        "headerSame": true,
+        "welcome": true,
+        "action": "/new"
+      }
+    },
+    {
+      "file": "filter-only-390-dark.png",
+      "width": 390,
+      "scheme": "dark",
+      "proof": {
+        "dark": true,
+        "asset": "http://t3code:18380/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "No artifacts match your filters.",
+        "action": "Clear filters",
+        "href": "/search",
+        "overflow": false
+      },
+      "reset": {
+        "path": "/search",
+        "query": "",
+        "headerSame": true,
+        "welcome": true,
+        "action": "/new"
+      }
+    },
+    {
+      "file": "filter-only-320-light.png",
+      "width": 320,
+      "scheme": "light",
+      "proof": {
+        "dark": false,
+        "asset": "http://t3code:18380/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "No artifacts match your filters.",
+        "action": "Clear filters",
+        "href": "/search",
+        "overflow": false
+      },
+      "reset": {
+        "path": "/search",
+        "query": "",
+        "headerSame": true,
+        "welcome": true,
+        "action": "/new"
+      }
+    },
+    {
+      "file": "filter-only-320-dark.png",
+      "width": 320,
+      "scheme": "dark",
+      "proof": {
+        "dark": true,
+        "asset": "http://t3code:18380/assets/v/aa7a00afd7a2/phosphor/regular.css",
+        "heading": "No artifacts match your filters.",
+        "action": "Clear filters",
+        "href": "/search",
+        "overflow": false
+      },
+      "reset": {
+        "path": "/search",
+        "query": "",
+        "headerSame": true,
+        "welcome": true,
+        "action": "/new"
+      }
+    }
+  ]
+}

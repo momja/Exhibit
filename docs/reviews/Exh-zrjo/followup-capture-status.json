@@ -1,0 +1,8 @@
+{
+  "command": "node e2e/capture-ui.mjs docs/screenshots/Exh-zrjo/followup-round-27",
+  "application": "947758e0ed4fee4f3590aa2837981218118520d0",
+  "exitCode": 0,
+  "seconds": 315.28,
+  "log": "/tmp/exhibit-zrjo-nine-followup-capture.log",
+  "applicationUnchanged": true
+}

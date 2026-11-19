@@ -1,0 +1,12 @@
+
+> test
+> playwright test --grep a tag mutation stays locked
+
+
+Running 1 test using 1 worker
+
+(node:341344) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium] › specs/tags.spec.ts:3:1 › a tag mutation stays locked through refresh failure and retries only the fragment (5.2s)
+
+  1 passed (9.1s)
