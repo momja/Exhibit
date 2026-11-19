@@ -80,19 +80,19 @@
 .login-headline-window{position:absolute;inset:-.14em 0 auto;height:1.30em;overflow:hidden}
 .login-headline-words{position:absolute;inset:0 0 auto;display:grid;grid-auto-rows:1.30em;line-height:.95}
 .login-headline-words span{padding-block-start:.14em;padding-inline-start:.02em}
-/* One pass, including pauses, fits under five seconds. The last frame is the
- * original word and reduced motion keeps the first frame. */
+/* A 21s loop rests on tools for about 12s and on the other words for about
+ * 2s each. The duplicate tools row makes the loop seam invisible. */
 @media (prefers-reduced-motion:no-preference){
-  .login-headline-words{animation:login-headline-words 4.98s cubic-bezier(.22,.77,.31,1) both}
+  .login-headline-words{animation:login-headline-words 21s cubic-bezier(.22,.77,.31,1) infinite}
 }
 @keyframes login-headline-words{
-  0%,12%{transform:translateY(0)}
-  23%,38%{transform:translateY(-20%)}
-  49%,64%{transform:translateY(-40%)}
-  75%,89%{transform:translateY(-60%)}
+  0%,58%{transform:translateY(0)}
+  61%,71%{transform:translateY(-20%)}
+  74%,84%{transform:translateY(-40%)}
+  87%,97%{transform:translateY(-60%)}
   100%{transform:translateY(-80%)}
 }
-.login-tagline{margin-top:14px;max-width:26ch;font-size:1.1875rem;font-weight:700;line-height:1.35;color:var(--color-on-painting);text-shadow:0 1px 8px var(--painting-text-shadow)}
+.login-tagline{margin-block-start:16px;margin-inline-start:.65em;max-width:34ch;font-size:1.1875rem;font-weight:700;line-height:1.35;color:var(--color-on-painting);text-shadow:0 1px 8px var(--painting-text-shadow)}
 .login-painted .login{max-width:340px;align-items:stretch;padding:22px 24px 24px}
 .login-painted .login-sub{margin:0;font-weight:700;color:var(--color-ink)}
 .login-painted .login-form{margin-top:14px}
@@ -108,12 +108,13 @@
 /* The hosted card changes height when Clerk promotes the last-used provider
  * or switches authentication steps. Give it space before using the fit scale. */
 .login-hosted{height:100dvh;min-height:0;overflow:clip;contain:paint}
+.login-hosted .app-header-slot{flex-shrink:0}
 .login-hosted .login-content{
   flex:none;gap:clamp(12px,2dvh,24px);padding-block:clamp(10px,2.5dvh,34px) 16px;
   transform:scale(var(--login-fit,1));transform-origin:top left;
 }
 .login-hosted .login-headline{font-size:clamp(38px,min(6.4vw,8.6dvh),92px)}
-.login-hosted .login-tagline{margin-top:10px}
+.login-hosted .login-tagline{margin-top:14px}
 .login-hosted .login-clerk{padding-block:18px}
 
 @media (max-height:920px){
@@ -139,7 +140,7 @@
 
   .login-painted .login-content{padding:2vh 20px calc(var(--login-painting-h) - 12px);gap:18px}
   .login-headline{font-size:clamp(40px,12vw,56px)}
-  .login-tagline{margin-top:10px}
+  .login-tagline{margin-top:12px}
   .login-painted .login{max-width:none;padding:16px 18px 18px}
   .login-painted .login-form{margin-top:8px;gap:4px}
   .login-painted .login-form .login-label+.field{margin-bottom:6px}
@@ -150,7 +151,7 @@
 
 @media (max-height:650px){
   .login-hosted .login-content{gap:12px}
-  .login-hosted .login-tagline{font-size:1rem;margin-top:7px}
+  .login-hosted .login-tagline{font-size:1rem;margin-top:10px}
   .login-hosted .cl-card{gap:12px}
   .login-hosted .cl-main,.login-hosted .cl-form{gap:10px}
   .login-hosted :is(.cl-footerAction,.cl-footerItem){padding-block:7px}

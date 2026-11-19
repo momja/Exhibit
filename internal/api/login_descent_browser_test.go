@@ -71,11 +71,12 @@ func TestLoginDescentBrowser(t *testing.T) {
 						return Math.abs(offset + slotHeight * row) < 0.5;
 					};
 					const originalTime = animation.currentTime;
-					const matches = frameMatches(500, 0) && frameMatches(1500, 1) &&
-						frameMatches(2750, 2) && frameMatches(4050, 3) && frameMatches(4980, 4);
+					const matches = frameMatches(10000, 0) && frameMatches(13000, 1) &&
+						frameMatches(16000, 2) && frameMatches(19000, 3) && frameMatches(21001, 0) &&
+						frameMatches(31000, 0) && frameMatches(34000, 1);
 					animation.currentTime = originalTime;
-					return matches && animation.effect.getTiming().duration < 5000;
-				})()`), "the carousel gives each word a stationary beat and returns to tools")
+					return matches && animation.effect.getTiming().iterations === Infinity;
+				})()`), "the carousel loops, with a longer rest on tools between passes")
 			}
 			formRect := `JSON.stringify(document.querySelector('main.login').getBoundingClientRect())`
 			before, err := chromedp.Run(ctx, chromedp.Evaluate[string](formRect))
@@ -93,7 +94,7 @@ func TestLoginDescentBrowser(t *testing.T) {
 			require.True(t, eval(`getComputedStyle(document.querySelector('.login-scene-composite')).opacity === '0'`), "an animating visit does not start on the finished picture")
 			// Jump to the end of every animation, as the timeline would.
 			require.NoError(t, chromedp.Do(ctx, chromedp.Poll[chromedp.Void](`document.body.classList.contains('login-descent-go')`, chromedp.WithPollingTimeout(5*time.Second))), "the animation starts once the layers are decoded")
-			require.True(t, eval(`document.getAnimations().forEach(a => a.finish()) || true`))
+			require.True(t, eval(`document.querySelector('.login-scene').getAnimations({subtree:true}).forEach(a => a.finish()) || true`))
 			// The hill layer fills the stage, and the stage is where the
 			// composite's object-fit:cover; object-position:78% 50% puts it.
 			require.True(t, eval(`(() => {

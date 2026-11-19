@@ -988,9 +988,9 @@ viewport, tightens card spacing on short screens, and fits the content if a
 Clerk step still needs more room. The OAuth consent page keeps the plain card
 (`.login-painted` scopes the art).
 
-The last word of the headline rotates once in a fixed CSS slot and settles
-back on “tools” in under five seconds. Assistive technology and reduced-motion
-users get the static headline.
+The last word of the headline rotates in a fixed CSS slot. Each cycle rests
+on “tools” for about twelve seconds and on each other word for about two.
+Assistive technology and reduced-motion users get the static headline.
 
 **Sign-in descent** (Exh-vsw0): on a visit the server marks, the scenery moves
 for 3.6s (`cubic-bezier(.5,0,.15,1)`) as a camera coming down out of the sky.

@@ -58,8 +58,10 @@ func TestClerkLoginFitsAfterProviderCardGrows(t *testing.T) {
 	defer timeout()
 	const fits = `(() => {
 		window.scrollTo(0, innerHeight);
+		const header = document.querySelector('.app-header').getBoundingClientRect();
+		const intro = document.querySelector('.login-intro').getBoundingClientRect();
 		const card = document.querySelector('.login-clerk').getBoundingClientRect();
-		return card.bottom < innerHeight && window.scrollY === 0 &&
+		return intro.top >= header.bottom && card.bottom < innerHeight && window.scrollY === 0 &&
 			document.documentElement.scrollHeight === innerHeight;
 	})()`
 	require.NoError(t, chromedp.Do(ctx,

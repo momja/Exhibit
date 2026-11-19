@@ -26,6 +26,7 @@ func TestLoginPageIsPainted(t *testing.T) {
 	assert.Contains(t, page, `class="login-page login-painted login-descend"`)
 	assert.Contains(t, page, `A space for <span class="login-headline-ending"><em>your</em> <span class="sr-only">tools</span>`)
 	assert.Contains(t, page, `<span>tools</span><span>apps</span><span>art</span><span>games</span><span>tools</span>`)
+	assert.Contains(t, page, `build apps instantly, use them, share them, repaint them any time`)
 	assert.Contains(t, page, `class="login-wordmark"`)
 	assert.Contains(t, page, `<picture class="login-scene-composite">`)
 	assert.Regexp(t, `<img class="login-scene-image"[^>]* width="2560" height="1440"`, page)
