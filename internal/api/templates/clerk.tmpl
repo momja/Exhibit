@@ -23,7 +23,7 @@
 {{if .Descend}}<script type="module" src="{{asset "gallery/login-descent.js"}}"></script>
 <noscript><style>.login-descend .login-scene-composite{opacity:1;animation:none}</style></noscript>{{end}}
 </head>
-<body class="login-page login-painted{{if .Descend}} login-descend{{end}}"{{if .Descend}} data-descent-after="clerk"{{end}}>{{template "loginScene" .Descend}}
+<body class="login-page login-painted login-hosted{{if .Descend}} login-descend{{end}}"{{if .Descend}} data-descent-after="clerk"{{end}}>{{template "loginScene" .Descend}}
 {{template "appHeader" .Header}}
 <div class="login-content">
 {{template "loginIntro"}}

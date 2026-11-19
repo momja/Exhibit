@@ -10,6 +10,7 @@ export default class extends Controller {
 
   async connect() {
     if (this.modeValue === 'manage') return;
+    this.fitLoginToViewport();
     this.connection = new AbortController();
     const { signal } = this.connection;
     if (this.modeValue === 'user') this.setAccountState('loading', 'Loading your account…');
@@ -123,7 +124,23 @@ export default class extends Controller {
     window.location.reload();
   }
 
+  fitLoginToViewport() {
+    const page = this.element.closest('.login-hosted');
+    if (!page) return;
+    const content = this.element.closest('.login-content');
+    this.loginFitObserver = new ResizeObserver(() => {
+      const availableHeight = page.clientHeight - content.offsetTop;
+      // offsetHeight is measured before the CSS transform, so each step and
+      // resize can be fitted from its natural size without a resize loop.
+      const scale = Math.min(1, Math.max(0, availableHeight) / content.offsetHeight);
+      content.style.setProperty('--login-fit', scale);
+    });
+    this.loginFitObserver.observe(page);
+    this.loginFitObserver.observe(content);
+  }
+
   disconnect() {
+    this.loginFitObserver?.disconnect();
     this.connection?.abort();
     if (!this.clerk) return;
     if (this.modeValue === 'user') this.unmountUserButton();

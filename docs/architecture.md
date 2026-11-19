@@ -982,9 +982,11 @@ text, and the tagline and wordmark are sized as large text too (19px and 20px at
 the WCAG bold threshold; 600 would count as normal text and need 4.5:1). The box is
 the ordinary `.login` card; for Clerk, `.login-clerk` is the box and Clerk's own
 card is flattened inside it (`clerkAuthAppearance`, plus `.cl-*` rules). On
-phones the painting owns a band at the bottom of the page and the content
-reserves it, so a short screen scrolls rather than covering the figure. The
-OAuth consent page keeps the plain card (`.login-painted` scopes the art).
+phones the painting owns a band at the bottom of the page. Local sign-in
+reserves that band below the form. Hosted sign-in keeps the page within the
+viewport, tightens card spacing on short screens, and fits the content if a
+Clerk step still needs more room. The OAuth consent page keeps the plain card
+(`.login-painted` scopes the art).
 
 The last word of the headline rotates once in a fixed CSS slot and settles
 back on “tools” in under five seconds. Assistive technology and reduced-motion
