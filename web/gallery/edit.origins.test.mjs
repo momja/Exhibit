@@ -32,7 +32,7 @@ async function loadEdit({ blocked = [BLOCKED], allowlist = [], footprint = [], r
     TOKEN: "", READ_ONLY: false, ID, INITIAL_SOURCE_FOOTPRINT: footprint,
     allowlist, unapproved: footprint.filter(origin => !allowlist.includes(origin) && !blocked.includes(origin)), blocked,
     downloadsApproved: false, clipboardApproved: false, linksApproved: false,
-    cameraApproved: false, microphoneApproved: false, geolocationApproved: false,
+    cameraApproved: false, microphoneApproved: false, geolocationApproved: false, inferenceApproved: false,
     apiFetch: api.apiFetch,
     alert: () => {}, confirm: () => true, CustomEvent: class { constructor(type) { this.type = type; } }
   }, {

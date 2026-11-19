@@ -639,6 +639,7 @@ func (ro *Router) setupRoutes() {
 				// window.exhibit.ai in the frame. Not in agentSubResources:
 				// an agent has its own model and never spends a viewer's
 				// allowance through an artifact.
+				r.Get("/inference", ro.getInferenceState)
 				r.Post("/inference", ro.runInference)
 				r.Put("/inference/consent", ro.setInferenceConsent)
 				r.Delete("/inference/consent", ro.setInferenceConsent)

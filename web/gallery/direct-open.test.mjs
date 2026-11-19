@@ -19,7 +19,7 @@ async function load({ artifact = 'art-1', viewer = '1', store = storage(), block
     CONNECTION_PROTECTED: connectionProtected,
     STATE_WRITABLE: !readOnly, SHARED_STATE: false,
     downloadsApproved: false, clipboardApproved: false, linksApproved: false,
-    cameraApproved: false, microphoneApproved: false, geolocationApproved: false,
+    cameraApproved: false, microphoneApproved: false, geolocationApproved: false, inferenceApproved: false,
     apiFetch: api.apiFetch, apiStateFetch: api.apiStateFetch, CustomEvent,
     localStorage: store,
     open: (...args) => {

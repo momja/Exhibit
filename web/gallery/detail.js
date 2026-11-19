@@ -1,6 +1,7 @@
 import { modalFor } from './modal.js';
 import { apiFetch, apiStateFetch } from './api-module.js';
 import { networkPrompt } from './network-prompt.js';
+import { connectInferenceHost } from './inference-host.js';
 /* Artifact detail (viewer) page script. Served from the app origin at
  * /assets/gallery/detail.js. The page's inline bootstrap <script> defines the
  * per-request globals this file reads (and reassigns) before it loads:
@@ -1012,3 +1013,7 @@ function refetchNote(data) {
 
 // Existing server-rendered toolbar action.
 window.refetchSource = refetchSource;
+
+// window.exhibit.ai calls from the frame (Exh-zue3): consent prompts, the
+// authenticated request and the chrome notices live in inference-host.js.
+connectInferenceHost({ artifactId: () => ID, title: () => null });

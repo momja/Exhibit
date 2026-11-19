@@ -358,7 +358,7 @@ func (ro *Router) galleryEdit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	canGenerate, generateHint := ro.widgetGenerateAvailability(r)
-	page, err := renderEditPage(a, decisions, library, string(src), ro.widgetSource(r, a), ro.pageCredentials(r), ro.renderURLs(r), canGenerate, generateHint, versions, editorReturn(r, a))
+	page, err := renderEditPage(a, decisions, library, string(src), ro.widgetSource(r, a), ro.pageCredentials(r), ro.renderURLs(r), canGenerate, generateHint, versions, editorReturn(r, a), editPageInstance{InferenceEnabled: ro.cfg.Inference.Enabled()})
 	if err != nil {
 		serverError(w, r, "gallery edit render", err)
 		return
@@ -779,6 +779,7 @@ func newCapabilityView(a *store.Artifact, showManage bool) capabilityView {
 		CameraApproved:      a.CameraApproved,
 		MicrophoneApproved:  a.MicrophoneApproved,
 		GeolocationApproved: a.GeolocationApproved,
+		InferenceApproved:   a.InferenceApproved,
 		ShowManage:          showManage,
 	}
 }
@@ -814,7 +815,9 @@ type capabilityView struct {
 	CameraApproved      bool
 	MicrophoneApproved  bool
 	GeolocationApproved bool
-	ShowManage          bool
+	// InferenceApproved is the owner's AI approval (Exh-zue3).
+	InferenceApproved bool
+	ShowManage        bool
 	// Compact is the gallery card's form (av-uvc6): glyphs with no
 	// "Sandboxed" label, and no trigger at all for a sandboxed artifact that
 	// is not shared. There, as for sharing, the absence is the signal. The
@@ -830,7 +833,7 @@ type capabilityView struct {
 // no capability approved. Both partials branch on it, so it is defined once.
 func (v capabilityView) Sandboxed() bool {
 	return len(v.NetworkAllowlist) == 0 && !v.DownloadsApproved && !v.ClipboardApproved &&
-		!v.LinksApproved && !v.CameraApproved && !v.MicrophoneApproved && !v.GeolocationApproved
+		!v.LinksApproved && !v.CameraApproved && !v.MicrophoneApproved && !v.GeolocationApproved && !v.InferenceApproved
 }
 
 // HasTrigger reports whether the cluster renders at all. Only the compact
@@ -1212,6 +1215,9 @@ type editPageData struct {
 	CameraApproved      bool
 	MicrophoneApproved  bool
 	GeolocationApproved bool
+	// AI (Exh-zue3): the approval, and whether the instance offers AI at all.
+	InferenceApproved bool
+	InferenceEnabled  bool
 	// The gallery widget (av-fafu): its source for the editor, and the same
 	// tile view the library renders for the live preview beside it. WidgetSrc
 	// is "" when the artifact has no widget, which is also when Widget renders
@@ -1274,7 +1280,18 @@ func newVersionViews(versions []store.Version) []versionView {
 	return out
 }
 
-func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, library []*store.Tag, src, widgetSrc string, creds pageCredentials, urls renderURLs, canGenerate bool, generateHint string, versions []store.Version, navigation editNavigation) (string, error) {
+// editPageInstance is what the edit page needs to know about the instance
+// rather than the artifact. Optional so tests of the artifact half need not
+// spell it out.
+type editPageInstance struct {
+	InferenceEnabled bool
+}
+
+func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, library []*store.Tag, src, widgetSrc string, creds pageCredentials, urls renderURLs, canGenerate bool, generateHint string, versions []store.Version, navigation editNavigation, instance ...editPageInstance) (string, error) {
+	var inst editPageInstance
+	if len(instance) > 0 {
+		inst = instance[0]
+	}
 	if navigation.URL == "" {
 		navigation = editNavigation{URL: "/search", Label: "Search"}
 	}
@@ -1310,6 +1327,8 @@ func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, library
 		CameraApproved:      a.CameraApproved,
 		MicrophoneApproved:  a.MicrophoneApproved,
 		GeolocationApproved: a.GeolocationApproved,
+		InferenceApproved:   a.InferenceApproved,
+		InferenceEnabled:    inst.InferenceEnabled,
 	})
 }
 

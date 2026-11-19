@@ -14,7 +14,7 @@ async function load(responses, widgetBody = '<b>my tile</b>') {
   TOKEN:'', READ_ONLY:false, ID:'art-1', INITIAL_SOURCE_FOOTPRINT:[],
   allowlist:[], unapproved:[], blocked:[],
   downloadsApproved:false, clipboardApproved:false, linksApproved:false,
-  cameraApproved:false, microphoneApproved:false, geolocationApproved:false,
+  cameraApproved:false, microphoneApproved:false, geolocationApproved:false, inferenceApproved:false,
   apiFetch:api.apiFetch, confirm:()=>true,
   CustomEvent:class {constructor(type) {this.type=type;}},
   // Navigation must wait until both documents have been saved.
