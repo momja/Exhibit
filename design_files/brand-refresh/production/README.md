@@ -25,6 +25,8 @@ across the areas hidden by clouds and landscape. Matting separates the silhouett
 at source resolution. Foreground colors are solved against the clean sky so the
 resting desktop composite closely matches the source painting. Renders and
 `verification.json` record the color differences after resampling.
+The upper extension carries the brush texture in its original direction and
+blends into the top edge of the resting sky.
 
 ## Regenerate
 

@@ -67,7 +67,7 @@ func TestLoginDescentBrowser(t *testing.T) {
 					const slot = track.parentElement;
 					const slotHeight = slot.getBoundingClientRect().height;
 					const frameMatches = (time, row) => {
-						animation.currentTime = time;
+						animation.currentTime = time + animation.effect.getTiming().delay;
 						const offset = new DOMMatrix(getComputedStyle(track).transform).m42;
 						return Math.abs(offset + slotHeight * row) < 0.5;
 					};
@@ -76,14 +76,15 @@ func TestLoginDescentBrowser(t *testing.T) {
 						frameMatches(16000, 2) && frameMatches(19000, 3) && frameMatches(21001, 0) &&
 						frameMatches(31000, 0) && frameMatches(34000, 1);
 					animation.currentTime = originalTime;
-					return matches && animation.effect.getTiming().iterations === Infinity;
+					return matches && animation.effect.getTiming().iterations === Infinity &&
+						animation.effect.getTiming().delay === -10000;
 				})()`), "the carousel loops, with a longer rest on tools between passes")
 				require.True(t, eval(`(() => {
 					const slot = document.querySelector('.login-headline-window');
 					const feather = slot.getAnimations()[0];
 					const originalTime = feather.currentTime;
 					const at = time => {
-						feather.currentTime = time;
+						feather.currentTime = time + feather.effect.getTiming().delay;
 						return getComputedStyle(slot).getPropertyValue('--login-word-feather');
 					};
 					const matches = at(10000) === '0%' && at(12450) === '24%' && at(13000) === '0%';

@@ -25,7 +25,7 @@ const formats = ['webp', 'avif'];
 const BUDGET = {
   composite: { webp: 265_000, avif: 185_000 },
   phone: { webp: 200_000, avif: 135_000 },
-  layers: { webp: 545_000, avif: 430_000 },
+  layers: { webp: 550_000, avif: 430_000 },
 };
 
 // Limit codec workers and only batch one kind of image at a time.

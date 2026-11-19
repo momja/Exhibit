@@ -32,32 +32,32 @@
   "day-sky-960.webp": {
     "width": 960,
     "height": 852,
-    "bytes": 17380
+    "bytes": 21232
   },
   "day-sky-960.avif": {
     "width": 960,
     "height": 852,
-    "bytes": 12758
+    "bytes": 14452
   },
   "day-sky-1600.webp": {
     "width": 1600,
     "height": 1420,
-    "bytes": 69822
+    "bytes": 84858
   },
   "day-sky-1600.avif": {
     "width": 1600,
     "height": 1420,
-    "bytes": 49457
+    "bytes": 57487
   },
   "day-sky-2560.webp": {
     "width": 2560,
     "height": 2272,
-    "bytes": 179680
+    "bytes": 211416
   },
   "day-sky-2560.avif": {
     "width": 2560,
     "height": 2272,
-    "bytes": 144908
+    "bytes": 163336
   },
   "day-clouds-960.webp": {
     "width": 960,
@@ -122,22 +122,22 @@
   "day-phone-750.webp": {
     "width": 750,
     "height": 1625,
-    "bytes": 99080
+    "bytes": 100488
   },
   "day-phone-750.avif": {
     "width": 750,
     "height": 1625,
-    "bytes": 66671
+    "bytes": 67797
   },
   "day-phone-1170.webp": {
     "width": 1170,
     "height": 2535,
-    "bytes": 183490
+    "bytes": 187406
   },
   "day-phone-1170.avif": {
     "width": 1170,
     "height": 2535,
-    "bytes": 125170
+    "bytes": 126358
   },
   "dusk-composite-960.webp": {
     "width": 960,
@@ -172,32 +172,32 @@
   "dusk-sky-960.webp": {
     "width": 960,
     "height": 852,
-    "bytes": 6302
+    "bytes": 7156
   },
   "dusk-sky-960.avif": {
     "width": 960,
     "height": 852,
-    "bytes": 4874
+    "bytes": 5288
   },
   "dusk-sky-1600.webp": {
     "width": 1600,
     "height": 1420,
-    "bytes": 18094
+    "bytes": 20430
   },
   "dusk-sky-1600.avif": {
     "width": 1600,
     "height": 1420,
-    "bytes": 12860
+    "bytes": 14452
   },
   "dusk-sky-2560.webp": {
     "width": 2560,
     "height": 2272,
-    "bytes": 57824
+    "bytes": 70532
   },
   "dusk-sky-2560.avif": {
     "width": 2560,
     "height": 2272,
-    "bytes": 46297
+    "bytes": 50897
   },
   "dusk-clouds-960.webp": {
     "width": 960,
@@ -262,21 +262,21 @@
   "dusk-phone-750.webp": {
     "width": 750,
     "height": 1625,
-    "bytes": 45628
+    "bytes": 46630
   },
   "dusk-phone-750.avif": {
     "width": 750,
     "height": 1625,
-    "bytes": 34152
+    "bytes": 34718
   },
   "dusk-phone-1170.webp": {
     "width": 1170,
     "height": 2535,
-    "bytes": 90210
+    "bytes": 92548
   },
   "dusk-phone-1170.avif": {
     "width": 1170,
     "height": 2535,
-    "bytes": 67333
+    "bytes": 68407
   }
 }

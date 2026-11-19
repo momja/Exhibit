@@ -81,15 +81,16 @@
 .login-headline-words{position:absolute;inset:0 0 auto;display:grid;grid-auto-rows:1.30em;line-height:.95}
 .login-headline-words span{padding-block-start:.14em;padding-inline-start:.02em}
 /* A 21s loop rests on tools for about 12s and on the other words for about
- * 2s each. The duplicate tools row makes the loop seam invisible. */
+ * 2s each. Start 10s into the first tools hold so the first change is visible
+ * sooner. The duplicate tools row makes the loop seam invisible. */
 @property --login-word-feather{
   syntax:"<percentage>";inherits:false;initial-value:0%;
 }
 @media (prefers-reduced-motion:no-preference){
-  .login-headline-words{animation:login-headline-words 21s cubic-bezier(.22,.77,.31,1) infinite}
+  .login-headline-words{animation:login-headline-words 21s cubic-bezier(.22,.77,.31,1) -10s infinite}
   .login-headline-window{
     mask-image:linear-gradient(to bottom,transparent,#000 var(--login-word-feather),#000 calc(100% - var(--login-word-feather)),transparent);
-    animation:login-headline-feather 21s linear infinite;
+    animation:login-headline-feather 21s linear -10s infinite;
   }
 }
 @keyframes login-headline-words{
@@ -104,7 +105,7 @@
   0%,58%,61%,71%,74%,84%,87%,97%,100%{--login-word-feather:0%}
   59%,60%,72%,73%,85%,86%,98%,99%{--login-word-feather:24%}
 }
-.login-tagline{margin-block-start:16px;margin-inline-start:.65em;max-width:34ch;font-size:1.1875rem;font-weight:700;line-height:1.35;color:var(--color-on-painting);text-shadow:0 1px 8px var(--painting-text-shadow)}
+.login-tagline{margin-block-start:16px;margin-inline-start:1.15em;max-width:36ch;font-size:1.1875rem;font-weight:700;line-height:1.35;text-wrap:balance;color:var(--color-on-painting);text-shadow:0 1px 8px var(--painting-text-shadow)}
 .login-painted .login{max-width:340px;align-items:stretch;padding:22px 24px 24px}
 .login-painted .login-sub{margin:0;font-weight:700;color:var(--color-ink)}
 .login-painted .login-form{margin-top:14px}
@@ -167,6 +168,10 @@
   .login-hosted .cl-card{gap:12px}
   .login-hosted .cl-main,.login-hosted .cl-form{gap:10px}
   .login-hosted :is(.cl-footerAction,.cl-footerItem){padding-block:7px}
+}
+
+@media (max-width:360px){
+  .login-tagline br{display:none}
 }
 
 @media (min-width:601px) and (max-height:480px){

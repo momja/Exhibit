@@ -21,7 +21,7 @@
     "restoration_max_error": 44,
     "restoration_mean_error": 0.7121299913194444,
     "composite_rgb_sha256": "8ec474221b32198eea32f6b396df810355aa087888d66eb7de3eaef548f0a959",
-    "phone_rgb_sha256": "df28a044c23f03e6ee36d84a3360b6ea307a131de62f9d9b4f8b6ef497eedbcd"
+    "phone_rgb_sha256": "37c9e79f4c7bcde43f715fac34f2fcad78632896d5e344693afdfe2038e02080"
   },
   "dusk": {
     "native": [
@@ -45,7 +45,7 @@
     "restoration_max_error": 37,
     "restoration_mean_error": 0.47841552734375,
     "composite_rgb_sha256": "706fc7fede5cbbe21ddf3788c2d369b9376751501dde5005ba823aafe74810da",
-    "phone_rgb_sha256": "38cd5a18671470ba12bc20c6250962bd536b9e6a5870be28e720b1d8af255599"
+    "phone_rgb_sha256": "dbeef99b55cafd470bb596f6f4c8fd329a56b29bd1b84b7342532276e2f7e2c0"
   },
   "sha256": {
     "inputs": {
@@ -57,10 +57,10 @@
       "production/dusk-brushwork.webp": "03ad00aa8c57f06dccd5525a2726bff8170a4205c06659ff2fe5d2983f1d8ed9"
     },
     "outputs": {
-      "production/day-sky.webp": "2d974dfcce3bdc06c88eb11c74d1ce4b9c6d629ac84d9205f6eb4d1a25465389",
+      "production/day-sky.webp": "5f5ceaf0ca6d66afd4d559b82c57f1b28c2feeb4c32cb2af9ad22bef62e3ddab",
       "production/day-clouds.webp": "9effaefd7642d48824b0a8a8e59d3b57d7cc99287ea217aa32993c77da2d7843",
       "production/day-hill.webp": "5b9bbb92e88c6be97fb4e72fb4cfbbf76532e4a016114f56b04390332440b689",
-      "production/dusk-sky.webp": "103d5f18a28785b548786e9ad5181dff5206531cdbeac5f829fcf3e71a0459b3",
+      "production/dusk-sky.webp": "c58dc1bbf439cd1a4f457c7466835de6372d9f284c6501c135c717576613a1c7",
       "production/dusk-clouds.webp": "90e55de71bf67340f14d79a003d4fe48b4c107eb186a75100e6b0670fd0c7a4d",
       "production/dusk-hill.webp": "4d9928fb97d584f3ceaf73854cfc4da4f3adf0adba98aeb70264186cbb476a76"
     }

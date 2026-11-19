@@ -68,6 +68,24 @@ def assemble(mode):
     return sky, layers, composite, phone
 
 
+def extend_sky(sky, mode):
+    """Continue the existing brush direction above the resting frame."""
+    source = sky[:EXT]
+    row_tone = gaussian_filter1d(np.median(source, axis=1), 12, axis=0)
+    texture = source - row_tone[:, None, :]
+    horizon = row_tone[0]
+    fade = np.linspace(1, 0, EXT)[:, None, None] ** 1.5 * .60
+    deep = np.array([.07, .20, .46] if mode == 'day' else [.025, .035, .10])
+    extension = horizon * (1 - fade) + deep * fade + texture
+
+    # Carry the source's exact top edge into the join without doubling its
+    # brush marks into a reflected chevron.
+    blend = np.clip(np.arange(EXT - 1, -1, -1) / 32, 0, 1)[:, None, None]
+    blend = blend * blend * (3 - 2 * blend)
+    extension = extension * blend + sky[0] * (1 - blend)
+    return np.concatenate([extension, sky])
+
+
 def brushwork_layers(mode):
     """Separate the approved repaint while preserving its original colors and coordinates."""
     source = rgb(OUT / f'{mode}-brushwork.webp', (1600, 900))
@@ -140,10 +158,7 @@ def brushwork_layers(mode):
         Image.fromarray(pixels).save(OUT / f'{mode}-{kind}.webp', **MASTER_KW)
 
     sky = np.asarray(image(sky).resize(SIZE, Image.Resampling.LANCZOS)) / 255
-    fade = np.linspace(1, 0, EXT)[:, None, None] ** 1.5 * .60
-    deep = np.array([.07, .20, .46] if mode == 'day' else [.025, .035, .10])
-    extension = sky[:EXT][::-1] * (1 - fade) + deep * fade
-    image(np.concatenate([extension, sky])).save(OUT / f'{mode}-sky.webp', **MASTER_KW)
+    image(extend_sky(sky, mode)).save(OUT / f'{mode}-sky.webp', **MASTER_KW)
     return Image.open(OUT / f'{mode}-brushwork.webp')
 
 
