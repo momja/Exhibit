@@ -1,16 +1,20 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
-	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/momja/Exhibit/internal/mockllm"
 )
 
-// Loopback HTTP fixture, not a provider measurement. Exercises Pi's real adapters.
+// Instrument the shared mockLLM HTTP handler, not Pi's registry/adapters.
+// Only credential/overlap assertions and a 1 ms benchmark delay live here.
 type fixture struct {
 	server                        *httptest.Server
 	mu                            sync.Mutex
@@ -20,6 +24,7 @@ type fixture struct {
 
 func newFixture() *fixture {
 	f := &fixture{}
+	provider := mockllm.Handler()
 	f.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body map[string]any
 		if json.NewDecoder(r.Body).Decode(&body) != nil {
@@ -40,65 +45,34 @@ func newFixture() *fixture {
 			f.leaks++
 		}
 		f.mu.Unlock()
-		defer func() { f.mu.Lock(); f.active--; f.mu.Unlock() }()
-		delay := time.Millisecond
-		if strings.Contains(text, "slow") {
-			delay = 300 * time.Millisecond
-		}
+		defer func() {
+			f.mu.Lock()
+			defer f.mu.Unlock()
+			f.active--
+			if r.Context().Err() != nil {
+				f.canceled++
+			}
+		}()
+		timer := time.NewTimer(time.Millisecond)
+		defer timer.Stop()
 		select {
 		case <-r.Context().Done():
-			f.mu.Lock()
-			f.canceled++
-			f.mu.Unlock()
 			return
-		case <-time.After(delay):
+		case <-timer.C:
 		}
-		if strings.Contains(text, "http-error") {
-			w.WriteHeader(401)
-			fmt.Fprint(w, `{"error":{"message":"test-key-A must never escape"}}`)
-			return
-		}
-		if strings.HasSuffix(r.URL.Path, "systemone") {
-			answers := map[string]any{}
-			questions, _ := body["questions"].(map[string]any)
-			for id, raw := range questions {
-				q := raw.(map[string]any)
-				switch q["type"] {
-				case "noul":
-					answers[id] = map[string]any{"type": "noul", "noul": 0.98}
-				case "choice":
-					answers[id] = map[string]any{"type": "choice", "choice": "positive", "probabilities": map[string]float64{"positive": 0.98, "negative": 0.02}, "confidence": 0.96}
-				case "score":
-					answers[id] = map[string]any{"type": "score", "score": 0.9, "confidence": 0.95}
-				}
-			}
-			if strings.Contains(text, "malformed") {
-				answers = map[string]any{}
-			}
-			_ = json.NewEncoder(w).Encode(map[string]any{"answers": answers, "usage": map[string]int{"input_tokens": 100, "output_tokens": 0}})
-			return
-		}
-		w.Header().Set("Content-Type", "text/event-stream")
-		answer := "OK"
-		if strings.Contains(text, "tenant-A") {
-			answer += " tenant-A"
-		}
-		if strings.Contains(text, "tenant-B") {
-			answer += " tenant-B"
-		}
-		chunk, _ := json.Marshal(map[string]any{"id": "fake-1", "choices": []any{map[string]any{"index": 0, "delta": map[string]any{"role": "assistant", "content": answer}, "finish_reason": nil}}})
-		fmt.Fprintf(w, "data: %s\n\n", chunk)
-		fmt.Fprint(w, "data: {\"id\":\"fake-1\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":100,\"completion_tokens\":1,\"total_tokens\":101,\"cost\":0.0000104,\"is_byok\":false}}\n\ndata: [DONE]\n\n")
+		// Restore the body after inspecting the independent tenant identity.
+		r.Body = io.NopCloser(bytes.NewReader(encoded))
+		provider.ServeHTTP(w, r)
 	}))
 	return f
 }
 
 func sampleRequest(kind, model, key, identity string) request {
 	if kind == "complete" {
-		return request{Op: kind, Model: model, APIKey: key, Context: map[string]any{"messages": []any{map[string]any{"role": "user", "content": "Reply only OK. " + identity, "timestamp": int64(0)}}}}
+		return request{Op: kind, Model: model, APIKey: key, Context: map[string]any{"messages": []any{map[string]any{"role": "user", "content": "mock-inference Reply only OK. " + identity, "timestamp": int64(0)}}}}
 	}
 	return request{Op: kind, Model: model, APIKey: key, Context: map[string]any{
-		"state": map[string]any{"text": "A wonderful sunny day. " + identity},
+		"state": map[string]any{"text": "mock-inference A wonderful sunny day. " + identity},
 		"questions": map[string]any{
 			"positive":  map[string]any{"type": "bool", "instructions": "Is the sentiment positive?", "criteria": map[string]string{"true": "Positive sentiment", "false": "Negative sentiment"}},
 			"sentiment": map[string]any{"type": "choice", "instructions": "Choose the sentiment.", "criteria": map[string]string{"positive": "Positive sentiment", "negative": "Negative sentiment"}},

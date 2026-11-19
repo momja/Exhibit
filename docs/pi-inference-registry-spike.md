@@ -1,7 +1,7 @@
 # Artifact inference through Pi's registry
 
 Research for [Exh-urrg](../.tickets/Exh-urrg.md), under
-[Exh-zue3](../.tickets/Exh-zue3.md). Investigated 2026-11-05 on Linux ARM64.
+[Exh-zue3](../.tickets/Exh-zue3.md). Investigated 2026-11-05 on Linux ARM64; mockLLM acceptance completed 2026-11-19.
 
 ## Decision and acceptance status
 
@@ -12,23 +12,37 @@ The pinned native binary can host this without adding Node, npm, a listener,
 an agent conversation per inference call, or a new production service. A worker
 is separate from the per-conversation agent manager and its admission limits.
 
-This is a **provisional runtime decision, not a completed spike**. The runnable
-prototype exercises both real Pi adapters from Go against a local HTTP fixture;
-the live OpenRouter acceptance criterion remains unmet. No OpenRouter key was
-available in the shell or Pi auth configuration (which has only an OpenCode Go
-credential). No unrelated credential was reused. Public catalog requests and
-unauthenticated HTTP probes are not inference measurements. Keep
-[Exh-urrg](../.tickets/Exh-urrg.md) in progress, and keep its dependents gated,
-until both live registry operations and their timings are recorded.
+**The architecture spike is complete.** The user clarified the acceptance
+scope: “Why do we need openrouter benchmarks? We should be able to test with
+mockLLM?” Deterministic mock-provider calls through the **real pinned native
+Pi registry and adapters**, measured local overhead/memory, isolation/failure
+checks, and a written choice suffice to choose this runtime. No live provider
+benchmark or credential is required to close [Exh-urrg](../.tickets/Exh-urrg.md)
+or begin the dependent implementation.
 
-In particular, live classification must resolve a compatibility question:
-pinned Pi calls `/api/v1/systemone`, while OpenRouter's current decision-model
-catalog advertises `/api/alpha/decisions`. Both unauthenticated probes returned
-401; that proves neither authenticated route works. Do not silently patch the
-registry transport and claim the pinned adapter passed. If it fails, evaluate a
-small, explicitly tested transport correction or the Go fallback described
-below before finalizing this decision. Evidence: [pinned transport][systemone],
-[current provider catalog][or-classifiers], and the
+The prototype now uses the shared [mockLLM handler](../internal/mockllm/inference.go)
+for both operations. Go calls the real worker over RPC; the extension resolves
+real OpenRouter catalog models and calls `registry.complete()` / `classify()`.
+Only the provider HTTP destination is redirected to loopback. This retains the
+pinned transport, bool/noul conversion, parsing and catalog accounting in the
+tested path; it does not mock the registry at its boundary. The
+[fixture wrapper](../scripts/pi-inference-spike/fixture.go) only instruments
+credentials, overlap and cancellation and adds the 1 ms benchmark delay.
+Shared mockLLM supplies SSE completion, typed answers, usage, slow cancellation,
+HTTP errors and malformed billed answers. Normal agent tool-building and
+legacy guard scripts remain covered by regression tests.
+
+No live OpenRouter inference was performed. Mock success proves neither live
+API compatibility, model accuracy, real spend nor a provider-facing latency
+SLO. Before enabling an actual provider integration/release, the
+[complete kind](../.tickets/Exh-gd3g.md) and
+[decide kind](../.tickets/Exh-x16u.md) retain opt-in/manual compatibility checks.
+In particular, the pinned classifier calls `/api/v1/systemone`, while the
+2026-11-05 OpenRouter catalog advertised `/api/alpha/decisions`. Unauthenticated
+401 probes establish neither route's compatibility nor incompatibility. Do not
+patch transport speculatively; if authorized release validation fails, evaluate
+an explicitly tested correction or the narrow Go fallback below. Evidence:
+[pinned transport][systemone], [provider catalog][or-classifiers], and
 [captured catalog/probe results](../scripts/pi-inference-spike/results/openrouter-catalog-2026-11-05.json).
 
 ## Exact version evidence
@@ -129,7 +143,7 @@ is intentionally not run or cached for all viewers. Resolving a model from
 the catalog does not guarantee the caller's key may use it; API rejection still
 fails that call. [OpenRouter provider/personalization][or-provider]
 
-Real-Bolt tests against the loopback fixture establish:
+Real-Bolt tests against shared mockLLM through the loopback fixture establish:
 
 - Twelve concurrent mixed chat/classifier calls reached twelve overlapping
   HTTP handlers. Alternating fake platform/user keys were checked against
@@ -153,8 +167,8 @@ load third-party/user extensions there. [Tests](../scripts/pi-inference-spike/wo
 
 ## Latency and memory measurements
 
-**Local HTTP fixture only; no provider latency or HTTPS/TLS is included.**
-One ARM64 run on this shared server, Go 1.25.7, checksum-verified Bolt 1.0.8,
+**Shared mockLLM over local HTTP only; no provider latency or HTTPS/TLS is included.**
+One ARM64 run on 2026-11-19 on this shared server, Go 1.25.7, checksum-verified Bolt 1.0.8,
 JIT off. Each path/kind had one excluded warmup and **20 measured samples**.
 Calls used the same small payload and model ID, alternating direct/worker
 order, reusable connections, eight maximum chat output tokens, and zero
@@ -165,30 +179,35 @@ The fixture injects a 1 ms delay and deterministic answers/usage; this is not
 an accuracy test. Both classifier paths deliberately use the pinned
 `/api/v1/systemone` URL shape, so a direct control cannot hide a worker endpoint
 compatibility problem. [Harness](../scripts/pi-inference-spike/main.go),
-[fixture](../scripts/pi-inference-spike/fixture.go),
-[raw samples/results](../scripts/pi-inference-spike/results/local-bolt-1.0.8-arm64.json)
+[instrumented mockLLM](../scripts/pi-inference-spike/fixture.go),
+[raw samples/results](../scripts/pi-inference-spike/results/mockllm-bolt-1.0.8-arm64.json)
 
-- Chat: warm worker median **3.659 ms**, range 3.413–5.101 ms; direct Go HTTP
-  median **1.605 ms**, range 1.475–2.047 ms.
-- Classifier: warm worker median **2.834 ms**, range 2.335–3.499 ms; direct Go
-  HTTP median **1.616 ms**, range 1.412–1.750 ms.
-- Difference of medians: **2.054 ms** chat, **1.218 ms** classifier. These are
+- Chat: warm worker median **3.816 ms**, range 3.268–11.556 ms; direct Go HTTP
+  median **1.638 ms**, range 1.493–3.825 ms.
+- Classifier: warm worker median **2.533 ms**, range 2.369–2.800 ms; direct Go
+  HTTP median **1.583 ms**, range 1.463–1.857 ms.
+- Difference of medians: **2.178 ms** chat, **0.950 ms** classifier. These are
   whole-adapter/IPC differences, not pure serialization measurements. Go vs
   Bun HTTP stacks and fixture timer scheduling also contribute.
-- Worker launch to extension-ready ping: **142.498 ms** (one observation).
+- Worker launch to extension-ready ping: **135.777 ms** (one observation).
   Never launch one per artifact request.
-- `/proc/<pid>/status` RSS: worker ready **80,812 KiB**, warm **91,940 KiB**
-  (about 89.8 MiB). Go driver/fixture process ready **7,712 KiB**, warm
-  **10,648 KiB**. Direct Go adds no child process. The Go values include both
+- `/proc/<pid>/status` RSS: worker ready **84,888 KiB**, warm **94,804 KiB**
+  (about 92.6 MiB). Go driver/fixture process ready **7,964 KiB**, warm
+  **12,036 KiB**. Direct Go adds no child process. The Go values include both
   paths, the fixture and measurement scaffolding, so they are not an isolated
   production direct-client memory benchmark. RSS includes shared mappings;
   PSS, peak RSS, long-run growth and loaded production behavior were not measured.
 
 The local classifier overhead supports a warm-worker design, with a real
-roughly 90 MiB steady child-process cost on this host. It does **not** prove a
+roughly 93 MiB steady child-process cost on this host. It does **not** prove a
 provider-facing latency SLO. There is one process/run, small inputs, no TLS,
 no production load distribution, and no meaningful tail percentile estimate.
-The live comparison must be added before accepting this spike.
+The earlier isolated-fixture baseline is retained as
+[historical local evidence](../scripts/pi-inference-spike/results/local-bolt-1.0.8-arm64.json).
+Neither run is a live-provider benchmark; local overhead suffices for this
+architecture choice. Concurrent compilation on a shared server may also affect
+individual samples. The harness reports the upper middle observation for an
+even sample count, rather than interpolating between the two middle values.
 
 ## Usage, catalog prices and answer contract
 
@@ -210,13 +229,13 @@ output-token cost. The fake classifier's 100 input tokens therefore produce
 **$0.0000042**; the fake chat produces 100 input + 1 output and a reported
 **$0.0000104**. These are fixture accounting checks, **not real spend**.
 The retained raw results mark chat `totalFromProvider: true` and classifier
-`false`. [Pinned catalog][catalog], [raw local results](../scripts/pi-inference-spike/results/local-bolt-1.0.8-arm64.json)
+`false`. [Pinned catalog][catalog], [raw local results](../scripts/pi-inference-spike/results/mockllm-bolt-1.0.8-arm64.json)
 
-The public OpenRouter catalogs were read without a key. They currently identify
+The public OpenRouter catalogs were read without a key. The 2026-11-05 snapshots identify
 chat snapshot `openai/gpt-4.1-nano-2025-04-14` and classifier snapshot
 `typesafe/jev-1.14-20261014`, with the same base input/output prices. These
 are catalog snapshot identifiers, **not observed models served by live calls**.
-Catalog cache-read pricing can drift (current chat API $0.03/M versus pinned
+Catalog cache-read pricing can drift (snapshot chat API $0.03/M versus pinned
 $0.025/M). Keep classifier cost explicitly estimated, do not claim it is an
 invoice, and test/catalog-review it when upgrading the pin.
 [Current chat catalog][or-models], [current classifier catalog][or-classifiers]
@@ -251,13 +270,13 @@ The stdout reader drains/reaps the child and removes its scratch HOME.
 [Supervisor](../scripts/pi-inference-spike/worker.go)
 
 With real Bolt and local in-flight classifier HTTP calls, fault injection
-measured **9.778 ms** to fail pending calls after exit(42), and **282.376 ms**
+measured **8.621 ms** to fail pending calls after exit(42), and **281.784 ms**
 after an intentional synchronous infinite loop (30 ms deadline + grace).
-Explicit fresh-worker readiness took **165.194 ms** and **194.847 ms** respectively;
+Explicit fresh-worker readiness took **176.040 ms** and **191.204 ms** respectively;
 the subsequent classifier call succeeded. One sample each, not restart SLOs;
 fault commands only exist when the test fixture is configured.
 [Fault-injection tests](../scripts/pi-inference-spike/worker_test.go),
-[captured test output](../scripts/pi-inference-spike/results/runtime-tests-bolt-1.0.8-arm64.txt).
+[captured test output](../scripts/pi-inference-spike/results/mockllm-runtime-tests-bolt-1.0.8-arm64.txt).
 
 Production work belongs to [Exh-hwjg](../.tickets/Exh-hwjg.md): an independent
 supervisor owned by inference, eager readiness while inference is enabled,
@@ -275,9 +294,9 @@ before validating/redacting it; map unknown worker/provider errors to the
 core's stable error vocabulary. No production endpoints, bridges, DB migrations,
 guardrail changes or agent process limits are implemented by this spike.
 
-## Go fallback and remaining gate
+## Go fallback and provider release validation
 
-If authenticated pinned-registry calls cannot work reliably, or the measured
+If later provider validation shows pinned-registry calls cannot work reliably, or the measured
 production memory/latency budget rules out the worker, implement the two narrow
 Go adapters behind the existing inference core. The direct control in this
 prototype is deliberately OpenRouter-only, not the beginning of a generic SDK.
@@ -294,23 +313,28 @@ provider endpoint. A direct request's reported cost does not replace a catalog
 for providers/operations without reported prices. [Pinned provider registration][or-provider],
 [chat implementation][chat], [classifier implementation][systemone-shared]
 
-The next evidence needed is small: an authorized OpenRouter configuration,
-then the live benchmark below with both operations, observed served model IDs
-if the responses expose them, per-path samples/usage/cost, and explicit confirmation
-of the pinned classifier URL. If that requires a transport fix, retain failing
-and corrected evidence separately and revise the decision. Only then close
-[Exh-urrg](../.tickets/Exh-urrg.md). Related tickets now point to this decision
-and retain that gate; the bridge/agent-guidance tickets do not prescribe a
-conflicting runtime. The ZIP export ticket must make its local worker
-prerequisite explicit rather than assuming the Go relay alone supplies adapters.
+The runtime choice is ready for implementation. Provider compatibility is a
+separate release check in the two kind tickets, not an unresolved dependency
+of this spike. It may be run manually or with explicit opt-in when authorized
+configuration is available. Record served model IDs if exposed, response
+usage/cost provenance and confirmation of the pinned classifier URL. A live
+benchmark is optional; it is not necessary to repeat the local runtime-overhead
+comparison. Keep a failing integration disabled until corrected and verified.
+The ZIP export ticket requires a compatible local worker in addition to the Go
+relay and local keys.
 
 ## Reproduction and verification
 
-Completed checks: checksum/version verification, asset build, real-Bolt
-prototype tests under Go's race detector, `go vet ./scripts/pi-inference-spike`,
-repository-wide compile checks (`go test -run '^$' ./...`), local Markdown
-target/result-JSON validation, and ticket dependency-cycle check.
-The broader `go test ./...` run terminated with exit 143 before completion;
+This round: checksum/version verification; shared mockLLM and real-Bolt
+prototype tests under Go's race detector; selected existing agent/guardrail
+pipeline regressions using the same native binary; `go vet ./internal/mockllm
+./scripts/pi-inference-spike`; local mock benchmark; Markdown target/result-JSON
+validation; `git diff --check`; and ticket dependency-cycle check. Captured
+[shared mock/native tests](../scripts/pi-inference-spike/results/mockllm-runtime-tests-bolt-1.0.8-arm64.txt)
+and [agent regressions](../scripts/pi-inference-spike/results/agent-mock-regression-tests-bolt-1.0.8-arm64.txt).
+The prior round also completed an asset build and repository-wide compile-only
+checks (`go test -run '^$' ./...`).
+The prior broader `go test ./...` run terminated with exit 143 before completion;
 `internal/agent` had passed (49.895 s), and no failing assertion was emitted
 before termination. This is **not** a full-suite pass. The latest prototype
 race run includes malformed/scalar-envelope handling and verifies such input
@@ -330,15 +354,18 @@ echo 'f530486723c7ab9004aca51f6f9494b95861fba7287c05ae8804647d63077de1  /tmp/Exh
 tar -xJf /tmp/Exh-urrg-bolt.tar.xz -C /tmp/Exh-urrg-bolt --strip-components=1
 /tmp/Exh-urrg-bolt/pi --version
 
-PI_SPIKE_BIN=/tmp/Exh-urrg-bolt/pi go test -race -count=1 -v ./scripts/pi-inference-spike
-go vet ./scripts/pi-inference-spike
-go run ./scripts/pi-inference-spike -pi /tmp/Exh-urrg-bolt/pi -local -n 20 \
+PI_SPIKE_BIN=/tmp/Exh-urrg-bolt/pi go test -race -count=1 -v ./internal/mockllm ./scripts/pi-inference-spike
+go vet ./internal/mockllm ./scripts/pi-inference-spike
+PATH=/tmp/Exh-urrg-bolt:$PATH go test -count=1 -v ./internal/api \
+  -run '^(TestAgentSessionReadsTheArtifactItself|TestPlatformModeRunsASessionWithNoStoredKey|TestGuardrailBlocksAPromptBeforeTheAgentRuns|TestGuardrailFailsClosed|TestGuardrailAllowedPromptShowsNoRefusal)$'
+go run ./scripts/pi-inference-spike -pi /tmp/Exh-urrg-bolt/pi -n 20 \
   > /tmp/Exh-urrg-local.json
 
+# Optional provider release check, NOT required for the spike.
 # OPENROUTER_API_KEY must already be supplied by authorized configuration.
 # Never put a real key in argv, source files, command output or git.
 # Each kind/path makes one warmup + 5 measured calls: 24 total provider calls.
-go run ./scripts/pi-inference-spike -pi /tmp/Exh-urrg-bolt/pi -n 5 \
+go run ./scripts/pi-inference-spike -pi /tmp/Exh-urrg-bolt/pi -live -n 5 \
   > /tmp/Exh-urrg-live.json
 ```
 
@@ -346,8 +373,9 @@ The tiny configured models/output bound are intended to keep a live run cheap;
 no live spend was incurred here. Benchmark output is written only after all
 paths succeed; a failure returns a generic stage/status error without dumping
 upstream bodies or credentials. With no `PI_SPIKE_BIN`, integration tests skip
-explicitly; that is not validation of the pinned runtime. With no live key,
-the CLI refuses live mode rather than quietly measuring a mock.
+explicitly; that is not validation of the pinned runtime. By default,
+the CLI uses shared mockLLM even when a live key exists. Only `-live` permits
+provider requests, and it refuses to run without explicit live configuration.
 The benchmark also refuses an executable whose version string is not the
 pinned Bolt/Pi pair (archive checksum verification remains the operator's step).
 

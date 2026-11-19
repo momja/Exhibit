@@ -1,0 +1,70 @@
+=== RUN   TestHandlerScriptSelection
+=== RUN   TestHandlerScriptSelection//agent
+2026/11/19 02:58:58 turn: 1 messages -> tool
+=== RUN   TestHandlerScriptSelection//guard
+2026/11/19 02:58:58 turn: 2 messages -> text
+=== RUN   TestHandlerScriptSelection//inference
+=== RUN   TestHandlerScriptSelection//system_marker
+2026/11/19 02:58:58 turn: 2 messages -> tool
+=== RUN   TestHandlerScriptSelection//v1/agent
+2026/11/19 02:58:58 turn: 1 messages -> tool
+=== RUN   TestHandlerScriptSelection//v1/guard
+2026/11/19 02:58:58 turn: 2 messages -> text
+=== RUN   TestHandlerScriptSelection//v1/inference
+=== RUN   TestHandlerScriptSelection//v1/system_marker
+2026/11/19 02:58:58 turn: 2 messages -> tool
+=== RUN   TestHandlerScriptSelection//api/v1/agent
+2026/11/19 02:58:58 turn: 1 messages -> tool
+=== RUN   TestHandlerScriptSelection//api/v1/guard
+2026/11/19 02:58:58 turn: 2 messages -> text
+=== RUN   TestHandlerScriptSelection//api/v1/inference
+=== RUN   TestHandlerScriptSelection//api/v1/system_marker
+2026/11/19 02:58:58 turn: 2 messages -> tool
+--- PASS: TestHandlerScriptSelection (0.02s)
+    --- PASS: TestHandlerScriptSelection//agent (0.00s)
+    --- PASS: TestHandlerScriptSelection//guard (0.00s)
+    --- PASS: TestHandlerScriptSelection//inference (0.00s)
+    --- PASS: TestHandlerScriptSelection//system_marker (0.00s)
+    --- PASS: TestHandlerScriptSelection//v1/agent (0.00s)
+    --- PASS: TestHandlerScriptSelection//v1/guard (0.00s)
+    --- PASS: TestHandlerScriptSelection//v1/inference (0.00s)
+    --- PASS: TestHandlerScriptSelection//v1/system_marker (0.00s)
+    --- PASS: TestHandlerScriptSelection//api/v1/agent (0.00s)
+    --- PASS: TestHandlerScriptSelection//api/v1/guard (0.00s)
+    --- PASS: TestHandlerScriptSelection//api/v1/inference (0.00s)
+    --- PASS: TestHandlerScriptSelection//api/v1/system_marker (0.00s)
+=== RUN   TestBodyFromSourceResult
+--- PASS: TestBodyFromSourceResult (0.00s)
+=== RUN   TestArxivFixtureUsesTheDirectAPI
+--- PASS: TestArxivFixtureUsesTheDirectAPI (0.00s)
+=== RUN   TestDecideReadsBeforeItChanges
+--- PASS: TestDecideReadsBeforeItChanges (0.00s)
+=== RUN   TestDecideAfterACreateReadsTheArtifact
+--- PASS: TestDecideAfterACreateReadsTheArtifact (0.00s)
+=== RUN   TestDecideCreateAndWidget
+--- PASS: TestDecideCreateAndWidget (0.00s)
+PASS
+ok  	github.com/momja/Exhibit/internal/mockllm	1.054s
+=== RUN   TestWorkerConcurrencyCredentialsUsage
+    worker_test.go:115: 12 overlapping mixed calls; peak=12; credential mismatches=0
+--- PASS: TestWorkerConcurrencyCredentialsUsage (0.49s)
+=== RUN   TestWorkerCancelOnlyOneRequest
+=== RUN   TestWorkerCancelOnlyOneRequest/complete
+=== RUN   TestWorkerCancelOnlyOneRequest/classify
+--- PASS: TestWorkerCancelOnlyOneRequest (1.01s)
+    --- PASS: TestWorkerCancelOnlyOneRequest/complete (0.51s)
+    --- PASS: TestWorkerCancelOnlyOneRequest/classify (0.49s)
+=== RUN   TestWorkerFailClosedRetainsUsage
+--- PASS: TestWorkerFailClosedRetainsUsage (0.21s)
+=== RUN   TestWorkerCrashWedgeRestart
+=== RUN   TestWorkerCrashWedgeRestart/crash
+    worker_test.go:281: crash: fail pending calls 8.621 ms; fresh worker ready 176.040 ms; recovery call succeeded
+=== RUN   TestWorkerCrashWedgeRestart/wedge
+    worker_test.go:281: wedge: fail pending calls 281.784 ms; fresh worker ready 191.204 ms; recovery call succeeded
+--- PASS: TestWorkerCrashWedgeRestart (1.09s)
+    --- PASS: TestWorkerCrashWedgeRestart/crash (0.42s)
+    --- PASS: TestWorkerCrashWedgeRestart/wedge (0.67s)
+=== RUN   TestWorkerBoundsAdmission
+--- PASS: TestWorkerBoundsAdmission (0.53s)
+PASS
+ok  	github.com/momja/Exhibit/scripts/pi-inference-spike	4.364s

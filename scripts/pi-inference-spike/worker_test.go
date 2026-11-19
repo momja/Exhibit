@@ -68,7 +68,7 @@ func TestWorkerConcurrencyCredentialsUsage(t *testing.T) {
 				kind = "classify"
 				model = "typesafe/jev-1.14"
 			}
-			result, err := callTest(w, sampleRequest(kind, model, key, tenant+" slow"))
+			result, err := callTest(w, sampleRequest(kind, model, key, tenant+" mock-inference-slow"))
 			successful(t, result, err)
 			usage, ok := result["usage"].(map[string]any)
 			if !ok {
@@ -77,11 +77,18 @@ func TestWorkerConcurrencyCredentialsUsage(t *testing.T) {
 			}
 			cost := usage["cost"].(map[string]any)
 			if kind == "classify" {
-				if math.Abs(cost["total"].(float64)-0.0000042) > 1e-15 || usage["input"] != float64(100) {
+				if math.Abs(cost["total"].(float64)-0.0000042) > 1e-15 || usage["input"] != float64(100) || cost["totalFromProvider"] != false {
 					t.Errorf("wrong classifier catalog cost: %v", usage)
 				}
 				answers := result["answers"].(map[string]any)
-				if answers["positive"].(map[string]any)["type"] != "bool" || answers["sentiment"].(map[string]any)["choice"] != "positive" || answers["rating"].(map[string]any)["score"] != 0.9 {
+				positive := answers["positive"].(map[string]any)
+				sentiment := answers["sentiment"].(map[string]any)
+				rating := answers["rating"].(map[string]any)
+				probabilities := sentiment["probabilities"].(map[string]any)
+				if positive["type"] != "bool" || positive["probability"] != 0.98 ||
+					sentiment["choice"] != "positive" || sentiment["confidence"] != 0.96 ||
+					probabilities["positive"] != 0.98 || probabilities["negative"] != 0.02 ||
+					rating["score"] != 0.9 || rating["confidence"] != 0.95 {
 					t.Errorf("wrong typed answers: %v", answers)
 				}
 			} else {
@@ -138,11 +145,11 @@ func TestWorkerCancelOnlyOneRequest(t *testing.T) {
 			aborted := make(chan outcome, 1)
 			sibling := make(chan outcome, 1)
 			go func() {
-				r, e := w.call(ctx, sampleRequest(kind, model, "test-key-A", "tenant-A slow"))
+				r, e := w.call(ctx, sampleRequest(kind, model, "test-key-A", "tenant-A mock-inference-slow"))
 				aborted <- outcome{r, e}
 			}()
 			go func() {
-				r, e := callTest(w, sampleRequest(kind, model, "test-key-B", "tenant-B slow"))
+				r, e := callTest(w, sampleRequest(kind, model, "test-key-B", "tenant-B mock-inference-slow"))
 				sibling <- outcome{r, e}
 			}()
 			deadline := time.Now().Add(time.Second)
@@ -190,16 +197,21 @@ func TestWorkerFailClosedRetainsUsage(t *testing.T) {
 	if _, err := callTest(w, request{Op: "ping"}); err != nil {
 		t.Fatal("malformed input escaped the hook", err)
 	}
-	r, err := callTest(w, sampleRequest("classify", "typesafe/jev-1.14", "test-key-A", "malformed"))
+	r, err := callTest(w, sampleRequest("classify", "typesafe/jev-1.14", "test-key-A", "mock-inference-malformed"))
 	if err != nil || r["stopReason"] != "error" || r["usage"] == nil {
 		t.Fatalf("lost usage on malformed billed result: %v %v", err, r)
+	}
+	usage := r["usage"].(map[string]any)
+	cost := usage["cost"].(map[string]any)
+	if usage["input"] != float64(100) || math.Abs(cost["total"].(float64)-0.0000042) > 1e-15 {
+		t.Fatalf("wrong usage/cost on malformed billed result: %v", usage)
 	}
 	for _, kind := range []string{"complete", "classify"} {
 		model := "openai/gpt-4.1-nano"
 		if kind == "classify" {
 			model = "typesafe/jev-1.14"
 		}
-		r, err = callTest(w, sampleRequest(kind, model, "test-key-A", "http-error"))
+		r, err = callTest(w, sampleRequest(kind, model, "test-key-A", "mock-inference-http-error"))
 		if err != nil || r["stopReason"] != "error" {
 			t.Fatalf("HTTP failure did not fail closed: %v %v", err, r)
 		}
@@ -231,7 +243,7 @@ func TestWorkerCrashWedgeRestart(t *testing.T) {
 			w := testWorker(t, f)
 			pending := make(chan error, 1)
 			go func() {
-				_, err := callTest(w, sampleRequest("classify", "typesafe/jev-1.14", "test-key-A", "slow"))
+				_, err := callTest(w, sampleRequest("classify", "typesafe/jev-1.14", "test-key-A", "mock-inference-slow"))
 				pending <- err
 			}()
 			deadline := time.Now().Add(time.Second)
@@ -280,7 +292,7 @@ func TestWorkerBoundsAdmission(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			r, e := callTest(w, sampleRequest("classify", "typesafe/jev-1.14", "test-key-A", "slow"))
+			r, e := callTest(w, sampleRequest("classify", "typesafe/jev-1.14", "test-key-A", "mock-inference-slow"))
 			successful(t, r, e)
 		}()
 	}

@@ -21,7 +21,7 @@ Precedent: the usage-policy guardrail (internal/agent/ext/guard.ts, av-gust) alr
 ## Design
 
 - Providers: the agent's provider pattern, no separate decision configuration. Platform mode uses the instance credential (AGENT_API_KEY + AGENT_PROVIDER; OpenRouter on the hosted version, which serves Jev). BYOK uses the viewer's stored key and provider. INFERENCE_DECISION_MODEL names a classifier model in Pi's catalog for that provider; startup fails in platform mode if it is unset or doesn't resolve to a classifier. In BYOK mode, a provider with no classifier model makes decide() unavailable for that viewer.
-- Runtime: [Exh-urrg](Exh-urrg.md) provisionally selects registry.classify() in the core's dedicated warm Pi Bolt 1.0.8 / Pi 1.4.0 worker. [Findings and prototype](../docs/pi-inference-registry-spike.md) prove local operation/isolation but not live OpenRouter acceptance. Keep this dependency unresolved until authenticated classification verifies the pinned /api/v1/systemone transport (current OpenRouter catalog advertises /api/alpha/decisions). Do not silently use a new endpoint or claim the pinned adapter passed. If this fails, revise the spike decision before adding a narrow Go fallback.
+- Runtime: [Exh-urrg](Exh-urrg.md) selects registry.classify() in the core's dedicated warm Pi Bolt 1.0.8 / Pi 1.4.0 worker. [Findings and prototype](../docs/pi-inference-registry-spike.md) validate this choice deterministically through shared mockLLM with the real registry/adapters. Implement without a live benchmark prerequisite. Before enabling actual OpenRouter integration/release, verify the pinned /api/v1/systemone route versus the catalog-advertised /api/alpha/decisions. Unauthenticated 401s prove neither compatibility nor incompatibility. Do not silently substitute an endpoint; use an explicitly tested correction or revisit the documented narrow Go fallback if release validation fails.
 - window.exhibit.ai.decide({ state, questions }) mirrors Pi's ClassifierContext. state is a JSON object (the thing being judged). Each named question is one of:
   - bool: instructions, criteria { true, false } → { probability }
   - choice: instructions, criteria { option: meaning } → { choice, probabilities, confidence }
@@ -34,8 +34,8 @@ Precedent: the usage-policy guardrail (internal/agent/ext/guard.ts, av-gust) alr
 
 ## Acceptance Criteria
 
-- Each question type round-trips against a fake classifier provider, including probabilities and confidence.
+- Each question type round-trips against shared mockLLM through the real pinned registry/adapters, including probabilities and confidence.
 - Unsupported question types and over-limit inputs are refused with no provider call.
 - With no classifier model for the provider, decide() rejects with unavailable even when complete() works.
 - The ledger records decide calls separately from complete calls, against the same total.
-- One end-to-end check against OpenRouter's Jev, run manually or behind an opt-in test flag.
+- Before enabling actual OpenRouter integration/release: one end-to-end compatibility check against Jev, run manually or behind an opt-in test flag, confirming the pinned endpoint, normalized answers and usage behavior. Separate release validation only; no live benchmark gates implementation or completion of the architecture spike. Mock success establishes no live accuracy, spend or API compatibility claim.

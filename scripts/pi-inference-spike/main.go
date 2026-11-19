@@ -113,7 +113,7 @@ func main() {
 func run() error {
 	binary := flag.String("pi", "pi", "exact Pi Bolt 1.0.8 binary path")
 	extension := flag.String("extension", "scripts/pi-inference-spike/extension.ts", "extension path")
-	local := flag.Bool("local", false, "use loopback fixture; no provider requests")
+	live := flag.Bool("live", false, "opt-in paid provider comparison using OPENROUTER_API_KEY; not a spike gate")
 	n := flag.Int("n", 5, "measured samples per kind/path, excludes one warmup each (1..20)")
 	chat := flag.String("chat-model", "openai/gpt-4.1-nano", "catalog chat model")
 	classifier := flag.String("classifier-model", "typesafe/jev-1.14", "catalog classifier model")
@@ -123,7 +123,7 @@ func run() error {
 	}
 	key := os.Getenv("OPENROUTER_API_KEY")
 	baseURL, testURL := "https://openrouter.ai", ""
-	if *local {
+	if !*live {
 		f := newFixture()
 		defer f.server.Close()
 		baseURL = f.server.URL
@@ -156,7 +156,7 @@ func run() error {
 	defer w.close()
 	client := &http.Client{Timeout: 20 * time.Second}
 	defer client.CloseIdleConnections()
-	report := map[string]any{"at": time.Now().UTC().Format(time.RFC3339), "local_fixture": *local, "runtime": strings.TrimSpace(string(version)), "samples_per_path": *n, "startup_ms": startupMS, "worker_ready_rss_kib": rssKiB(w.cmd.Process.Pid), "go_ready_rss_kib": rssKiB(os.Getpid()), "chat_model": *chat, "classifier_model": *classifier}
+	report := map[string]any{"at": time.Now().UTC().Format(time.RFC3339), "local_fixture": !*live, "mock_provider": "internal/mockllm (local mode only)", "runtime": strings.TrimSpace(string(version)), "samples_per_path": *n, "startup_ms": startupMS, "worker_ready_rss_kib": rssKiB(w.cmd.Process.Pid), "go_ready_rss_kib": rssKiB(os.Getpid()), "chat_model": *chat, "classifier_model": *classifier}
 	runs := []any{}
 	for _, kind := range []string{"complete", "classify"} {
 		model := *chat

@@ -1,6 +1,6 @@
 ---
 id: Exh-urrg
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-04T15:56:51Z
@@ -22,7 +22,7 @@ Questions to answer, with a short written recommendation:
 
 - Can a long-lived Pi Bolt process host a small inference extension that the Go server calls per request (RPC from host to extension, concurrent requests, cancellation), using the pinned Pi version? If not, what is the smallest shim that can (e.g. a long-lived worker using the same registry)?
 - Per-request credentials: the guardrail passes apiKey as a per-request option. Confirm that one worker can serve platform and BYOK calls concurrently without credentials leaking between requests.
-- Latency and memory of one warm worker against a direct HTTPS call, for a decide() call in particular, where the point is speed.
+- Local overhead and memory of one warm worker against a direct mock-provider HTTP call, for a decide() call in particular, where the point is speed.
 - Usage and cost: confirm complete() and classify() results both carry usage with catalog cost, for OpenRouter at least.
 - Failure model: a crashed or wedged worker must fail calls closed and restart without taking the server down; the agent's subprocess limits must not count it.
 - Fallback: if the worker is not viable, the Go client per kind that Exh-gd3g and Exh-x16u describe, and what is lost (cost estimates, classify contract).
@@ -31,16 +31,20 @@ Record the decision in the epic and update Exh-hwjg, Exh-gd3g and Exh-x16u to ma
 
 ## Acceptance Criteria
 
-- A prototype answering a complete() and a classify() call through OpenRouter from Go, with measured latency.
+- A prototype answering complete() and classify() from Go through the real pinned Pi registry/adapters against shared mockLLM, with measured local worker/direct overhead and memory.
+- Deterministic concurrency, per-request credentials, cancellation, usage/error accounting and crash/wedge recovery checks; no conversation per call. Live provider benchmarks are not a completion gate.
 - A written decision with the trade-offs above, linked from the epic.
 
-## Research result — 2026-11-05 (live acceptance still blocked)
+## Completed result — mockLLM scope clarification, 2026-11-19
 
-[Findings, primary-source citations and reproducible commands](../docs/pi-inference-registry-spike.md), [Go prototype](../scripts/pi-inference-spike/main.go), [extension](../scripts/pi-inference-spike/extension.ts), and [raw local measurements](../scripts/pi-inference-spike/results/local-bolt-1.0.8-arm64.json).
+The user clarified: “Why do we need openrouter benchmarks? We should be able to test with mockLLM?” This architecture spike uses deterministic provider HTTP responses; live compatibility is separate opt-in/manual release validation in the kind tickets. No credentials, paid calls or live benchmarks are required for spike completion or dependent implementation.
 
-Provisional recommendation: one independent, warm, checksum-pinned Pi Bolt 1.0.8 / Pi 1.4.0 worker, an inference-only handled-input RPC extension, and Go supervision in the inference core. Reuse complete/classify adapters/catalogs; no new Go provider client family unless live evidence invalidates this runtime. Epic, core and both kind tickets updated; ZIP export prerequisite clarified, and bridge/guidance checked for runtime contradictions.
+[Findings, pinned primary-source citations and commands](../docs/pi-inference-registry-spike.md), [Go prototype](../scripts/pi-inference-spike/main.go), [extension](../scripts/pi-inference-spike/extension.ts), [shared mockLLM](../internal/mockllm/inference.go), and [local measurements](../scripts/pi-inference-spike/results/mockllm-bolt-1.0.8-arm64.json).
 
-Actual Bolt tests pass twelve overlapping mixed calls with zero credential mismatches, cancellation of each kind without canceling siblings, bounded admission, malformed-answer usage preservation, crash/wedge failure of pending calls, and successful explicit fresh-worker replacement. Local HTTP fixture (20 warm samples per path/kind): complete median 3.659 ms worker vs 1.605 ms direct; classify 2.834 ms vs 1.616 ms. Ready 142.498 ms; warm child RSS 91,940 KiB. These are fake-provider transport/accounting measurements, not provider/HTTPS latency or real spend.
+Decision: one independent, warm, checksum-pinned Pi Bolt 1.0.8 / Pi 1.4.0 worker, an inference-only handled-input RPC extension, and Go supervision in the inference core. Reuse complete/classify adapters/catalogs; narrow Go adapters remain the fallback if later integration or production budgets invalidate the choice. Epic, core, both kinds and ZIP prerequisite are aligned. The prototype uses explicit fresh-worker replacement; production supervisor/backoff/circuit breaking belongs to the core.
 
-Acceptance remains unmet: no authorized OpenRouter credential was available in the shell or Pi auth store, so no live complete/classify call or provider latency was measured. Public API catalog/probes are recorded separately and do not satisfy acceptance. Pinned classify uses /api/v1/systemone while the current OpenRouter catalog advertises /api/alpha/decisions; authenticate and verify the pinned route before finalizing the recommendation. Keep this ticket in_progress and its dependencies gated; do not close based on local tests alone.
+Shared mockLLM supplies both HTTP protocols and deterministic usage/error responses. The real native registry, model lookup, adapters and catalog remain in the path. Race tests pass twelve overlapping mixed calls with zero credential mismatches, cancellation of each kind without sibling harm, bounded admission, malformed-answer usage preservation, crash/wedge failure of pending calls and successful explicit fresh-worker replacement. Selected existing agent create/edit and guardrail pipeline regressions pass with the pinned binary.
 
+Twenty warm samples per path/kind: complete median 3.816 ms worker vs 1.638 ms direct; classify 2.533 ms vs 1.583 ms. Ready 135.777 ms (one observation); warm worker RSS 94,804 KiB. These are local HTTP transport/accounting checks, not provider/HTTPS latency, model accuracy or real spend. Benchmark defaults to mockLLM; live mode requires explicit -live.
+
+Provider release validation remains in [complete](Exh-gd3g.md) and [decide](Exh-x16u.md): the pinned classifier route /api/v1/systemone versus the catalog-advertised /api/alpha/decisions is unverified, not proven incompatible by unauthenticated 401s. Do not enable an unverified actual-provider integration or patch transport speculatively. This does not block implementation.
