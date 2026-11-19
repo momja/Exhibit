@@ -10,18 +10,25 @@ assignee: Max Omdal
 parent: Exh-zue3
 tags: [inference, export, experimental]
 ---
-# Exports: explain missing inference in .html exports and run it locally from the ZIP
+# Exports: disable AI inference and preserve editable source
 
-An artifact that calls window.exhibit.ai leaves the service without it. The exported file should say so rather than break silently, and the portable ZIP should be able to run inference locally with keys the person enters there, the same pattern connectors use.
+Both standalone HTML and ZIP exports disable Exhibit-provided AI inference, including complete() and decide(). Export preserves editable artifact source so a person can hand the bundle to another agent and arrange their own replacement. Exhibit does not provision, reconnect or rewire inference for exported artifacts.
+
+Product decision (2026-11-19): inference portability is out of scope. This supersedes the earlier ZIP local-inference proposal and any research notes requiring a local Pi runtime for exports. Inference remains disabled in exports even when they are online.
 
 ## Design
 
-- .html export: include a minimal window.exhibit.ai stand-in whose available() is empty and whose methods reject with 'unavailable', showing nothing in the artifact's DOM. The export dialog says this tool uses AI and won't use it offline.
-- ZIP export: the local relay gains the inference route with the same request shape, so the artifact runs unchanged. Each kind works only if the person configures a provider for it locally (never the instance's credential, never the viewer's stored one).
-- No credential of any kind is written into either export.
+- Both formats install a minimal window.exhibit.ai stand-in before artifact code runs: available() reports no available kinds, and complete()/decide() reject with the same stable unavailable error as the hosted API. The stand-in makes no network or relay requests and inserts no markup into the artifact's DOM.
+- Artifact code handles unavailable explicitly: AI-dependent actions are disabled with an explanation, while other functionality remains usable where possible. The agent guidance and example artifact cover this behavior ([Exh-15tf](Exh-15tf.md)).
+- The export dialog says AI features are disabled in exported artifacts. ZIP documentation repeats that limitation and points to the editable source for users who want to implement their own inference integration. It does not present an inference setup wizard or promise automatic portability.
+- Preserve the artifact's inference call sites and editable source in the source bundle. Export adds the unavailable stand-in rather than attempting to translate prompts, models, providers or API calls. User-directed rewiring is outside Exhibit's supported export behavior.
+- No inference route in the ZIP relay, provider SDK/client, Pi runtime requirement, credential-entry flow or authenticated connection back to Exhibit is added for inference. Existing connector export behavior is unaffected.
+- No credential, instance inference configuration or live Exhibit inference endpoint is written into either export.
 
 ## Acceptance Criteria
 
-- An exported .html of the example artifact loads, available() is empty and calls reject with 'unavailable'.
-- The ZIP runner completes complete() and decide() calls against locally configured mock providers, and reports unavailable for an unconfigured kind.
-- A test asserts neither export contains a key or the instance's inference configuration.
+- Both HTML and ZIP exports of the example artifact load, report no available AI kinds, and reject complete()/decide() with unavailable. AI-dependent controls explain the limitation, with no uncaught rejection; non-AI features remain usable where possible.
+- Browser tests with mock inference endpoints assert zero inference requests for either export, including when online and when unrelated connector relay configuration exists.
+- The export dialog and ZIP documentation explicitly state that AI features are disabled in exports.
+- The source bundle retains the editable artifact source and its inference call sites so another agent can rewire them independently.
+- Tests assert neither format embeds credentials, instance inference configuration or a live Exhibit inference endpoint, and the ZIP has no inference relay route or runtime requirement.
