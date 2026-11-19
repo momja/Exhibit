@@ -64,9 +64,10 @@ var accountTables = map[string]accountTable{
 		"durable remote revocation work survives unexpected erasure; API deletion drains it first, and maintenance retries without retaining library payloads", ""},
 	"hosted_account_deletions": {reachRetained,
 		"identity fences and durable provider-deletion work survive erasure; no library payload is retained", ""},
-	"artifact_relay_grants": {reachTrigger, "relay_account_delete erases viewer consent, including on another owner's artifact", "SELECT COUNT(*) FROM artifact_relay_grants WHERE viewer_id = ?1"},
-	"relay_activity":        {reachTrigger, "relay_account_delete erases the viewer's request metadata", "SELECT COUNT(*) FROM relay_activity WHERE viewer_id = ?1"},
-	"relay_schedules":       {reachTrigger, "relay_account_delete erases the viewer's scheduled fetches", "SELECT COUNT(*) FROM relay_schedules WHERE viewer_id = ?1"},
+	"artifact_relay_grants":       {reachTrigger, "relay_account_delete erases viewer consent, including on another owner's artifact", "SELECT COUNT(*) FROM artifact_relay_grants WHERE viewer_id = ?1"},
+	"artifact_inference_consents": {reachTrigger, "artifact_inference_consents_account_delete erases the viewer's AI spend consents, including on another owner's artifact; the artifact's own rows cascade", "SELECT COUNT(*) FROM artifact_inference_consents WHERE viewer_id = ?1"},
+	"relay_activity":              {reachTrigger, "relay_account_delete erases the viewer's request metadata", "SELECT COUNT(*) FROM relay_activity WHERE viewer_id = ?1"},
+	"relay_schedules":             {reachTrigger, "relay_account_delete erases the viewer's scheduled fetches", "SELECT COUNT(*) FROM relay_schedules WHERE viewer_id = ?1"},
 	"users": {reachExplicit, "the account itself, and the guard that may refuse the whole operation",
 		"SELECT COUNT(*) FROM users WHERE id = ?1"},
 	"artifacts": {reachExplicit, "the library, by owner_id — and the row every cascade below hangs from",
@@ -298,6 +299,7 @@ func seedEverything(t *testing.T, s *SQLiteStore) accountFixture {
 	_, grantErr := s.CreateGrant(ctx, admin.ID, "grant-source", member.ID)
 	require.NoError(t, grantErr)
 	require.NoError(t, s.SetRelayGrant(ctx, member.ID, deletedArtifact, RelayGrant{Allowed: true}))
+	require.NoError(t, s.SetInferenceConsent(ctx, ViewerID(member.ID), "grant-source", true))
 	require.NoError(t, s.RecordRelayActivity(ctx, member.ID, deletedArtifact, RelayActivity{Origin: "https://api.example.test", Method: "GET", Status: 200, Bytes: 10}))
 	require.NoError(t, s.PutRelaySchedule(ctx, RelaySchedule{ID: "member-refresh", ViewerID: member.ID, ArtifactID: deletedArtifact, URL: "https://api.example.test/accounts", StateKey: "accounts", IntervalSeconds: 86400, NextRunAt: time.Now().Unix(), Enabled: true}, 10))
 	require.NoError(t, s.SetState(ctx, OwnerID(member.ID), deletedArtifact, ViewerID(member.ID), "runs", "12"))
