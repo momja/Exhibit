@@ -24,6 +24,7 @@ Artifact code calls a method on window.exhibit.ai. The preamble posts the call t
   - Artifact-level: a new inference_approved column in store.ApprovalColumns, set only by the owner through the ordinary first-use prompt in app chrome. It names the artifact and says that text it sends, possibly including saved data, goes to an AI service. Revocable from the artifact's security settings and shown in the capability cluster.
   - Viewer-level: because a recipient spends their own allowance, each viewer also consents once per artifact, in the same shape as relay consent. For the owner it is one prompt covering both. A recipient of an approved artifact is asked only about their own spend; a recipient of an unapproved one gets the refusal explained in chrome with no button (av-awr4).
 - Version preview: allowed for the owner and metered.
+- Exports: both HTML and ZIP use the unavailable stand-in specified by [Exh-i902](Exh-i902.md), never a live host inference bridge or local inference relay. The export behavior is the same whether online or offline.
 - Errors reaching the artifact are one stable set shared by every kind (unavailable, not_approved, no_key, limit_reached, invalid_request, rate_limited, provider_error, plus kind-specific codes each provider ticket names), never upstream text.
 
 ## Acceptance Criteria
