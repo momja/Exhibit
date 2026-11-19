@@ -64,7 +64,8 @@ func TestLoginDescentBrowser(t *testing.T) {
 				require.True(t, eval(`(() => {
 					const track = document.querySelector('.login-headline-words');
 					const animation = track.getAnimations()[0];
-					const slotHeight = track.parentElement.getBoundingClientRect().height;
+					const slot = track.parentElement;
+					const slotHeight = slot.getBoundingClientRect().height;
 					const frameMatches = (time, row) => {
 						animation.currentTime = time;
 						const offset = new DOMMatrix(getComputedStyle(track).transform).m42;
@@ -77,6 +78,18 @@ func TestLoginDescentBrowser(t *testing.T) {
 					animation.currentTime = originalTime;
 					return matches && animation.effect.getTiming().iterations === Infinity;
 				})()`), "the carousel loops, with a longer rest on tools between passes")
+				require.True(t, eval(`(() => {
+					const slot = document.querySelector('.login-headline-window');
+					const feather = slot.getAnimations()[0];
+					const originalTime = feather.currentTime;
+					const at = time => {
+						feather.currentTime = time;
+						return getComputedStyle(slot).getPropertyValue('--login-word-feather');
+					};
+					const matches = at(10000) === '0%' && at(12450) === '24%' && at(13000) === '0%';
+					feather.currentTime = originalTime;
+					return matches;
+				})()`), "the carousel edges fade only during transitions")
 			}
 			formRect := `JSON.stringify(document.querySelector('main.login').getBoundingClientRect())`
 			before, err := chromedp.Run(ctx, chromedp.Evaluate[string](formRect))
