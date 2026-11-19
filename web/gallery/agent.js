@@ -1,3 +1,4 @@
+import { connectInferenceHost } from './inference-host.js';
 import { modalFor } from './modal.js';
 import { networkPrompt } from './network-prompt.js';
 import { apiFetch, apiEventSource } from './api-module.js';
@@ -1272,3 +1273,6 @@ if (BYOK) {
   document.getElementById('key-save')?.addEventListener('click', saveKey);
   document.getElementById('key-delete')?.addEventListener('click', deleteKey);
 }
+
+// window.exhibit.ai calls from the preview or a version preview (Exh-zue3).
+connectInferenceHost({ artifactId: () => artifact?.id, title: () => artifact?.title });

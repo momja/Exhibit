@@ -28,13 +28,14 @@
        Clipboard read/write is instead proxied through the host via the shim's
        capability bridge, gated by per-artifact first-use approval. Native
        keyboard paste (Ctrl/Cmd+V) is a browser event and works without it. */}}
-  <iframe {{if .RelayEnabled}}data-relay-src{{else}}src{{end}}="{{.FrameURL}}" sandbox="allow-scripts allow-forms" loading="lazy" title="{{.Title}}"></iframe>
+  <iframe {{if .RelayEnabled}}data-relay-src{{else}}src{{end}}="{{.FrameURL}}" sandbox="allow-scripts allow-forms" loading="lazy" title="{{.Title}}" data-ai-frame></iframe>
 </div>
 {{/* The page's notices: the three banners below and the status line. They are
      messages to read and often act on, so they stay until dealt with rather
      than timing out, and they float over the artifact on the side of the
      window away from the pill (pip.js sets data-pip-corner on <body>). */}}
 <div class="pip-notices">
+{{template "inferenceBanner"}}
 {{/* Unsupported-capability warning (av-yvtb): hidden until the render shim
      reports that the artifact tried something the opaque-origin sandbox can't
      run. Phase 1 detects a Worker({type:'module'}) (browsers refuse it in the
@@ -223,6 +224,7 @@
 </dialog>
 
 {{template "networkPrompt"}}
+{{template "inferencePrompt" .Title}}
 {{template "directOpenPrompt" .}}
 {{if .RelayEnabled}}{{template "relayConsent" .}}{{end}}
 <script>

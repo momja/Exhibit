@@ -335,6 +335,16 @@ func main() {
 		routerConfig.ClerkPublishableKey = hostedLogin.PublishableKey
 		routerConfig.ClerkFrontendAPI = hostedLogin.FrontendAPI
 	}
+	// Artifact AI (Exh-zue3): window.exhibit.ai, served by one warm Pi worker.
+	inferenceService, inferenceWorker, err := newInferenceService(context.Background(), st, box, platformAgentKey,
+		spendCaps, guardrail, piBin, dataDir+"/inference")
+	if err != nil {
+		fatal("configure artifact inference", err)
+	}
+	if inferenceWorker != nil {
+		defer inferenceWorker.Close()
+	}
+	routerConfig.Inference = inferenceService
 	router := api.NewRouter(routerConfig)
 	if hostedLogin != nil {
 		go router.RetryHostedAccountDeletions(context.Background())

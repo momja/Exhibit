@@ -534,3 +534,25 @@ func (s *Service) MonthStart() time.Time {
 	now := s.cfg.Now().UTC()
 	return time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
 }
+
+// InstanceKinds is what this instance can offer anybody, for teaching agents
+// which calls to write (Exh-15tf). Platform mode offers exactly the configured
+// models. BYOK offers both kinds, because whether a viewer's own provider has a
+// model for a kind is known only per viewer: artifacts must check available()
+// either way, and the guidance says so.
+func (s *Service) InstanceKinds() []Kind {
+	if !s.Enabled() {
+		return nil
+	}
+	if s.cfg.Platform == nil {
+		return []Kind{KindComplete, KindDecide}
+	}
+	var out []Kind
+	if s.cfg.ChatModel != "" {
+		out = append(out, KindComplete)
+	}
+	if s.cfg.DecisionModel != "" {
+		out = append(out, KindDecide)
+	}
+	return out
+}

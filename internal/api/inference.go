@@ -233,3 +233,26 @@ func (ro *Router) inferenceStateFor(ctx context.Context, a *store.Artifact, view
 	}
 	return st
 }
+
+// getInferenceState is the host page's question "what may this viewer do with
+// AI on this artifact": the kinds, who pays, and the two consents. The page
+// asks lazily, on the frame's first AI message, so pages that never meet an
+// AI-using tool never ask.
+func (ro *Router) getInferenceState(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	if !inferencePrincipalAllowed(r.Context()) {
+		writeJSON(w, http.StatusOK, inferencePageState{})
+		return
+	}
+	viewer := stateViewer(r)
+	a, err := ro.cfg.Store.GetArtifactReadableBy(r.Context(), viewer, urlParamID(r, "artifactID"))
+	if err != nil {
+		serverError(w, r, "inference state lookup", err)
+		return
+	}
+	if a == nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	writeJSON(w, http.StatusOK, ro.inferenceStateFor(r.Context(), a, int64(viewer)))
+}
