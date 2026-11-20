@@ -55,5 +55,5 @@
     get length() { return Object.keys(state).length; }
   };
   Object.defineProperty(window, "localStorage", {value: storage, configurable: true});
-  Object.defineProperty(window, "exhibit", {value:Object.freeze({connections:Object.freeze({list:() => host("exhibit:local:connections", {})})}), configurable:false});
+  Object.defineProperty(window, "exhibit", {value:Object.freeze({ai:window.exhibit && window.exhibit.ai, connections:Object.freeze({list:() => host("exhibit:local:connections", {})})}), configurable:false});
 })();

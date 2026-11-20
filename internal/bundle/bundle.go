@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/momja/Exhibit/internal/inference/standin"
 	"github.com/momja/Exhibit/internal/origin"
 )
 
@@ -24,7 +25,13 @@ import (
 var serveMJS []byte
 
 //go:embed files/shim.js
-var shimJS string
+var shimSource string
+
+// shimJS runs before the page's own scripts, and replaces window.exhibit with a
+// frozen object. It therefore installs the unavailable AI stand-in first and
+// keeps its window.exhibit.ai, or the page's own stand-in (Exh-i902) would find
+// window.exhibit frozen without one.
+var shimJS = standin.Script + shimSource
 
 //go:embed files/host.js
 var hostJS string
@@ -203,6 +210,12 @@ assets may still load from these origins. The page runs in an opaque sandbox;
 connections and saved data are handled by the local runner. No artifact code
 runs on the server. Saved data persists in state.json; the ZIP runner writes a
 separate .state.json file beside its ZIP. Stop the runner to stop local access.
+
+AI features (window.exhibit.ai) are turned off in exported copies, even when
+online: available() reports nothing available and complete() and decide()
+reject with code "unavailable". This bundle has no AI route and needs no AI
+runtime. index.html keeps the artifact's AI calls unchanged, so you can wire up
+your own AI integration in that source if you want to; Exhibit does not.
 `, b.Manifest.Title, origins)
 }
 

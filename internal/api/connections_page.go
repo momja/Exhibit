@@ -366,7 +366,9 @@ func (ro *Router) exportRelayBundle(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	app := bundle.New(a.Title, page, state, allowed, requirements)
+	// AI is off in exported copies, the ZIP included (Exh-i902): the bundle
+	// carries no inference route, and its page gets the unavailable stand-in.
+	app := bundle.New(a.Title, export.DisableAI(page), state, allowed, requirements)
 	data, err := app.Bytes(strings.TrimSuffix(exportFilename(a.Title), ".html"))
 	if err != nil {
 		serverError(w, r, "bundle export", err)
