@@ -33,6 +33,10 @@ export function connectInferenceHost({ artifactId, title }) {
   const states = new Map(); // artifact id -> Promise<state>
   const decisions = new Map(); // artifact id -> Promise<boolean> while asking
   const bannered = new Set();
+  // "Not now" holds for this page load: a tool that calls again at once, or in
+  // a loop, is refused without raising the dialog again. Reloading the page,
+  // or allowing it under Edit → Permissions or Settings, asks afresh.
+  const declined = new Set();
 
   function stateFor(id, fresh = false) {
     if (fresh || !states.has(id)) {
@@ -88,7 +92,7 @@ export function connectInferenceHost({ artifactId, title }) {
         allow.removeEventListener('click', onAllow);
         resolve(value);
       };
-      const onClosed = () => finish(false);
+      const onClosed = () => { if (!settled) declined.add(id); finish(false); };
       const onAllow = async () => {
         allow.disabled = true;
         const path = '/api/artifacts/' + encodeURIComponent(id);
@@ -132,17 +136,20 @@ export function connectInferenceHost({ artifactId, title }) {
     if (d.op !== 'complete' && d.op !== 'decide') return;
     const fail = (code, message) => reply(frame, callID, id, { ok: false, error: { code, message: message || REFUSED[code] || 'The AI request failed.' } });
     if (!st.enabled) { fail('unavailable'); return; }
-    if (!st.complete && !st.decide && st.reason === 'no_key') {
-      showBanner('no_key', 'This tool tried to use AI, but you have not added an AI key yet.', true);
-      fail('no_key', 'Add your own AI key to use AI in artifacts.');
-      return;
-    }
+    // Only the owner can change this, so it is said before anything the
+    // viewer could fix, such as adding a key.
     if (notAllowed) {
       showBanner('owner', OWNER_NOTE);
       fail('not_approved');
       return;
     }
+    if (!st.complete && !st.decide && st.reason === 'no_key') {
+      showBanner('no_key', 'This tool tried to use AI, but you have not added an AI key yet.', true);
+      fail('no_key', 'Add your own AI key to use AI in artifacts.');
+      return;
+    }
     if (!st.consented) {
+      if (declined.has(id)) { fail('not_approved', 'AI use was not allowed.'); return; }
       if (!(await ask(id, st, frame))) { fail('not_approved', 'AI use was not allowed.'); return; }
     }
     const res = await viewerFetch('/api/artifacts/' + encodeURIComponent(id) + '/inference', {

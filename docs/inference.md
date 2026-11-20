@@ -105,7 +105,11 @@ artifact's DOM:
   artifact and viewer). On an approved tool shared with them, a recipient is
   asked once whether it may use *their* allowance. Revocable in Settings.
 
-The endpoint enforces both; the host page's checks are only the UX.
+The endpoint enforces both; the host page's checks are only the UX. An agent
+or MCP credential cannot set `inference_approved` (400): unlike the other
+approvals it spends money, so it is only ever the owner's choice in Exhibit's
+chrome. "Not now" holds for the page load, so a tool that calls again at once
+is refused without the dialog returning; reloading asks again.
 
 ## Where people see it
 

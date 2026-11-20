@@ -1497,6 +1497,10 @@ const aiBridgeScript = `
   // connect-src source. An anonymous visitor keeps the stand-in installed
   // above: there is nobody to pay, and the endpoint refuses them anyway.
   if (window.parent !== window && !ANONYMOUS) {
+    // Call ids carry a per-load prefix: the host answers whichever document is
+    // in the frame element, and a frame reloaded with a call in flight must
+    // not take the old document's answer for its own call of the same number.
+    var aiLoad = Math.random().toString(36).slice(2) + Date.now().toString(36);
     var aiSeq = 0;
     var aiPending = {};
     // A call is sent only once the host has said it is listening
@@ -1530,7 +1534,7 @@ const aiBridgeScript = `
     });
     var callAI = function(op, payload) {
       return new Promise(function(resolve, reject) {
-        var id = 'i' + (++aiSeq);
+        var id = aiLoad + '-' + (++aiSeq);
         aiPending[id] = { resolve: resolve, reject: reject };
         var msg = { __avInference: true, artifactId: ARTIFACT_ID, id: id, op: op };
         if (payload !== undefined) {
