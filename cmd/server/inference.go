@@ -106,3 +106,12 @@ func boolEnv(name string) (bool, error) {
 	}
 	return v, nil
 }
+
+// inferenceKindNames spells kinds the way agent guidance takes them.
+func inferenceKindNames(kinds []inference.Kind) []string {
+	names := make([]string, 0, len(kinds))
+	for _, k := range kinds {
+		names = append(names, string(k))
+	}
+	return names
+}

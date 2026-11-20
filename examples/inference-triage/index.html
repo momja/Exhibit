@@ -1,0 +1,650 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Feedback triage</title>
+<style>
+:root{
+  color-scheme:light dark;
+  --bg:#f6f7f9;--panel:#fff;--ink:#16191d;--muted:#5d6570;--line:#dfe3e8;
+  --accent:#23559e;--on-accent:#fff;--focus:#23559e;
+  --bug:#b42318;--request:#2f5fb3;--question:#7a4cc2;--praise:#1d7a46;
+  --warn-ink:#7a4b00;--warn-bg:#fff4dc;--info-ink:#24456f;--info-bg:#e9f1fc;--danger:#b42318;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#15181c;--panel:#1d2126;--ink:#e8eaed;--muted:#a1a8b2;--line:#323840;
+    --accent:#8db4f2;--on-accent:#0f1720;--focus:#8db4f2;
+    --bug:#ff8a7a;--request:#8db4f2;--question:#c4a7f5;--praise:#7fd3a0;
+    --warn-ink:#f6d28b;--warn-bg:#3a2e14;--info-ink:#bcd3f5;--info-bg:#1d2a3c;--danger:#ff8a7a;
+  }
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:860px;margin:0 auto;padding:24px 16px 48px}
+h1{font-size:24px;margin:0 0 4px;letter-spacing:-.3px}
+h2{font-size:16px;margin:0 0 10px}
+p{margin:0 0 8px}
+.lede{color:var(--muted);margin-bottom:16px}
+section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+textarea,input,select,button{font:inherit;font-size:16px;color:inherit}
+textarea,input,select{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px;width:100%}
+textarea{resize:vertical;min-height:84px}
+button{border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:6px 12px;cursor:pointer}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+button:disabled{opacity:.5;cursor:not-allowed}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row > *{flex:0 0 auto}
+.row select{width:auto}
+.grow{flex:1 1 180px}
+.note{font-size:13px;color:var(--muted);margin-top:6px}
+.notice{border-radius:6px;padding:8px 10px;font-size:14px;margin:0 0 12px}
+.notice.warn{background:var(--warn-bg);color:var(--warn-ink)}
+.notice.info{background:var(--info-bg);color:var(--info-ink)}
+.notice.error{background:var(--warn-bg);color:var(--danger)}
+.counts{display:flex;gap:12px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-bottom:10px}
+.counts b{color:var(--ink)}
+ul.items{list-style:none;margin:0;padding:0}
+li.item{border-top:1px solid var(--line);padding:12px 0;display:grid;gap:8px}
+li.item:first-child{border-top:0}
+.item-text{white-space:pre-wrap;overflow-wrap:anywhere}
+.item-controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:14px}
+.item-controls select{width:auto}
+.item-controls label{display:flex;gap:4px;align-items:center}
+.item-controls input[type=checkbox]{width:auto}
+.chip{display:inline-block;border-radius:999px;padding:0 8px;font-size:12px;font-weight:600;border:1px solid currentColor}
+.chip.bug{color:var(--bug)}.chip.request{color:var(--request)}.chip.question{color:var(--question)}.chip.praise{color:var(--praise)}
+.chip.person{color:var(--warn-ink)}
+.chip.urgent{color:var(--danger)}
+.ai-why{font-size:12px;color:var(--muted)}
+pre.outgoing{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:10px;max-height:260px;overflow:auto;font-size:13px;margin:8px 0}
+ol.actions{margin:8px 0 0;padding-left:20px}
+.empty{color:var(--muted);font-style:italic}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+</style>
+</head>
+<body>
+<main>
+  <h1>Feedback triage</h1>
+  <p class="lede">Collect feedback, sort it into bugs, requests, questions and praise, and keep a short summary of what to do next. Everything works by hand; AI can help when Exhibit offers it.</p>
+
+  <p id="ai-status" class="notice info" role="status">Checking whether AI is available…</p>
+
+  <section aria-labelledby="add-heading">
+    <h2 id="add-heading">Add feedback</h2>
+    <label class="sr-only" for="new-items">Feedback, one item per line</label>
+    <textarea id="new-items" placeholder="Paste feedback here — one item per line."></textarea>
+    <div class="row" style="margin-top:8px">
+      <button id="add-items" class="primary" type="button">Add items</button>
+      <span class="note">Items are saved in this tool and follow you across devices.</span>
+    </div>
+  </section>
+
+  <section aria-labelledby="items-heading">
+    <div class="row" style="justify-content:space-between;margin-bottom:8px">
+      <h2 id="items-heading" style="margin:0">Items</h2>
+      <div class="row">
+        <label class="sr-only" for="filter">Show</label>
+        <select id="filter">
+          <option value="all">All items</option>
+          <option value="untriaged">Untriaged</option>
+          <option value="person">Needs a person</option>
+          <option value="urgent">Urgent</option>
+          <option value="bug">Bugs</option>
+          <option value="request">Requests</option>
+          <option value="question">Questions</option>
+          <option value="praise">Praise</option>
+        </select>
+        <button id="triage-ai" type="button" disabled>Suggest triage with AI…</button>
+      </div>
+    </div>
+    <p id="triage-note" class="note" hidden></p>
+    <div id="counts" class="counts"></div>
+    <ul id="items" class="items"></ul>
+  </section>
+
+  <section id="preview" aria-labelledby="preview-heading" hidden>
+    <h2 id="preview-heading">Check what will be sent</h2>
+    <p id="preview-intro"></p>
+    <pre id="preview-text" class="outgoing"></pre>
+    <div class="row">
+      <button id="preview-send" class="primary" type="button">Send</button>
+      <button id="preview-cancel" type="button">Cancel</button>
+    </div>
+  </section>
+
+  <section aria-labelledby="summary-heading">
+    <h2 id="summary-heading">Summary</h2>
+    <p id="summary-note" class="note" hidden></p>
+    <div class="row" style="margin-bottom:8px">
+      <label class="grow"><span class="sr-only">Headline</span>
+        <input id="summary-headline" placeholder="Headline, e.g. Two login bugs need attention">
+      </label>
+    </div>
+    <label><span class="sr-only">Summary</span>
+      <textarea id="summary-body" placeholder="What stands out, and what to do next."></textarea>
+    </label>
+    <ol id="summary-actions" class="actions" hidden></ol>
+    <div class="row" style="margin-top:8px">
+      <button id="summary-save" type="button">Save summary</button>
+      <button id="summary-ai" type="button" disabled>Draft with AI…</button>
+      <span id="summary-meta" class="note"></span>
+    </div>
+  </section>
+
+  <p id="error" class="notice error" role="alert" hidden></p>
+</main>
+
+<template id="item-template">
+  <li class="item">
+    <div class="item-text"></div>
+    <div class="item-controls">
+      <label>Category
+        <select data-field="category">
+          <option value="">—</option>
+          <option value="bug">Bug</option>
+          <option value="request">Request</option>
+          <option value="question">Question</option>
+          <option value="praise">Praise</option>
+        </select>
+      </label>
+      <label>Severity
+        <select data-field="severity">
+          <option value="">—</option>
+          <option value="0">Trivial</option>
+          <option value="1">Minor</option>
+          <option value="2">Moderate</option>
+          <option value="3">Major</option>
+          <option value="4">Critical</option>
+        </select>
+      </label>
+      <label><input type="checkbox" data-field="urgent"> Urgent</label>
+      <span data-slot="chips"></span>
+      <button type="button" data-action="delete">Delete</button>
+    </div>
+    <div class="ai-why" data-slot="why" hidden></div>
+  </li>
+</template>
+
+<script>
+'use strict';
+// ---- Saved data ------------------------------------------------------------
+// One localStorage key holds the whole tool, so the widget reads one value.
+const STORAGE_KEY = 'triage.v1';
+const CATEGORIES = ['bug', 'request', 'question', 'praise'];
+const CATEGORY_LABELS = { bug: 'Bug', request: 'Request', question: 'Question', praise: 'Praise' };
+const SEVERITY_LABELS = ['Trivial', 'Minor', 'Moderate', 'Major', 'Critical'];
+
+// ---- Decision thresholds ----------------------------------------------------
+// The judgments come back as probabilities and confidences; what counts as
+// "sure enough" is this tool's call. Answers vary a little between runs, so
+// these are ranges with a gap in between that goes to a person.
+const CATEGORY_MIN_CONFIDENCE = 0.6; // below: leave the category for a person
+const URGENT_AT_LEAST = 0.75;        // probability >= this: urgent
+const NOT_URGENT_BELOW = 0.3;        // probability < this: not urgent; between: a person decides
+const SEVERITY_MIN_CONFIDENCE = 0.5; // below: leave severity for a person
+
+function load() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+    if (saved && Array.isArray(saved.items)) return { items: saved.items, summary: saved.summary || null };
+  } catch { /* unreadable data starts fresh rather than breaking the tool */ }
+  return { items: [], summary: null };
+}
+let data = load();
+function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
+
+const $ = (id) => document.getElementById(id);
+function newID() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function isTriaged(item) { return Boolean(item.category); }
+
+// ---- AI availability ----------------------------------------------------------
+// window.exhibit.ai is always defined inside Exhibit. It reports nothing
+// available in a public link, a tab opened directly, a widget or an exported
+// copy; the typeof check also covers this file opened anywhere else.
+const ai = { complete: false, decide: false };
+const UNAVAILABLE = 'AI isn’t available here. That happens when this tool is opened from a public link, opened directly in its own tab, or exported as a file — exported copies always have AI turned off. Everything else still works by hand.';
+let busy = false;
+
+async function checkAI() {
+  try {
+    const exhibitAI = window.exhibit && window.exhibit.ai;
+    const offered = exhibitAI ? await exhibitAI.available() : null;
+    ai.complete = Boolean(offered && offered.complete);
+    ai.decide = Boolean(offered && offered.decide);
+  } catch {
+    ai.complete = ai.decide = false;
+  }
+  renderAIState();
+}
+
+function renderAIState() {
+  const status = $('ai-status');
+  if (ai.complete && ai.decide) {
+    status.className = 'notice info';
+    status.textContent = 'AI can suggest triage and draft a summary. You’ll see exactly what is sent before anything leaves this page.';
+  } else if (ai.decide || ai.complete) {
+    status.className = 'notice info';
+    status.textContent = ai.decide
+      ? 'AI can suggest triage here, but not draft summaries. Write the summary by hand.'
+      : 'AI can draft a summary here, but not suggest triage. Tag items by hand.';
+  } else {
+    status.className = 'notice warn';
+    status.textContent = UNAVAILABLE;
+  }
+  const untriaged = data.items.filter((item) => !isTriaged(item)).length;
+  $('triage-ai').disabled = busy || !ai.decide || untriaged === 0;
+  // The banner above carries the reason; the notes say what to do instead.
+  setNote('triage-note', !ai.decide ? 'AI triage is off here — tag items by hand.' : untriaged === 0 && data.items.length ? 'Every item has a category. Clear one to ask again.' : '');
+  $('summary-ai').disabled = busy || !ai.complete || data.items.length === 0;
+  setNote('summary-note', !ai.complete ? 'AI drafting is off here — write the summary by hand.' : '');
+}
+
+function setNote(id, text) {
+  const el = $(id);
+  el.textContent = text;
+  el.hidden = !text;
+}
+
+function showError(text) {
+  const el = $('error');
+  el.textContent = text;
+  el.hidden = !text;
+}
+
+// Every code gets an answer the person can act on. A kind that turns out to be
+// unavailable is switched off, with the reason shown beside its control.
+function explainAIError(err, kind) {
+  if (!err || err.name !== 'ExhibitAIError') {
+    return 'The AI request failed unexpectedly. Nothing was changed. ' + ((err && err.message) || '');
+  }
+  switch (err.code) {
+    case 'unavailable':
+      ai[kind] = false;
+      return UNAVAILABLE;
+    case 'not_approved':
+      return 'This tool isn’t allowed to use AI — you can allow it from Exhibit when it asks. Nothing was sent, and manual triage still works.';
+    case 'no_key':
+      return 'AI needs a key or an allowance on your Exhibit account first. ' + err.message;
+    case 'limit_reached':
+      return 'Your AI allowance is used up for now. ' + err.message;
+    case 'rate_limited':
+      return 'Too many AI requests just now. Wait a minute and try again.';
+    case 'provider_error':
+      return 'The AI service failed to answer. Try again later. ' + err.message;
+    case 'invalid_request':
+    case 'invalid_output':
+      return 'The AI couldn’t handle this request: ' + err.message;
+    default:
+      return 'The AI request failed: ' + err.message;
+  }
+}
+
+// ---- Preview: nothing leaves the page without being shown first -----------------
+let pendingSend = null;
+function preview(intro, text, sendLabel, send) {
+  pendingSend = send;
+  $('preview-intro').textContent = intro;
+  $('preview-text').textContent = text;
+  $('preview-send').textContent = sendLabel;
+  $('preview').hidden = false;
+  $('preview').scrollIntoView({ block: 'nearest' });
+  $('preview-send').focus();
+}
+function closePreview() {
+  pendingSend = null;
+  $('preview').hidden = true;
+}
+$('preview-cancel').addEventListener('click', closePreview);
+$('preview-send').addEventListener('click', () => {
+  const send = pendingSend;
+  closePreview();
+  if (send) send();
+});
+
+// ---- decide(): triage ---------------------------------------------------------------
+const TRIAGE_QUESTIONS = {
+  category: {
+    type: 'choice',
+    instructions: 'Classify this piece of product feedback.',
+    criteria: {
+      bug: 'Something is broken, wrong, or behaves unexpectedly.',
+      request: 'Asks for a new feature or a change to how something works.',
+      question: 'Asks how something works or asks for help.',
+      praise: 'Positive feedback that asks for nothing.',
+    },
+  },
+  urgent: {
+    type: 'bool',
+    instructions: 'Does this feedback need attention today?',
+    criteria: {
+      true: 'It blocks someone from working, risks losing data or money, is a security problem, or mentions a near deadline.',
+      false: 'It can wait for normal planning.',
+    },
+  },
+  severity: {
+    type: 'score',
+    instructions: 'How much harm or friction does this describe for the person?',
+    criteria: [
+      'Trivial: cosmetic or no harm.',
+      'Minor: a small annoyance with an easy workaround.',
+      'Moderate: a real obstacle with a workaround.',
+      'Major: a core task fails or is very hard.',
+      'Critical: data loss, security, or nobody can work.',
+    ],
+  },
+};
+
+function triageState(item) { return { feedback: item.text }; }
+
+function startTriage() {
+  const queue = data.items.filter((item) => !isTriaged(item));
+  if (!ai.decide || queue.length === 0) return;
+  const text = queue.map((item) => JSON.stringify(triageState(item))).join('\n');
+  preview(
+    'Each untriaged item’s text is sent on its own, exactly as below. Nothing else from this tool is included.',
+    text,
+    'Send ' + queue.length + (queue.length === 1 ? ' item' : ' items'),
+    () => runTriage(queue.map((item) => item.id)),
+  );
+}
+
+// Apply a decide() answer with this tool's thresholds. A low-confidence or
+// in-between answer is kept as a suggestion and the item goes to a person.
+function applyJudgment(item, answer) {
+  const category = answer.category || {};
+  const urgent = answer.urgent || {};
+  const severity = answer.severity || {};
+  const suggestion = {
+    category: category.choice, categoryConfidence: category.confidence,
+    urgentProbability: urgent.probability,
+    severity: severity.score, severityConfidence: severity.confidence,
+  };
+  let needsPerson = false;
+  if (CATEGORIES.includes(category.choice) && category.confidence >= CATEGORY_MIN_CONFIDENCE) {
+    item.category = category.choice;
+  } else {
+    needsPerson = true;
+  }
+  if (typeof urgent.probability === 'number') {
+    if (urgent.probability >= URGENT_AT_LEAST) item.urgent = true;
+    else if (urgent.probability < NOT_URGENT_BELOW) item.urgent = false;
+    else needsPerson = true;
+  }
+  if (typeof severity.score === 'number' && severity.confidence >= SEVERITY_MIN_CONFIDENCE) {
+    item.severity = Math.max(0, Math.min(4, Math.round(severity.score)));
+  } else {
+    needsPerson = true;
+  }
+  item.ai = suggestion;
+  item.needsPerson = needsPerson;
+}
+
+async function runTriage(ids) {
+  busy = true;
+  showError('');
+  renderAIState();
+  let done = 0;
+  try {
+    for (const [index, id] of ids.entries()) {
+      const item = data.items.find((candidate) => candidate.id === id);
+      if (!item || isTriaged(item)) continue;
+      setNote('triage-note', 'Triaging ' + (index + 1) + ' of ' + ids.length + '…');
+      try {
+        const answer = await window.exhibit.ai.decide({ state: triageState(item), questions: TRIAGE_QUESTIONS });
+        applyJudgment(item, answer);
+        save();
+        render();
+      } catch (err) {
+        const message = explainAIError(err, 'decide');
+        const perItem = err && (err.code === 'invalid_request' || err.code === 'invalid_output');
+        if (perItem) {
+          // This item could not be judged; the others still can.
+          item.needsPerson = true;
+          save();
+          render();
+          showError(message);
+          continue;
+        }
+        showError(message + (done ? ' ' + done + ' item(s) were triaged before this.' : ''));
+        break;
+      }
+      done += 1;
+    }
+  } finally {
+    busy = false;
+    renderAIState();
+  }
+}
+
+// ---- complete(): summary ----------------------------------------------------------
+const SUMMARY_SCHEMA = {
+  type: 'object',
+  properties: {
+    headline: { type: 'string', maxLength: 90, description: 'One short line for a dashboard.' },
+    summary: { type: 'string', maxLength: 700, description: 'Two to four sentences on what stands out.' },
+    top_actions: { type: 'array', items: { type: 'string', maxLength: 160 }, minItems: 1, maxItems: 3 },
+  },
+  required: ['headline', 'summary', 'top_actions'],
+  additionalProperties: false,
+};
+
+function summaryInput() {
+  return sortedItems(data.items).map((item) => {
+    const tags = [
+      item.category ? CATEGORY_LABELS[item.category] : 'Untriaged',
+      item.urgent ? 'urgent' : null,
+      item.severity != null && item.severity !== '' ? 'severity ' + SEVERITY_LABELS[item.severity] : null,
+    ].filter(Boolean).join(', ');
+    return '- [' + tags + '] ' + item.text.replace(/\s+/g, ' ');
+  }).join('\n');
+}
+
+function startSummary() {
+  if (!ai.complete || data.items.length === 0) return;
+  const text = summaryInput();
+  preview(
+    'Your list is sent as below, with an instruction to summarise it for whoever acts on this feedback.',
+    text,
+    'Send list',
+    () => runSummary(text),
+  );
+}
+
+async function runSummary(text) {
+  busy = true;
+  showError('');
+  renderAIState();
+  setNote('summary-note', 'Drafting…');
+  try {
+    const result = await window.exhibit.ai.complete({
+      system: 'You summarise product feedback for the person who triages it. Be concrete and brief. Base everything on the list given.',
+      messages: [{ role: 'user', content: 'Feedback, one item per line, with its triage in brackets:\n' + text }],
+      schema: SUMMARY_SCHEMA,
+      maxTokens: 600,
+    });
+    data.summary = {
+      headline: result.headline, summary: result.summary, top_actions: result.top_actions,
+      source: 'ai', at: new Date().toISOString(), itemCount: data.items.length,
+    };
+    save();
+    renderSummary();
+  } catch (err) {
+    showError(explainAIError(err, 'complete'));
+  } finally {
+    busy = false;
+    renderAIState();
+  }
+}
+
+function saveManualSummary() {
+  const headline = $('summary-headline').value.trim();
+  const summary = $('summary-body').value.trim();
+  const keepActions = data.summary && data.summary.source === 'ai' &&
+    headline === data.summary.headline && summary === data.summary.summary;
+  data.summary = (headline || summary) ? {
+    headline, summary, top_actions: keepActions ? data.summary.top_actions : [],
+    source: keepActions ? 'ai' : 'manual', at: new Date().toISOString(), itemCount: data.items.length,
+  } : null;
+  save();
+  renderSummary();
+}
+
+// ---- Rendering ----------------------------------------------------------------
+function sortedItems(items) {
+  return items.slice().sort((a, b) =>
+    (Number(Boolean(b.urgent)) - Number(Boolean(a.urgent))) ||
+    ((b.severity ?? -1) - (a.severity ?? -1)) ||
+    (b.created - a.created));
+}
+
+function matchesFilter(item, filter) {
+  switch (filter) {
+    case 'all': return true;
+    case 'untriaged': return !isTriaged(item);
+    case 'person': return Boolean(item.needsPerson);
+    case 'urgent': return Boolean(item.urgent);
+    default: return item.category === filter;
+  }
+}
+
+function percent(value) { return Math.round(value * 100) + '%'; }
+
+function describeSuggestion(s) {
+  const parts = [];
+  if (s.category) parts.push(CATEGORY_LABELS[s.category] + ' (' + percent(s.categoryConfidence ?? 0) + ' sure)');
+  if (typeof s.urgentProbability === 'number') parts.push('urgent ' + percent(s.urgentProbability));
+  if (typeof s.severity === 'number') parts.push('severity ' + s.severity.toFixed(1) + ' of 4 (' + percent(s.severityConfidence ?? 0) + ' sure)');
+  return 'AI suggested: ' + parts.join(', ') + '.';
+}
+
+function render() {
+  const counts = { untriaged: 0, urgent: 0, person: 0 };
+  for (const c of CATEGORIES) counts[c] = 0;
+  for (const item of data.items) {
+    if (item.category) counts[item.category] += 1; else counts.untriaged += 1;
+    if (item.urgent) counts.urgent += 1;
+    if (item.needsPerson) counts.person += 1;
+  }
+  const countsEl = $('counts');
+  countsEl.replaceChildren();
+  for (const [key, label] of [['bug', 'Bugs'], ['request', 'Requests'], ['question', 'Questions'], ['praise', 'Praise'], ['untriaged', 'Untriaged'], ['urgent', 'Urgent'], ['person', 'Needs a person']]) {
+    const span = document.createElement('span');
+    const b = document.createElement('b');
+    b.textContent = counts[key];
+    span.append(b, ' ' + label);
+    countsEl.append(span);
+  }
+
+  const list = $('items');
+  list.replaceChildren();
+  const filter = $('filter').value;
+  const visible = sortedItems(data.items).filter((item) => matchesFilter(item, filter));
+  if (visible.length === 0) {
+    const li = document.createElement('li');
+    li.className = 'empty';
+    li.textContent = data.items.length ? 'Nothing matches this filter.' : 'No feedback yet. Paste some above.';
+    list.append(li);
+  }
+  for (const item of visible) {
+    const node = $('item-template').content.firstElementChild.cloneNode(true);
+    node.dataset.id = item.id;
+    node.querySelector('.item-text').textContent = item.text;
+    node.querySelector('[data-field=category]').value = item.category || '';
+    node.querySelector('[data-field=severity]').value = item.severity == null ? '' : String(item.severity);
+    node.querySelector('[data-field=urgent]').checked = Boolean(item.urgent);
+    const chips = node.querySelector('[data-slot=chips]');
+    if (item.category) chips.append(chip(CATEGORY_LABELS[item.category], item.category));
+    if (item.urgent) chips.append(chip('Urgent', 'urgent'));
+    if (item.needsPerson) chips.append(chip('Needs a person', 'person'));
+    if (item.ai) {
+      const why = node.querySelector('[data-slot=why]');
+      why.textContent = describeSuggestion(item.ai);
+      why.hidden = false;
+    }
+    list.append(node);
+  }
+  renderAIState();
+}
+
+function chip(text, kind) {
+  const span = document.createElement('span');
+  span.className = 'chip ' + kind;
+  span.textContent = text;
+  return span;
+}
+
+function renderSummary() {
+  const s = data.summary;
+  $('summary-headline').value = s ? s.headline : '';
+  $('summary-body').value = s ? s.summary : '';
+  const actions = $('summary-actions');
+  actions.replaceChildren();
+  for (const action of (s && s.top_actions) || []) {
+    const li = document.createElement('li');
+    li.textContent = action;
+    actions.append(li);
+  }
+  actions.hidden = actions.children.length === 0;
+  $('summary-meta').textContent = s
+    ? (s.source === 'ai' ? 'Drafted with AI' : 'Written by hand') + ' · ' + new Date(s.at).toLocaleString() +
+      (s.itemCount !== data.items.length ? ' · the list has changed since' : '')
+    : '';
+}
+
+// ---- Events --------------------------------------------------------------------
+$('add-items').addEventListener('click', () => {
+  const lines = $('new-items').value.split('\n').map((line) => line.trim()).filter(Boolean);
+  if (lines.length === 0) return;
+  const now = Date.now();
+  lines.forEach((text, i) => data.items.push({ id: newID(), text, created: now + i, category: null, urgent: false, severity: null }));
+  $('new-items').value = '';
+  save();
+  render();
+  renderSummary();
+});
+
+$('items').addEventListener('change', (event) => {
+  const li = event.target.closest('li.item');
+  const item = li && data.items.find((candidate) => candidate.id === li.dataset.id);
+  if (!item) return;
+  const field = event.target.dataset.field;
+  if (field === 'category') item.category = event.target.value || null;
+  if (field === 'severity') item.severity = event.target.value === '' ? null : Number(event.target.value);
+  if (field === 'urgent') item.urgent = event.target.checked;
+  item.needsPerson = false; // a person has now looked at it
+  save();
+  render();
+});
+
+$('items').addEventListener('click', (event) => {
+  if (event.target.dataset.action !== 'delete') return;
+  const li = event.target.closest('li.item');
+  data.items = data.items.filter((item) => item.id !== li.dataset.id);
+  save();
+  render();
+  renderSummary();
+});
+
+$('filter').addEventListener('change', render);
+$('triage-ai').addEventListener('click', startTriage);
+$('summary-ai').addEventListener('click', startSummary);
+$('summary-save').addEventListener('click', saveManualSummary);
+
+// Another device (or Exhibit's resync) changed the saved data.
+window.addEventListener('storage', (event) => {
+  if (event.key !== STORAGE_KEY && event.key !== null) return;
+  data = load();
+  render();
+  renderSummary();
+});
+
+render();
+renderSummary();
+checkAI();
+</script>
+</body>
+</html>

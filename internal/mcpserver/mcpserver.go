@@ -26,25 +26,37 @@ import (
 //go:embed prompts/*.tmpl
 var promptFS embed.FS
 
-// Instructions is what the server tells a connecting client about Exhibit,
-// sharing what an artifact is, the widget rules and the data contract with
-// the Pi system prompt (agentguidance).
-var Instructions = func() string {
-	t := template.Must(template.Must(template.New("").Option("missingkey=error").
-		ParseFS(promptFS, "prompts/*.tmpl")).ParseFS(agentguidance.FS, "*.tmpl"))
+var instructionTemplates = template.Must(template.Must(template.New("").Option("missingkey=error").
+	ParseFS(promptFS, "prompts/*.tmpl")).ParseFS(agentguidance.FS, "*.tmpl"))
+
+// InstructionsFor is what the server tells a connecting client about Exhibit,
+// sharing what an artifact is, the widget rules, window.exhibit.ai and the
+// data contract with the Pi system prompt (agentguidance). ai names the
+// inference kinds the instance offers artifacts; the zero value says nothing
+// about AI.
+func InstructionsFor(ai agentguidance.AI) string {
 	var out bytes.Buffer
-	if err := t.ExecuteTemplate(&out, "instructions.tmpl", nil); err != nil {
+	if err := instructionTemplates.ExecuteTemplate(&out, "instructions.tmpl", struct{ AI agentguidance.AI }{ai}); err != nil {
 		panic("mcpserver: render instructions: " + err.Error())
 	}
 	return strings.TrimSuffix(out.String(), "\n")
-}()
+}
+
+// Instructions are the instructions of an instance offering no inference.
+var Instructions = InstructionsFor(agentguidance.AI{})
 
 // New returns an MCP server whose tools act through api. A server holds the
 // revisions its tools last read, so it serves one client: make one per
 // connection.
 func New(api API, version string) *mcp.Server {
+	return NewWithInstructions(api, version, Instructions)
+}
+
+// NewWithInstructions is New with the server instructions given, such as
+// InstructionsFor an instance that offers inference.
+func NewWithInstructions(api API, version, instructions string) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "exhibit", Title: "Exhibit", Version: version},
-		&mcp.ServerOptions{Instructions: Instructions, Capabilities: &mcp.ServerCapabilities{}})
+		&mcp.ServerOptions{Instructions: instructions, Capabilities: &mcp.ServerCapabilities{}})
 	t := &tools{api: api, artifacts: make(map[string]*artifactRevisions)}
 	t.register(s)
 	return s

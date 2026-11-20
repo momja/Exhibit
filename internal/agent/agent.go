@@ -78,6 +78,12 @@ type Config struct {
 	// the failure legible. Zero passes nothing, and the extension then learns
 	// of the limit from the 413 alone.
 	MaxRequestBodyBytes int64
+	// InferenceKinds names the window.exhibit.ai kinds this instance offers
+	// artifacts ("complete", "decide"; agentguidance.KindComplete/KindDecide),
+	// so the system prompt teaches exactly those (Exh-15tf). Empty says nothing
+	// about AI. Any other value is a programming error and panics at session
+	// creation.
+	InferenceKinds []string
 }
 
 // providerEnv maps a provider name to the env var pi reads its key from.
@@ -333,7 +339,7 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 			_ = os.RemoveAll(workDir)       // and nothing to keep the directory for
 		}
 	}()
-	sysPrompt := buildSystemPrompt(m.cfg.SystemPrompt, opts)
+	sysPrompt := buildSystemPrompt(m.cfg.SystemPrompt, m.cfg.InferenceKinds, opts)
 	sessionFile := filepath.Join(workDir, sessionFileName)
 	resumeNotice := ""
 	if resume != nil {

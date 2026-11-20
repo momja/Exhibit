@@ -12,6 +12,8 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/modelcontextprotocol/go-sdk/oauthex"
+
+	"github.com/momja/Exhibit/internal/agentguidance"
 )
 
 const DefaultMaxRequestBodyBytes int64 = 32 << 20
@@ -28,6 +30,13 @@ type HTTPConfig struct {
 	PublicURL           string
 	Version             string
 	MaxRequestBodyBytes int64
+	// AIKinds are the window.exhibit.ai kinds the core offers artifacts
+	// ("complete", "decide"), from EXHIBIT_AI_KINDS. The instructions teach
+	// exactly these; empty says nothing about AI. This process runs no
+	// inference itself, so the operator states what the core is configured
+	// with; a kind named here that the core lacks still fails safely, because
+	// generated artifacts check available() before any call.
+	AIKinds []string
 }
 
 // NewHTTPHandler serves Streamable HTTP at PublicURL's path, public OAuth
@@ -87,6 +96,11 @@ func NewHTTPHandler(cfg HTTPConfig) (http.Handler, error) {
 		w.Header().Set("WWW-Authenticate", challenge)
 		http.Error(w, message, http.StatusUnauthorized)
 	}
+	ai, err := agentguidance.AIFor(cfg.AIKinds)
+	if err != nil {
+		return nil, fmt.Errorf("EXHIBIT_AI_KINDS: %w", err)
+	}
+	instructions := InstructionsFor(ai)
 	if cfg.MaxRequestBodyBytes == 0 {
 		cfg.MaxRequestBodyBytes = DefaultMaxRequestBodyBytes
 	}
@@ -100,7 +114,7 @@ func NewHTTPHandler(cfg HTTPConfig) (http.Handler, error) {
 	verifierClient := &http.Client{Timeout: 10 * time.Second, CheckRedirect: noRedirect}
 	toolClient := &http.Client{Timeout: 2 * time.Minute, CheckRedirect: noRedirect}
 	stream := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
-		return New(&HTTPAPI{BaseURL: cfg.BaseURL, Token: requestBearer(r), Client: toolClient}, cfg.Version)
+		return NewWithInstructions(&HTTPAPI{BaseURL: cfg.BaseURL, Token: requestBearer(r), Client: toolClient}, cfg.Version, instructions)
 	}, &mcp.StreamableHTTPOptions{
 		SessionTimeout:      30 * time.Minute,
 		MaxRequestBodyBytes: cfg.MaxRequestBodyBytes,

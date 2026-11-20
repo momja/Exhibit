@@ -15,12 +15,17 @@ var updatePromptGoldens = flag.Bool("update-prompt-goldens", false, "rewrite tes
 // relay and connector guidance selected by instance capabilities.
 func TestPromptsMatchGoldens(t *testing.T) {
 	cases := map[string]string{
-		"system-relay.golden":       buildSystemPrompt("", CreateOpts{NetworkRelayEnabled: true}),
-		"system-connections.golden": buildSystemPrompt("", CreateOpts{NetworkRelayEnabled: true, ConnectionsEnabled: true}),
-		"system-default.golden":     buildSystemPrompt("", CreateOpts{}),
-		"system-edit.golden":        buildSystemPrompt("", CreateOpts{ArtifactID: "a"}),
-		"system-widget-only.golden": buildSystemPrompt("", CreateOpts{ArtifactID: "a", WidgetOnly: true}),
-		"system-override.golden":    buildSystemPrompt("You are a haiku generator.", CreateOpts{ArtifactID: "a"}),
+		"system-relay.golden":       buildSystemPrompt("", nil, CreateOpts{NetworkRelayEnabled: true}),
+		"system-connections.golden": buildSystemPrompt("", nil, CreateOpts{NetworkRelayEnabled: true, ConnectionsEnabled: true}),
+		"system-default.golden":     buildSystemPrompt("", nil, CreateOpts{}),
+		// Inference guidance (Exh-15tf): "neither" is system-default above,
+		// which must stay byte-identical to an instance without inference.
+		"system-ai-complete.golden": buildSystemPrompt("", []string{"complete"}, CreateOpts{}),
+		"system-ai-decide.golden":   buildSystemPrompt("", []string{"decide"}, CreateOpts{}),
+		"system-ai-both.golden":     buildSystemPrompt("", []string{"complete", "decide"}, CreateOpts{}),
+		"system-edit.golden":        buildSystemPrompt("", nil, CreateOpts{ArtifactID: "a"}),
+		"system-widget-only.golden": buildSystemPrompt("", nil, CreateOpts{ArtifactID: "a", WidgetOnly: true}),
+		"system-override.golden":    buildSystemPrompt("You are a haiku generator.", nil, CreateOpts{ArtifactID: "a"}),
 		"selection-1.golden":        selectionNotice(1),
 		"selection-3.golden":        selectionNotice(3),
 		"resumed.golden":            resumedNotice,
