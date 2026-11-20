@@ -158,3 +158,16 @@ main{padding:var(--page-top) var(--page-gutter);max-width:900px;margin:0 auto}
 }
 
 .settings-facts .settings-name{font-weight:inherit}
+
+/* AI in artifacts (Exh-zue3) */
+.ai-meter{display:block;width:100%;height:8px;margin:var(--space-2) 0;border:0;border-radius:999px;background:var(--color-border);overflow:hidden;appearance:none;-webkit-appearance:none;accent-color:var(--color-accent)}
+.ai-meter::-webkit-progress-bar{background:var(--color-border);border-radius:999px}
+.ai-meter::-webkit-progress-value{background:var(--color-accent);border-radius:999px}
+.ai-meter::-moz-progress-bar{background:var(--color-accent);border-radius:999px}
+.ai-meter.is-high::-webkit-progress-value{background:var(--color-warn-strong)}
+.ai-meter.is-high::-moz-progress-bar{background:var(--color-warn-strong)}
+.ai-meter.is-full::-webkit-progress-value{background:var(--color-danger)}
+.ai-meter.is-full::-moz-progress-bar{background:var(--color-danger)}
+.ai-permissions{list-style:none;margin:0;padding:0;display:grid;gap:var(--space-2)}
+.ai-permissions li{display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap}
+.ai-permissions li button{margin-left:auto}

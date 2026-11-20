@@ -89,6 +89,11 @@ var writeRoutes = []struct {
 	{"POST", "/api/artifacts/{artifactID}/relay", true},
 	{"POST", "/api/artifacts/{artifactID}/navigation-check", true},
 	{"PUT", "/api/artifacts/{artifactID}/relay-grant", true},
+	// Artifact AI (Exh-zue3): the fixture leaves inference off, so the call is
+	// refused as unavailable before its body is read; consent has no body.
+	{"POST", "/api/artifacts/{artifactID}/inference", false},
+	{"PUT", "/api/artifacts/{artifactID}/inference/consent", false},
+	{"DELETE", "/api/artifacts/{artifactID}/inference/consent", false},
 	{"POST", "/api/artifacts/{artifactID}/relay-schedules", true},
 	{"DELETE", "/api/artifacts/{artifactID}/relay-schedules/{scheduleID}", false},
 	{"POST", "/api/connections", true},

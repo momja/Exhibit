@@ -15,7 +15,7 @@
 <link rel="stylesheet" href="{{asset "gallery/tokens.css"}}">
 <link rel="stylesheet" href="{{asset "gallery/components.css"}}">
 <link rel="stylesheet" href="{{asset "gallery/settings.css"}}">
-{{if .AgentGrants}}<script src="{{asset "htmx/htmx.min.js"}}"></script>{{end}}
+{{if or .AgentGrants .AI}}<script src="{{asset "htmx/htmx.min.js"}}"></script>{{end}}
 </head>
 <body>
 {{template "appHeader" .Header}}
@@ -72,6 +72,7 @@
 </section>
 {{end}}
 
+{{with .AI}}{{template "aiSettingsPanel" .}}{{end}}
 {{with .AgentGrants}}{{template "agentGrantsPanel" .}}{{end}}
 {{if .Connections.Enabled}}
 <div class="card">
@@ -129,6 +130,7 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
 <script src="{{asset "gallery/api.js"}}"></script>
 <script type="module" src="{{asset "gallery/profile.js"}}"></script>
 {{if .AgentGrants}}<script type="module" src="{{asset "gallery/agent-grants.js"}}"></script>{{end}}
+{{if .AI}}<script type="module" src="{{asset "gallery/ai-settings.js"}}"></script>{{end}}
 </body>
 </html>{{end}}
 

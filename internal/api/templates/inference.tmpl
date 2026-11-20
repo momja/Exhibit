@@ -46,3 +46,51 @@
   <button type="button" class="banner-action" id="ai-banner-dismiss" aria-label="Dismiss"><i class="ph ph-x" aria-hidden="true"></i></button>
 </div>
 {{end}}
+
+{{/* Settings → AI in artifacts (Exh-zue3). Rendered only where the instance
+     offers AI. The permission list is the region htmx refreshes after a
+     revoke (exhibit:ai-permissions-changed); the rest is read once per load. */}}
+{{define "aiSettingsPanel"}}<section class="card" id="ai-panel" aria-labelledby="ai-heading">
+  <h3 class="settings-h3" id="ai-heading"><i class="ph ph-sparkle" aria-hidden="true"></i> AI in artifacts</h3>
+  {{if eq .Reason "no_key"}}
+  <p class="settings-copy">Tools in your Gallery can use AI once you add your own AI key. Requests are then billed to your provider account.</p>
+  <div class="settings-foot"><a class="btn btn-sec" href="/agent"><i class="ph ph-key" aria-hidden="true"></i> Add an AI key</a></div>
+  {{else if or .Complete .Decide}}
+  <p class="settings-copy">{{if eq .Payer "platform"}}Tools you allow can use AI. Requests come out of your Exhibit AI allowance, which the agent also uses.{{else}}Tools you allow can use AI with your own AI key. Requests are billed to your provider account.{{end}} A tool shared with you uses your allowance, never its owner’s.</p>
+  <dl class="settings-facts">
+    <dt>Text answers</dt><dd>{{if .Complete}}Available{{else}}Not available{{end}}</dd>
+    <dt>Quick judgments</dt><dd>{{if .Decide}}Available{{else}}Not available{{end}}</dd>
+  </dl>
+  {{else}}
+  <p class="settings-copy">AI is not available right now. Tools that use it will say so and keep working without it.</p>
+  {{end}}
+
+  {{with .Allowance}}{{if .Limited}}
+  <h4 class="settings-h4">This month’s allowance</h4>
+  <progress class="ai-meter{{if ge .UsedPercent 100}} is-full{{else if ge .UsedPercent 80}} is-high{{end}}" max="100" value="{{.UsedPercent}}" aria-label="AI allowance used">{{.UsedPercent}}%</progress>
+  <p class="settings-copy settings-note">{{.UsedPercent}}% used{{if .InferenceShare}}, {{.InferenceShare}}% of that by tools and the rest by the agent{{end}}. {{if ge .UsedPercent 100}}AI in tools and the agent are paused until {{.ResetOn}}.{{else}}Resets on {{.ResetOn}}.{{end}}</p>
+  {{end}}{{end}}
+
+  <h4 class="settings-h4">Used in {{.MonthName}}</h4>
+  {{if .Usage}}<div class="settings-table-wrap">
+    <table class="settings-table ai-usage-table">
+      <thead><tr><th scope="col">Tool</th><th scope="col">Kind</th><th scope="col">Requests</th>{{if ne .Payer "platform"}}<th scope="col">Tokens</th>{{end}}</tr></thead>
+      <tbody>{{$own := ne .Payer "platform"}}{{range .Usage}}<tr>
+        <td class="settings-name">{{if .Readable}}<a href="/artifacts/{{.ArtifactID}}"><bdi>{{.Title}}</bdi></a>{{else}}<span class="muted">A tool you can no longer open</span>{{end}}</td>
+        <td>{{.KindLabel}}</td><td>{{.Calls}}</td>{{if $own}}<td>{{.Tokens}}</td>{{end}}
+      </tr>{{end}}</tbody>
+    </table>
+  </div>{{else}}<p class="muted text-sm">No tool has used AI this month.</p>{{end}}
+
+  <h4 class="settings-h4">Tools allowed to use AI</h4>
+  <div id="ai-permissions-body" hx-get="/partials/ai-permissions" hx-headers="{{.Permissions.RefreshHeaders}}"
+       hx-trigger="exhibit:ai-permissions-changed from:body" hx-swap="innerHTML">{{template "aiPermissionsBody" .Permissions}}</div>
+  <p class="settings-status" id="ai-permissions-status" role="status" aria-live="polite" hidden></p>
+</section>{{end}}
+
+{{define "aiPermissionsBody"}}{{if .Permissions}}
+<ul class="ai-permissions">{{range .Permissions}}
+  <li><a href="/artifacts/{{.ArtifactID}}"><bdi>{{.Title}}</bdi></a> <span class="muted text-sm">{{if .Owned}}Yours{{else}}Shared with you{{end}}</span>
+    <button class="btn btn-sec btn-sm" type="button" data-ai-revoke="{{.ArtifactID}}" data-ai-owned="{{if .Owned}}true{{else}}false{{end}}" aria-label="Stop {{.Title}} using AI">Stop</button></li>
+{{end}}</ul>
+{{else}}<p class="muted text-sm">No tools are allowed to use AI at your expense. A tool asks the first time it needs AI.</p>{{end}}{{end}}
