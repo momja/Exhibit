@@ -265,6 +265,24 @@ it safe behind the no-auth share path (§7).
   inlined and no write-through; it is in the MAC because it subtracts authority.
   A share still inlines the owner's state. `security.md` §1.3.
 
+### 3.2a Artifact AI (Exh-zue3)
+
+`window.exhibit.ai` (`complete`, `decide`, `available`). Every render's
+preamble installs an unavailable stand-in (`internal/inference/standin`); a
+framed render with a viewer splices `aiBridgeScript` after it, which posts
+calls to the host. `web/gallery/inference-host.js` (artifact page, agent
+preview, version previews — any `iframe[data-ai-frame]`) answers them: owner
+approval / recipient consent dialog, then `POST /api/artifacts/:id/inference`.
+The handler checks principal, `inference_approved` and the recipient's
+`artifact_inference_consents` row; `internal/inference` then runs enablement →
+principal → payload → payer (always the viewer) → model → rate belts → shared
+agent spend caps → guardrail → provider → metering, metering before error
+mapping. Providers are reached through one warm Pi worker
+(`internal/inference/worker.go`), separate from `agent.Manager`. Usage lands in
+`agent_usage` (migration 056: `artifact_id`, `kind`, `cost_source`, source
+`artifact_inference`). Exports keep the stand-in only. Full design:
+[inference.md](inference.md).
+
 ### 3.3 Store interface
 
 The seam between handlers and persistence.
