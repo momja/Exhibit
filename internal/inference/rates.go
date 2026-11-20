@@ -45,6 +45,7 @@ type rateLimiter struct {
 	now func() time.Time
 
 	mu        sync.Mutex
+	swept     time.Time
 	viewers   map[int64]*bucket
 	artifacts map[string]*bucket
 	inFlight  map[int64]int
@@ -71,12 +72,37 @@ func (r *rateLimiter) take(b *bucket, perMinute int, commit bool) time.Duration 
 	return time.Duration((1 - b.tokens) / rate * float64(time.Second))
 }
 
+// sweep drops buckets that have refilled completely, at most once a minute.
+// A full bucket is exactly what a missing one starts as, so forgetting it
+// changes no decision and keeps the maps bounded by recent callers.
+func (r *rateLimiter) sweep() {
+	now := r.now()
+	if now.Sub(r.swept) < time.Minute {
+		return
+	}
+	r.swept = now
+	full := func(b *bucket, perMinute int) bool {
+		return b.tokens+now.Sub(b.at).Seconds()*float64(perMinute)/60 >= float64(r.cfg.Burst)
+	}
+	for id, b := range r.viewers {
+		if full(b, r.cfg.PerViewerPerMinute) {
+			delete(r.viewers, id)
+		}
+	}
+	for id, b := range r.artifacts {
+		if full(b, r.cfg.PerArtifactPerMinute) {
+			delete(r.artifacts, id)
+		}
+	}
+}
+
 // admit charges one call to the viewer's and the artifact's buckets and
 // holds a concurrency slot until release is called. Nothing is charged when
 // either refuses.
 func (r *rateLimiter) admit(viewerID int64, artifactID string, _ Kind) (release func(), err error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.sweep()
 	if r.inFlight[viewerID] >= r.cfg.ViewerConcurrency {
 		return nil, &Error{Code: CodeRateLimited, Message: "Too many AI requests at once. Try again in a moment.", RetryAfter: time.Second}
 	}

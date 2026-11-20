@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -407,5 +408,31 @@ func TestStartupRequiresAChatModelInPlatformMode(t *testing.T) {
 	s, _, _ = newTestService(t, nil)
 	if err := s.CheckStartup(context.Background()); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Buckets that have refilled are forgotten, so the limiter's memory tracks
+// recent callers rather than everyone who ever called.
+func TestRateLimiterForgetsIdleBuckets(t *testing.T) {
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	r := newRateLimiter(RateConfig{}, func() time.Time { return now })
+	for i := range 50 {
+		release, err := r.admit(int64(i), fmt.Sprintf("a%d", i), KindComplete)
+		if err != nil {
+			t.Fatal(err)
+		}
+		release()
+	}
+	if len(r.viewers) != 50 || len(r.artifacts) != 50 {
+		t.Fatalf("buckets: %d viewers, %d artifacts", len(r.viewers), len(r.artifacts))
+	}
+	now = now.Add(5 * time.Minute)
+	release, err := r.admit(999, "fresh", KindComplete)
+	if err != nil {
+		t.Fatal(err)
+	}
+	release()
+	if len(r.viewers) != 1 || len(r.artifacts) != 1 {
+		t.Fatalf("after idling: %d viewers, %d artifacts", len(r.viewers), len(r.artifacts))
 	}
 }

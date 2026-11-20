@@ -76,3 +76,50 @@ window.exhibit.ai.available().then(function (a) {
 	require.NoError(t, err)
 	assert.True(t, a.InferenceApproved, "Allow is the owner's approval")
 }
+
+// "Not now" holds for the page load: a tool that asks again straight away is
+// refused without the dialog coming back, so a loop cannot trap the person.
+func TestInferenceNotNowIsRememberedForTheLoadBrowser(t *testing.T) {
+	browser, err := chromium.New(chromiumtest.Start(t))
+	require.NoError(t, err)
+	ctx, cancel, err := browser.Tab(context.Background())
+	require.NoError(t, err)
+	defer cancel()
+	ctx, timeout := context.WithTimeout(ctx, 60*time.Second)
+	defer timeout()
+
+	ro := newTestRouter(t)
+	rt := withPlatformInference(t, ro)
+	body := `<!doctype html><html><head><script>
+function ask() { return window.exhibit.ai.complete({ prompt: 'Summarize' }).then(function () { return 'ok'; }, function (e) { return e.code; }); }
+ask().then(function (first) {
+  localStorage.setItem('first', first);
+  return ask();
+}).then(function (second) { localStorage.setItem('second', second); });
+</script></head><body><h1>Loop</h1></body></html>`
+	id := createArtifact(t, ro, map[string]any{"title": "Loop", "body": body})
+	appMux, renderMux := http.NewServeMux(), http.NewServeMux()
+	app := httptest.NewServer(appMux)
+	defer app.Close()
+	frame := httptest.NewServer(renderMux)
+	defer frame.Close()
+	ro.cfg.AppOrigin, ro.cfg.RenderOrigin = app.URL, frame.URL
+	renderMux.Handle("/", ro.RenderHandler())
+	appMux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Header.Set("Authorization", authHeader())
+		ro.ServeHTTP(w, r)
+	}))
+
+	require.NoError(t, chromedp.Do(ctx,
+		chromedp.Navigate(app.URL+"/artifacts/"+id),
+		chromedp.Poll[chromedp.Void](`document.getElementById('ai-modal')?.open`),
+		chromedp.Click(chromedp.CSS("#ai-block")),
+	))
+	require.Eventually(t, func() bool { return getState(t, ro, id)["second"] != "" }, 10*time.Second, 50*time.Millisecond)
+	assert.Equal(t, "not_approved", getState(t, ro, id)["first"])
+	assert.Equal(t, "not_approved", getState(t, ro, id)["second"])
+	open, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`document.getElementById('ai-modal').open`))
+	require.NoError(t, err)
+	assert.False(t, open, "the second call does not raise the dialog again")
+	assert.Zero(t, rt.calls())
+}

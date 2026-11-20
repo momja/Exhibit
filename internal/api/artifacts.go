@@ -611,6 +611,12 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 	// reason the approval flags are: the store refuses it too, and a rule held
 	// in one layer alone is a rule the other layer can later be given a way
 	// around.
+	// AI is the one approval that spends money — the viewer's — so it is the
+	// owner's own decision in Exhibit's chrome, never an agent's (Exh-zbwk).
+	if _, ok := updates["inference_approved"]; ok && principalFromCtx(r.Context()).Kind == PrincipalAgentGrant {
+		writeError(w, http.StatusBadRequest, "inference_approved is set by the artifact's owner, not by an agent")
+		return
+	}
 	if v, ok := updates["share_attribution"]; ok {
 		if principalFromCtx(r.Context()).Kind == PrincipalAgentGrant {
 			writeError(w, http.StatusBadRequest, "share_attribution is set by the owner")

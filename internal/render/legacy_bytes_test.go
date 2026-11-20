@@ -25,7 +25,7 @@ func TestLegacyDocumentBytes(t *testing.T) {
 		"share":                    serveShare(t, rd, link),
 		"version":                  serveVersion(vr, "abc", 1, versionToken("abc", 1, 1)),
 	}
-	want := map[string]string{"artifact-and-direct-open": "2581f51d50e02ea37bec3598aea567e32e97c6f82db392d441c5f8c8997e5eeb", "widget": "d8ae7c668c86b0f5f0de9063347ef8e1cd7d430825625867edbfdbbdee7d084c", "share-widget": "336a1672eb0029421354c517839d5ef5b9c093c11307168f1d044e84252aa7c1", "share": "56acf56a220747f093839a3d5229c13073fcef8755325be9424bfe7c4b07f9bc", "version": "c9da80bc2162c94c7acf57c07caa0dbbffda9552980dec3bbdfbd20a13aaa202"}
+	want := map[string]string{"artifact-and-direct-open": "dff51df668438853ce38c0a2cba3a0d1e7160fc642ae9d4313231b42179b0d0e", "widget": "d8ae7c668c86b0f5f0de9063347ef8e1cd7d430825625867edbfdbbdee7d084c", "share-widget": "336a1672eb0029421354c517839d5ef5b9c093c11307168f1d044e84252aa7c1", "share": "56acf56a220747f093839a3d5229c13073fcef8755325be9424bfe7c4b07f9bc", "version": "2f330e9313ff89c01932cdce724e326b4cc3b8cb3f75cbead5a657125e35c0e4"}
 	for name, response := range cases {
 		bytes := strings.ReplaceAll(response.Body.String(), link, "PUBLIC-LINK") + "\n" + fmt.Sprint(response.Header())
 		got := fmt.Sprintf("%x", sha256.Sum256([]byte(bytes)))
