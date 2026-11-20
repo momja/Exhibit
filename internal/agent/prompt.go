@@ -108,10 +108,29 @@ func networkGuidance(opts CreateOpts) string {
 	return guidance
 }
 
+// inferenceGuidance teaches window.exhibit.ai for the kinds the instance
+// offers (Config.InferenceKinds). With none it is empty, so an instance with
+// inference off says nothing about AI and its prompt is unchanged. A widget
+// never calls AI, so a widget-only session gets none either.
+func inferenceGuidance(aiKinds []string, opts CreateOpts) string {
+	if opts.WidgetOnly {
+		return ""
+	}
+	ai, err := agentguidance.AIFor(aiKinds)
+	if err != nil {
+		panic("agent: " + err.Error()) // NewManager validated the kinds
+	}
+	if !ai.Any() {
+		return ""
+	}
+	return "\n\n" + renderPrompt("inference", ai)
+}
+
 // buildSystemPrompt composes the session's system prompt: the role half
-// (overridable by config), the paragraph naming this session's mode, and the
-// always-present contract on how to read tool results.
-func buildSystemPrompt(override string, opts CreateOpts) string {
+// (overridable by config), the platform capabilities the instance offers, the
+// paragraph naming this session's mode, and the always-present contract on how
+// to read tool results.
+func buildSystemPrompt(override string, aiKinds []string, opts CreateOpts) string {
 	role := override
 	if role == "" {
 		role = rolePrompt
@@ -120,7 +139,7 @@ func buildSystemPrompt(override string, opts CreateOpts) string {
 	if !opts.WidgetOnly {
 		guidance = "\n\n" + questionGuidance
 	}
-	return role + networkGuidance(opts) + modePrompt(opts) + guidance + "\n\n" + dataContract
+	return role + networkGuidance(opts) + inferenceGuidance(aiKinds, opts) + modePrompt(opts) + guidance + "\n\n" + dataContract
 }
 
 // selectionNotice is the fixed sentence appended to a prompt that carries a
