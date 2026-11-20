@@ -54,10 +54,6 @@
  * floating toolbar, which is outside 100dvh. Without a colour here the canvas
  * falls back to the scheme's default, black in the dark. */
 html:has(>body.login-painted){background:var(--painting-ground)}
-/* The pages set viewport-fit=cover, so on iOS Safari the page itself runs
- * under the floating toolbar and the painting with it. The scene ignores the
- * insets; the header and the card respect them. */
-.login-painted{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 
 /* The stage: fixed to the viewport on desktop, the whole page on phones. */
 .login-scene{container-type:size;position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none;background:var(--painting-sky-top)}
