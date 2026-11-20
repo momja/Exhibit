@@ -139,6 +139,7 @@ var appOriginGETRoutes = []getRoute{
 	{route: "/partials/share-panel"},
 	// Connected agents lists credentials; issuing/revoking require POST/DELETE.
 	{route: "/partials/agent-grants"},
+	{route: "/partials/ai-permissions"},
 	{route: "/api/agent-grants"},
 	{route: "/api/agent/credential"},
 	// An earlier version of an artifact, shown running before a person decides
@@ -167,6 +168,7 @@ var appOriginGETRoutes = []getRoute{
 	{route: "/api/artifacts/{artifactID}/agent-connections"},
 	{route: "/api/artifacts/{artifactID}/relay-bundle"},
 	{route: "/api/artifacts/{artifactID}/relay-grant"},
+	{route: "/api/artifacts/{artifactID}/inference"},
 	{route: "/api/artifacts/{artifactID}/relay-schedules"},
 	{route: "/api/connections"},
 	{route: "/api/connections/oauth/github/callback", mutates: true, why: "provider authorization callback requires one-shot unpredictable state, PKCE and a matching HttpOnly browser-flow cookie bound to the live login session; forging the navigation cannot connect an attacker's account"},
