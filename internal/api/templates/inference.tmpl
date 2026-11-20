@@ -68,7 +68,7 @@
   {{with .Allowance}}{{if .Limited}}
   <h4 class="settings-h4">This month’s allowance</h4>
   <progress class="ai-meter{{if ge .UsedPercent 100}} is-full{{else if ge .UsedPercent 80}} is-high{{end}}" max="100" value="{{.UsedPercent}}" aria-label="AI allowance used">{{.UsedPercent}}%</progress>
-  <p class="settings-copy settings-note">{{.UsedPercent}}% used{{if .InferenceShare}}, {{.InferenceShare}}% of that by tools and the rest by the agent{{end}}. {{if ge .UsedPercent 100}}AI in tools and the agent are paused until {{.ResetOn}}.{{else}}Resets on {{.ResetOn}}.{{end}}</p>
+  <p class="settings-copy settings-note">{{.Used}}. {{if ge .UsedPercent 100}}AI in tools and the agent are paused until {{.ResetOn}}.{{else}}Resets on {{.ResetOn}}.{{end}}</p>
   {{end}}{{end}}
 
   <h4 class="settings-h4">Used in {{.MonthName}}</h4>

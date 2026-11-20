@@ -502,7 +502,10 @@ type Allowance struct {
 	// InferenceShare is the share of the used amount spent by artifacts,
 	// 0–100, the rest being the agent's.
 	InferenceShare int
-	ResetAt        time.Time
+	// Spent says anything was spent this month, so a share that rounds to
+	// 0% can still be told apart from nothing at all.
+	Spent   bool
+	ResetAt time.Time
 }
 
 // AllowanceFor reads a payer's month against the shared owner ceiling.
@@ -515,6 +518,7 @@ func (s *Service) AllowanceFor(ctx context.Context, viewerID int64, inferenceMic
 		return a, err
 	}
 	if totals.CostMicros > 0 {
+		a.Spent = true
 		a.InferenceShare = int(min(100, inferenceMicros*100/totals.CostMicros))
 	}
 	if c := s.cfg.Caps.OwnerMicrosPerMonth; c != nil {
