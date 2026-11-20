@@ -10,8 +10,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Goldens retain the serveDoc output from 99452599 with the refreshed artifact
-// favicon. Only the randomly minted public link is normalized.
+// Goldens were measured by substituting serveDoc verbatim from 99452599,
+// before running this fixture, and re-measured when every render gained the
+// window.exhibit.ai stand-in and the framed AI bridge (Exh-zue3). Only the randomly minted public link is normalized.
 func TestLegacyDocumentBytes(t *testing.T) {
 	rd, _, link, _ := newShareWidgetFixture(t)
 	private := httptest.NewRecorder()
@@ -24,13 +25,7 @@ func TestLegacyDocumentBytes(t *testing.T) {
 		"share":                    serveShare(t, rd, link),
 		"version":                  serveVersion(vr, "abc", 1, versionToken("abc", 1, 1)),
 	}
-	want := map[string]string{
-		"artifact-and-direct-open": "b80d692af4b0d5a939bf243b6f3c528bd694ff1014b11b4f284c06466f636dff",
-		"widget":                   "c54d487793fb8cc7e8ede1a0e072801b4916f5693a93103fd9cf28b56a29a2fa",
-		"share-widget":             "d4b47afa2d80d41b3bda68b96e811e789898e24dc7a2be6bcade842e7606d936",
-		"share":                    "f368b0b367b0e47980e27fa5484186efb56f5e6a8138eb5af864f7b1c25658e1",
-		"version":                  "4e46950c4a721bdff60e1c02754adaebc75753f6a71418bb04d4ba9471412df6",
-	}
+	want := map[string]string{"artifact-and-direct-open": "2581f51d50e02ea37bec3598aea567e32e97c6f82db392d441c5f8c8997e5eeb", "widget": "d8ae7c668c86b0f5f0de9063347ef8e1cd7d430825625867edbfdbbdee7d084c", "share-widget": "336a1672eb0029421354c517839d5ef5b9c093c11307168f1d044e84252aa7c1", "share": "56acf56a220747f093839a3d5229c13073fcef8755325be9424bfe7c4b07f9bc", "version": "c9da80bc2162c94c7acf57c07caa0dbbffda9552980dec3bbdfbd20a13aaa202"}
 	for name, response := range cases {
 		bytes := strings.ReplaceAll(response.Body.String(), link, "PUBLIC-LINK") + "\n" + fmt.Sprint(response.Header())
 		got := fmt.Sprintf("%x", sha256.Sum256([]byte(bytes)))

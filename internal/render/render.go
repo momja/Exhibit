@@ -1499,9 +1499,25 @@ const aiBridgeScript = `
   if (window.parent !== window && !ANONYMOUS) {
     var aiSeq = 0;
     var aiPending = {};
+    // A call is sent only once the host has said it is listening
+    // (__avAIHostReady): the host's module can attach after this frame's
+    // first call, and a call lost then would never settle. Queued calls are
+    // flushed exactly once, never re-sent, because a delivered complete() may
+    // already have been billed. A call with no host after AI_HOST_WAIT_MS
+    // settles unavailable.
+    var AI_HOST_WAIT_MS = 10000;
+    var aiHostReady = false;
+    var aiQueue = [];
+    var aiPost = function(msg) { window.parent.postMessage(msg, API_ORIGIN); };
     window.addEventListener('message', function(e) {
       if (e.origin !== API_ORIGIN || e.source !== window.parent) return;
       var d = e.data;
+      if (d && d.__avAIHostReady === true) {
+        if (aiHostReady) return;
+        aiHostReady = true;
+        aiQueue.splice(0).forEach(aiPost);
+        return;
+      }
       if (!d || d.__avInferenceResult !== true || d.artifactId !== ARTIFACT_ID) return;
       var p = aiPending[d.id];
       if (!p) return;
@@ -1527,7 +1543,17 @@ const aiBridgeScript = `
             return;
           }
         }
-        window.parent.postMessage(msg, API_ORIGIN);
+        if (aiHostReady) { aiPost(msg); return; }
+        aiQueue.push(msg);
+        setTimeout(function() {
+          var at = aiQueue.indexOf(msg);
+          if (at < 0) return;
+          aiQueue.splice(at, 1);
+          delete aiPending[id];
+          var gone = new Error('AI is not available here.');
+          gone.name = 'ExhibitAIError'; gone.code = 'unavailable';
+          reject(gone);
+        }, AI_HOST_WAIT_MS);
       });
     };
     window.exhibit.ai.available = function() { return callAI('available'); };
