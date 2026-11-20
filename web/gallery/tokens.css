@@ -135,6 +135,7 @@
 	--painting-text-shadow:rgba(11,42,90,.45);
 	--painting-sky-top:#2f78dc;
 	--painting-sky-bottom:#4f8fd4;
+	--painting-ground:#6491a1;       /* mean of the art's bottom edge */
 
 	/* elevation */
 	--shadow-header:0 1px 0 rgba(60,45,10,.12);
@@ -300,6 +301,7 @@
 		--painting-text-shadow:rgba(8,10,30,.5);
 		--painting-sky-top:#18235c;
 		--painting-sky-bottom:#2a2f6a;
+		--painting-ground:#293245;
 
 		--shadow-header:0 1px 0 rgba(0,0,0,.5);
 		--shadow-card:0 1px 0 rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.06);

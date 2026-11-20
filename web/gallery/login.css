@@ -50,6 +50,10 @@
  * story (Exh-vsw0) does to the scene can move or delay the form.
  */
 .login-painted{--login-inset:40px;position:relative;isolation:isolate;background:var(--painting-sky-top)}
+/* What shows past the page's own box: on iOS Safari, the strip around the
+ * floating toolbar, which is outside 100dvh. Without a colour here the canvas
+ * falls back to the scheme's default, black in the dark. */
+html:has(>body.login-painted){background:var(--painting-ground)}
 
 /* The stage: fixed to the viewport on desktop, the whole page on phones. */
 .login-scene{container-type:size;position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none;background:var(--painting-sky-top)}
@@ -133,7 +137,10 @@
 
 /* The hosted card changes height when Clerk promotes the last-used provider
  * or switches authentication steps. Give it space before using the fit scale. */
-.login-hosted{height:100dvh;min-height:0;overflow:clip;contain:paint}
+/* overflow:clip propagates to the viewport, so nothing scrolls. No paint
+ * containment: it would clip the scene to 100dvh and stop it reaching under
+ * a mobile browser's toolbar. */
+.login-hosted{height:100dvh;min-height:0;overflow:clip}
 .login-hosted .app-header-slot{flex-shrink:0}
 .login-hosted .login-content{
   flex:none;margin-block:auto;gap:clamp(20px,4.5dvh,48px);padding-block:clamp(10px,2.5dvh,34px) 16px;
@@ -157,7 +164,9 @@
    * that band (less its faded top edge), so a short screen scrolls instead of
    * letting the form cover the figure. */
   .login-painted{--login-inset:20px;--login-painting-h:clamp(240px,40dvh,380px);min-height:100dvh;background:linear-gradient(var(--painting-sky-top),var(--painting-sky-bottom))}
-  .login-scene{position:absolute;background:linear-gradient(var(--painting-sky-top),var(--painting-sky-bottom))}
+  /* At least the large viewport tall, so the painting runs on under a mobile
+   * toolbar rather than stopping at its top edge. */
+  .login-scene{position:absolute;bottom:auto;height:max(100%,100lvh);background:linear-gradient(var(--painting-sky-top),var(--painting-sky-bottom))}
   .login-scene-composite{inset:auto 0 0;height:var(--login-painting-h);-webkit-mask-image:linear-gradient(transparent 0,#000 28%);mask-image:linear-gradient(transparent 0,#000 28%)}
   .login-scene-image{object-position:50% 100%}
   .login-scene::after{background:linear-gradient(var(--painting-shade) 0,var(--painting-shade) 30%,transparent 62%)}
