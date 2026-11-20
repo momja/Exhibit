@@ -123,6 +123,13 @@
 .login-clerk .cl-cardBox{overflow:visible}
 .login-clerk .cl-card{padding:0}
 .login-clerk .cl-footer{background:transparent;background-image:none}
+/* Clerk draws provider buttons and fields with a 7% ring and its own border
+ * rules win over the appearance object, which leaves the provider buttons
+ * the card's own colour and invisible as buttons in the dark. Give them the
+ * field border (3:1 against the panel in both modes) and a hover fill. The
+ * border is a border, not a box-shadow, so Clerk's focus ring still shows. */
+.login-clerk :is(.cl-socialButtonsIconButton,.cl-socialButtonsBlockButton,.cl-formFieldInput){border:1px solid var(--color-field-border)!important}
+.login-clerk :is(.cl-socialButtonsIconButton,.cl-socialButtonsBlockButton):hover{background:var(--color-subtle)}
 
 /* The hosted card changes height when Clerk promotes the last-used provider
  * or switches authentication steps. Give it space before using the fit scale. */
