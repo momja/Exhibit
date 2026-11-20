@@ -470,6 +470,17 @@ permission, which would make Exhibit itself the thing holding where you are on
 behalf of a tool you may have pasted in a minute ago. So an approved artifact
 reads your location in its own tab too, and an unapproved one reads it nowhere.
 
+**AI** (Exh-zue3) is a capability of the same kind with one difference: it
+spends money. An artifact may call an AI model through `window.exhibit.ai`
+without any key of its own, and the person *viewing* it pays. So it takes two
+consents rather than one. The owner allows the tool to use AI at all — the
+prompt names the tool, says that what it sends can include saved data, and
+says who pays — and that is also their consent to spend their own allowance.
+Each person the tool is shared with agrees, once, to spend *theirs*; nobody's
+use is ever charged to the owner. A recipient of a tool its owner never
+allowed is told so and offered nothing. Public links, anonymous visitors,
+widgets, directly opened tabs and exports never use AI. See `inference.md`.
+
 ### 6.4 Residual risk
 
 This controls what an artifact *reaches out to*. It does not stop a malicious artifact

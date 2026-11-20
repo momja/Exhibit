@@ -634,6 +634,17 @@ its `get_selection` tool rather than as part of `message`. See `docs/security.md
 (Ctrl+Shift+S) lets you click an element in the live preview and attach its
 screenshot + selector to your next prompt. See [docs/agent.md](./docs/agent.md).
 
+## Artifact AI (experimental, Exh-zue3)
+
+Made by the host page on behalf of an artifact frame; see
+[inference.md](inference.md). All three refuse public visitors and agent/MCP
+credentials, and answer 404 for an artifact the caller cannot read.
+
+- `GET /api/artifacts/:id/inference` → `{enabled, complete, decide, payer, reason, owner, approved, consented}`. Never names a provider or model.
+- `POST /api/artifacts/:id/inference` `{kind: "complete"|"decide", payload}` → `200 {value}` or `{error: {code, message, needs?, reset_at?, retry_after_ms?, limit?}}` with 503 unavailable, 403 not_approved (`needs`: `owner_approval` | `consent`) / no_key, 429 limit_reached / rate_limited, 400 invalid_request, 502 provider_error / invalid_output.
+- `PUT` / `DELETE /api/artifacts/:id/inference/consent` → 204. A named recipient agrees to (or stops) spending their own allowance on this artifact. The owner uses `PATCH inference_approved` instead (PUT answers 400 for the owner).
+- `inference_approved` is a strict-boolean `PATCH /api/artifacts/:id` field like the other approvals.
+
 ## Shares
 
 ```
