@@ -1,6 +1,6 @@
 ---
 id: Exh-zue3
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-04T05:36:21Z
@@ -69,3 +69,9 @@ UI decisions (filling gaps the tickets left open):
   platform mode; BYOK says calls bill the person's own provider account.
 - **Exports**: the Download HTML help text and the app-bundle ZIP README state that AI
   features are turned off in exported copies.
+
+## Notes
+
+**2026-11-20T06:19:13Z**
+
+Implemented on feature/Exh-zue3/artifact-inference (see docs/inference.md). Limitations: live provider compatibility untested (no paid calls; classifier route /api/v1/systemone vs /api/alpha/decisions unverified — run one manual complete and decide with a real key before enabling in production); window.claude.complete only maps prompt→string; allowance shown as a share, never money; BYOK users see tokens, not cost; the demo's answers come from the deterministic mock.

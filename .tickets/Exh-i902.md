@@ -1,6 +1,6 @@
 ---
 id: Exh-i902
-status: open
+status: closed
 deps: [Exh-zbwk]
 links: []
 created: 2026-11-04T05:37:11Z
@@ -32,3 +32,9 @@ Product decision (2026-11-19): inference portability is out of scope. This super
 - The export dialog and ZIP documentation explicitly state that AI features are disabled in exports.
 - The source bundle retains the editable artifact source and its inference call sites so another agent can rewire them independently.
 - Tests assert neither format embeds credentials, instance inference configuration or a live Exhibit inference endpoint, and the ZIP has no inference relay route or runtime requirement.
+
+## Notes
+
+**2026-11-20T06:19:13Z**
+
+Done: every HTML and ZIP export installs the unavailable stand-in first in <head> (ZIP: before the bundle shim freezes window.exhibit); available() reports nothing; calls reject unavailable with zero network requests; source and call sites unchanged; no credentials, config or endpoint exported; Download HTML, ZIP panel and README say AI is off. Connector export behavior unchanged (bundle tests).

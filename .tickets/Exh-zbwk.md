@@ -1,6 +1,6 @@
 ---
 id: Exh-zbwk
-status: open
+status: closed
 deps: [Exh-hwjg]
 links: []
 created: 2026-11-04T05:36:51Z
@@ -34,3 +34,9 @@ Artifact code calls a method on window.exhibit.ai. The preamble posts the call t
 - A named recipient's call is charged to the recipient; the owner's ledger is unchanged.
 - Public link, anonymous, widget and top-level renders cannot cause a call. Tested at the endpoint, not only by absence of the bridge.
 - security.md §4 and PRD §6.3 describe the capability and its two consents.
+
+## Notes
+
+**2026-11-20T06:19:13Z**
+
+Done: unavailable stand-in on every render, aiBridgeScript only on framed renders with a viewer (not widgets, public shares, anonymous, top-level), POST/GET /api/artifacts/:id/inference, PUT/DELETE …/inference/consent, inference-host.js dialog/banners on detail, agent preview and version previews; Edit → Permissions AI row; posture glyph; Settings → AI in artifacts (allowance as a share, usage per tool, revocable permissions). Fixed during the demo: the frame's first call could be lost before the host module attached — calls now wait for __avAIHostReady and flush exactly once (browser test). UI decisions: one dialog with owner/recipient copy; recipient of an unapproved tool gets a banner, no button, including when the tool only checks available().
