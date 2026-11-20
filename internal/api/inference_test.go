@@ -200,3 +200,19 @@ func TestSettingsListsAndRevokesAIPermissions(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, approved.InferenceApproved, "withdrawing my consent leaves the owner's decision alone")
 }
+
+// The allowance sentence never says "0% used" about a month that has spent
+// something, and says plainly when tools or the agent spent all of it.
+func TestAllowanceUsedSentence(t *testing.T) {
+	for _, tc := range []struct {
+		a    inference.Allowance
+		want string
+	}{
+		{inference.Allowance{}, "Nothing used yet"},
+		{inference.Allowance{Spent: true, InferenceShare: 100}, "Less than 1% used, all of it by tools"},
+		{inference.Allowance{Spent: true, UsedPercent: 12}, "12% used, all of it by the agent"},
+		{inference.Allowance{Spent: true, UsedPercent: 40, InferenceShare: 25}, "40% used, 25% of that by tools and the rest by the agent"},
+	} {
+		assert.Equal(t, tc.want, allowanceUsed(tc.a))
+	}
+}

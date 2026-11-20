@@ -35,10 +35,31 @@ type aiSettingsView struct {
 }
 
 type aiAllowanceView struct {
-	Limited        bool
-	UsedPercent    int
-	InferenceShare int
-	ResetOn        string
+	Limited     bool
+	UsedPercent int
+	// Used is the sentence under the meter: how much is gone and who spent it.
+	Used    string
+	ResetOn string
+}
+
+// allowanceUsed says how much of the month's allowance is gone and how it
+// splits between tools and the agent, without a misleading "0%" when
+// something was spent.
+func allowanceUsed(a inference.Allowance) string {
+	if !a.Spent {
+		return "Nothing used yet"
+	}
+	used := fmt.Sprintf("%d%% used", a.UsedPercent)
+	if a.UsedPercent == 0 {
+		used = "Less than 1% used"
+	}
+	switch a.InferenceShare {
+	case 100:
+		return used + ", all of it by tools"
+	case 0:
+		return used + ", all of it by the agent"
+	}
+	return fmt.Sprintf("%s, %d%% of that by tools and the rest by the agent", used, a.InferenceShare)
 }
 
 type aiUsageRow struct {
@@ -115,7 +136,7 @@ func (ro *Router) aiSettings(r *http.Request) (*aiSettingsView, error) {
 		if err != nil {
 			return nil, err
 		}
-		view.Allowance = &aiAllowanceView{Limited: a.Limited, UsedPercent: a.UsedPercent, InferenceShare: a.InferenceShare,
+		view.Allowance = &aiAllowanceView{Limited: a.Limited, UsedPercent: a.UsedPercent, Used: allowanceUsed(a),
 			ResetOn: a.ResetAt.Format("January 2")}
 	}
 	return view, nil
