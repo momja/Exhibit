@@ -104,6 +104,7 @@ type profilePageData struct {
 	Favicon     template.URL
 	Account     profileAccount
 	AgentGrants *agentGrantsPanelView
+	AI          *aiSettingsView
 	Connections profileConnectionAllowance
 	IsAdmin     bool
 	pageCredentials
@@ -178,6 +179,12 @@ func (ro *Router) profilePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	aiSettings, err := ro.aiSettings(r)
+	if err != nil {
+		serverError(w, r, "profile ai settings", err)
+		return
+	}
+
 	creds := ro.pageCredentials(r)
 	var connectionAllowance profileConnectionAllowance
 	if ro.cfg.Relay.Enabled || ro.cfg.Connections != nil {
@@ -193,6 +200,7 @@ func (ro *Router) profilePage(w http.ResponseWriter, r *http.Request) {
 		Favicon:         template.URL(exhibitLogoDataURI),
 		Account:         acct,
 		AgentGrants:     agentGrants,
+		AI:              aiSettings,
 		Connections:     connectionAllowance,
 		IsAdmin:         ro.adminRequest(r),
 		pageCredentials: creds,

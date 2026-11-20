@@ -539,6 +539,7 @@ func (ro *Router) setupRoutes() {
 		// looking at.
 		r.Get("/partials/share-panel", ro.sharePanelPartial)
 		r.Get("/partials/agent-grants", ro.agentGrantsPanelPartial)
+		r.Get("/partials/ai-permissions", ro.aiPermissionsPartial)
 		// The capability badge + popover (av-isb3, av-41se), re-rendered
 		// after a runtime origin approval (av-mf1x). Same reason as the
 		// share panel: the frame reloads transparently under the widened
