@@ -1,6 +1,6 @@
 ---
 id: Exh-x16u
-status: open
+status: closed
 deps: [Exh-hwjg, Exh-zbwk, Exh-urrg]
 links: []
 created: 2026-11-04T05:37:11Z
@@ -39,3 +39,9 @@ Precedent: the usage-policy guardrail (internal/agent/ext/guard.ts, av-gust) alr
 - With no classifier model for the provider, decide() rejects with unavailable even when complete() works.
 - The ledger records decide calls separately from complete calls, against the same total.
 - One end-to-end check against OpenRouter's Jev, run manually or behind an opt-in test flag.
+
+## Notes
+
+**2026-11-20T06:19:13Z**
+
+Done: decide() via INFERENCE_DECISION_MODEL resolved as a classifier (startup fails otherwise); bool/choice/score with bounds; never falls back to a chat model. Live route /api/v1/systemone vs /api/alpha/decisions unverified.

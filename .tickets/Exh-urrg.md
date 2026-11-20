@@ -1,6 +1,6 @@
 ---
 id: Exh-urrg
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-04T15:56:51Z
@@ -34,3 +34,9 @@ Record the decision in the epic and update Exh-hwjg, Exh-gd3g and Exh-x16u to ma
 - A prototype answering a complete() and a classify() call through OpenRouter from Go, with measured latency.
 - A written decision with the trade-offs above, linked from the epic.
 
+
+## Notes
+
+**2026-11-20T06:19:12Z**
+
+Decision: serve both kinds through one warm, checksum-pinned Pi Bolt 1.0.8 / Pi 1.4.0 worker (internal/inference/worker.go + ext/inference.ts), supervised from Go and separate from agent.Manager. Per-call apiKey and abort; no replay of a call whose outcome is unknown; restart with backoff; circuit breaker after 5 failed starts; 16 in flight. Findings reused from spike PR #306, not merged. Verified only against internal/mockllm through Pi's real OpenRouter adapters (complete, classify bool/choice/score, 12 concurrent distinct keys, cancel, redaction, restart). NOT verified: live provider calls, and Pi's OpenRouter classifier route /api/v1/systemone vs OpenRouter's current /api/alpha/decisions. No paid call was made. Fallback (Go client per kind) not needed.

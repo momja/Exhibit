@@ -1,6 +1,6 @@
 ---
 id: Exh-15tf
-status: open
+status: closed
 deps: [Exh-gd3g, Exh-x16u]
 links: []
 created: 2026-11-04T05:37:11Z
@@ -28,3 +28,9 @@ Built-in and connected agents should reach for decide() when a tool needs a judg
 - The example artifact runs against mock providers in a browser test, and degrades with each kind removed.
 - Both export formats of the example artifact clearly disable AI actions and make no inference requests; the source bundle preserves its inference call sites.
 - Configuration variables documented beside the AGENT_* table.
+
+## Notes
+
+**2026-11-20T06:19:13Z**
+
+Done: shared agentguidance AI section rendered only for offered kinds (Pi: from inference.Service.InstanceKinds(); MCP: EXHIBIT_AI_KINDS), golden tests for none/complete/decide/both; examples/inference-triage (tool, widget, README, Chromium tests for every kind combination).
