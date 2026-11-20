@@ -178,7 +178,10 @@ func handleClassify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	state, _ := json.Marshal(req.State)
-	text := strings.ToLower(string(state))
+	// Judge what the state says, not its key names: a key such as "feedback"
+	// would otherwise match every criterion that mentions feedback. Fault
+	// markers are looked for in the whole state below.
+	text := strings.ToLower(stateText(req.State))
 	answers := map[string]any{}
 	for id, q := range req.Questions {
 		switch q.Type {
@@ -210,7 +213,11 @@ func handleClassify(w http.ResponseWriter, r *http.Request) {
 			best := labels[int(hash(text))%len(labels)]
 			bestScore := -1.0
 			for _, l := range labels {
-				if s := overlap(text, l+" "+c[l]); s > bestScore {
+				s := overlap(text, c[l])
+				if strings.Contains(text, strings.ToLower(l)) {
+					s++ // the label itself named in the text is the strongest signal
+				}
+				if s > bestScore {
 					best, bestScore = l, s
 				}
 			}
@@ -243,11 +250,37 @@ func handleClassify(w http.ResponseWriter, r *http.Request) {
 	if !inferenceReady(w, r, string(state)) {
 		return
 	}
-	if strings.Contains(text, "mock-inference-malformed") {
+	if strings.Contains(strings.ToLower(string(state)), "mock-inference-malformed") {
 		answers = map[string]any{} // A billed response the real adapter must reject.
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{"answers": answers, "usage": map[string]int{"input_tokens": 100, "output_tokens": 0}})
+}
+
+// stateText is every string value in the state, in key order, joined.
+func stateText(v any) string {
+	switch t := v.(type) {
+	case string:
+		return t
+	case map[string]any:
+		keys := make([]string, 0, len(t))
+		for k := range t {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		parts := make([]string, 0, len(keys))
+		for _, k := range keys {
+			parts = append(parts, stateText(t[k]))
+		}
+		return strings.Join(parts, " ")
+	case []any:
+		parts := make([]string, 0, len(t))
+		for _, e := range t {
+			parts = append(parts, stateText(e))
+		}
+		return strings.Join(parts, " ")
+	}
+	return ""
 }
 
 // overlap is the share of a criterion's words (four letters or more) that
