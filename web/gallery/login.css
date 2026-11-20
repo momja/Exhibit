@@ -54,9 +54,9 @@
  * floating toolbar, which is outside 100dvh. Without a colour here the canvas
  * falls back to the scheme's default, black in the dark. */
 html:has(>body.login-painted){background:var(--painting-ground)}
-/* The pages set viewport-fit=cover, so on iOS Safari the page itself runs
- * under the floating toolbar and the painting with it. The scene ignores the
- * insets; the header and the card respect them. */
+/* viewport-fit=cover lets iOS tint its bars from the page. Where a browser
+ * does draw the page under a bar, the safe-area padding keeps the header and
+ * card clear of it. */
 .login-painted{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 
 /* The stage: fixed to the viewport on desktop, the whole page on phones. */
@@ -168,12 +168,14 @@ html:has(>body.login-painted){background:var(--painting-ground)}
    * that band (less its faded top edge), so a short screen scrolls instead of
    * letting the form cover the figure. */
   .login-painted{--login-inset:20px;--login-painting-h:clamp(240px,40dvh,380px);min-height:100dvh;background:linear-gradient(var(--painting-sky-top),var(--painting-sky-bottom))}
-  /* At least the large viewport tall, so the painting runs on under a mobile
-   * toolbar rather than stopping at its top edge. */
-  .login-scene{position:absolute;bottom:auto;height:max(100%,100lvh);background:linear-gradient(var(--painting-sky-top),var(--painting-sky-bottom))}
+  .login-scene{position:absolute;background:linear-gradient(var(--painting-sky-top),var(--painting-sky-bottom))}
   .login-scene-composite{inset:auto 0 0;height:var(--login-painting-h);-webkit-mask-image:linear-gradient(transparent 0,#000 28%);mask-image:linear-gradient(transparent 0,#000 28%)}
   .login-scene-image{object-position:50% 100%}
-  .login-scene::after{background:linear-gradient(var(--painting-shade) 0,var(--painting-shade) 30%,transparent 62%)}
+  /* iOS Safari 26 draws no page content under its floating toolbar: it ends
+   * the viewport above the bar and fills the strip with one colour sampled
+   * from the page, here the root's --painting-ground. The painting's last
+   * 56px fade into that colour, so the art meets the strip without an edge. */
+  .login-scene::after{background:linear-gradient(transparent calc(100% - 56px),var(--painting-ground)),linear-gradient(var(--painting-shade) 0,var(--painting-shade) 30%,transparent 62%)}
   .login-painted .app-header{position:static;padding-inline:var(--login-inset);padding-top:6px;min-height:0;height:var(--header-height)}
   .login-painted .app-header-slot{min-height:0}
 
