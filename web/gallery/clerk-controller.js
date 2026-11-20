@@ -129,7 +129,10 @@ export default class extends Controller {
     if (!page) return;
     const content = this.element.closest('.login-content');
     this.loginFitObserver = new ResizeObserver(() => {
-      const availableHeight = page.clientHeight - content.offsetTop;
+      // The content is centred with auto margins; measure from where it would
+      // start without them, or centring alone would read as overflow.
+      const top = content.offsetTop - parseFloat(getComputedStyle(content).marginTop);
+      const availableHeight = page.clientHeight - top;
       // offsetHeight is measured before the CSS transform, so each step and
       // resize can be fitted from its natural size without a resize loop.
       const scale = Math.min(1, Math.max(0, availableHeight) / content.offsetHeight);

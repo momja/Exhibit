@@ -24,9 +24,9 @@ func TestLoginPageIsPainted(t *testing.T) {
 	// The first visit also plays the descent (login_descent_test.go); the
 	// painted page itself is the same either way.
 	assert.Contains(t, page, `class="login-page login-painted login-descend"`)
-	assert.Contains(t, page, `A space for <span class="login-headline-ending"><em>your</em> <span class="sr-only">tools</span>`)
+	assert.Contains(t, page, `A space for<br> <span class="login-headline-ending"><em>your</em> <span class="sr-only">tools</span>`)
 	assert.Contains(t, page, `<span>tools</span><span>apps</span><span>art</span><span>games</span><span>tools</span>`)
-	assert.Regexp(t, `build apps instantly, use them,<br>\s+share them, repaint them any time`, page)
+	assert.Regexp(t, `Build apps instantly, use them,<br>\s+share them, repaint them any time`, page)
 	assert.Contains(t, page, `class="login-wordmark"`)
 	assert.Contains(t, page, `<picture class="login-scene-composite">`)
 	assert.Regexp(t, `<img class="login-scene-image"[^>]* width="2560" height="1440"`, page)

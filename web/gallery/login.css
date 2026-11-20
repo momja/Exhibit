@@ -49,7 +49,7 @@
  * (.login-scene); the form never sits inside it, so nothing the animation
  * story (Exh-vsw0) does to the scene can move or delay the form.
  */
-.login-painted{position:relative;isolation:isolate;background:var(--painting-sky-top)}
+.login-painted{--login-inset:40px;position:relative;isolation:isolate;background:var(--painting-sky-top)}
 
 /* The stage: fixed to the viewport on desktop, the whole page on phones. */
 .login-scene{container-type:size;position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none;background:var(--painting-sky-top)}
@@ -59,18 +59,24 @@
 .login-scene::after{content:"";position:absolute;inset:0;z-index:2;background:radial-gradient(ellipse 62% 80% at 0% 30%,var(--painting-shade) 0,var(--painting-shade) 35%,transparent 100%)}
 .login-scene-grain{position:absolute;inset:0;z-index:1;--grain-opacity:.2}
 
-.login-painted .app-header{background:none;border:0;box-shadow:none;padding-inline:40px;padding-top:6px;height:var(--header-height)}
+.login-painted .app-header{background:none;border:0;box-shadow:none;padding-inline:var(--login-inset);padding-top:6px;height:var(--header-height)}
 .login-painted .app-header .logo{height:40px}
 .login-wordmark{font-size:1.25rem;font-weight:700;color:var(--color-on-painting);text-shadow:0 1px 8px var(--painting-text-shadow)}
 
-.login-painted .login-content{flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:28px;padding:5vh 40px 40px}
+/* One left edge, --login-inset, for the logo, headline, tagline and card. The
+ * stack is centred vertically in the space under the header, so the hill shows
+ * below the card on any screen tall enough to hold it. */
+.login-painted .login-content{flex-direction:column;align-items:flex-start;justify-content:center;gap:clamp(28px,5vh,48px);padding:5vh var(--login-inset) 40px}
 /* No box behind the text. A feathered shade over the sky (the scene's ::after,
  * above the painting and below the text) holds the cream type above 3:1 over
  * any part of the sky strip, so it does not depend on which pixels the art
  * (or Exh-vsw0's sliding sky layer) puts behind it. The tagline and wordmark
  * are sized as large text (>=18.66px semibold/bold), as is the headline. */
 .login-intro{max-width:34rem}
-.login-headline em{font-style:italic;font-weight:inherit}
+/* The ending always starts the second line. Fraunces's italic y overhangs its
+ * origin by about .12em, so indent it by that much: the ink, not the glyph box,
+ * sits on the shared left edge. */
+.login-headline em{font-style:italic;font-weight:inherit;margin-inline-start:.12em}
 .login-headline{font-size:clamp(44px,6.4vw,92px);line-height:.95;letter-spacing:-.02em;color:var(--color-on-painting);text-shadow:0 2px 18px var(--painting-text-shadow);text-wrap:balance}
 .login-headline-ending{white-space:nowrap}
 .login-headline-carousel{display:inline-block;position:relative;width:3em}
@@ -105,7 +111,7 @@
   0%,58%,61%,71%,74%,84%,87%,97%,100%{--login-word-feather:0%}
   59%,60%,72%,73%,85%,86%,98%,99%{--login-word-feather:24%}
 }
-.login-tagline{margin-block-start:16px;margin-inline-start:1.15em;max-width:36ch;font-size:1.1875rem;font-weight:700;line-height:1.35;text-wrap:balance;color:var(--color-on-painting);text-shadow:0 1px 8px var(--painting-text-shadow)}
+.login-tagline{margin-block-start:16px;max-width:36ch;font-size:1.1875rem;font-weight:700;line-height:1.35;text-wrap:balance;color:var(--color-on-painting);text-shadow:0 1px 8px var(--painting-text-shadow)}
 .login-painted .login{max-width:340px;align-items:stretch;padding:22px 24px 24px}
 .login-painted .login-sub{margin:0;font-weight:700;color:var(--color-ink)}
 .login-painted .login-form{margin-top:14px}
@@ -123,11 +129,11 @@
 .login-hosted{height:100dvh;min-height:0;overflow:clip;contain:paint}
 .login-hosted .app-header-slot{flex-shrink:0}
 .login-hosted .login-content{
-  flex:none;gap:clamp(12px,2dvh,24px);padding-block:clamp(10px,2.5dvh,34px) 16px;
-  transform:scale(var(--login-fit,1));transform-origin:top left;
+  flex:none;margin-block:auto;gap:clamp(20px,4.5dvh,48px);padding-block:clamp(10px,2.5dvh,34px) 16px;
+  transform:scale(var(--login-fit,1));transform-origin:var(--login-inset) 0;
 }
 .login-hosted .login-headline{font-size:clamp(38px,min(6.4vw,8.6dvh),92px)}
-.login-hosted .login-tagline{margin-top:14px}
+.login-hosted .login-tagline{margin-top:clamp(14px,2.6dvh,26px)}
 .login-hosted .login-clerk{padding-block:18px}
 
 @media (max-height:920px){
@@ -143,21 +149,21 @@
   /* The painting owns a band at the bottom of the page, and the content reserves
    * that band (less its faded top edge), so a short screen scrolls instead of
    * letting the form cover the figure. */
-  .login-painted{--login-painting-h:clamp(240px,40dvh,380px);min-height:100dvh;background:linear-gradient(var(--painting-sky-top),var(--painting-sky-bottom))}
+  .login-painted{--login-inset:20px;--login-painting-h:clamp(240px,40dvh,380px);min-height:100dvh;background:linear-gradient(var(--painting-sky-top),var(--painting-sky-bottom))}
   .login-scene{position:absolute;background:linear-gradient(var(--painting-sky-top),var(--painting-sky-bottom))}
   .login-scene-composite{inset:auto 0 0;height:var(--login-painting-h);-webkit-mask-image:linear-gradient(transparent 0,#000 28%);mask-image:linear-gradient(transparent 0,#000 28%)}
   .login-scene-image{object-position:50% 100%}
   .login-scene::after{background:linear-gradient(var(--painting-shade) 0,var(--painting-shade) 30%,transparent 62%)}
-  .login-painted .app-header{position:static;padding-inline:20px;padding-top:6px;min-height:0;height:var(--header-height)}
+  .login-painted .app-header{position:static;padding-inline:var(--login-inset);padding-top:6px;min-height:0;height:var(--header-height)}
   .login-painted .app-header-slot{min-height:0}
 
-  .login-painted .login-content{padding:2vh 20px calc(var(--login-painting-h) - 12px);gap:18px}
+  .login-painted .login-content{justify-content:flex-start;padding:2vh var(--login-inset) calc(var(--login-painting-h) - 12px);gap:22px}
   .login-headline{font-size:clamp(40px,12vw,56px)}
   .login-tagline{margin-top:12px}
   .login-painted .login{max-width:none;padding:16px 18px 18px}
   .login-painted .login-form{margin-top:8px;gap:4px}
   .login-painted .login-form .login-label+.field{margin-bottom:6px}
-  .login-hosted .login-content{padding-block:clamp(8px,1.8dvh,16px) 12px;transform-origin:top center}
+  .login-hosted .login-content{margin-block:0;gap:22px;padding-block:clamp(8px,1.8dvh,16px) 12px;transform-origin:top center}
   .login-hosted .login-headline{font-size:clamp(32px,min(12vw,6.2dvh),56px)}
   .login-hosted .login-clerk{padding-block:16px}
 }
