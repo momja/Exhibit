@@ -161,6 +161,16 @@ export function connectInferenceHost({ artifactId, title }) {
     handle(frame, d);
   }
   window.addEventListener('message', onMessage);
+  // The frame holds its calls until this says it is listening, so a call made
+  // before this module ran is not lost. Announced to every AI frame now, and
+  // again on each frame load (a reload, or a version preview htmx inserts
+  // later); the frame acts on the first and ignores the rest. targetOrigin is
+  // '*' because the frame's origin is opaque; the frame checks it came from
+  // the app origin.
+  const announce = frame => frame.contentWindow?.postMessage({ __avAIHostReady: true }, '*');
+  const onFrameLoad = e => { if (e.target?.tagName === 'IFRAME' && e.target.hasAttribute?.('data-ai-frame')) announce(e.target); };
+  document.querySelectorAll('iframe[data-ai-frame]').forEach(announce);
+  document.addEventListener('load', onFrameLoad, true);
   // A decision made on another page (Edit → Permissions, Settings) must not
   // be outlived by this page's cached copy.
   const refresh = () => states.clear();
@@ -168,6 +178,7 @@ export function connectInferenceHost({ artifactId, title }) {
   document.body.addEventListener('exhibit:capabilities-changed', refresh);
   return () => {
     window.removeEventListener('message', onMessage);
+    document.removeEventListener('load', onFrameLoad, true);
     document.removeEventListener('visibilitychange', refresh);
     document.body.removeEventListener('exhibit:capabilities-changed', refresh);
   };
