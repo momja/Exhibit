@@ -120,7 +120,12 @@ export function connectInferenceHost({ artifactId, title }) {
     if (!artifactId() || id !== artifactId()) return;
     const st = await stateFor(id);
     const usable = st.enabled && (st.owner || st.approved);
+    const notAllowed = st.enabled && !st.owner && !st.approved;
+    const OWNER_NOTE = 'This tool uses AI, but its owner has not allowed that. Only the owner can turn it on.';
     if (d.op === 'available') {
+      // A tool that checks first never calls, so this is where a recipient
+      // learns why its AI controls are off — in Exhibit's chrome, once.
+      if (notAllowed && (st.complete || st.decide)) showBanner('owner', OWNER_NOTE);
       reply(frame, callID, id, { ok: true, value: { complete: Boolean(usable && st.complete), decide: Boolean(usable && st.decide) } });
       return;
     }
@@ -132,8 +137,8 @@ export function connectInferenceHost({ artifactId, title }) {
       fail('no_key', 'Add your own AI key to use AI in artifacts.');
       return;
     }
-    if (!st.approved && !st.owner) {
-      showBanner('owner', 'This tool tried to use AI, but its owner has not allowed that. Only the owner can turn it on.');
+    if (notAllowed) {
+      showBanner('owner', OWNER_NOTE);
       fail('not_approved');
       return;
     }

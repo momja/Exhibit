@@ -37,7 +37,7 @@ func TestDirectOpenPromptForEveryViewer(t *testing.T) {
 		if readOnly {
 			assert.NotContains(t, page, `href="/api/artifacts/art-1/export"`)
 		} else {
-			assert.Contains(t, page, `download title="Downloads this artifact and its assets, without saved data or connected accounts"`)
+			assert.Contains(t, page, `download title="Downloads this artifact and its assets, without saved data or connected accounts. AI features are turned off in downloaded copies."`)
 		}
 		protected, err := renderDetailPage(a, urls, creds, nil, detailNetworkPolicy{Protected: true})
 		require.NoError(t, err)

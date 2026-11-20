@@ -133,8 +133,14 @@ func TestInferenceRefusesPrincipalsThatCannotPay(t *testing.T) {
 	// A stranger without a grant learns nothing about the artifact.
 	stranger, err := in.ro.cfg.Store.UpsertUser(context.Background(), "sub-stranger", "s@example.test")
 	require.NoError(t, err)
-	w = postInference(in.ro, in.granted, sessionCookieFor(t, in.ro.cfg.Store, stranger.ID, "session-stranger"))
+	strangerCookie := sessionCookieFor(t, in.ro.cfg.Store, stranger.ID, "session-stranger")
+	w = postInference(in.ro, in.granted, strangerCookie)
 	assert.Equal(t, http.StatusNotFound, w.Code)
+	req := httptest.NewRequest(http.MethodGet, "/api/artifacts/"+in.granted+"/inference", nil)
+	req.AddCookie(strangerCookie)
+	w = httptest.NewRecorder()
+	in.ro.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusNotFound, w.Code, "the page state is no oracle either")
 	assert.Equal(t, 0, rt.calls())
 }
 
