@@ -64,6 +64,8 @@ func (ro *Router) exportArtifact(w http.ResponseWriter, r *http.Request) {
 	if ro.cfg.Relay.Enabled {
 		doc = export.RelayNote(doc, scanner.FetchOrigins(body))
 	}
+	// Last, so the AI stand-in is the first script in the file (Exh-i902).
+	doc = export.DisableAI(doc)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Content-Disposition", `attachment; filename="`+exportFilename(a.Title)+`"`)
