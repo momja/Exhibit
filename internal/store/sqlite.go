@@ -1419,11 +1419,14 @@ const datetimeLayout = "2006-01-02 15:04:05"
 
 // OwnerAgentSpend is one owner's platform-paid agent spend since a time —
 // what the per-owner budget meters (av-99f4). BYO-key rows are the owner's
-// own money and guardrail rows are the operator's overhead, so neither
-// counts against the owner's budget.
+// own money and the agent's guardrail rows are the operator's overhead, so
+// neither counts against the owner's budget. A guardrail screen of an
+// artifact's AI call (artifact_id set) does count: the viewer causes every
+// one, and leaving them out would let refused requests spend without limit
+// on an instance with only an owner cap (Exh-hwjg).
 func (s *SQLiteStore) OwnerAgentSpend(ctx context.Context, ownerID int64, since time.Time) (UsageTotals, error) {
 	return s.usageTotals(ctx,
-		"owner_id=? AND paid_by='platform' AND source != 'guardrail' AND recorded_at >= ?",
+		"owner_id=? AND paid_by='platform' AND (source != 'guardrail' OR artifact_id IS NOT NULL) AND recorded_at >= ?",
 		ownerID, since.UTC().Format(datetimeLayout))
 }
 

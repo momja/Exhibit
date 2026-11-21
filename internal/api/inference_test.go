@@ -222,3 +222,70 @@ func TestAllowanceUsedSentence(t *testing.T) {
 		assert.Equal(t, tc.want, allowanceUsed(tc.a))
 	}
 }
+
+// A browser request that spends or authorizes AI must come from the app's own
+// page. SameSite=Lax still carries the session cookie on a POST from a
+// sibling subdomain, so the cookie alone does not prove it.
+func TestInferenceRefusesRequestsFromAnotherPage(t *testing.T) {
+	in := newGrantedInstance(t)
+	rt := withPlatformInference(t, in.ro)
+	ctx := context.Background()
+	require.NoError(t, in.ro.cfg.Store.UpdateArtifact(ctx, in.ownerOne, in.granted, map[string]any{"inference_approved": true}))
+
+	foreign := map[string]func(*http.Request){
+		"another origin": func(r *http.Request) { r.Header.Set("Origin", "http://evil.test") },
+		"same site":      func(r *http.Request) { r.Header.Set("Sec-Fetch-Site", "same-site") },
+		"cross site":     func(r *http.Request) { r.Header.Set("Sec-Fetch-Site", "cross-site") },
+	}
+	for name, mutate := range foreign {
+		w := postInference(in.ro, in.granted, in.cookieOne, mutate)
+		assert.Equal(t, http.StatusForbidden, w.Code, name)
+		assert.Equal(t, "not_approved/", inferenceCode(t, w), name)
+
+		put := httptest.NewRequest(http.MethodPut, "/api/artifacts/"+in.granted+"/inference/consent", nil)
+		put.AddCookie(in.cookieTwo)
+		mutate(put)
+		pw := httptest.NewRecorder()
+		in.ro.ServeHTTP(pw, put)
+		assert.Equal(t, http.StatusForbidden, pw.Code, name+": consent")
+
+		patch := httptest.NewRequest(http.MethodPatch, "/api/artifacts/"+in.granted, strings.NewReader(`{"inference_approved":false}`))
+		patch.Header.Set("Content-Type", "application/json")
+		patch.AddCookie(in.cookieOne)
+		mutate(patch)
+		aw := httptest.NewRecorder()
+		in.ro.ServeHTTP(aw, patch)
+		assert.Equal(t, http.StatusForbidden, aw.Code, name+": approval")
+	}
+	assert.Zero(t, rt.calls(), "nothing ran for a foreign page")
+	a, err := in.ro.cfg.Store.GetArtifact(ctx, in.ownerOne, in.granted)
+	require.NoError(t, err)
+	assert.True(t, a.InferenceApproved, "a foreign page cannot change the approval")
+
+	w := postInference(in.ro, in.granted, in.cookieOne, func(r *http.Request) {
+		r.Header.Set("Origin", in.ro.cfg.AppOrigin)
+		r.Header.Set("Sec-Fetch-Site", "same-origin")
+	})
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Equal(t, 1, rt.calls())
+}
+
+// Every AI frame carries the channel its document inlines for this viewer, so
+// the host can tell the artifact's own document from one navigated into it.
+func TestDetailFrameCarriesTheViewersAIChannel(t *testing.T) {
+	in := newGrantedInstance(t)
+	withPlatformInference(t, in.ro)
+	for _, viewer := range []struct {
+		id     int64
+		cookie *http.Cookie
+	}{{in.ownerOne, in.cookieOne}, {in.ownerTwo, in.cookieTwo}} {
+		req := httptest.NewRequest(http.MethodGet, "/artifacts/"+in.granted, nil)
+		req.AddCookie(viewer.cookie)
+		w := httptest.NewRecorder()
+		in.ro.ServeHTTP(w, req)
+		require.Equal(t, http.StatusOK, w.Code)
+		channel := in.ro.tokens.AIChannel(in.granted, viewer.id)
+		require.NotEmpty(t, channel)
+		assert.Contains(t, w.Body.String(), `data-ai-channel="`+channel+`"`)
+	}
+}

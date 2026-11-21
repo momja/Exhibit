@@ -84,10 +84,32 @@ func inferencePrincipalAllowed(ctx context.Context) bool {
 	return false
 }
 
+// fromAppPage reports whether a request that spends or authorizes AI
+// spending came from Exhibit's own page. SameSite=Lax still sends the session
+// cookie on a POST from a sibling subdomain — including the render origin in a
+// deployment that puts both under one site — so a browser request must name
+// the app origin, as the relay's does. Requests with neither header are not
+// from a browser page and are left to authentication alone.
+func (ro *Router) fromAppPage(r *http.Request) bool {
+	if o := r.Header.Get("Origin"); o != "" && o != ro.cfg.AppOrigin {
+		return false
+	}
+	switch r.Header.Get("Sec-Fetch-Site") {
+	case "", "same-origin", "none":
+		return true
+	}
+	return false
+}
+
 func (ro *Router) runInference(w http.ResponseWriter, r *http.Request) {
 	unavailable := inferenceErrorBody{Code: inference.CodeUnavailable, Message: "AI is not available here."}
 	if !inferencePrincipalAllowed(r.Context()) || !ro.cfg.Inference.Enabled() {
 		writeInferenceError(w, http.StatusServiceUnavailable, unavailable)
+		return
+	}
+	if !ro.fromAppPage(r) {
+		writeInferenceError(w, http.StatusForbidden, inferenceErrorBody{Code: inference.CodeNotApproved,
+			Message: "AI requests are accepted only from Exhibit itself."})
 		return
 	}
 	var req inferenceRequest
@@ -167,6 +189,10 @@ func (ro *Router) inferenceGate(ctx context.Context, a *store.Artifact, viewer s
 func (ro *Router) setInferenceConsent(w http.ResponseWriter, r *http.Request) {
 	if !inferencePrincipalAllowed(r.Context()) {
 		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if !ro.fromAppPage(r) {
+		writeError(w, http.StatusForbidden, "AI consent is given only in Exhibit itself")
 		return
 	}
 	viewer := stateViewer(r)

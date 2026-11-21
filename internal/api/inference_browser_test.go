@@ -34,10 +34,15 @@ func TestInferenceBridgeBrowser(t *testing.T) {
 	ro := newTestRouter(t)
 	rt := withPlatformInference(t, ro)
 	body := `<!doctype html><html><head><script>
+var windowReceivedAIResult = false;
+window.addEventListener('message', function (event) {
+  if (event.data?.__avInferenceResult) windowReceivedAIResult = true;
+});
 window.exhibit.ai.available().then(function (a) {
   localStorage.setItem('available', JSON.stringify(a));
   return window.exhibit.ai.complete({ prompt: 'Summarize' });
 }).then(function (text) {
+  localStorage.setItem('windowReceivedAIResult', String(windowReceivedAIResult));
   localStorage.setItem('answer', text);
 }, function (e) {
   localStorage.setItem('answer', 'error:' + e.code);
@@ -71,6 +76,8 @@ window.exhibit.ai.available().then(function (a) {
 	require.NoError(t, chromedp.Do(ctx, chromedp.Click(chromedp.CSS("#ai-allow"))))
 	require.Eventually(t, func() bool { return getState(t, ro, id)["answer"] != "" }, 10*time.Second, 50*time.Millisecond)
 	assert.Equal(t, "a summary", getState(t, ro, id)["answer"])
+	assert.Equal(t, "false", getState(t, ro, id)["windowReceivedAIResult"],
+		"AI responses stay on the requesting document's ports, off the navigable frame window")
 	assert.Equal(t, 1, rt.calls(), "one call, sent once")
 	a, err := ro.cfg.Store.GetArtifact(t.Context(), 1, id)
 	require.NoError(t, err)

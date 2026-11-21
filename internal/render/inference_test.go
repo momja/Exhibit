@@ -22,6 +22,8 @@ func TestAIStandInAndBridgePlacement(t *testing.T) {
 	require.Contains(t, private, aiStandIn)
 	require.Contains(t, private, aiBridge)
 	require.Less(t, strings.Index(private, aiStandIn), strings.Index(private, aiBridge), "the bridge replaces the stand-in, so it comes after it")
+	require.Regexp(t, `var AI_CHANNEL = "[A-Za-z0-9_-]{20,}";`, private, "the bridge carries this viewer's channel")
+	require.NotContains(t, private, "%AI_CHANNEL%")
 
 	widget := serveWidget(t, rd, "abc").Body.String()
 	require.Contains(t, widget, aiStandIn)

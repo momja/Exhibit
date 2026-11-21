@@ -21,7 +21,7 @@ import (
 type kindSpec struct {
 	timeout time.Duration
 	prepare func(payload json.RawMessage) (*prepared, error)
-	run     func(ctx context.Context, rt Runtime, job Job, req *prepared, meter func(Outcome)) (json.RawMessage, error)
+	run     func(ctx context.Context, rt Runtime, job Job, req *prepared, meter func(Outcome), gate func() error) (json.RawMessage, error)
 }
 
 // prepared is a validated payload.
@@ -171,11 +171,11 @@ func (r *completeRequest) context(extra ...completeMessage) json.RawMessage {
 	return out
 }
 
-func runComplete(ctx context.Context, rt Runtime, job Job, p *prepared, meter func(Outcome)) (json.RawMessage, error) {
+func runComplete(ctx context.Context, rt Runtime, job Job, p *prepared, meter func(Outcome), gate func() error) (json.RawMessage, error) {
 	req := p.complete
 	job.MaxTokens = req.MaxTokens
 	job.Context = req.context()
-	res, err := callOnce(ctx, rt, job, meter)
+	res, err := callOnce(ctx, rt, job, meter, gate)
 	if err != nil {
 		return nil, err
 	}
@@ -193,7 +193,7 @@ func runComplete(ctx context.Context, rt Runtime, job Job, p *prepared, meter fu
 		completeMessage{Role: "assistant", Content: res.Text},
 		completeMessage{Role: "user", Content: fmt.Sprintf(repairInstructionText, verr.Error())},
 	)
-	res, err = callOnce(ctx, rt, job, meter)
+	res, err = callOnce(ctx, rt, job, meter, gate)
 	if err != nil {
 		return nil, err
 	}
@@ -205,8 +205,15 @@ func runComplete(ctx context.Context, rt Runtime, job Job, p *prepared, meter fu
 }
 
 // callOnce runs one provider call, meters it, then maps its failure. The
-// order matters: a call that failed may still have been billed.
-func callOnce(ctx context.Context, rt Runtime, job Job, meter func(Outcome)) (Result, error) {
+// order matters: a call that failed may still have been billed. gate runs
+// first, before every paid call — a screen or a first answer may have used
+// the last of the allowance, and a repair must not start past it.
+func callOnce(ctx context.Context, rt Runtime, job Job, meter func(Outcome), gate func() error) (Result, error) {
+	if gate != nil {
+		if err := gate(); err != nil {
+			return Result{}, err
+		}
+	}
 	res, outcome, err := rt.Run(ctx, job)
 	meter(outcome)
 	if err != nil {
@@ -567,14 +574,14 @@ func prepareDecide(payload json.RawMessage) (*prepared, error) {
 	return &prepared{decide: &decideRequest{State: compactState, Questions: in.Questions}, screenText: screen.String()}, nil
 }
 
-func runDecide(ctx context.Context, rt Runtime, job Job, p *prepared, meter func(Outcome)) (json.RawMessage, error) {
+func runDecide(ctx context.Context, rt Runtime, job Job, p *prepared, meter func(Outcome), gate func() error) (json.RawMessage, error) {
 	req := p.decide
 	questions := map[string]any{}
 	for id, q := range req.Questions {
 		questions[id] = map[string]any{"type": q.Type, "instructions": q.Instructions, "criteria": q.Criteria}
 	}
 	job.Context, _ = json.Marshal(map[string]any{"state": req.State, "questions": questions})
-	res, err := callOnce(ctx, rt, job, meter)
+	res, err := callOnce(ctx, rt, job, meter, gate)
 	if err != nil {
 		return nil, err
 	}

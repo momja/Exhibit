@@ -145,6 +145,29 @@ func TestWorkerCompleteRoundTripReportsUsage(t *testing.T) {
 	}
 }
 
+func TestWorkerScreensThroughMockAndPreservesUsageOnFailure(t *testing.T) {
+	m := newMockProvider(t)
+	w := startTestWorker(t, m.URL)
+	for _, tc := range []struct {
+		model   string
+		text    string
+		wantErr bool
+	}{
+		{model: testChatModel, text: "Summarize a calendar event"},
+		{model: testDecisionModel, text: "Summarize a calendar event"},
+		{model: testChatModel, text: "mock-guard-garbage", wantErr: true},
+	} {
+		before := m.count()
+		verdict, err := w.Screen(deadline(t, 20*time.Second), ScreenJob{
+			Provider: "openrouter", Model: tc.model, APIKey: "test-guard-key", Text: tc.text,
+		})
+		if (err != nil) != tc.wantErr || verdict.Usage == nil || m.count() != before+1 {
+			t.Errorf("screen %s (%q) = %+v, %v, %d mock requests; want usage and one mock request",
+				tc.model, tc.text, verdict, err, m.count()-before)
+		}
+	}
+}
+
 func TestWorkerClassifyRoundTrip(t *testing.T) {
 	m := newMockProvider(t)
 	w := startTestWorker(t, m.URL)
@@ -161,7 +184,7 @@ func TestWorkerClassifyRoundTrip(t *testing.T) {
 			t.Errorf("outcome = %+v", o)
 		}
 	}
-	got, err = runDecide(deadline(t, 20*time.Second), w, Job{Kind: KindDecide, Provider: "openrouter", Model: testDecisionModel, APIKey: "key-A"}, p, meter)
+	got, err = runDecide(deadline(t, 20*time.Second), w, Job{Kind: KindDecide, Provider: "openrouter", Model: testDecisionModel, APIKey: "key-A"}, p, meter, nil)
 	if err != nil {
 		t.Fatalf("decide: %v", err)
 	}

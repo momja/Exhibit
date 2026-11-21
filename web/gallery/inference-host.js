@@ -16,8 +16,8 @@ import { viewerFetch, apiFetch } from './api-module.js';
  * artifact's promise with a stable code, so a tool can always degrade.
  *
  * It listens to every iframe marked data-ai-frame: the artifact page's frame,
- * the agent preview and a version preview. A frame is identified by its
- * window, never its origin, which is opaque.
+ * the agent preview and a version preview. The host checks both the frame's
+ * window and the channel shared with its artifact document.
  *
  *   connectInferenceHost({ artifactId: () => id, title: () => text })
  */
@@ -52,10 +52,6 @@ export function connectInferenceHost({ artifactId, title }) {
       if (frame.contentWindow === source) return frame;
     }
     return null;
-  }
-
-  function reply(frame, id, artifact, result) {
-    frame.contentWindow?.postMessage({ __avInferenceResult: true, artifactId: artifact, id, ...result }, '*');
   }
 
   function showBanner(key, text, withKeyLink = false) {
@@ -118,10 +114,8 @@ export function connectInferenceHost({ artifactId, title }) {
     return decision;
   }
 
-  async function handle(frame, d) {
+  async function handle(frame, d, reply) {
     const id = String(d.artifactId);
-    const callID = String(d.id);
-    if (!artifactId() || id !== artifactId()) return;
     const st = await stateFor(id);
     const usable = st.enabled && (st.owner || st.approved);
     const notAllowed = st.enabled && !st.owner && !st.approved;
@@ -129,12 +123,11 @@ export function connectInferenceHost({ artifactId, title }) {
     if (d.op === 'available') {
       // A tool that checks first never calls, so this is where a recipient
       // learns why its AI controls are off — in Exhibit's chrome, once.
-      if (notAllowed && (st.complete || st.decide)) showBanner('owner', OWNER_NOTE);
-      reply(frame, callID, id, { ok: true, value: { complete: Boolean(usable && st.complete), decide: Boolean(usable && st.decide) } });
+      if (notAllowed && (st.complete || st.decide || st.reason === 'no_key')) showBanner('owner', OWNER_NOTE);
+      reply({ ok: true, value: { complete: Boolean(usable && st.complete), decide: Boolean(usable && st.decide) } });
       return;
     }
-    if (d.op !== 'complete' && d.op !== 'decide') return;
-    const fail = (code, message) => reply(frame, callID, id, { ok: false, error: { code, message: message || REFUSED[code] || 'The AI request failed.' } });
+    const fail = (code, message) => reply({ ok: false, error: { code, message: message || REFUSED[code] || 'The AI request failed.' } });
     if (!st.enabled) { fail('unavailable'); return; }
     // Only the owner can change this, so it is said before anything the
     // viewer could fix, such as adding a key.
@@ -157,7 +150,7 @@ export function connectInferenceHost({ artifactId, title }) {
     }).catch(() => null);
     if (!res) { fail('provider_error', 'The AI request could not be sent.'); return; }
     const body = await res.json().catch(() => ({}));
-    if (res.ok) { reply(frame, callID, id, { ok: true, value: body.value }); return; }
+    if (res.ok) { reply({ ok: true, value: body.value }); return; }
     const err = body.error && typeof body.error === 'object' ? body.error : { code: 'provider_error' };
     if (err.code === 'limit_reached') showBanner('limit', err.message || 'The AI allowance is used up for this month.');
     if (err.code === 'no_key') showBanner('no_key', 'This tool tried to use AI, but you have not added an AI key yet.', true);
@@ -167,10 +160,21 @@ export function connectInferenceHost({ artifactId, title }) {
 
   function onMessage(e) {
     const d = e.data;
-    if (!d || d.__avInference !== true) return;
+    if (d?.__avInference !== true || e.ports.length !== 1) return;
+    const port = e.ports[0];
     const frame = frameFor(e.source);
-    if (!frame) return;
-    handle(frame, d);
+    const id = artifactId();
+    const channel = frame?.dataset.aiChannel;
+    // A replacement document shares the frame's window. The channel is
+    // inlined only in the authorized artifact render for this viewer.
+    if (!id || d.artifactId !== id || !channel || d.channel !== channel ||
+        (d.op !== 'available' && d.op !== 'complete' && d.op !== 'decide')) {
+      port.close();
+      return;
+    }
+    // Reply through the requesting document's port, even if the frame has
+    // since navigated. Only the readiness announcement uses the window.
+    handle(frame, d, result => port.postMessage(result)).finally(() => port.close());
   }
   window.addEventListener('message', onMessage);
   // The frame holds its calls until this says it is listening, so a call made

@@ -384,24 +384,26 @@ func (s *Service) Run(ctx context.Context, call Call) (json.RawMessage, error) {
 		return nil, err
 	}
 	defer release()
-	if p.paidBy == store.PaidByPlatform {
-		if err := s.checkSpend(ctx, call.ViewerID); err != nil {
-			return nil, err
-		}
-	}
 	ctx, cancel := context.WithTimeout(ctx, k.timeout)
 	defer cancel()
 	callID := "inference:" + uuid.NewString()
-	if p.paidBy == store.PaidByPlatform && s.cfg.Guardrail != nil {
-		if err := s.screen(ctx, call, callID, req.screenText); err != nil {
-			return nil, err
+	var gate func() error
+	if p.paidBy == store.PaidByPlatform {
+		gate = func() error { return s.checkSpend(ctx, call.ViewerID) }
+		if s.cfg.Guardrail != nil {
+			if err := gate(); err != nil {
+				return nil, err
+			}
+			if err := s.screen(ctx, call, callID, req.screenText); err != nil {
+				return nil, err
+			}
 		}
 	}
 	job := Job{Kind: call.Kind, Provider: p.cred.Provider, Model: model, APIKey: p.cred.APIKey}
 	meter := func(o Outcome) {
 		s.meter(call, callID, p, model, o)
 	}
-	return k.run(ctx, s.cfg.Runtime, job, req, meter)
+	return k.run(ctx, s.cfg.Runtime, job, req, meter, gate)
 }
 
 // screen runs the operator's guardrail over a platform-paid input. A screen

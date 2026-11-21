@@ -93,7 +93,7 @@ var (
 	ErrProvider = errors.New("provider error")
 )
 
-// decodeUsage reads Pi's usage shape. ok is false for an absent report.
+// decodeUsage reads Pi's usage shape and returns nil for an absent report.
 func decodeUsage(raw json.RawMessage) *Usage {
 	if len(raw) == 0 || string(raw) == "null" {
 		return nil
@@ -104,7 +104,8 @@ func decodeUsage(raw json.RawMessage) *Usage {
 		CacheRead  float64 `json:"cacheRead"`
 		CacheWrite float64 `json:"cacheWrite"`
 		Cost       struct {
-			Total float64 `json:"total"`
+			Total             float64 `json:"total"`
+			TotalFromProvider bool    `json:"totalFromProvider"`
 		} `json:"cost"`
 	}
 	if json.Unmarshal(raw, &wire) != nil {
@@ -117,8 +118,15 @@ func decodeUsage(raw json.RawMessage) *Usage {
 		return int64(math.Round(f))
 	}
 	u := &Usage{Input: count(wire.Input), Output: count(wire.Output), CacheRead: count(wire.CacheRead), CacheWrite: count(wire.CacheWrite)}
-	if wire.Cost.Total > 0 && !math.IsInf(wire.Cost.Total, 0) {
+	if wire.Cost.Total >= 0 && !math.IsInf(wire.Cost.Total, 0) {
 		u.Cost.Total = wire.Cost.Total
+		u.Cost.TotalFromProvider = wire.Cost.TotalFromProvider
+	}
+	// Pi starts every call with a zero-filled usage object and keeps it when
+	// the stream fails before the provider reports anything. With no explicit
+	// provider cost, the zero-filled placeholder means unknown spend.
+	if u.Input == 0 && u.Output == 0 && u.CacheRead == 0 && u.CacheWrite == 0 && u.Cost == (UsageCost{}) {
+		return nil
 	}
 	return u
 }
