@@ -4,6 +4,8 @@ import (
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
+	"fmt"
+	"html/template"
 	"io/fs"
 	"net/http"
 	"strings"
@@ -47,6 +49,23 @@ var assetFiles, assetVersion = hashAssets()
 // below /assets/ (e.g. "gallery/index.js").
 func assetURL(name string) string {
 	return versionedAssetPrefix + assetVersion + "/" + name
+}
+
+// inlineSVG is an embedded SVG's markup, for a page that must draw it inline
+// rather than through <img>: only inline SVG takes the text's currentColor and
+// follows dark mode (the agent's boiling indicator, Exh-s8yu). It is trusted
+// because the build produced it, which is also why a missing file is an error
+// rather than an empty icon: the page fails to render instead of shipping one
+// without it.
+func inlineSVG(name string) (template.HTML, error) {
+	if !strings.HasSuffix(name, ".svg") {
+		return "", fmt.Errorf("inlineSVG: %s is not an SVG", name)
+	}
+	b, err := fs.ReadFile(assetsFS(), name)
+	if err != nil {
+		return "", fmt.Errorf("inlineSVG: %w (run make assets)", err)
+	}
+	return template.HTML(strings.TrimSpace(string(b))), nil
 }
 
 func assetsFS() fs.FS {

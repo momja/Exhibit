@@ -1,11 +1,14 @@
 {
   "name": "artifact-viewer-icons",
   "private": true,
-  "description": "Vendors the Phosphor Icons regular-weight CSS + webfont into internal/api/assets/phosphor (see `make assets`), so the gallery serves icons from the app origin instead of a third-party CDN. Node is a build-time-only dependency.",
+  "description": "Vendors the Phosphor Icons regular-weight CSS + webfont into internal/api/assets/phosphor (see `make assets`), so the gallery serves icons from the app origin instead of a third-party CDN, and bakes the agent's boiling pencil indicator (boil.mjs) beside them. Node is a build-time-only dependency.",
   "scripts": {
-    "build": "node build.mjs"
+    "build": "node build.mjs",
+    "test": "node --test boil.test.mjs"
   },
   "devDependencies": {
-    "@phosphor-icons/web": "^2.1.1"
+    "@phosphor-icons/core": "2.1.1",
+    "@phosphor-icons/web": "^2.1.1",
+    "svg-path-properties": "2.2.0"
   }
 }
