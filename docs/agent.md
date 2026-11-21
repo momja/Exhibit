@@ -1050,6 +1050,17 @@ real pi sidecar against it (`internal/api/agent_pipeline_test.go` and
 to end with no real credential. The exhibit extension registers the provider only
 when `MOCK_LLM_URL` is set.
 
+The same handler supports the inference spike: a last user message containing
+`mock-inference` returns `OK` with fixed SSE token usage and reported cost;
+`/systemone`, `/v1/systemone` and `/api/v1/systemone` return canned positive
+sentiment answers for wire-level `noul`, `choice` (positive/negative criteria)
+and `score` questions with fixed token usage. Chat also accepts `/api/v1`.
+The inference markers `mock-inference-slow`, `mock-inference-http-error` and
+`mock-inference-malformed` exercise transport cancellation, HTTP failure and
+billed malformed classifier answers respectively. These are explicit test
+scripts, not model accuracy or live API compatibility tests. See the
+[spike report](pi-inference-registry-spike.md) for real pinned-registry tests.
+
 ### Pi runtime compatibility
 
 The Dockerfile pins [**Pi Bolt 1.0.8**](https://github.com/opensec-git/Pi-Bolt/releases/tag/bolt-v1.0.8),

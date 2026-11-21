@@ -1,0 +1,23 @@
+=== RUN   TestWorkerConcurrencyCredentialsUsage
+    worker_test.go:108: 12 overlapping mixed calls; peak=12; credential mismatches=0
+--- PASS: TestWorkerConcurrencyCredentialsUsage (0.51s)
+=== RUN   TestWorkerCancelOnlyOneRequest
+=== RUN   TestWorkerCancelOnlyOneRequest/complete
+=== RUN   TestWorkerCancelOnlyOneRequest/classify
+--- PASS: TestWorkerCancelOnlyOneRequest (1.03s)
+    --- PASS: TestWorkerCancelOnlyOneRequest/complete (0.51s)
+    --- PASS: TestWorkerCancelOnlyOneRequest/classify (0.51s)
+=== RUN   TestWorkerFailClosedRetainsUsage
+--- PASS: TestWorkerFailClosedRetainsUsage (0.22s)
+=== RUN   TestWorkerCrashWedgeRestart
+=== RUN   TestWorkerCrashWedgeRestart/crash
+    worker_test.go:269: crash: fail pending calls 9.778 ms; fresh worker ready 165.194 ms; recovery call succeeded
+=== RUN   TestWorkerCrashWedgeRestart/wedge
+    worker_test.go:269: wedge: fail pending calls 282.376 ms; fresh worker ready 194.847 ms; recovery call succeeded
+--- PASS: TestWorkerCrashWedgeRestart (1.01s)
+    --- PASS: TestWorkerCrashWedgeRestart/crash (0.35s)
+    --- PASS: TestWorkerCrashWedgeRestart/wedge (0.66s)
+=== RUN   TestWorkerBoundsAdmission
+--- PASS: TestWorkerBoundsAdmission (0.53s)
+PASS
+ok  	github.com/momja/Exhibit/scripts/pi-inference-spike	3.337s
