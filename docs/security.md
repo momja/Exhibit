@@ -1341,6 +1341,9 @@ possibly including saved data, to a third party. So:
   only from a marked frame with the channel for its artifact and viewer. Each
   reply travels through a message port held by the requesting document, so a
   page that replaces the document in the same frame cannot receive its results.
+  Browser inference requests carry that channel to the server, which checks it
+  against the current authenticated viewer. An artifact left open during an
+  account switch cannot use the new account's consent or allowance.
 - **The viewer pays, never the owner.** The core resolves the payer from the
   request's principal alone. A recipient without a key gets `no_key`, never the
   owner's key or allowance.

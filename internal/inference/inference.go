@@ -411,7 +411,7 @@ func (s *Service) Run(ctx context.Context, call Call) (json.RawMessage, error) {
 func (s *Service) screen(ctx context.Context, call Call, callID, text string) error {
 	g := s.cfg.Guardrail
 	verdict, err := s.cfg.Runtime.Screen(ctx, ScreenJob{Provider: g.Provider, Model: g.Model, APIKey: g.APIKey, Text: text})
-	if verdict.Usage != nil {
+	if verdict.Dispatched || verdict.Usage != nil {
 		s.record(store.AgentUsage{OwnerID: call.ViewerID, SessionID: callID, Provider: g.Provider, Model: g.Model,
 			PaidBy: store.PaidByPlatform, Source: store.UsageSourceGuardrail, ArtifactID: call.ArtifactID},
 			verdict.Usage)

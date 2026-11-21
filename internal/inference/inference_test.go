@@ -370,12 +370,15 @@ func TestGuardrailScreensPlatformCallsAndFailsClosed(t *testing.T) {
 	if rt.calls() != 0 || len(led.rows) != 1 || led.rows[0].Source != store.UsageSourceGuardrail {
 		t.Fatalf("calls=%d rows=%+v", rt.calls(), led.rows)
 	}
-	rt.verdict, rt.screenEr = ScreenVerdict{}, ErrProvider
+	rt.verdict, rt.screenEr = ScreenVerdict{Dispatched: true}, ErrProvider
 	if _, err := s.Run(context.Background(), completeCall(owner)); code(err) != CodeProviderError {
 		t.Fatalf("screen failure = %v", err)
 	}
 	if rt.calls() != 0 {
 		t.Fatal("a failed screen let the call through")
+	}
+	if len(led.rows) != 2 || led.rows[1].CostSource != store.CostSourceNone {
+		t.Fatalf("failed screen's unknown spend was not recorded: %+v", led.rows)
 	}
 }
 

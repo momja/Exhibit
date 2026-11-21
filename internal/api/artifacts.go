@@ -605,12 +605,6 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// share_state_mode is an enum the render path branches on (av-6xjd), so an
-	// unrecognized value is not a bad label — it is a branch nobody wrote,
-	// deciding whose state rows a recipient writes. Checked here for the same
-	// reason the approval flags are: the store refuses it too, and a rule held
-	// in one layer alone is a rule the other layer can later be given a way
-	// around.
 	// AI is the one approval that spends money — the viewer's — so it is the
 	// owner's own decision in Exhibit's chrome, never an agent's (Exh-zbwk).
 	if _, ok := updates["inference_approved"]; ok {
@@ -620,6 +614,12 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 		}
 		if !ro.fromAppPage(r) {
 			writeError(w, http.StatusForbidden, "inference_approved is set only in Exhibit itself")
+			return
+		}
+		// The bridge supplies its page-load identity. The manual editor can
+		// save this field on an artifact owned by the current account.
+		if r.Header.Get(inferenceChannelHeader) != "" && !ro.inferenceViewerMatches(r, id) {
+			writeError(w, http.StatusForbidden, "Reload the page to change AI approval as the signed-in viewer")
 			return
 		}
 	}
@@ -634,6 +634,8 @@ func (ro *Router) updateArtifact(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// The render path branches on this enum to choose whose state rows a
+	// recipient writes. Reject an unrecognized mode here and in the store.
 	if v, ok := updates["share_state_mode"]; ok {
 		mode, isString := v.(string)
 		if !isString || !store.ValidShareStateMode(mode) {

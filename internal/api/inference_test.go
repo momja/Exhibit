@@ -147,6 +147,7 @@ func TestInferenceRefusesPrincipalsThatCannotPay(t *testing.T) {
 func TestInferenceRefusesPublicVisitorsAndAgents(t *testing.T) {
 	ctx := context.Background()
 	for _, p := range []Principal{
+		{OwnerID: 1, Kind: PrincipalNone},
 		{OwnerID: 1, Kind: PrincipalPublic, ReadOnly: true},
 		{OwnerID: 1, Kind: PrincipalAgentGrant},
 	} {
@@ -265,9 +266,57 @@ func TestInferenceRefusesRequestsFromAnotherPage(t *testing.T) {
 	w := postInference(in.ro, in.granted, in.cookieOne, func(r *http.Request) {
 		r.Header.Set("Origin", in.ro.cfg.AppOrigin)
 		r.Header.Set("Sec-Fetch-Site", "same-origin")
+		r.Header.Set(inferenceChannelHeader, in.ro.tokens.AIChannel(in.granted, in.ownerOne))
 	})
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	assert.Equal(t, 1, rt.calls())
+}
+
+func TestInferenceRejectsAnArtifactPageFromBeforeAnAccountSwitch(t *testing.T) {
+	in := newGrantedInstance(t)
+	rt := withPlatformInference(t, in.ro)
+	ctx := t.Context()
+	require.NoError(t, in.ro.cfg.Store.UpdateArtifact(ctx, in.ownerOne, in.granted, map[string]any{"inference_approved": true}))
+	ownerChannel := in.ro.tokens.AIChannel(in.granted, in.ownerOne)
+	recipientChannel := in.ro.tokens.AIChannel(in.granted, in.ownerTwo)
+	path := "/api/artifacts/" + in.granted
+
+	fromPage := func(channel string) func(*http.Request) {
+		return func(r *http.Request) {
+			r.Header.Set("Sec-Fetch-Site", "same-origin")
+			if channel != "" {
+				r.Header.Set(inferenceChannelHeader, channel)
+			}
+		}
+	}
+	request := func(method, path, channel, body string, cookie *http.Cookie) int {
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req.AddCookie(cookie)
+		req.Header.Set("Content-Type", "application/json")
+		fromPage(channel)(req)
+		w := httptest.NewRecorder()
+		in.ro.ServeHTTP(w, req)
+		return w.Code
+	}
+	consent := path + "/inference/consent"
+	assert.Equal(t, http.StatusForbidden, request(http.MethodGet, path+"/inference", ownerChannel, "", in.cookieTwo))
+	assert.Equal(t, http.StatusForbidden, request(http.MethodPut, consent, ownerChannel, "", in.cookieTwo))
+	allowed, err := in.ro.cfg.Store.HasInferenceConsent(ctx, store.ViewerID(in.ownerTwo), in.granted)
+	require.NoError(t, err)
+	assert.False(t, allowed)
+
+	require.Equal(t, http.StatusNoContent, request(http.MethodPut, consent, recipientChannel, "", in.cookieTwo))
+	assert.Equal(t, http.StatusForbidden, request(http.MethodDelete, consent, ownerChannel, "", in.cookieTwo))
+	assert.Equal(t, http.StatusForbidden, request(http.MethodPatch, path, recipientChannel, `{"inference_approved":false}`, in.cookieOne))
+	for _, channel := range []string{ownerChannel, ""} {
+		w := postInference(in.ro, in.granted, in.cookieTwo, fromPage(channel))
+		assert.Equal(t, http.StatusForbidden, w.Code, w.Body.String())
+	}
+	assert.Zero(t, rt.calls())
+
+	w := postInference(in.ro, in.granted, in.cookieTwo, fromPage(recipientChannel))
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Equal(t, 1, rt.calls(), "the current page can use both approvals")
 }
 
 // Every AI frame carries the channel its document inlines for this viewer, so

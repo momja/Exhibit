@@ -11,10 +11,11 @@ document.addEventListener('click', async event => {
   const button = event.target.closest('[data-ai-revoke]');
   if (!button) return;
   const id = encodeURIComponent(button.dataset.aiRevoke);
+  const headers = { 'X-Exhibit-Inference-Channel': button.dataset.aiChannel };
   button.disabled = true;
   const res = await (button.dataset.aiOwned === 'true'
-    ? apiFetch('/api/artifacts/' + id, { method: 'PATCH', body: JSON.stringify({ inference_approved: false }) })
-    : viewerFetch('/api/artifacts/' + id + '/inference/consent', { method: 'DELETE' })).catch(() => null);
+    ? apiFetch('/api/artifacts/' + id, { method: 'PATCH', headers, body: JSON.stringify({ inference_approved: false }) })
+    : viewerFetch('/api/artifacts/' + id + '/inference/consent', { method: 'DELETE', headers })).catch(() => null);
   const el = status();
   if (!res || !res.ok) {
     button.disabled = false;

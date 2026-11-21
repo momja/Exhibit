@@ -76,8 +76,9 @@ type ScreenJob struct {
 
 // ScreenVerdict is a screen's answer and what it spent.
 type ScreenVerdict struct {
-	Allowed bool
-	Usage   *Usage
+	Allowed    bool
+	Dispatched bool
+	Usage      *Usage
 }
 
 // Runtime errors the core maps to stable codes.
