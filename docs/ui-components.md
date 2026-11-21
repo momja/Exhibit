@@ -356,16 +356,21 @@ partial. The search covers owned artifacts and incoming account grants, using
 the existing title, visible source and tag index with one stable paginated order.
 Shared cards retain recipient-scoped widget URLs and omit owner actions. A blank
 query shows a prompt. Search does not inherit the source space’s filters.
-Owned cards carry `/search?q=…` as their editor return destination. Tab clicks
-and the `/` shortcut focus the Search field after the successful htmx swap;
-history restoration keeps its existing focus behavior.
+Owned cards carry `/search?q=…` as their editor return destination. Opening
+Search from another tab leaves the field unfocused. Clicking the active Search
+tab scrolls to the field and focuses it without replacing the query or results.
+The `/` shortcut still focuses the search field.
 
 Each content root uses `gallery-space`. Its connection initializes widget
 visibility, duplication and edit-return behavior; disconnect releases their
 observers, listeners and timers. `event-scope.js` groups explicit listener
 cleanup, including listeners on a stable ancestor. Pending mutations may
 finish on the server after disconnect, but their callbacks cannot refresh or
-focus a different space. The new destination always reloads its data.
+focus a different space. Returning to an unfiltered tab reuses its recent
+server-rendered fragment and restores the position of a visible card or
+activity item. A single htmx request refreshes the tab in the background.
+The refresh waits while the reader is interacting or if the incoming layout
+cannot keep the visible item at the same viewport position.
 
 The `filter-sheet` controller lives on the shell so header triggers and the
 content dialog share a scope. Its targets may disappear when a space has no

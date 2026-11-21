@@ -52,12 +52,31 @@ func TestSearchTabBrowser(t *testing.T) {
 				run(`document.querySelector('.gallery-spaces a[href="/search"]').click()`)
 			}
 			poll(`location.pathname === '/search' && document.querySelector('.gallery-page-search [data-gallery-query]')`)
-			check(`document === originalDocument && document.querySelector('header') === originalHeader && !document.querySelector('header [data-gallery-query]') && document.querySelector('.gallery-spaces [aria-current]').getAttribute('href') === '/search' && document.querySelector('.card') && document.activeElement.matches('[data-gallery-query]')`)
+			check(`document === originalDocument && document.querySelector('header') === originalHeader && !document.querySelector('header [data-gallery-query]') && document.querySelector('.gallery-spaces [aria-current]').getAttribute('href') === '/search' && document.querySelector('.card')`)
+			if width == 390 {
+				poll(`document.activeElement.matches('[data-gallery-query]')`)
+			} else {
+				check(`!document.activeElement.matches('[data-gallery-query]')`)
+				run(`document.querySelector('.gallery-spaces a[href="/"]').click()`)
+				poll(`location.pathname === '/' && document.querySelector('#starred-gallery')`)
+				run(`document.querySelector('.gallery-spaces a[href="/search"]').click()`)
+				poll(`location.pathname === '/search' && document.querySelector('.gallery-page-search [data-gallery-query]')`)
+				check(`!document.activeElement.matches('[data-gallery-query]')`)
+			}
 			run(`document.querySelector('[data-gallery-query]').value='chart';document.querySelector('[data-gallery-query]').dispatchEvent(new Event('input',{bubbles:true}))`)
 			poll(`location.search === '?q=chart' && document.querySelectorAll('.card').length >= 24`)
 			run(`document.querySelector('[data-gallery-page]')?.click()`)
 			poll(`document.querySelectorAll('.card').length === 31`)
 			check(`document.querySelector('[data-href="/artifacts/owned-tool"] .card-actions') && document.querySelector('.card-by') && !document.querySelector('.card-by').closest('.card').querySelector('.capability-cluster, a[href*="/edit"]') && document.documentElement.scrollWidth <= innerWidth`)
+			run(`
+				window.searchField = document.querySelector('[data-gallery-query]');
+				window.searchHistoryLength = history.length;
+				searchField.blur();
+				window.scrollTo(0, document.documentElement.scrollHeight);
+			`)
+			check(`searchField.getBoundingClientRect().bottom < 0`)
+			run(`document.querySelector('.gallery-spaces a[href="/search"]').click()`)
+			check(`document.activeElement === searchField && searchField.getBoundingClientRect().top >= document.querySelector('header').getBoundingClientRect().bottom && searchField.getBoundingClientRect().bottom <= innerHeight && searchField.value === 'chart' && location.search === '?q=chart' && history.length === searchHistoryLength && document.querySelectorAll('.card').length === 31`)
 			// Navigate away/back through htmx; the query and correct selection return.
 			run(`document.querySelector('.gallery-spaces a[href="/shared"]').click()`)
 			poll(`location.pathname === '/shared' && document.querySelector('#shared-gallery')`)

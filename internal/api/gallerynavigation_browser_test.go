@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -145,7 +147,8 @@ func TestGallerySpaceNavigationBrowser(t *testing.T) {
 			poll(`document.querySelector('[data-duplicate-dialog]').open`)
 			run(`document.querySelector('[data-duplicate-dialog] form').requestSubmit()`)
 			poll(`!document.querySelector('[data-duplicate-dialog]').open`)
-			visit("/search")
+			run(`document.querySelector('.gallery-filter-chips [data-gallery-filter]').click()`)
+			poll(`location.pathname === '/search' && location.search === ''`)
 			poll(`Array.from(document.querySelectorAll('.card-title')).some(a=>a.textContent==='Owned tool (copy)')`)
 			run(`document.body.dispatchEvent(new KeyboardEvent('keydown',{key:'/',bubbles:true}))`)
 			check(`document.activeElement.matches('[data-gallery-query]')`)
@@ -233,15 +236,20 @@ func TestGallerySpaceNavigationRacesBrowser(t *testing.T) {
 	check(`location.pathname === '/' && document.querySelectorAll('.card').length === 0 && !document.querySelector('.card-owner-name')`)
 	// Two space requests in quick succession: the last destination wins even
 	// if the first request finishes reading its body afterwards.
-	run(`hold(url=>url==='/shared','body');document.querySelector('.gallery-spaces a[href="/shared"]').click()`)
+	run(`hold(url=>url==='/activity','body');document.querySelector('.gallery-spaces a[href="/activity"]').click()`)
 	poll(`typeof release === 'function'`)
+	// The tab bar answers the click while the content is still in flight: the
+	// destination is marked current and the outgoing results step back. Without
+	// this the click produces no visible change at all until the response
+	// lands, which is most of what made a switch feel slow.
+	check(`document.querySelector('.gallery-spaces a[href="/activity"]').getAttribute('aria-current') === 'page' && document.querySelector('#gallery-shell').hasAttribute('data-gallery-pending') && document.querySelector('[data-gallery-results]') !== null`)
 	visit("/search")
 	run(`release();window.fetch=nativeFetch`)
 	poll(`released`)
-	check(`location.pathname === '/search' && document.querySelector('[data-gallery-search]').getAttribute('hx-get') === '/partials/gallery-grid/search'`)
+	check(`location.pathname === '/search' && document.querySelector('[data-gallery-search]').getAttribute('hx-get') === '/partials/gallery-grid/search' && !document.querySelector('#gallery-shell').hasAttribute('data-gallery-pending')`)
 	// Back interrupts an outstanding space request and restores the old URL
 	// through the same region, without replacing the header.
-	run(`hold(url=>url==='/shared','body');document.querySelector('.gallery-spaces a[href="/shared"]').click()`)
+	run(`hold(url=>url==='/activity','body');document.querySelector('.gallery-spaces a[href="/activity"]').click()`)
 	poll(`typeof release === 'function'`)
 	run(`history.back()`)
 	poll(`location.pathname === '/' && document.querySelector('.gallery-spaces [aria-current]').getAttribute('href') === '/'`)
@@ -249,10 +257,10 @@ func TestGallerySpaceNavigationRacesBrowser(t *testing.T) {
 	poll(`released`)
 	check(`document.querySelector('header') === originalHeader && document.querySelector('[data-clerk-target="mount"] button') === originalButton && clerkCalls.mount === 1 && clerkCalls.reload === 1 && clerkCalls.unmount === 0`)
 	// Destination failures retain a coherent current space and expose a retry.
-	run(`window.fetch=(url,options)=>url==='/shared'?Promise.resolve(new Response('private server failure',{status:500})):nativeFetch(url,options);document.querySelector('.gallery-spaces a[href="/shared"]').click()`)
+	run(`window.fetch=(url,options)=>url==='/activity'?Promise.resolve(new Response('private server failure',{status:500})):nativeFetch(url,options);document.querySelector('.gallery-spaces a[href="/activity"]').click()`)
 	poll(`!document.querySelector('[data-gallery-navigation-error]').hidden`)
 	check(`location.pathname === '/' && document.querySelector('.gallery-spaces [aria-current]').getAttribute('href') === '/' && !document.body.textContent.includes('private server failure')`)
-	run(`window.fetch=(url,options)=>url==='/shared'?Promise.reject(new TypeError('offline')):nativeFetch(url,options);document.querySelector('.gallery-spaces a[href="/shared"]').click()`)
+	run(`window.fetch=(url,options)=>url==='/activity'?Promise.reject(new TypeError('offline')):nativeFetch(url,options);document.querySelector('.gallery-spaces a[href="/activity"]').click()`)
 	poll(`!document.querySelector('[data-gallery-navigation-error]').hidden`)
 	run(`window.fetch=nativeFetch`)
 	visit("/shared")
@@ -267,6 +275,142 @@ func TestGallerySpaceNavigationRacesBrowser(t *testing.T) {
    link.dispatchEvent(event);
  }`)
 	check(`modifiedRequests === 0 && location.pathname === '/shared'`)
+}
+
+func TestGalleryCachedTabScrollBrowser(t *testing.T) {
+	app, in := galleryNavigationApp(t)
+	browser, err := chromium.New(chromiumtest.Start(t))
+	require.NoError(t, err)
+	ctx, cancel, err := browser.Tab(context.Background())
+	require.NoError(t, err)
+	defer cancel()
+	ctx, cancel = context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	_, err = chromedp.Call(ctx, emulation.SetDeviceMetricsOverride, emulation.SetDeviceMetricsOverrideParams{Width: 390, Height: 844, DeviceScaleFactor: 1, Mobile: true})
+	require.NoError(t, err)
+	run := func(js string) {
+		t.Helper()
+		require.NoError(t, chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](js)))
+	}
+	poll := func(js string) {
+		t.Helper()
+		require.NoError(t, chromedp.Do(ctx, chromedp.Poll[chromedp.Void](js, chromedp.WithPollingTimeout(8*time.Second))), js)
+	}
+	screenshot := func(name string) {
+		t.Helper()
+		if dir := os.Getenv("GALLERY_SCREENSHOT_DIR"); dir != "" {
+			require.NoError(t, os.MkdirAll(dir, 0755))
+			shot, err := chromedp.Run(ctx, chromedp.CaptureScreenshot())
+			require.NoError(t, err)
+			require.NoError(t, os.WriteFile(filepath.Join(dir, name+".png"), shot, 0644))
+		}
+	}
+	require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(app.URL+"/shared")))
+	poll(`document.querySelector('[data-gallery-page][data-htmx-powered]') && window.clerkCalls?.mount === 1`)
+	run(`document.querySelector('[data-gallery-page]').click()`)
+	poll(`document.querySelectorAll('.card').length === 32`)
+	run(`
+		window.cards = () => [...document.querySelectorAll('.card')];
+		window.anchorKey = cards()[25].dataset.href;
+		window.anchor = () => cards().find(card => card.dataset.href === anchorKey);
+		window.freshKey = '/artifacts/fresh-share';
+		window.fresh = () => cards().some(card => card.dataset.href === freshKey);
+		window.visit = path => document.querySelector('.gallery-spaces a[href="'+path+'"]').click();
+		window.nativeFetch = window.fetch.bind(window);
+		window.holdShared = () => {
+			window.release = undefined;
+			window.sharedRequests = 0;
+			window.fetch = async (url, options) => {
+				const response = await nativeFetch(url, options);
+				if (!url.startsWith('/shared')) return response;
+				const html = await response.text();
+				sharedRequests++;
+				await new Promise(resolve => { window.release = resolve; });
+				return new Response(html, {status: response.status, headers: response.headers});
+			};
+		};
+		// Part of the card above the anchor is visible too. Use the first
+		// visible card so this assertion matches the reader's leading row.
+		window.scrollTo(0, scrollY + anchor().getBoundingClientRect().top + 20);
+		window.originalOffset = anchor().getBoundingClientRect().top;
+		window.originalScroll = scrollY;
+		window.track = () => {
+			if (location.pathname === '/shared') {
+				window.offsets.push(anchor()?.getBoundingClientRect().top ?? null);
+			}
+			window.animationFrame = requestAnimationFrame(track);
+		};
+	`)
+	poll(`Math.abs(originalOffset + 20) < 1 && document.querySelector('#gallery-shell').hasAttribute('data-chrome-hidden')`)
+	run(`visit('/activity')`)
+	poll(`location.pathname === '/activity' && scrollY === 0`)
+
+	// Insert one item and remove two ahead of the anchor. Its scroll offset
+	// has to change, while its viewport offset has to stay exactly the same.
+	added := seedOwnedArtifact(t, in.ro, in.ownerOne, "fresh-share", "Fresh share", "source", "state")
+	_, err = in.ro.cfg.Store.CreateGrant(ctx, in.ownerOne, added, in.ownerTwo)
+	require.NoError(t, err)
+	for _, id := range []string{"shared-029", "shared-028"} {
+		require.NoError(t, in.ro.cfg.Store.DeleteGrant(ctx, in.ownerOne, id, in.ownerTwo))
+	}
+	run(`holdShared(); window.offsets = []; track(); visit('/shared');`)
+	poll(`typeof release === 'function' && location.pathname === '/shared' && !fresh() && cards().length === 32 && offsets.length >= 3 && !document.querySelector('#gallery-shell').getAnimations({subtree: true}).length`)
+	screenshot("cached-tab-before-refresh")
+	run(`release()`)
+	poll(`fresh() && cards().length === 31 && offsets.length >= 8 && scrollY < originalScroll && sharedRequests === 1 && location.search === ''`)
+	// Sample several frames after the swap too, catching a delayed native
+	// anchor adjustment or a late widget/layout shift.
+	run(`window.settledAt = offsets.length`)
+	poll(`offsets.length >= settledAt + 5`)
+	run(`cancelAnimationFrame(animationFrame)`)
+	offsets, err := chromedp.Run(ctx, chromedp.Evaluate[[]*float64](`offsets`))
+	require.NoError(t, err)
+	for i, offset := range offsets {
+		require.NotNil(t, offset, "anchor present on frame %d", i)
+		require.InDelta(t, -20, *offset, 1, "anchor position on frame %d", i)
+	}
+	screenshot("cached-tab-after-refresh")
+
+	// If the response can't fit the viewport anchor, keep the current view
+	// until the reader scrolls to a position where the update fits.
+	run(`visit('/activity')`)
+	poll(`location.pathname === '/activity'`)
+	key, err := chromedp.Run(ctx, chromedp.Evaluate[string](`anchorKey`))
+	require.NoError(t, err)
+	for i := range 28 {
+		id := fmt.Sprintf("shared-%03d", i)
+		if "/artifacts/"+id != key {
+			require.NoError(t, in.ro.cfg.Store.DeleteGrant(ctx, in.ownerOne, id, in.ownerTwo))
+		}
+	}
+	require.NoError(t, in.ro.cfg.Store.DeleteGrant(ctx, in.ownerOne, added, in.ownerTwo))
+	require.NoError(t, in.ro.cfg.Store.DeleteGrant(ctx, in.ownerOne, in.granted, in.ownerTwo))
+	require.NoError(t, in.ro.cfg.Store.DeleteGrant(ctx, in.ownerTwo, in.artifactTwo, in.ownerOne))
+	run(`holdShared(); visit('/shared')`)
+	poll(`typeof release === 'function' && location.pathname === '/shared' && cards().length === 31`)
+	run(`
+		window.refreshFinished = false;
+		document.addEventListener('htmx:finally:request', event => {
+			if (event.detail.ctx.galleryRefresh?.path === '/shared') refreshFinished = true;
+		});
+		release();
+	`)
+	poll(`refreshFinished && Math.abs(anchor().getBoundingClientRect().top - originalOffset) < 1 && cards().length === 31`)
+	run(`window.scrollTo(0, 0)`)
+	poll(`cards().length === 1 && anchor() && scrollY === 0`)
+
+	// A response already read from the network can arrive after navigation,
+	// even when the outgoing tab's request was aborted.
+	run(`visit('/activity')`)
+	poll(`location.pathname === '/activity'`)
+	_, err = in.ro.cfg.Store.CreateGrant(ctx, in.ownerOne, added, in.ownerTwo)
+	require.NoError(t, err)
+	run(`holdShared(); visit('/shared')`)
+	poll(`typeof release === 'function' && location.pathname === '/shared' && cards().length === 1`)
+	run(`visit('/activity')`)
+	poll(`location.pathname === '/activity'`)
+	run(`refreshFinished = false; release()`)
+	poll(`refreshFinished && location.pathname === '/activity' && document.querySelector('.activity-heading') && cards().length === 0`)
 }
 
 func TestGallerySpaceNavigationWithoutJSBrowser(t *testing.T) {

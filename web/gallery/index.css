@@ -159,6 +159,21 @@ main{padding:var(--page-top) var(--page-gutter)}
 .gallery-empty .empty-hint{margin:0;max-width:40ch;font-weight:400;color:var(--color-muted);font-size:.875rem;line-height:1.6}
 .gallery-search-feedback{display:none;margin-bottom:12px;font-size:.875rem;color:var(--color-muted)}
 #gallery-shell:has(.search-row.htmx-request) .gallery-search-feedback{display:block}
+
+/* A space switch re-renders the whole content region, so the only thing that
+ * can acknowledge the click before the response is the tab bar itself. The rail
+ * stays crisp and clickable; the results it is about to replace step back.
+ * gallery-controller.js sets and clears the flag around the request.
+ *
+ * The dim waits 150ms before it starts, so a switch that comes back quickly
+ * never flickers — the flag is cleared before the fade would be visible. The
+ * rule that applies once it is cleared carries no delay, so the incoming
+ * content is not held at 40% opacity while it appears. */
+#gallery-shell[data-gallery-pending] [data-gallery-results]{opacity:.4;transition:opacity .12s ease .15s}
+#gallery-shell:not([data-gallery-pending]) [data-gallery-results]{transition:opacity .12s ease}
+@media(prefers-reduced-motion:reduce){
+  #gallery-shell[data-gallery-pending] [data-gallery-results]{transition:none}
+}
 @media(max-width:767px){
   .grid{gap:12px}
   .gallery-empty{padding:40px 16px}
