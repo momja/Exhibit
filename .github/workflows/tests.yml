@@ -55,6 +55,11 @@ jobs:
         if: steps.changes.outputs.run_tests == 'true'
         with:
           node-version: '24'
+      - name: Install font build dependencies
+        if: steps.changes.outputs.run_tests == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends python3-fonttools python3-brotli
       - name: Build the application and embedded assets
         if: steps.changes.outputs.run_tests == 'true'
         run: make build
