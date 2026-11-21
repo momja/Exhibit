@@ -30,21 +30,21 @@ const REFUSED = {
 export function connectInferenceHost({ artifactId, title }) {
   const dialog = document.getElementById('ai-modal');
   const banner = document.getElementById('ai-banner');
-  const states = new Map(); // artifact id -> Promise<state>
-  const decisions = new Map(); // artifact id -> Promise<boolean> while asking
+  const states = new Map(); // viewer/artifact channel -> Promise<state>
+  const decisions = new Map(); // viewer/artifact channel -> Promise<boolean> while asking
   const bannered = new Set();
   // "Not now" holds for this page load: a tool that calls again at once, or in
   // a loop, is refused without raising the dialog again. Reloading the page,
   // or allowing it under Edit → Permissions or Settings, asks afresh.
   const declined = new Set();
 
-  function stateFor(id, fresh = false) {
-    if (fresh || !states.has(id)) {
-      states.set(id, viewerFetch('/api/artifacts/' + encodeURIComponent(id) + '/inference')
+  function stateFor(id, channel, headers, fresh = false) {
+    if (fresh || !states.has(channel)) {
+      states.set(channel, viewerFetch('/api/artifacts/' + encodeURIComponent(id) + '/inference', { headers })
         .then(r => (r.ok ? r.json() : {}))
         .catch(() => ({})));
     }
-    return states.get(id);
+    return states.get(channel);
   }
 
   function frameFor(source) {
@@ -65,8 +65,9 @@ export function connectInferenceHost({ artifactId, title }) {
 
   // Asks once per artifact however many calls arrive while the dialog is up;
   // every waiting call settles with the one answer.
-  function ask(id, st, frame) {
-    if (decisions.has(id)) return decisions.get(id);
+  function ask(id, channel, headers, st, frame) {
+    if (decisions.has(channel)) return decisions.get(channel);
+    if (decisions.size) return Promise.resolve(false);
     const decision = new Promise(resolve => {
       if (!dialog) { resolve(false); return; }
       const modal = modalFor(dialog);
@@ -88,13 +89,13 @@ export function connectInferenceHost({ artifactId, title }) {
         allow.removeEventListener('click', onAllow);
         resolve(value);
       };
-      const onClosed = () => { if (!settled) declined.add(id); finish(false); };
+      const onClosed = () => { if (!settled) declined.add(channel); finish(false); };
       const onAllow = async () => {
         allow.disabled = true;
         const path = '/api/artifacts/' + encodeURIComponent(id);
         const res = await (st.owner
-          ? apiFetch(path, { method: 'PATCH', body: JSON.stringify({ inference_approved: true }) })
-          : viewerFetch(path + '/inference/consent', { method: 'PUT' })).catch(() => null);
+          ? apiFetch(path, { method: 'PATCH', headers, body: JSON.stringify({ inference_approved: true }) })
+          : viewerFetch(path + '/inference/consent', { method: 'PUT', headers })).catch(() => null);
         if (!res || !res.ok) {
           status.textContent = '✗ Could not save your choice. Try again.';
           allow.disabled = false;
@@ -109,14 +110,17 @@ export function connectInferenceHost({ artifactId, title }) {
       dialog.addEventListener('modal:closed', onClosed);
       allow.addEventListener('click', onAllow);
       modal.show(frame);
-    }).finally(() => decisions.delete(id));
-    decisions.set(id, decision);
+    }).finally(() => decisions.delete(channel));
+    decisions.set(channel, decision);
     return decision;
   }
 
   async function handle(frame, d, reply) {
-    const id = String(d.artifactId);
-    const st = await stateFor(id);
+    const { artifactId: id, channel } = d;
+    // Recheck the page-load viewer on the server, even when the browser has
+    // since switched accounts and now sends a different session cookie.
+    const headers = { 'X-Exhibit-Inference-Channel': channel };
+    const st = await stateFor(id, channel, headers);
     const usable = st.enabled && (st.owner || st.approved);
     const notAllowed = st.enabled && !st.owner && !st.approved;
     const OWNER_NOTE = 'This tool uses AI, but its owner has not allowed that. Only the owner can turn it on.';
@@ -142,11 +146,11 @@ export function connectInferenceHost({ artifactId, title }) {
       return;
     }
     if (!st.consented) {
-      if (declined.has(id)) { fail('not_approved', 'AI use was not allowed.'); return; }
-      if (!(await ask(id, st, frame))) { fail('not_approved', 'AI use was not allowed.'); return; }
+      if (declined.has(channel)) { fail('not_approved', 'AI use was not allowed.'); return; }
+      if (!(await ask(id, channel, headers, st, frame))) { fail('not_approved', 'AI use was not allowed.'); return; }
     }
     const res = await viewerFetch('/api/artifacts/' + encodeURIComponent(id) + '/inference', {
-      method: 'POST', body: JSON.stringify({ kind: d.op, payload: d.payload ?? null }),
+      method: 'POST', headers, body: JSON.stringify({ kind: d.op, payload: d.payload ?? null }),
     }).catch(() => null);
     if (!res) { fail('provider_error', 'The AI request could not be sent.'); return; }
     const body = await res.json().catch(() => ({}));
@@ -154,7 +158,7 @@ export function connectInferenceHost({ artifactId, title }) {
     const err = body.error && typeof body.error === 'object' ? body.error : { code: 'provider_error' };
     if (err.code === 'limit_reached') showBanner('limit', err.message || 'The AI allowance is used up for this month.');
     if (err.code === 'no_key') showBanner('no_key', 'This tool tried to use AI, but you have not added an AI key yet.', true);
-    if (err.code === 'not_approved') stateFor(id, true); // a decision changed elsewhere
+    if (err.code === 'not_approved') stateFor(id, channel, headers, true); // a decision changed elsewhere
     fail(err.code || 'provider_error', err.message);
   }
 

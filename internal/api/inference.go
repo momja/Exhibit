@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"crypto/hmac"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -78,7 +79,7 @@ func inferencePrincipalAllowed(ctx context.Context) bool {
 		return false
 	}
 	switch p.Kind {
-	case PrincipalSession, PrincipalServiceToken, PrincipalNone:
+	case PrincipalSession, PrincipalServiceToken:
 		return p.OwnerID > 0
 	}
 	return false
@@ -101,6 +102,20 @@ func (ro *Router) fromAppPage(r *http.Request) bool {
 	return false
 }
 
+const inferenceChannelHeader = "X-Exhibit-Inference-Channel"
+
+// inferenceViewerMatches binds a bridge request to the viewer who loaded the
+// artifact. The session cookie can change while that document is still open.
+// Authenticated API clients without browser headers can use the API directly.
+func (ro *Router) inferenceViewerMatches(r *http.Request, artifactID string) bool {
+	channel := r.Header.Get(inferenceChannelHeader)
+	if channel == "" {
+		return r.Header.Get("Origin") == "" && r.Header.Get("Sec-Fetch-Site") == ""
+	}
+	expected := ro.tokens.AIChannel(artifactID, int64(stateViewer(r)))
+	return hmac.Equal([]byte(channel), []byte(expected))
+}
+
 func (ro *Router) runInference(w http.ResponseWriter, r *http.Request) {
 	unavailable := inferenceErrorBody{Code: inference.CodeUnavailable, Message: "AI is not available here."}
 	if !inferencePrincipalAllowed(r.Context()) || !ro.cfg.Inference.Enabled() {
@@ -110,6 +125,12 @@ func (ro *Router) runInference(w http.ResponseWriter, r *http.Request) {
 	if !ro.fromAppPage(r) {
 		writeInferenceError(w, http.StatusForbidden, inferenceErrorBody{Code: inference.CodeNotApproved,
 			Message: "AI requests are accepted only from Exhibit itself."})
+		return
+	}
+	artifactID := urlParamID(r, "artifactID")
+	if !ro.inferenceViewerMatches(r, artifactID) {
+		writeInferenceError(w, http.StatusForbidden, inferenceErrorBody{Code: inference.CodeUnavailable,
+			Message: "Reload the artifact to use AI as the signed-in viewer."})
 		return
 	}
 	var req inferenceRequest
@@ -122,7 +143,7 @@ func (ro *Router) runInference(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	viewer := stateViewer(r)
-	a, err := ro.cfg.Store.GetArtifactReadableBy(r.Context(), viewer, urlParamID(r, "artifactID"))
+	a, err := ro.cfg.Store.GetArtifactReadableBy(r.Context(), viewer, artifactID)
 	if err != nil {
 		serverError(w, r, "inference artifact lookup", err)
 		return
@@ -197,6 +218,10 @@ func (ro *Router) setInferenceConsent(w http.ResponseWriter, r *http.Request) {
 	}
 	viewer := stateViewer(r)
 	artifactID := urlParamID(r, "artifactID")
+	if !ro.inferenceViewerMatches(r, artifactID) {
+		writeError(w, http.StatusForbidden, "Reload the page to change AI consent as the signed-in viewer")
+		return
+	}
 	allowed := r.Method == http.MethodPut
 	if allowed {
 		a, err := ro.cfg.Store.GetArtifactReadableBy(r.Context(), viewer, artifactID)
@@ -271,7 +296,12 @@ func (ro *Router) getInferenceState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	viewer := stateViewer(r)
-	a, err := ro.cfg.Store.GetArtifactReadableBy(r.Context(), viewer, urlParamID(r, "artifactID"))
+	artifactID := urlParamID(r, "artifactID")
+	if !ro.inferenceViewerMatches(r, artifactID) {
+		writeError(w, http.StatusForbidden, "Reload the artifact to use AI as the signed-in viewer")
+		return
+	}
+	a, err := ro.cfg.Store.GetArtifactReadableBy(r.Context(), viewer, artifactID)
 	if err != nil {
 		serverError(w, r, "inference state lookup", err)
 		return

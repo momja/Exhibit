@@ -83,8 +83,13 @@ func (r aiUsageRow) KindLabel() string {
 // aiPermissionsView is the swappable list: the region htmx refreshes after a
 // revoke.
 type aiPermissionsView struct {
-	Permissions    []store.InferencePermission
+	Permissions    []aiPermissionRow
 	RefreshHeaders string
+}
+
+type aiPermissionRow struct {
+	store.InferencePermission
+	Channel string
 }
 
 func (ro *Router) aiPermissions(r *http.Request) (aiPermissionsView, error) {
@@ -96,11 +101,19 @@ func (ro *Router) aiPermissions(r *http.Request) (aiPermissionsView, error) {
 	if err != nil {
 		return aiPermissionsView{}, err
 	}
-	perms, err := ro.cfg.Store.ListInferencePermissions(r.Context(), store.ViewerID(ownerIDFromCtx(r.Context())))
+	viewer := stateViewer(r)
+	perms, err := ro.cfg.Store.ListInferencePermissions(r.Context(), viewer)
 	if err != nil {
 		return aiPermissionsView{}, err
 	}
-	return aiPermissionsView{Permissions: perms, RefreshHeaders: string(encoded)}, nil
+	view := aiPermissionsView{RefreshHeaders: string(encoded)}
+	for _, perm := range perms {
+		view.Permissions = append(view.Permissions, aiPermissionRow{
+			InferencePermission: perm,
+			Channel:             ro.tokens.AIChannel(perm.ArtifactID, int64(viewer)),
+		})
+	}
+	return view, nil
 }
 
 // aiSettings builds the panel, or nil when the instance does not offer AI or

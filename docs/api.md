@@ -639,6 +639,10 @@ screenshot + selector to your next prompt. See [docs/agent.md](./docs/agent.md).
 Made by the host page on behalf of an artifact frame; see
 [inference.md](inference.md). All three refuse public visitors and agent/MCP
 credentials, and answer 404 for an artifact the caller cannot read.
+The host sends the rendered viewer's `X-Exhibit-Inference-Channel` with these
+requests and the first-use approval PATCH. A channel that belongs to a
+different viewer or artifact is refused with 403. Browser requests to the
+inference and consent endpoints also require the channel.
 
 - `GET /api/artifacts/:id/inference` → `{enabled, complete, decide, payer, reason, owner, approved, consented}`. Never names a provider or model.
 - `POST /api/artifacts/:id/inference` `{kind: "complete"|"decide", payload}` → `200 {value}` or `{error: {code, message, needs?, reset_at?, retry_after_ms?, limit?}}` with 503 unavailable, 403 not_approved (`needs`: `owner_approval` | `consent`) / no_key, 429 limit_reached / rate_limited, 400 invalid_request, 502 provider_error / invalid_output.

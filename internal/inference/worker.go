@@ -362,7 +362,10 @@ func (w *Worker) Screen(ctx context.Context, job ScreenJob) (ScreenVerdict, erro
 		return ScreenVerdict{}, err
 	}
 	r, err := g.call(ctx, envelope{ID: w.nextID(), Op: "screen", Provider: job.Provider, Model: job.Model, APIKey: job.APIKey, Text: job.Text})
-	v := ScreenVerdict{Usage: decodeUsage(r.Usage)}
+	if errors.Is(err, errNotSent) || r.Error == "busy" || r.Error == "invalid_request" {
+		return ScreenVerdict{}, ErrProvider
+	}
+	v := ScreenVerdict{Dispatched: true, Usage: decodeUsage(r.Usage)}
 	if err != nil {
 		return v, ErrProvider
 	}

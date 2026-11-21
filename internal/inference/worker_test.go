@@ -161,7 +161,7 @@ func TestWorkerScreensThroughMockAndPreservesUsageOnFailure(t *testing.T) {
 		verdict, err := w.Screen(deadline(t, 20*time.Second), ScreenJob{
 			Provider: "openrouter", Model: tc.model, APIKey: "test-guard-key", Text: tc.text,
 		})
-		if (err != nil) != tc.wantErr || verdict.Usage == nil || m.count() != before+1 {
+		if (err != nil) != tc.wantErr || !verdict.Dispatched || verdict.Usage == nil || m.count() != before+1 {
 			t.Errorf("screen %s (%q) = %+v, %v, %d mock requests; want usage and one mock request",
 				tc.model, tc.text, verdict, err, m.count()-before)
 		}
