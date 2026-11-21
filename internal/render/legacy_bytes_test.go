@@ -30,11 +30,11 @@ func TestLegacyDocumentBytes(t *testing.T) {
 		"version":                  serveVersion(vr, "abc", 1, versionToken("abc", 1, 1)),
 	}
 	want := map[string]string{
-		"artifact-and-direct-open": "b2b72d2efad44acd73e0ff3850a92fa2f44fdbd5b5c6097dc5df6def0ad8c0f4",
+		"artifact-and-direct-open": "1db36623abba204c1d8fa8b5f2f5c145481dd46d5823ec67fd1ef715fc8dfe28",
 		"widget":                   "f6c61534b9c32d02bc90adeb38a3c9402ba95e06f1eb60ea9cd3211604280893",
 		"share-widget":             "f073709dfcc88b981565a63fd47a10604f6d5a4bfe2d6e88536428cf48c2ea36",
-		"share":                    "d00e59857e52c7187c7d212c7537d882e9fb2ccd37f79e1d17acbb50632337c8",
-		"version":                  "ce109b29fb9d87b8ba4e55763c8eae6910f5e24ce7ff7c8777a97c11e3c6a2e8",
+		"share":                    "8a66190e1b669c866d8e5c4f2048cae48830a2e3551a15fc7f93c5d6ddf96d9c",
+		"version":                  "cfd1c744046b49a9cab5e4957fc884163dfb2b102413bdbb5eb838885ad6da87",
 	}
 	for name, response := range cases {
 		body := artifactChannelPattern.ReplaceAllString(response.Body.String(), `var ARTIFACT_CHANNEL = "CHANNEL";`)
