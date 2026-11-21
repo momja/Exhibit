@@ -227,6 +227,10 @@ func TestExampleTriagesAndSummarisesBrowser(t *testing.T) {
 	draftStored, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`JSON.parse(localStorage.getItem('triage.v1')).summary !== null`))
 	require.NoError(t, err)
 	assert.False(t, draftStored, "the draft stays private until Save")
+	require.NoError(t, chromedp.Do(ctx, chromedp.EmulateViewport(390, 844)))
+	fitsPhone, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`document.documentElement.scrollWidth <= innerWidth`))
+	require.NoError(t, err)
+	assert.True(t, fitsPhone, "draft disclosure and save controls fit on a phone")
 	require.NoError(t, chromedp.Do(ctx, chromedp.Click(chromedp.CSS(`#items [data-action="save-triage"]:not([hidden])`))))
 	require.NoError(t, chromedp.Do(ctx, chromedp.Click(chromedp.CSS("#summary-save"))))
 
