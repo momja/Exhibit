@@ -8,14 +8,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/assert"
 )
 
 // Goldens were measured by substituting serveDoc verbatim from 99452599,
 // before running this fixture, and re-measured when every render gained the
-// window.exhibit.ai stand-in and the framed AI bridge (Exh-zue3). Only the randomly minted public link and the
-// AI channel (derived from the fixture's random signing key) are normalized.
-var aiChannelPattern = regexp.MustCompile(`var AI_CHANNEL = "[^"]*";`)
+// window.exhibit.ai stand-in and the document channels (Exh-zue3). The random
+// public link and the channel derived from the fixture's signing key are normalized.
+var artifactChannelPattern = regexp.MustCompile(`var ARTIFACT_CHANNEL = "[^"]*";`)
 
 func TestLegacyDocumentBytes(t *testing.T) {
 	rd, _, link, _ := newShareWidgetFixture(t)
@@ -30,20 +30,16 @@ func TestLegacyDocumentBytes(t *testing.T) {
 		"version":                  serveVersion(vr, "abc", 1, versionToken("abc", 1, 1)),
 	}
 	want := map[string]string{
-		"artifact-and-direct-open": "8355b0af715aebf8a23b883a0016d1f8ce036bf8296f5ad0ae80c8e536a730c8",
-		"widget":                   "d8ae7c668c86b0f5f0de9063347ef8e1cd7d430825625867edbfdbbdee7d084c",
-		"share-widget":             "336a1672eb0029421354c517839d5ef5b9c093c11307168f1d044e84252aa7c1",
-		"share":                    "56acf56a220747f093839a3d5229c13073fcef8755325be9424bfe7c4b07f9bc",
-		"version":                  "a3fff14e8af4b15b17c50c691319519f6fd50c3638f23a0cce6707ef4cf64002",
+		"artifact-and-direct-open": "b2b72d2efad44acd73e0ff3850a92fa2f44fdbd5b5c6097dc5df6def0ad8c0f4",
+		"widget":                   "f6c61534b9c32d02bc90adeb38a3c9402ba95e06f1eb60ea9cd3211604280893",
+		"share-widget":             "f073709dfcc88b981565a63fd47a10604f6d5a4bfe2d6e88536428cf48c2ea36",
+		"share":                    "d00e59857e52c7187c7d212c7537d882e9fb2ccd37f79e1d17acbb50632337c8",
+		"version":                  "ce109b29fb9d87b8ba4e55763c8eae6910f5e24ce7ff7c8777a97c11e3c6a2e8",
 	}
 	for name, response := range cases {
-		body := aiChannelPattern.ReplaceAllString(response.Body.String(), `var AI_CHANNEL = "CHANNEL";`)
+		body := artifactChannelPattern.ReplaceAllString(response.Body.String(), `var ARTIFACT_CHANNEL = "CHANNEL";`)
 		bytes := strings.ReplaceAll(body, link, "PUBLIC-LINK") + "\n" + fmt.Sprint(response.Header())
 		got := fmt.Sprintf("%x", sha256.Sum256([]byte(bytes)))
-		if len(want) == 0 {
-			t.Logf("GOLDEN %s %s", name, got)
-		} else {
-			require.Equal(t, want[name], got, name)
-		}
+		assert.Equal(t, want[name], got, name)
 	}
 }

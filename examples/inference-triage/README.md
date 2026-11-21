@@ -9,6 +9,9 @@ uses Exhibit's AI capability ([docs/inference.md](../../docs/inference.md)).
   "Needs a person". **Draft with AI** asks `complete()` for a summary validated
   against a JSON Schema. Both are explicit button presses, and the tool shows
   what will be sent first.
+- AI judgments and summary drafts stay in the current tab. **Save triage**,
+  manual edits to triage fields, and **Save summary to tool** write to the
+  tool's saved data. Other named viewers can read it if shared state is enabled.
 - `widget.html` — the card widget. It never calls AI; it shows the counts the
   tool saved.
 

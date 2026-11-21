@@ -65,7 +65,7 @@ type agentPreviewData struct {
 	HasArtifact         bool
 	Title               string
 	FrameURL            string
-	AIChannel           string
+	ArtifactChannel     string
 	OpenURL             string
 	DetailURL           string
 	Widget              widgetView
@@ -105,7 +105,7 @@ func (ro *Router) newAgentPreviewData(r *http.Request, a *store.Artifact) agentP
 		HasArtifact:         true,
 		Title:               a.Title,
 		FrameURL:            cacheBust(urls.artifact(a.ID)),
-		AIChannel:           urls.aiChannel(a.ID),
+		ArtifactChannel:     urls.artifactChannel(a.ID),
 		OpenURL:             openURL(a.ID),
 		DetailURL:           "/artifacts/" + a.ID,
 		Widget:              widget,

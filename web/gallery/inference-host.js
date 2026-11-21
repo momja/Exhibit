@@ -168,7 +168,7 @@ export function connectInferenceHost({ artifactId, title }) {
     const port = e.ports[0];
     const frame = frameFor(e.source);
     const id = artifactId();
-    const channel = frame?.dataset.aiChannel;
+    const channel = frame?.dataset.artifactChannel;
     // A replacement document shares the frame's window. The channel is
     // inlined only in the authorized artifact render for this viewer.
     if (!id || d.artifactId !== id || !channel || d.channel !== channel ||

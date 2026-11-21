@@ -11,7 +11,7 @@ document.addEventListener('click', async event => {
   const button = event.target.closest('[data-ai-revoke]');
   if (!button) return;
   const id = encodeURIComponent(button.dataset.aiRevoke);
-  const headers = { 'X-Exhibit-Inference-Channel': button.dataset.aiChannel };
+  const headers = { 'X-Exhibit-Inference-Channel': button.dataset.artifactChannel };
   button.disabled = true;
   const res = await (button.dataset.aiOwned === 'true'
     ? apiFetch('/api/artifacts/' + id, { method: 'PATCH', headers, body: JSON.stringify({ inference_approved: false }) })

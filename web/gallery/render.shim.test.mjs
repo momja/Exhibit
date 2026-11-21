@@ -69,6 +69,7 @@ function shimSource({ cache = {}, anonymous = false, widget = false, versionView
 // shim installs its host-facing halves under.
 function loadShim(opts = {}) {
   const posted = [];
+  const sentPorts = [];
   // Where each posted message was addressed, in step with `posted`. The shim pins
   // every message to the app origin, and a message that reached the wrong window
   // is the failure a test of its shape alone cannot see.
@@ -98,7 +99,7 @@ function loadShim(opts = {}) {
     }
   }
 
-  const parent = { postMessage: (msg, target) => { posted.push(msg); targets.push(target); } };
+  const parent = { postMessage: (msg, target, ports) => { posted.push(msg); targets.push(target); sentPorts.push(ports?.[0]); } };
   const window = {
     parent,
     onstorage: null,
@@ -123,7 +124,11 @@ function loadShim(opts = {}) {
 
   const context = vm.createContext({
     window, Object, JSON, String, Promise, console,
-    Event, StorageEvent, Storage,
+    Event, StorageEvent, Storage, ARTIFACT_CHANNEL: "authorized",
+    MessageChannel: class {
+      port1 = { close() {} };
+      port2 = { postMessage: data => this.port1.onmessage({ data }) };
+    },
     location: { href: "https://render.test/a/" + ARTIFACT_ID },
     document: { addEventListener() {}, createElement: () => ({}) }
   });
@@ -132,8 +137,11 @@ function loadShim(opts = {}) {
 
   // Delivers a message the way the host frame does: from the parent window, on
   // the app origin.
-  const fromHost = (data, { origin = API_ORIGIN, source = parent } = {}) =>
-    Promise.all((listeners.message || []).map((fn) => fn({ data, origin, source })));
+  const fromHost = async ({ state, ...data }, { origin = API_ORIGIN, source = parent } = {}) => {
+    const index = sentPorts.length;
+    await Promise.all((listeners.message || []).map((fn) => fn({ data, origin, source })));
+    sentPorts[index]?.postMessage(state);
+  };
 
   // Messages the shim built came out of the vm's realm, so their prototype is
   // not this file's Object.prototype and a strict deep-equal against a literal
@@ -144,7 +152,7 @@ function loadShim(opts = {}) {
   return { window, posted, targets, dispatched, fromHost, flat, storage: window.localStorage };
 }
 
-const sync = (state) => ({ __avStateSync: true, artifactId: ARTIFACT_ID, state });
+const sync = (state) => ({ __avStateSyncRequest: true, artifactId: ARTIFACT_ID, request: 1, state });
 
 // --- the diff -------------------------------------------------------------
 
@@ -253,7 +261,7 @@ test("a sync from the wrong origin or the wrong window is ignored", async () => 
 
   await fromHost(sync({ note: "injected" }), { origin: "https://evil.test" });
   await fromHost(sync({ note: "injected" }), { source: { postMessage() {} } });
-  await fromHost({ __avStateSync: true, artifactId: "someone-else", state: { note: "injected" } });
+  await fromHost({ ...sync({ note: "injected" }), artifactId: "someone-else" });
 
   assert.equal(storage.getItem("note"), "mine",
     "the host is a real origin, so unlike the messages this frame sends, both " +

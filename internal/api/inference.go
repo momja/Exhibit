@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"crypto/hmac"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -112,8 +111,7 @@ func (ro *Router) inferenceViewerMatches(r *http.Request, artifactID string) boo
 	if channel == "" {
 		return r.Header.Get("Origin") == "" && r.Header.Get("Sec-Fetch-Site") == ""
 	}
-	expected := ro.tokens.AIChannel(artifactID, int64(stateViewer(r)))
-	return hmac.Equal([]byte(channel), []byte(expected))
+	return ro.artifactChannelMatches(r, artifactID, channel)
 }
 
 func (ro *Router) runInference(w http.ResponseWriter, r *http.Request) {

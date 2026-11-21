@@ -7,6 +7,7 @@
 package api
 
 import (
+	"crypto/hmac"
 	"errors"
 	"fmt"
 	"html/template"
@@ -118,21 +119,21 @@ func (u renderURLs) mint(id string) string {
 	return u.signer.MintViewer(id, u.ownerID, u.viewerID)
 }
 
-// artifact returns the tokened URL of an artifact's render document, for an
-// iframe src. Links a visitor might click minutes later must NOT use this —
-// they go through openArtifact, which mints at click time (a token embedded in
-// a link goes stale while the page sits open).
-// aiChannel is the window.exhibit.ai channel for an artifact's frame on this
-// page (rendertoken.Signer.AIChannel): the same value the render preamble
-// inlines for this viewer, so the host can tell the artifact's own document
-// from a page navigated into its frame.
-func (u renderURLs) aiChannel(id string) string {
+// artifactChannel is the value the render preamble inlines for this viewer.
+func (u renderURLs) artifactChannel(id string) string {
 	if u.signer == nil || u.anonymous || u.viewerID <= 0 {
 		return ""
 	}
-	return u.signer.AIChannel(id, u.viewerID)
+	return u.signer.ArtifactChannel(id, u.viewerID)
 }
 
+func (ro *Router) artifactChannelMatches(r *http.Request, artifactID, channel string) bool {
+	expected := ro.tokens.ArtifactChannel(artifactID, int64(stateViewer(r)))
+	return hmac.Equal([]byte(channel), []byte(expected))
+}
+
+// artifact returns a tokened iframe URL. Links use openArtifact, which mints
+// a fresh token when the visitor clicks.
 func (u renderURLs) artifact(id string) string {
 	policy, err := u.policyPath(id)
 	if err != nil {
@@ -1101,15 +1102,15 @@ type detailPageData struct {
 	Header appHeaderView
 	// Favicon is a data: URI (base64 SVG); typed template.URL because
 	// html/template rejects the data: scheme in URL contexts by default.
-	Favicon        template.URL
-	ID             string
-	Title          string
-	FrameURL       string
-	AIChannel      string
-	OpenURL        string
-	SourceURL      string
-	SourceRevision string
-	Capability     capabilityView
+	Favicon         template.URL
+	ID              string
+	Title           string
+	FrameURL        string
+	ArtifactChannel string
+	OpenURL         string
+	SourceURL       string
+	SourceRevision  string
+	Capability      capabilityView
 	// ViewerPreference scopes browser preferences to the visitor, including on
 	// shared artifacts. It grants no artifact authority and contains no token.
 	ViewerPreference string
@@ -1176,7 +1177,7 @@ func renderDetailPage(a *store.Artifact, urls renderURLs, creds pageCredentials,
 		ID:                  a.ID,
 		Title:               a.Title,
 		FrameURL:            urls.artifact(a.ID),
-		AIChannel:           urls.aiChannel(a.ID),
+		ArtifactChannel:     urls.artifactChannel(a.ID),
 		OpenURL:             openURL(a.ID),
 		SourceURL:           a.SourceURL,
 		SourceRevision:      store.ContentRevision(a.SourceBlobID),
