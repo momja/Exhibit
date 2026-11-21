@@ -130,3 +130,22 @@ func TestUsageTokensAreRecordedSeparately(t *testing.T) {
 		InputTokens: 111, OutputTokens: 222, CacheReadTokens: 333, CacheWriteTokens: 444, CostMicros: 5,
 	}, totals)
 }
+
+// A guardrail screen of an artifact's AI call is caused by the viewer, so it
+// counts against that viewer's budget; the agent's own screens stay the
+// operator's overhead (Exh-hwjg).
+func TestOwnerAgentSpendCountsScreensOfArtifactCalls(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	agentScreen := usageRow(7, "s1", PaidByPlatform, UsageSourceGuardrail, 1, 1, 300_000)
+	artifactScreen := usageRow(7, "inference:x", PaidByPlatform, UsageSourceGuardrail, 1, 1, 200_000)
+	artifactScreen.ArtifactID = "art-1"
+	require.NoError(t, s.RecordAgentUsage(ctx, agentScreen))
+	require.NoError(t, s.RecordAgentUsage(ctx, artifactScreen))
+	totals, err := s.OwnerAgentSpend(ctx, 7, time.Time{})
+	require.NoError(t, err)
+	assert.EqualValues(t, 200_000, totals.CostMicros)
+	inference, err := s.OwnerInferenceSpend(ctx, 7, time.Time{})
+	require.NoError(t, err)
+	assert.EqualValues(t, 200_000, inference.CostMicros)
+}

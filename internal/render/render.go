@@ -718,7 +718,11 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 	if !widget {
 		body = injectFavicon(body, artifacticon.DataURI(a.Tags))
 	}
-	out := injectPreambleWithHostMode(body, a.ID, rd.cfg.AppOrigin, state, origins, widget, viewer.Anonymous, versionView, manifest, doc.attribution, doc.publicShare, a.VersionSeq)
+	aiChannel := ""
+	if !viewer.Anonymous && viewer.ViewerID > 0 {
+		aiChannel = rd.cfg.Tokens.AIChannel(a.ID, viewer.ViewerID)
+	}
+	out := injectPreambleWithHostMode(body, a.ID, rd.cfg.AppOrigin, state, origins, widget, viewer.Anonymous, versionView, manifest, doc.attribution, doc.publicShare, aiChannel, a.VersionSeq)
 	if rd.cfg.RelayEnabled && !widget && !versionView && !viewer.Anonymous && doc.headMeta == "" {
 		out = injectRelay(out, rd.cfg.AppOrigin, a.ID, allowed)
 	}
@@ -1496,12 +1500,9 @@ const aiBridgeScript = `
   // connect-src source. An anonymous visitor keeps the stand-in installed
   // above: there is nobody to pay, and the endpoint refuses them anyway.
   if (window.parent !== window && !ANONYMOUS) {
-    // Call ids carry a per-load prefix: the host answers whichever document is
-    // in the frame element, and a frame reloaded with a call in flight must
-    // not take the old document's answer for its own call of the same number.
-    var aiLoad = Math.random().toString(36).slice(2) + Date.now().toString(36);
-    var aiSeq = 0;
-    var aiPending = {};
+    // The host answers only calls carrying this document's channel, which a
+    // page navigated into this frame does not have.
+    var AI_CHANNEL = %AI_CHANNEL%;
     // A call is sent only once the host has said it is listening
     // (__avAIHostReady): the host's module can attach after this frame's
     // first call, and a call lost then would never settle. Queued calls are
@@ -1511,51 +1512,48 @@ const aiBridgeScript = `
     var AI_HOST_WAIT_MS = 10000;
     var aiHostReady = false;
     var aiQueue = [];
-    var aiPost = function(msg) { window.parent.postMessage(msg, API_ORIGIN); };
     window.addEventListener('message', function(e) {
       if (e.origin !== API_ORIGIN || e.source !== window.parent) return;
-      var d = e.data;
-      if (d && d.__avAIHostReady === true) {
-        if (aiHostReady) return;
-        aiHostReady = true;
-        aiQueue.splice(0).forEach(aiPost);
-        return;
-      }
-      if (!d || d.__avInferenceResult !== true || d.artifactId !== ARTIFACT_ID) return;
-      var p = aiPending[d.id];
-      if (!p) return;
-      delete aiPending[d.id];
-      if (d.ok) { p.resolve(d.value); return; }
-      var err = new Error(String((d.error && d.error.message) || 'The AI request failed.'));
-      err.name = 'ExhibitAIError';
-      err.code = String((d.error && d.error.code) || 'provider_error');
-      p.reject(err);
+      if (!e.data || e.data.__avAIHostReady !== true || aiHostReady) return;
+      aiHostReady = true;
+      aiQueue.splice(0).forEach(function(send) { send(); });
     });
+    var aiError = function(code, message) {
+      var err = new Error(message);
+      err.name = 'ExhibitAIError';
+      err.code = code;
+      return err;
+    };
     var callAI = function(op, payload) {
       return new Promise(function(resolve, reject) {
-        var id = aiLoad + '-' + (++aiSeq);
-        aiPending[id] = { resolve: resolve, reject: reject };
-        var msg = { __avInference: true, artifactId: ARTIFACT_ID, id: id, op: op };
+        var msg = { __avInference: true, artifactId: ARTIFACT_ID, channel: AI_CHANNEL, op: op };
         if (payload !== undefined) {
           try { msg.payload = JSON.parse(JSON.stringify(payload)); }
           catch (err) {
-            delete aiPending[id];
-            var bad = new Error('The request must be plain JSON data.');
-            bad.name = 'ExhibitAIError'; bad.code = 'invalid_request';
-            reject(bad);
+            reject(aiError('invalid_request', 'The request must be plain JSON data.'));
             return;
           }
         }
-        if (aiHostReady) { aiPost(msg); return; }
-        aiQueue.push(msg);
+        var send = function() {
+          // The reply port belongs to this call's document. A navigation can
+          // reuse the frame window but cannot receive anything on this port.
+          var response = new MessageChannel();
+          response.port1.onmessage = function(e) {
+            response.port1.close();
+            var d = e.data;
+            if (d.ok) { resolve(d.value); return; }
+            var error = d.error || {};
+            reject(aiError(error.code || 'provider_error', error.message || 'The AI request failed.'));
+          };
+          window.parent.postMessage(msg, API_ORIGIN, [response.port2]);
+        };
+        if (aiHostReady) { send(); return; }
+        aiQueue.push(send);
         setTimeout(function() {
-          var at = aiQueue.indexOf(msg);
+          var at = aiQueue.indexOf(send);
           if (at < 0) return;
           aiQueue.splice(at, 1);
-          delete aiPending[id];
-          var gone = new Error('AI is not available here.');
-          gone.name = 'ExhibitAIError'; gone.code = 'unavailable';
-          reject(gone);
+          reject(aiError('unavailable', 'AI is not available here.'));
         }, AI_HOST_WAIT_MS);
       });
     };
@@ -2598,17 +2596,18 @@ const widgetHealthScript = `<script>
 // data the shim must hold before the artifact's first line runs, not a mode
 // flag.
 func injectPreamble(body, artifactID, appOrigin string, state map[string]string, origins originPolicy, widget, anonymous, versionView bool, assetManifest map[string]string, versionSeq ...int) string {
-	return injectPreambleWithHostMode(body, artifactID, appOrigin, state, origins, widget, anonymous, versionView, assetManifest, false, false, versionSeq...)
+	return injectPreambleWithHostMode(body, artifactID, appOrigin, state, origins, widget, anonymous, versionView, assetManifest, false, false, "", versionSeq...)
 }
 
 // injectPreambleWithHostMode explicitly distinguishes an attributed public share
 // from an app-hosted frame. Public shares inline the owner's saved state but
 // have no authenticated viewer/host to persist through or answer capabilities.
 // Native unsupported APIs reject under browser policy; no host reply is awaited.
-func injectPreambleWithHostMode(body, artifactID, appOrigin string, state map[string]string, origins originPolicy, widget, anonymous, versionView bool, assetManifest map[string]string, noHost, publicShare bool, versionSeq ...int) string {
+func injectPreambleWithHostMode(body, artifactID, appOrigin string, state map[string]string, origins originPolicy, widget, anonymous, versionView bool, assetManifest map[string]string, noHost, publicShare bool, aiChannel string, versionSeq ...int) string {
 	bridges := bridgeScript
 	if !noHost && !publicShare && !widget && !anonymous {
-		bridges += aiBridgeScript
+		channel, _ := json.Marshal(aiChannel)
+		bridges += strings.Replace(aiBridgeScript, "%AI_CHANNEL%", string(channel), 1)
 	}
 	if noHost {
 		bridges = frameLocalScript + "\n  }\n"

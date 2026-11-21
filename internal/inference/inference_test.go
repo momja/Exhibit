@@ -436,3 +436,40 @@ func TestRateLimiterForgetsIdleBuckets(t *testing.T) {
 		t.Fatalf("after idling: %d viewers, %d artifacts", len(r.viewers), len(r.artifacts))
 	}
 }
+
+// Every paid call checks the allowance first, so a first answer that used the
+// last of it cannot be followed by a paid repair.
+func TestRepairIsRefusedOnceTheAllowanceIsSpent(t *testing.T) {
+	cap := int64(1000) // micro-dollars; the fake's first answer costs exactly this
+	s, rt, _ := newTestService(t, func(c *Config) { c.Caps.OwnerMicrosPerMonth = &cap })
+	payload := json.RawMessage(`{"messages":[{"role":"user","content":"Tag it"}],"schema":{"type":"object","properties":{"tags":{"type":"array"}},"required":["tags"]}}`)
+	rt.reply = func(Job) (Result, Outcome, error) {
+		return Result{StopReason: "stop", Text: "not json"}, Outcome{Dispatched: true, Usage: &Usage{Input: 5, Cost: UsageCost{Total: 0.001}}}, nil
+	}
+	_, err := s.Run(context.Background(), Call{ArtifactID: "a", ViewerID: owner, Kind: KindComplete, Payload: payload})
+	if code(err) != CodeLimitReached {
+		t.Fatalf("err = %v, want limit_reached before the repair", err)
+	}
+	if rt.calls() != 1 {
+		t.Fatalf("provider calls = %d, want 1: the repair must not start past the allowance", rt.calls())
+	}
+}
+
+// A usage report of all zeros is Pi's placeholder for a call that failed
+// before the provider reported: unknown spend, never a known zero. A cost the
+// provider reported itself keeps that provenance.
+func TestUsageDecodingKeepsUnknownAndProviderCostApart(t *testing.T) {
+	if u := decodeUsage(json.RawMessage(`{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"cost":{"total":0}}`)); u != nil {
+		t.Fatalf("zero-filled usage = %+v, want nil (unknown)", u)
+	}
+	u := decodeUsage(json.RawMessage(`{"input":12,"output":3,"cost":{"total":0.0004,"totalFromProvider":true}}`))
+	if u == nil || !u.Cost.TotalFromProvider || u.Input != 12 {
+		t.Fatalf("usage = %+v, want provider-reported cost", u)
+	}
+	if u := decodeUsage(json.RawMessage(`{"input":12,"output":3,"cost":{"total":0.0004}}`)); u == nil || u.Cost.TotalFromProvider {
+		t.Fatalf("usage = %+v, want a catalog estimate", u)
+	}
+	if u := decodeUsage(json.RawMessage(`{"cost":{"total":0,"totalFromProvider":true}}`)); u == nil || u.Cost != (UsageCost{TotalFromProvider: true}) {
+		t.Fatalf("usage = %+v, want a provider-reported zero cost", u)
+	}
+}

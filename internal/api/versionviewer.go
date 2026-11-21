@@ -33,6 +33,8 @@ type versionViewerData struct {
 	WhenISO string
 	// FrameURL is the version document, tokened for this version alone.
 	FrameURL string
+	// AIChannel is the window.exhibit.ai channel for this viewer's frame.
+	AIChannel string
 	// Restorable offers the restore beside the view. The edit page asks for it,
 	// because the decision to return to a version is made there; the chat's is
 	// made in the History card beside the pane, which carries the choice of
@@ -92,6 +94,7 @@ func (ro *Router) versionViewerPartial(w http.ResponseWriter, r *http.Request) {
 		When:       vv.When,
 		WhenISO:    vv.WhenISO,
 		FrameURL:   ro.renderURLs(r).version(a.ID, v.Seq),
+		AIChannel:  ro.renderURLs(r).aiChannel(a.ID),
 		Restorable: q.Get("restorable") == "1",
 	})
 }

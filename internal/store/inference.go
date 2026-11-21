@@ -61,10 +61,11 @@ func costSourceOrDefault(v string) string {
 
 // OwnerInferenceSpend is one payer's platform-paid inference spend since a
 // time — the inference share of what OwnerAgentSpend already counts (that sum
-// includes inference rows, which is the shared-limit rule).
+// includes inference rows, which is the shared-limit rule), screens of
+// artifact calls included.
 func (s *SQLiteStore) OwnerInferenceSpend(ctx context.Context, ownerID int64, since time.Time) (UsageTotals, error) {
 	return s.usageTotals(ctx,
-		"owner_id=? AND paid_by='platform' AND source='artifact_inference' AND recorded_at >= ?",
+		"owner_id=? AND paid_by='platform' AND (source='artifact_inference' OR (source='guardrail' AND artifact_id IS NOT NULL)) AND recorded_at >= ?",
 		ownerID, since.UTC().Format(datetimeLayout))
 }
 

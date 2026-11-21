@@ -499,3 +499,21 @@ func (s *Signer) tag(artifactID, claims string) string {
 	mac.Write([]byte(claims))
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
+
+// AIChannel is the value an artifact document and its host page share for
+// window.exhibit.ai (Exh-zbwk): the render preamble inlines it, the app page
+// puts it on the iframe element, and the host answers only calls that carry
+// it. A document that replaces the artifact inside the same iframe — a page
+// the frame navigated to — shares the window but not the value, so it cannot
+// spend the viewer's allowance as the artifact. Deterministic per (artifact,
+// viewer), so a reload through /artifacts/:id/open keeps it; a separate MAC
+// label keeps it from ever equalling a token tag.
+func (s *Signer) AIChannel(artifactID string, viewerID int64) string {
+	mac := hmac.New(sha256.New, s.key[:])
+	mac.Write([]byte("exhibit-ai-channel"))
+	mac.Write([]byte{0})
+	mac.Write([]byte(artifactID))
+	mac.Write([]byte{0})
+	mac.Write([]byte(strconv.FormatInt(viewerID, 10)))
+	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+}

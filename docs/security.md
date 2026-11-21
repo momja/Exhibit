@@ -1324,6 +1324,12 @@ possibly including saved data, to a third party. So:
   named recipient, a consent row to spend *their* allowance. The endpoint
   refuses `not_approved` without them; the host's prompt is only the UX, and a
   recipient of an unapproved tool is told so with no button (av-awr4).
+- **Browser requests come from the app origin.** The inference, approval and
+  consent write paths reject a foreign `Origin` or a cross-origin
+  `Sec-Fetch-Site`, including same-site sibling origins. The host accepts calls
+  only from a marked frame with the channel for its artifact and viewer. Each
+  reply travels through a message port held by the requesting document, so a
+  page that replaces the document in the same frame cannot receive its results.
 - **The viewer pays, never the owner.** The core resolves the payer from the
   request's principal alone. A recipient without a key gets `no_key`, never the
   owner's key or allowance.

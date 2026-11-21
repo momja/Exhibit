@@ -164,6 +164,13 @@ func (w *Worker) current(ctx context.Context) (*generation, error) {
 			slog.Error("inference worker failed to start", slog.String("err", err.Error()))
 			return nil, ErrRuntimeUnavailable
 		}
+		if w.closed {
+			// Close ran while this generation was starting: it saw nothing
+			// to stop, so stop it here rather than leave it running.
+			w.mu.Unlock()
+			g.fail()
+			return nil, ErrRuntimeUnavailable
+		}
 		w.gen = g
 		w.mu.Unlock()
 		go w.watch(g)

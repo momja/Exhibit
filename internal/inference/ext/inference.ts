@@ -98,14 +98,23 @@ export default function (pi: ExtensionAPI) {
 		const controller = new AbortController();
 		active.set(id, controller);
 		void (async () => {
+			let screenUsage: unknown;
 			try {
 				if (op === "screen") {
-					let usage: unknown;
-					const verdict = await screen(registry, {
+					// In mock mode the screen goes to the mock as well: the shared
+					// guard helper takes no fetch option of its own, so the
+					// registry it is handed adds it to both of its calls.
+					const screenRegistry = mockURL ? {
+						getModelOfType: (type: "classifier", provider: string, model: string) => registry.getModelOfType(type, provider, model),
+						find: (provider: string, model: string) => registry.find(provider, model),
+						classify: (m: any, c: any, o: any) => registry.classify(m, c, { ...o, ...fetchOverride }),
+						complete: (m: any, c: any, o: any) => registry.complete(m, c, { ...o, ...fetchOverride }),
+					} : registry;
+					const verdict = await screen(screenRegistry, {
 						provider: request.provider, model: request.model, apiKey: request.apiKey,
 						dataFence: "", policy: DEFAULT_POLICY,
-					}, String(request.text ?? ""), controller.signal, (u) => { usage = u; });
-					send({ id, result: { allowed: verdict.allowed }, usage });
+					}, String(request.text ?? ""), controller.signal, (usage) => { screenUsage = usage; });
+					send({ id, result: { allowed: verdict.allowed }, usage: screenUsage });
 					return;
 				}
 				const model = op === "complete"
@@ -132,7 +141,7 @@ export default function (pi: ExtensionAPI) {
 					send({ id, result: { stopReason: result?.stopReason, answers: result?.answers ?? null }, usage: result?.usage });
 				}
 			} catch {
-				send({ id, error: controller.signal.aborted ? "aborted" : "provider_error" });
+				send({ id, error: controller.signal.aborted ? "aborted" : "provider_error", usage: screenUsage });
 			} finally {
 				active.delete(id);
 			}

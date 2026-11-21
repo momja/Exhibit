@@ -122,6 +122,17 @@ func (u renderURLs) mint(id string) string {
 // iframe src. Links a visitor might click minutes later must NOT use this —
 // they go through openArtifact, which mints at click time (a token embedded in
 // a link goes stale while the page sits open).
+// aiChannel is the window.exhibit.ai channel for an artifact's frame on this
+// page (rendertoken.Signer.AIChannel): the same value the render preamble
+// inlines for this viewer, so the host can tell the artifact's own document
+// from a page navigated into its frame.
+func (u renderURLs) aiChannel(id string) string {
+	if u.signer == nil || u.anonymous || u.viewerID <= 0 {
+		return ""
+	}
+	return u.signer.AIChannel(id, u.viewerID)
+}
+
 func (u renderURLs) artifact(id string) string {
 	policy, err := u.policyPath(id)
 	if err != nil {
@@ -1094,6 +1105,7 @@ type detailPageData struct {
 	ID             string
 	Title          string
 	FrameURL       string
+	AIChannel      string
 	OpenURL        string
 	SourceURL      string
 	SourceRevision string
@@ -1164,6 +1176,7 @@ func renderDetailPage(a *store.Artifact, urls renderURLs, creds pageCredentials,
 		ID:                  a.ID,
 		Title:               a.Title,
 		FrameURL:            urls.artifact(a.ID),
+		AIChannel:           urls.aiChannel(a.ID),
 		OpenURL:             openURL(a.ID),
 		SourceURL:           a.SourceURL,
 		SourceRevision:      store.ContentRevision(a.SourceBlobID),
