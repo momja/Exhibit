@@ -107,8 +107,10 @@ export function loadPageScript(scriptPaths, globals = {}, initial = {}) {
   const document = {
     body: makeElement("body"),
     getElementById: byId,
-    // The only selector these scripts use is 'iframe'.
-    querySelector(sel) { return sel === "iframe" ? frame : null; },
+    querySelector(sel) {
+      if (sel === "iframe" || (sel === "iframe[data-artifact-channel]" && frame.dataset.artifactChannel)) return frame;
+      return null;
+    },
     querySelectorAll() { return []; },
     createElement: (tag) => makeElement(tag),
     addEventListener(type, fn, capture) {
@@ -204,9 +206,9 @@ export function loadPageScript(scriptPaths, globals = {}, initial = {}) {
   // Delivers a message as if the artifact frame had posted it. `source`
   // defaults to the frame's window, so a test that wants to prove the identity
   // check works passes something else.
-  const postFromFrame = (data, source = frame.contentWindow) =>
+  const postFromFrame = (data, source = frame.contentWindow, ports = []) =>
     Promise.all(
-      (windowListeners.message || []).map((fn) => fn({ data, source, origin: "null" }))
+      (windowListeners.message || []).map((fn) => fn({ data, source, origin: "null", ports }))
     );
 
   // init carries whatever else the handler reads off the event: a target, a

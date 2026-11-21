@@ -91,6 +91,6 @@
 {{define "aiPermissionsBody"}}{{if .Permissions}}
 <ul class="ai-permissions">{{range .Permissions}}
   <li><a class="settings-name" href="/artifacts/{{.ArtifactID}}"><bdi>{{.Title}}</bdi></a> <span class="muted text-sm">{{if .Owned}}Yours{{else}}Shared with you{{end}}</span>
-    <button class="btn btn-sec btn-sm" type="button" data-ai-revoke="{{.ArtifactID}}" data-ai-owned="{{if .Owned}}true{{else}}false{{end}}" aria-label="Stop {{.Title}} using AI" data-ai-channel="{{.Channel}}">Stop</button></li>
+    <button class="btn btn-sec btn-sm" type="button" data-ai-revoke="{{.ArtifactID}}" data-ai-owned="{{if .Owned}}true{{else}}false{{end}}" aria-label="Stop {{.Title}} using AI" data-artifact-channel="{{.Channel}}">Stop</button></li>
 {{end}}</ul>
 {{else}}<p class="muted text-sm">No tools are allowed to use AI at your expense. A tool asks the first time it needs AI.</p>{{end}}{{end}}

@@ -80,6 +80,11 @@ probabilities on ranges, keep thresholds in your code, and treat low confidence
 as an outcome. Never put saved data in a prompt without the person seeing what
 is sent.
 
+Keep private AI results in the current document. An artifact's localStorage
+can be shared with other named viewers through shared-state mode. Ask before
+writing a result to the tool's saved data, as the triage example does for its
+summary drafts.
+
 ## Who may call, and who pays
 
 | Viewer | Allowed? | Pays |

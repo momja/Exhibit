@@ -26,6 +26,10 @@ func stateViewer(r *http.Request) store.ViewerID {
 func (ro *Router) getState(w http.ResponseWriter, r *http.Request) {
 	artifactID := urlParamID(r, "artifactID")
 	w.Header().Set("Cache-Control", "no-store")
+	if channel := r.Header.Get("X-Exhibit-State-Channel"); channel != "" && !ro.artifactChannelMatches(r, artifactID, channel) {
+		writeError(w, http.StatusForbidden, "Reload the artifact to sync saved data as the signed-in viewer")
+		return
+	}
 
 	if !ro.artifactExists(w, r, artifactID, "get state") {
 		return

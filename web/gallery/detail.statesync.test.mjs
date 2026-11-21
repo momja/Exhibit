@@ -49,7 +49,7 @@ const HIDDEN = {
 // changing between two polls.
 const stateResponse = (state) => ({ ok: true, status: 200, json: async () => state });
 
-async function loadDetail({ readOnly = false, stateWritable = true, shared = false, responses = [], connectionProtected = false } = {}) {
+async function loadDetail({ readOnly = false, stateWritable = true, shared = false, responses = [], connectionProtected = false, frameChannel = "authorized" } = {}) {
   const api = recordingApi(responses);
   const page = loadPageScript(DETAIL_JS, {
     TOKEN: "",
@@ -74,8 +74,19 @@ async function loadDetail({ readOnly = false, stateWritable = true, shared = fal
   permissionDialog(page, 'link-modal');
   permissionDialog(page, 'media-modal');
   permissionDialog(page, 'geo-modal');
+  const { frame, postFromFrame } = page;
+  frame.dataset.artifactChannel = "authorized";
+  const port = { replies: [], closed: false, postMessage(state) { this.replies.push(state); }, close() { this.closed = true; } };
+  const postMessage = frame.contentWindow.postMessage;
+  let syncRequest;
+  frame.contentWindow.postMessage = function (message) {
+    postMessage.call(this, message);
+    if (message.__avStateSyncRequest) {
+      syncRequest = postFromFrame({ __avStateSyncPort: true, artifactId: ID, request: message.request, channel: frameChannel }, this, [port]);
+    }
+  };
   await page.loadModule(path.join(ASSETS, 'detail.js'));
-  return { ...page, api };
+  return { ...page, api, port, pendingSync: () => syncRequest };
 }
 
 const stateWrite = (key, value) => ({ __avState: true, artifactId: ID, op: "set", key, value });
@@ -148,20 +159,33 @@ test("a resync in flight with a local write waits", async () => {
 
   assert.equal(api.calls.length, 1, "the PUT went; the poll stood down");
   assert.equal(api.calls[0].method, "PUT");
-  assert.deepEqual(frame.contentWindow.posted.filter((m) => m.__avStateSync), []);
+  assert.deepEqual(frame.contentWindow.posted.filter((m) => m.__avStateSyncRequest), []);
 });
 
-test("the fetched map is posted into the frame", async () => {
-  const { frame, tickIntervals } = await loadDetail({
+test("the fetched map is delivered through the requesting document's port", async () => {
+  const { frame, port, tickIntervals, pendingSync } = await loadDetail({
     shared: true, responses: [stateResponse({ position: "e4" })]
   });
 
   await tickIntervals();
+  await pendingSync();
 
-  const [sync] = frame.contentWindow.posted.filter((m) => m.__avStateSync);
-  assert.ok(sync, "the frame is where the state has to end up; the host only carries it");
-  assert.equal(sync.artifactId, ID);
-  assert.deepEqual(sync.state, { position: "e4" });
+  const [request] = frame.contentWindow.posted.filter((m) => m.__avStateSyncRequest);
+  assert.equal(request.artifactId, ID);
+  assert.equal(request.state, undefined);
+  assert.deepEqual(port.replies, [{ position: "e4" }]);
+  assert.equal(port.closed, true);
+});
+
+test("a replacement document in the frame cannot resync saved data", async () => {
+  const { api, port, tickIntervals, pendingSync } = await loadDetail({ shared: true, frameChannel: "" });
+
+  await tickIntervals();
+  await pendingSync();
+
+  assert.deepEqual(api.calls, []);
+  assert.deepEqual(port.replies, []);
+  assert.equal(port.closed, true);
 });
 
 // --- the reload control, and when it stays out of the way ----------------

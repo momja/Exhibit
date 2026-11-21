@@ -205,7 +205,7 @@ let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
     {{if .HasArtifact}}<div class="pv-widget" id="pv-widget">{{template "cardWidget" .Widget}}<span class="pv-widget-label">Card widget</span></div>{{end}}
     <div id="frame-wrap"{{if .FramePolicyEnabled}} data-controller="relay-host" data-relay-host-artifact-id-value="{{.ID}}" data-relay-host-frame-selector-value="#pv-frame" data-relay-host-policy-value="{{.RelayPolicy}}"{{end}}>
       {{if .FramePolicyEnabled}}<template data-relay-host-target="framePolicy"><meta http-equiv="Content-Security-Policy" content="{{.RelayFramePolicy}}"></template>{{end}}
-      {{if .HasArtifact}}<iframe id="pv-frame" {{if .FramePolicyEnabled}}data-relay-src{{else}}src{{end}}="{{.FrameURL}}" sandbox="allow-scripts allow-forms" allow="clipboard-read; clipboard-write" data-ai-frame data-ai-channel="{{.AIChannel}}"></iframe>{{else}}<div id="empty-preview"><i class="ph ph-frame-corners"></i><span>Your artifact will appear here.</span></div>{{end}}
+      {{if .HasArtifact}}<iframe id="pv-frame" {{if .FramePolicyEnabled}}data-relay-src{{else}}src{{end}}="{{.FrameURL}}" sandbox="allow-scripts allow-forms" allow="clipboard-read; clipboard-write" data-ai-frame data-artifact-channel="{{.ArtifactChannel}}"></iframe>{{else}}<div id="empty-preview"><i class="ph ph-frame-corners"></i><span>Your artifact will appear here.</span></div>{{end}}
       {{if .RelayEnabled}}{{template "relayConsent" .}}{{end}}
     </div>{{end}}
 

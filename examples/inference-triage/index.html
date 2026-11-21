@@ -129,7 +129,7 @@ ol.actions{margin:8px 0 0;padding-left:20px}
     </label>
     <ol id="summary-actions" class="actions" hidden></ol>
     <div class="row" style="margin-top:8px">
-      <button id="summary-save" type="button">Save summary</button>
+      <button id="summary-save" type="button">Save summary to tool</button>
       <button id="summary-ai" type="button" disabled>Draft with AI…</button>
       <span id="summary-meta" class="note"></span>
     </div>
@@ -163,6 +163,7 @@ ol.actions{margin:8px 0 0;padding-left:20px}
       </label>
       <label><input type="checkbox" data-field="urgent"> Urgent</label>
       <span data-slot="chips"></span>
+      <button type="button" data-action="save-triage" hidden>Save triage</button>
       <button type="button" data-action="delete">Delete</button>
     </div>
     <div class="ai-why" data-slot="why" hidden></div>
@@ -196,6 +197,9 @@ function load() {
 }
 let data = load();
 function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
+const judgments = new Map();
+let draftSummary = null;
+function displayedItems() { return data.items.map((item) => judgments.get(item.id) || item); }
 
 const $ = (id) => document.getElementById(id);
 function newID() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
@@ -225,7 +229,7 @@ function renderAIState() {
   const status = $('ai-status');
   if (ai.complete && ai.decide) {
     status.className = 'notice info';
-    status.textContent = 'AI can suggest triage and draft a summary. You’ll see exactly what is sent before anything leaves this page.';
+    status.textContent = 'You’ll preview what goes to AI. Suggestions and drafts stay in this tab until you save your choices to the tool.';
   } else if (ai.decide || ai.complete) {
     status.className = 'notice info';
     status.textContent = ai.decide
@@ -235,7 +239,8 @@ function renderAIState() {
     status.className = 'notice warn';
     status.textContent = UNAVAILABLE;
   }
-  const untriaged = data.items.filter((item) => !isTriaged(item)).length;
+  if (ai.complete || ai.decide) status.textContent += ' People with shared access to the tool’s saved data can see what you save.';
+  const untriaged = displayedItems().filter((item) => !isTriaged(item)).length;
   $('triage-ai').disabled = busy || !ai.decide || untriaged === 0;
   // The banner above carries the reason; the notes say what to do instead.
   setNote('triage-note', !ai.decide ? 'AI triage is off here — tag items by hand.' : untriaged === 0 && data.items.length ? 'Every item has a category. Clear one to ask again.' : '');
@@ -341,7 +346,7 @@ const TRIAGE_QUESTIONS = {
 function triageState(item) { return { feedback: item.text }; }
 
 function startTriage() {
-  const queue = data.items.filter((item) => !isTriaged(item));
+  const queue = displayedItems().filter((item) => !isTriaged(item));
   if (!ai.decide || queue.length === 0) return;
   const text = queue.map((item) => JSON.stringify(triageState(item))).join('\n');
   preview(
@@ -395,16 +400,16 @@ async function runTriage(ids) {
       setNote('triage-note', 'Triaging ' + (index + 1) + ' of ' + ids.length + '…');
       try {
         const answer = await window.exhibit.ai.decide({ state: triageState(item), questions: TRIAGE_QUESTIONS });
-        applyJudgment(item, answer);
-        save();
+        const suggested = { ...item };
+        applyJudgment(suggested, answer);
+        judgments.set(id, suggested);
         render();
       } catch (err) {
         const message = explainAIError(err, 'decide');
         const perItem = err && (err.code === 'invalid_request' || err.code === 'invalid_output');
         if (perItem) {
           // This item could not be judged; the others still can.
-          item.needsPerson = true;
-          save();
+          judgments.set(id, { ...item, needsPerson: true });
           render();
           showError(message);
           continue;
@@ -433,7 +438,7 @@ const SUMMARY_SCHEMA = {
 };
 
 function summaryInput() {
-  return sortedItems(data.items).map((item) => {
+  return sortedItems(displayedItems()).map((item) => {
     const tags = [
       item.category ? CATEGORY_LABELS[item.category] : 'Untriaged',
       item.urgent ? 'urgent' : null,
@@ -466,11 +471,10 @@ async function runSummary(text) {
       schema: SUMMARY_SCHEMA,
       maxTokens: 600,
     });
-    data.summary = {
+    draftSummary = {
       headline: result.headline, summary: result.summary, top_actions: result.top_actions,
       source: 'ai', at: new Date().toISOString(), itemCount: data.items.length,
     };
-    save();
     renderSummary();
   } catch (err) {
     showError(explainAIError(err, 'complete'));
@@ -483,12 +487,14 @@ async function runSummary(text) {
 function saveManualSummary() {
   const headline = $('summary-headline').value.trim();
   const summary = $('summary-body').value.trim();
-  const keepActions = data.summary && data.summary.source === 'ai' &&
-    headline === data.summary.headline && summary === data.summary.summary;
+  const current = draftSummary || data.summary;
+  const keepActions = current && current.source === 'ai' &&
+    headline === current.headline && summary === current.summary;
   data.summary = (headline || summary) ? {
-    headline, summary, top_actions: keepActions ? data.summary.top_actions : [],
+    headline, summary, top_actions: keepActions ? current.top_actions : [],
     source: keepActions ? 'ai' : 'manual', at: new Date().toISOString(), itemCount: data.items.length,
   } : null;
+  draftSummary = null;
   save();
   renderSummary();
 }
@@ -524,7 +530,8 @@ function describeSuggestion(s) {
 function render() {
   const counts = { untriaged: 0, urgent: 0, person: 0 };
   for (const c of CATEGORIES) counts[c] = 0;
-  for (const item of data.items) {
+  const items = displayedItems();
+  for (const item of items) {
     if (item.category) counts[item.category] += 1; else counts.untriaged += 1;
     if (item.urgent) counts.urgent += 1;
     if (item.needsPerson) counts.person += 1;
@@ -542,7 +549,7 @@ function render() {
   const list = $('items');
   list.replaceChildren();
   const filter = $('filter').value;
-  const visible = sortedItems(data.items).filter((item) => matchesFilter(item, filter));
+  const visible = sortedItems(items).filter((item) => matchesFilter(item, filter));
   if (visible.length === 0) {
     const li = document.createElement('li');
     li.className = 'empty';
@@ -564,6 +571,7 @@ function render() {
       const why = node.querySelector('[data-slot=why]');
       why.textContent = describeSuggestion(item.ai);
       why.hidden = false;
+      node.querySelector('[data-action=save-triage]').hidden = false;
     }
     list.append(node);
   }
@@ -578,7 +586,7 @@ function chip(text, kind) {
 }
 
 function renderSummary() {
-  const s = data.summary;
+  const s = draftSummary || data.summary;
   $('summary-headline').value = s ? s.headline : '';
   $('summary-body').value = s ? s.summary : '';
   const actions = $('summary-actions');
@@ -589,10 +597,14 @@ function renderSummary() {
     actions.append(li);
   }
   actions.hidden = actions.children.length === 0;
-  $('summary-meta').textContent = s
-    ? (s.source === 'ai' ? 'Drafted with AI' : 'Written by hand') + ' · ' + new Date(s.at).toLocaleString() +
-      (s.itemCount !== data.items.length ? ' · the list has changed since' : '')
-    : '';
+  let status = '';
+  if (draftSummary) {
+    status = 'Private draft. People with shared access to the tool’s saved data can see it if you save.';
+  } else if (s) {
+    status = (s.source === 'ai' ? 'Drafted with AI' : 'Written by hand') + ' · ' + new Date(s.at).toLocaleString();
+    if (s.itemCount !== data.items.length) status += ' · the list has changed since';
+  }
+  $('summary-meta').textContent = status;
 }
 
 // ---- Events --------------------------------------------------------------------
@@ -611,6 +623,7 @@ $('items').addEventListener('change', (event) => {
   const li = event.target.closest('li.item');
   const item = li && data.items.find((candidate) => candidate.id === li.dataset.id);
   if (!item) return;
+  judgments.delete(item.id);
   const field = event.target.dataset.field;
   if (field === 'category') item.category = event.target.value || null;
   if (field === 'severity') item.severity = event.target.value === '' ? null : Number(event.target.value);
@@ -621,9 +634,21 @@ $('items').addEventListener('change', (event) => {
 });
 
 $('items').addEventListener('click', (event) => {
-  if (event.target.dataset.action !== 'delete') return;
-  const li = event.target.closest('li.item');
-  data.items = data.items.filter((item) => item.id !== li.dataset.id);
+  const action = event.target.dataset.action;
+  if (action !== 'delete' && action !== 'save-triage') return;
+  const id = event.target.closest('li.item').dataset.id;
+  if (action === 'delete') {
+    data.items = data.items.filter((item) => item.id !== id);
+  } else {
+    const saved = data.items.find((item) => item.id === id);
+    const suggestion = judgments.get(id);
+    if (!saved || !suggestion) return;
+    saved.category = suggestion.category;
+    saved.urgent = suggestion.urgent;
+    saved.severity = suggestion.severity;
+    saved.needsPerson = suggestion.needsPerson;
+  }
+  judgments.delete(id);
   save();
   render();
   renderSummary();
@@ -638,6 +663,7 @@ $('summary-save').addEventListener('click', saveManualSummary);
 window.addEventListener('storage', (event) => {
   if (event.key !== STORAGE_KEY && event.key !== null) return;
   data = load();
+  judgments.clear();
   render();
   renderSummary();
 });

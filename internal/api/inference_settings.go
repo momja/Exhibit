@@ -110,7 +110,7 @@ func (ro *Router) aiPermissions(r *http.Request) (aiPermissionsView, error) {
 	for _, perm := range perms {
 		view.Permissions = append(view.Permissions, aiPermissionRow{
 			InferencePermission: perm,
-			Channel:             ro.tokens.AIChannel(perm.ArtifactID, int64(viewer)),
+			Channel:             ro.tokens.ArtifactChannel(perm.ArtifactID, int64(viewer)),
 		})
 	}
 	return view, nil

@@ -1344,6 +1344,9 @@ possibly including saved data, to a third party. So:
   Browser inference requests carry that channel to the server, which checks it
   against the current authenticated viewer. An artifact left open during an
   account switch cannot use the new account's consent or allowance.
+  Saved-data resync also checks the viewer and delivers state over a port held
+  by the requesting document. Results an artifact deliberately saves are
+  subject to that artifact's state-sharing policy.
 - **The viewer pays, never the owner.** The core resolves the payer from the
   request's principal alone. A recipient without a key gets `no_key`, never the
   owner's key or allowance.

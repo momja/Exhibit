@@ -29,7 +29,7 @@
        Clipboard read/write is instead proxied through the host via the shim's
        capability bridge, gated by per-artifact first-use approval. Native
        keyboard paste (Ctrl/Cmd+V) is a browser event and works without it. */}}
-  <iframe {{if .RelayEnabled}}data-relay-src{{else}}src{{end}}="{{.FrameURL}}" sandbox="allow-scripts allow-forms" loading="lazy" title="{{.Title}}" data-ai-frame data-ai-channel="{{.AIChannel}}"></iframe>
+  <iframe {{if .RelayEnabled}}data-relay-src{{else}}src{{end}}="{{.FrameURL}}" sandbox="allow-scripts allow-forms" loading="lazy" title="{{.Title}}" data-ai-frame data-artifact-channel="{{.ArtifactChannel}}"></iframe>
 </div>
 {{/* The page's notices: the three banners below and the status line. They are
      messages to read and often act on, so they stay until dealt with rather

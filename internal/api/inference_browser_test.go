@@ -38,6 +38,9 @@ var windowReceivedAIResult = false;
 window.addEventListener('message', function (event) {
   if (event.data?.__avInferenceResult) windowReceivedAIResult = true;
 });
+window.addEventListener('storage', function (event) {
+  if (event.key === 'resync') localStorage.setItem('syncedValue', event.newValue);
+});
 window.exhibit.ai.available().then(function (a) {
   localStorage.setItem('available', JSON.stringify(a));
   return window.exhibit.ai.complete({ prompt: 'Summarize' });
@@ -82,6 +85,11 @@ window.exhibit.ai.available().then(function (a) {
 	a, err := ro.cfg.Store.GetArtifact(t.Context(), 1, id)
 	require.NoError(t, err)
 	assert.True(t, a.InferenceApproved, "Allow is the owner's approval")
+
+	require.NoError(t, ro.cfg.Store.SetStateAsViewer(ctx, 1, id, "resync", "from another device"))
+	_, err = chromedp.Run(ctx, chromedp.Evaluate[bool](`document.dispatchEvent(new Event('visibilitychange'))`))
+	require.NoError(t, err)
+	require.Eventually(t, func() bool { return getState(t, ro, id)["syncedValue"] == "from another device" }, 10*time.Second, 50*time.Millisecond)
 }
 
 // "Not now" holds for the page load: a tool that asks again straight away is

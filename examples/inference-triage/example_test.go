@@ -180,7 +180,7 @@ func TestExampleTriagesAndSummarisesBrowser(t *testing.T) {
 
 	type triaged struct {
 		Calls   int               `json:"calls"`
-		Saved   map[string]any    `json:"saved"`
+		Saved   []map[string]any  `json:"saved"`
 		Chips   []string          `json:"chips"`
 		ByText  map[string]string `json:"byText"`
 		Persons int               `json:"persons"`
@@ -189,10 +189,11 @@ func TestExampleTriagesAndSummarisesBrowser(t *testing.T) {
 		document.getElementById('preview-send').click();
 		for (let i = 0; i < 200 && __calls.length < 3; i++) await new Promise((r) => setTimeout(r, 10));
 		await new Promise((r) => setTimeout(r, 50));
-		const saved = JSON.parse(localStorage.getItem('triage.v1'));
+		const saved = JSON.parse(localStorage.getItem('triage.v1')).items;
+		const visible = displayedItems();
 		const byText = {};
-		for (const item of saved.items) byText[item.text] = (item.category || '') + (item.urgent ? '+urgent' : '');
-		return { calls: __calls.length, saved, byText, persons: saved.items.filter((i) => i.needsPerson).length,
+		for (const item of visible) byText[item.text] = (item.category || '') + (item.urgent ? '+urgent' : '');
+		return { calls: __calls.length, saved, byText, persons: visible.filter((i) => i.needsPerson).length,
 			chips: [...document.querySelectorAll('#items .chip')].map((c) => c.textContent) };
 	})()`, chromedp.EvalAwaitPromise))
 	require.NoError(t, err)
@@ -202,6 +203,11 @@ func TestExampleTriagesAndSummarisesBrowser(t *testing.T) {
 	assert.Equal(t, "", got.ByText["maybe fine"], "a low-confidence category is left for a person")
 	assert.Equal(t, 1, got.Persons)
 	assert.Contains(t, got.Chips, "Needs a person")
+	for _, saved := range got.Saved {
+		assert.Nil(t, saved["category"], "the selected category is a private suggestion")
+		assert.NotContains(t, saved, "ai", "raw judgments stay out of saved state")
+		assert.Equal(t, false, saved["urgent"])
+	}
 
 	shown = openPreview("summary-ai")
 	assert.True(t, shown.Visible)
@@ -218,12 +224,17 @@ func TestExampleTriagesAndSummarisesBrowser(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "One crash needs attention", headline)
 	assertNoAICallsOrErrors(t, ctx, 4)
+	draftStored, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`JSON.parse(localStorage.getItem('triage.v1')).summary !== null`))
+	require.NoError(t, err)
+	assert.False(t, draftStored, "the draft stays private until Save")
+	require.NoError(t, chromedp.Do(ctx, chromedp.Click(chromedp.CSS(`#items [data-action="save-triage"]:not([hidden])`))))
+	require.NoError(t, chromedp.Do(ctx, chromedp.Click(chromedp.CSS("#summary-save"))))
 
 	// The widget reads what the tool saved, and calls nothing.
 	require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(base+"/widget.html?ai=complete,decide")))
 	tile, err := chromedp.Run(ctx, chromedp.Evaluate[string](`[...document.body.querySelectorAll('#total,#label,#legend,#headline')].map((e) => e.textContent).join(' | ')`))
 	require.NoError(t, err)
-	assert.Equal(t, "3 | items · 1 urgent · 1 untriaged | 1 bugs1 praise | One crash needs attention", tile)
+	assert.Equal(t, "3 | items · 1 urgent · 2 untriaged | 1 bugs | One crash needs attention", tile)
 	assertNoAICallsOrErrors(t, ctx, 0)
 }
 

@@ -719,11 +719,11 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 	if !widget {
 		body = injectFavicon(body, artifacticon.DataURI(a.Tags))
 	}
-	aiChannel := ""
+	artifactChannel := ""
 	if !viewer.Anonymous && viewer.ViewerID > 0 {
-		aiChannel = rd.cfg.Tokens.AIChannel(a.ID, viewer.ViewerID)
+		artifactChannel = rd.cfg.Tokens.ArtifactChannel(a.ID, viewer.ViewerID)
 	}
-	out := injectPreambleWithHostMode(body, a.ID, rd.cfg.AppOrigin, state, origins, widget, viewer.Anonymous, versionView, manifest, doc.attribution, doc.publicShare, aiChannel, a.VersionSeq)
+	out := injectPreambleWithHostMode(body, a.ID, rd.cfg.AppOrigin, state, origins, widget, viewer.Anonymous, versionView, manifest, doc.attribution, doc.publicShare, artifactChannel, a.VersionSeq)
 	if rd.cfg.RelayEnabled && !widget && !versionView && !viewer.Anonymous && doc.headMeta == "" {
 		out = injectRelay(out, rd.cfg.AppOrigin, a.ID, allowed)
 	}
@@ -1452,12 +1452,18 @@ const shimTemplate = `<script>
       // both halves of its identity are checkable.
       if (e.origin !== API_ORIGIN || e.source !== window.parent) return;
       var d = e.data;
-      if (!d || d.__avStateSync !== true || d.artifactId !== ARTIFACT_ID) return;
-      var changed = applyStateSync(d.state);
-      window.parent.postMessage({
-        __avStateSynced: true, artifactId: ARTIFACT_ID,
-        changed: changed, live: listeningForStorage()
-      }, API_ORIGIN);
+      if (!d || d.__avStateSyncRequest !== true || d.artifactId !== ARTIFACT_ID || typeof ARTIFACT_CHANNEL !== 'string' || !ARTIFACT_CHANNEL) return;
+      var response = new MessageChannel();
+      response.port1.onmessage = function(event) {
+        response.port1.close();
+        var changed = applyStateSync(event.data);
+        window.parent.postMessage({
+          __avStateSynced: true, artifactId: ARTIFACT_ID,
+          changed: changed, live: listeningForStorage()
+        }, API_ORIGIN);
+      };
+      window.parent.postMessage({ __avStateSyncPort: true, artifactId: ARTIFACT_ID,
+        request: d.request, channel: ARTIFACT_CHANNEL }, API_ORIGIN, [response.port2]);
     });
   }
 %s
@@ -1503,7 +1509,7 @@ const aiBridgeScript = `
   if (window.parent !== window && !ANONYMOUS) {
     // The host answers only calls carrying this document's channel, which a
     // page navigated into this frame does not have.
-    var AI_CHANNEL = %AI_CHANNEL%;
+    var ARTIFACT_CHANNEL = %ARTIFACT_CHANNEL%;
     // A call is sent only once the host has said it is listening
     // (__avAIHostReady): the host's module can attach after this frame's
     // first call, and a call lost then would never settle. Queued calls are
@@ -1527,7 +1533,7 @@ const aiBridgeScript = `
     };
     var callAI = function(op, payload) {
       return new Promise(function(resolve, reject) {
-        var msg = { __avInference: true, artifactId: ARTIFACT_ID, channel: AI_CHANNEL, op: op };
+        var msg = { __avInference: true, artifactId: ARTIFACT_ID, channel: ARTIFACT_CHANNEL, op: op };
         if (payload !== undefined) {
           try { msg.payload = JSON.parse(JSON.stringify(payload)); }
           catch (err) {
@@ -2604,11 +2610,11 @@ func injectPreamble(body, artifactID, appOrigin string, state map[string]string,
 // from an app-hosted frame. Public shares inline the owner's saved state but
 // have no authenticated viewer/host to persist through or answer capabilities.
 // Native unsupported APIs reject under browser policy; no host reply is awaited.
-func injectPreambleWithHostMode(body, artifactID, appOrigin string, state map[string]string, origins originPolicy, widget, anonymous, versionView bool, assetManifest map[string]string, noHost, publicShare bool, aiChannel string, versionSeq ...int) string {
+func injectPreambleWithHostMode(body, artifactID, appOrigin string, state map[string]string, origins originPolicy, widget, anonymous, versionView bool, assetManifest map[string]string, noHost, publicShare bool, artifactChannel string, versionSeq ...int) string {
 	bridges := bridgeScript
 	if !noHost && !publicShare && !widget && !anonymous {
-		channel, _ := json.Marshal(aiChannel)
-		bridges += strings.Replace(aiBridgeScript, "%AI_CHANNEL%", string(channel), 1)
+		channel, _ := json.Marshal(artifactChannel)
+		bridges += strings.Replace(aiBridgeScript, "%ARTIFACT_CHANNEL%", string(channel), 1)
 	}
 	if noHost {
 		bridges = frameLocalScript + "\n  }\n"

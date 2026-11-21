@@ -266,7 +266,7 @@ func TestInferenceRefusesRequestsFromAnotherPage(t *testing.T) {
 	w := postInference(in.ro, in.granted, in.cookieOne, func(r *http.Request) {
 		r.Header.Set("Origin", in.ro.cfg.AppOrigin)
 		r.Header.Set("Sec-Fetch-Site", "same-origin")
-		r.Header.Set(inferenceChannelHeader, in.ro.tokens.AIChannel(in.granted, in.ownerOne))
+		r.Header.Set(inferenceChannelHeader, in.ro.tokens.ArtifactChannel(in.granted, in.ownerOne))
 	})
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	assert.Equal(t, 1, rt.calls())
@@ -277,8 +277,8 @@ func TestInferenceRejectsAnArtifactPageFromBeforeAnAccountSwitch(t *testing.T) {
 	rt := withPlatformInference(t, in.ro)
 	ctx := t.Context()
 	require.NoError(t, in.ro.cfg.Store.UpdateArtifact(ctx, in.ownerOne, in.granted, map[string]any{"inference_approved": true}))
-	ownerChannel := in.ro.tokens.AIChannel(in.granted, in.ownerOne)
-	recipientChannel := in.ro.tokens.AIChannel(in.granted, in.ownerTwo)
+	ownerChannel := in.ro.tokens.ArtifactChannel(in.granted, in.ownerOne)
+	recipientChannel := in.ro.tokens.ArtifactChannel(in.granted, in.ownerTwo)
 	path := "/api/artifacts/" + in.granted
 
 	fromPage := func(channel string) func(*http.Request) {
@@ -299,6 +299,18 @@ func TestInferenceRejectsAnArtifactPageFromBeforeAnAccountSwitch(t *testing.T) {
 		return w.Code
 	}
 	consent := path + "/inference/consent"
+	for _, channel := range []string{ownerChannel, recipientChannel} {
+		req := httptest.NewRequest(http.MethodGet, path+"/state", nil)
+		req.AddCookie(in.cookieTwo)
+		req.Header.Set("X-Exhibit-State-Channel", channel)
+		w := httptest.NewRecorder()
+		in.ro.ServeHTTP(w, req)
+		if channel == ownerChannel {
+			assert.Equal(t, http.StatusForbidden, w.Code)
+		} else {
+			assert.Equal(t, http.StatusOK, w.Code)
+		}
+	}
 	assert.Equal(t, http.StatusForbidden, request(http.MethodGet, path+"/inference", ownerChannel, "", in.cookieTwo))
 	assert.Equal(t, http.StatusForbidden, request(http.MethodPut, consent, ownerChannel, "", in.cookieTwo))
 	allowed, err := in.ro.cfg.Store.HasInferenceConsent(ctx, store.ViewerID(in.ownerTwo), in.granted)
@@ -321,7 +333,7 @@ func TestInferenceRejectsAnArtifactPageFromBeforeAnAccountSwitch(t *testing.T) {
 
 // Every AI frame carries the channel its document inlines for this viewer, so
 // the host can tell the artifact's own document from one navigated into it.
-func TestDetailFrameCarriesTheViewersAIChannel(t *testing.T) {
+func TestDetailFrameCarriesTheViewersArtifactChannel(t *testing.T) {
 	in := newGrantedInstance(t)
 	withPlatformInference(t, in.ro)
 	for _, viewer := range []struct {
@@ -333,8 +345,8 @@ func TestDetailFrameCarriesTheViewersAIChannel(t *testing.T) {
 		w := httptest.NewRecorder()
 		in.ro.ServeHTTP(w, req)
 		require.Equal(t, http.StatusOK, w.Code)
-		channel := in.ro.tokens.AIChannel(in.granted, viewer.id)
+		channel := in.ro.tokens.ArtifactChannel(in.granted, viewer.id)
 		require.NotEmpty(t, channel)
-		assert.Contains(t, w.Body.String(), `data-ai-channel="`+channel+`"`)
+		assert.Contains(t, w.Body.String(), `data-artifact-channel="`+channel+`"`)
 	}
 }
