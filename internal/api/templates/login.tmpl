@@ -5,13 +5,68 @@
      provider alone the gate redirects straight to the provider, because a page
      whose only control is "continue" is a choice that does not exist.
 
-     Deliberately scriptless: no bootstrap block, no /assets/gallery/*.js. The
-     form posts itself, and this is the one page in the app that must work for
-     somebody who is not yet allowed to load anything else.
+     Works without script: no bootstrap block, and the form posts itself, since
+     this is the one page in the app that must work for somebody who is not yet
+     allowed to load anything else. The only script it may carry is the
+     same-origin descent module (Exh-vsw0), on a visit that animates; it moves
+     scenery and never touches the form.
 
      Username and Error are echoed back through html/template's contextual
      escaping — Username is whatever was typed into the form, so it is
      attacker-controlled text and must never be assembled into markup. */}}
+{{/* The painted front door (Exh-90b2). One scene, shared by every sign-in page.
+
+     .login-scene is a fixed, pointer-less stage; .login-scene-composite is the
+     static final frame that paints first. Data: whether this visit plays the
+     descent (Exh-vsw0). If so, the sky, cloud and hill layers are emitted as
+     empty divs (their images are CSS backgrounds in login-descent.css, so a
+     visit that does not animate downloads none of them) and the composite is
+     hidden until they settle on top of it. The scene moves independently of
+     the form. The headline rotates words inside a fixed-height CSS slot.
+
+     Only the active colour mode and one width download: sources match in order,
+     so the first matching media query and a supported type win. Light is the
+     default, dusk follows prefers-color-scheme: dark, phones get the portrait
+     crop. Explicit dimensions keep the stage from shifting layout. */}}
+{{/* One descent layer (Exh-vsw0), by name: sky, clouds or hill. Sources mirror
+     the composite's (dusk under prefers-color-scheme: dark, AVIF before WebP).
+     The art is 2560 wide and the frame is as wide as the cover-fitted composite
+     (max(100vw,177.8vh)); on phones the frame is 2560/960 of the viewport and
+     the visible crop is about 37% of it, so 200vw is the width asked for. */}}
+{{define "loginLayer"}}{{$sizes := "(max-width:600px) 200vw, max(100vw, 177.8vh)"}}{{$h := 1440}}{{if eq . "sky"}}{{$h = 2272}}{{end}}<picture>
+      <source media="(prefers-color-scheme:dark)" type="image/avif" srcset="{{asset (printf "hero-art/dusk-%s-960.avif" .)}} 960w, {{asset (printf "hero-art/dusk-%s-1600.avif" .)}} 1600w, {{asset (printf "hero-art/dusk-%s-2560.avif" .)}} 2560w" sizes="{{$sizes}}">
+      <source media="(prefers-color-scheme:dark)" type="image/webp" srcset="{{asset (printf "hero-art/dusk-%s-960.webp" .)}} 960w, {{asset (printf "hero-art/dusk-%s-1600.webp" .)}} 1600w, {{asset (printf "hero-art/dusk-%s-2560.webp" .)}} 2560w" sizes="{{$sizes}}">
+      <source type="image/avif" srcset="{{asset (printf "hero-art/day-%s-960.avif" .)}} 960w, {{asset (printf "hero-art/day-%s-1600.avif" .)}} 1600w, {{asset (printf "hero-art/day-%s-2560.avif" .)}} 2560w" sizes="{{$sizes}}">
+      <source type="image/webp" srcset="{{asset (printf "hero-art/day-%s-960.webp" .)}} 960w, {{asset (printf "hero-art/day-%s-1600.webp" .)}} 1600w, {{asset (printf "hero-art/day-%s-2560.webp" .)}} 2560w" sizes="{{$sizes}}">
+      <img class="login-layer login-layer-{{.}}" src="{{asset (printf "hero-art/day-%s-1600.webp" .)}}" alt="" width="2560" height="{{$h}}" decoding="async">
+    </picture>{{end}}
+
+{{define "loginScene"}}<div class="login-scene" aria-hidden="true">
+  <picture class="login-scene-composite">
+    <source media="(max-width:600px) and (prefers-color-scheme:dark)" type="image/avif" srcset="{{asset "hero-art/dusk-phone-750.avif"}} 750w, {{asset "hero-art/dusk-phone-1170.avif"}} 1170w" sizes="100vw" width="1170" height="2535">
+    <source media="(max-width:600px) and (prefers-color-scheme:dark)" type="image/webp" srcset="{{asset "hero-art/dusk-phone-750.webp"}} 750w, {{asset "hero-art/dusk-phone-1170.webp"}} 1170w" sizes="100vw" width="1170" height="2535">
+    <source media="(max-width:600px)" type="image/avif" srcset="{{asset "hero-art/day-phone-750.avif"}} 750w, {{asset "hero-art/day-phone-1170.avif"}} 1170w" sizes="100vw" width="1170" height="2535">
+    <source media="(max-width:600px)" type="image/webp" srcset="{{asset "hero-art/day-phone-750.webp"}} 750w, {{asset "hero-art/day-phone-1170.webp"}} 1170w" sizes="100vw" width="1170" height="2535">
+    <source media="(prefers-color-scheme:dark)" type="image/avif" srcset="{{asset "hero-art/dusk-composite-960.avif"}} 960w, {{asset "hero-art/dusk-composite-1600.avif"}} 1600w, {{asset "hero-art/dusk-composite-2560.avif"}} 2560w" sizes="max(100vw, 177.8vh)" width="2560" height="1440">
+    <source media="(prefers-color-scheme:dark)" type="image/webp" srcset="{{asset "hero-art/dusk-composite-960.webp"}} 960w, {{asset "hero-art/dusk-composite-1600.webp"}} 1600w, {{asset "hero-art/dusk-composite-2560.webp"}} 2560w" sizes="max(100vw, 177.8vh)" width="2560" height="1440">
+    <source type="image/avif" srcset="{{asset "hero-art/day-composite-960.avif"}} 960w, {{asset "hero-art/day-composite-1600.avif"}} 1600w, {{asset "hero-art/day-composite-2560.avif"}} 2560w" sizes="max(100vw, 177.8vh)" width="2560" height="1440">
+    <source type="image/webp" srcset="{{asset "hero-art/day-composite-960.webp"}} 960w, {{asset "hero-art/day-composite-1600.webp"}} 1600w, {{asset "hero-art/day-composite-2560.webp"}} 2560w" sizes="max(100vw, 177.8vh)" width="2560" height="1440">
+    <img class="login-scene-image" src="{{asset "hero-art/day-composite-1600.webp"}}" alt="" width="2560" height="1440" decoding="async" fetchpriority="high">
+  </picture>
+  {{if .}}<div class="login-layers"><div class="login-layers-stage"><template>{{template "loginLayer" "sky"}}{{template "loginLayer" "clouds"}}{{template "loginLayer" "hill"}}</template></div></div>{{end}}
+  <div class="login-scene-grain grain"></div>
+</div>{{end}}
+
+{{/* Headline and tagline, over the painting. Copy overlaps Exh-s7kn's onboarding
+     copy; see the note on Exh-90b2. */}}
+{{define "loginIntro"}}<div class="login-intro">
+  <p class="login-headline font-headline">A space for<br> <span class="login-headline-ending"><em>your</em> <span class="sr-only">tools</span><span class="login-headline-carousel" aria-hidden="true"><span class="login-headline-window"><span class="login-headline-words">
+    <span>tools</span><span>apps</span><span>art</span><span>games</span><span>tools</span>
+  </span></span></span></span></p>
+  <p class="login-tagline">Build apps instantly, use them,<br>
+    share them, repaint them any time</p>
+</div>{{end}}
+
 {{define "login"}}<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -20,16 +75,21 @@
 <title>Sign in — Exhibit</title>
 <link rel="icon" type="image/svg+xml" href="{{.Favicon}}">
 {{template "pwaHead"}}
+{{template "fontsHead"}}
 <link rel="stylesheet" href="{{asset "phosphor/regular.css"}}">
 <link rel="stylesheet" href="{{asset "gallery/tokens.css"}}">
 <link rel="stylesheet" href="{{asset "gallery/components.css"}}">
 <link rel="stylesheet" href="{{asset "gallery/login.css"}}">
+<link rel="stylesheet" href="{{asset "gallery/login-descent.css"}}">
+{{if .Descend}}<script type="module" src="{{asset "gallery/login-descent.js"}}"></script>
+<noscript><style>.login-descend .login-scene-composite{opacity:1;animation:none}</style></noscript>{{end}}
 </head>
-<body class="login-page">
+<body class="login-page login-painted{{if .Descend}} login-descend{{end}}">{{template "loginScene" .Descend}}
 {{template "appHeader" .Header}}
 <div class="login-content">
+{{template "loginIntro"}}
 <main class="login">
-  <p class="login-sub">Sign in to your Gallery.</p>
+  <p class="login-sub">Sign in to your library</p>
 
   {{if .Error}}
   {{/* role=alert so the message is announced when the page reloads into it —
@@ -69,14 +129,18 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Sign-in failed — Exhibit</title>
 <link rel="icon" type="image/svg+xml" href="{{.Favicon}}">
+{{template "pwaHead"}}
+{{template "fontsHead"}}
 <link rel="stylesheet" href="{{asset "phosphor/regular.css"}}">
 <link rel="stylesheet" href="{{asset "gallery/tokens.css"}}">
 <link rel="stylesheet" href="{{asset "gallery/components.css"}}">
 <link rel="stylesheet" href="{{asset "gallery/login.css"}}">
 </head>
-<body class="login-page">
+<body class="login-page login-painted">{{template "loginScene" false}}
 {{template "appHeader" .Header}}
-<div class="login-content"><main class="login">
+<div class="login-content">
+{{template "loginIntro"}}
+<main class="login">
   <p class="login-error" role="alert">{{.Error}}</p>
   <a class="btn login-submit" href="/auth/login">Return to sign in</a>
 </main></div>

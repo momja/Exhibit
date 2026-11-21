@@ -11,7 +11,7 @@
  * AA at 11-13px.
  */
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(--color-ink);min-height:100vh}
+body{background:var(--color-ground);color:var(--color-ink);min-height:100vh}
 
 /* Two columns on the gallery ground: the hung (crooked) frame with its wall
  * label on the left, the copy and the real controls on the right. The top/
@@ -40,11 +40,11 @@ body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(-
  * frame. Same reason the nail sits at 4.2% rather than anywhere near the top
  * edge. */
 .exhibit-404__stage{overflow:visible;margin-left:104px}
-.exhibit-404__frame{display:block;width:293px;height:auto;transform-origin:49.7% 4.2%;animation:knock 2.8s ease-in-out .25s both}
+.exhibit-404__frame{display:block;width:293px;height:auto;transform-origin:48.3% 4.2%;animation:knock 2.8s ease-in-out .25s both}
 
 /* The pivot is the nail already drawn into the mark, not the box centre: in
- * the logo's own viewBox (0 0 40.316795 49.983387) the nail sits at
- * (20.048, 2.1088) -> 49.7% 4.2%. Negative angles swing the bottom of the
+ * the hanging logo's own viewBox (origin 35.8 36.625489, size 40.9 x
+ * 49.983387) the nail (55.54385, 38.734268) sits at offset (19.74385, 2.1088) -> 48.3% 4.2%. Negative angles swing the bottom of the
  * frame to the right, i.e. struck on the left. ease-in-out applies per
  * segment, which is what gives the swing slow extremes and a fast pass
  * through centre; the peaks decay 15 -> 9.5 -> 6.2 -> 4 -> 2.5 -> 1.4 -> 0.6
@@ -78,7 +78,7 @@ body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(-
 .exhibit-404__eyebrow{font-family:monospace;font-size:13px;font-weight:700;letter-spacing:.18em;color:var(--brand-blue)}
 /* max-width, not a <br>: the headline is meant to break after "hanging", and
  * a measure does that without hard-coding the break into the markup. */
-.exhibit-404__headline{max-width:520px;font-size:56px;font-weight:800;letter-spacing:-.035em;line-height:58px;color:var(--color-ink)}
+.exhibit-404__headline{max-width:520px;font-size:56px;letter-spacing:-.02em;line-height:60px;color:var(--color-ink)}
 .exhibit-404__body{max-width:472px;font-size:17px;line-height:28px;color:var(--nf-body)}
 .exhibit-404__path{display:inline-flex;align-items:center;gap:10px;max-width:100%;background:var(--color-panel);border:1px solid var(--color-hairline);border-radius:var(--radius-md);padding:9px 12px}
 .exhibit-404__path-label{flex:0 0 auto;font-size:12px;font-weight:600;letter-spacing:.08em;color:var(--nf-muted)}

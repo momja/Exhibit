@@ -6,13 +6,13 @@
  * branding and a page title without signed-in navigation or account controls.
  */
 *{box-sizing:border-box;margin:0;padding:0}
-.login-page{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(--color-ink);min-height:100vh;display:flex;flex-direction:column}
+.login-page{background:var(--color-ground);color:var(--color-ink);min-height:100vh;display:flex;flex-direction:column}
 
 .login-content{flex:1;display:flex;align-items:center;justify-content:center;padding:var(--space-8);min-width:0}
 
 /* min-width:0 so a long error message wraps inside the card instead of
  * widening it past the max. */
-.login{width:100%;min-width:0;max-width:380px;background:var(--color-panel);border-radius:var(--radius-lg);box-shadow:var(--shadow-card);padding:32px var(--space-8) var(--space-8);display:flex;flex-direction:column;align-items:center}
+.login{width:100%;min-width:0;max-width:380px;background:var(--color-panel);border-radius:var(--radius-lg);box-shadow:var(--shadow-panel);padding:32px var(--space-8) var(--space-8);display:flex;flex-direction:column;align-items:center}
 
 .login-sub{margin-top:var(--space-2);font-size:14px;color:var(--color-muted)}
 
@@ -42,3 +42,157 @@
 /* MCP consent shares the sign-in card. */
 .oauth-consent{max-width:460px;align-items:stretch}
 .oauth-consent .login-sub{line-height:1.5;overflow-wrap:anywhere}
+
+/* ---- Painted front door (Exh-90b2) -------------------------------------
+ * Scoped to .login-painted so the OAuth consent page, which shares the card,
+ * keeps its plain ground. The scene is a stage behind everything
+ * (.login-scene); the form never sits inside it, so nothing the animation
+ * story (Exh-vsw0) does to the scene can move or delay the form.
+ */
+.login-painted{--login-inset:40px;position:relative;isolation:isolate;background:var(--painting-sky-top)}
+
+/* The stage: fixed to the viewport on desktop, the whole page on phones. */
+.login-scene{container-type:size;position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none;background:var(--painting-sky-top)}
+.login-scene-composite{display:block;position:absolute;inset:0}
+.login-scene-image{display:block;width:100%;height:100%;object-fit:cover;object-position:78% 50%}
+/* Grain over the painting: the shared .grain utility, one layer above the art. */
+.login-scene::after{content:"";position:absolute;inset:0;z-index:2;background:radial-gradient(ellipse 62% 80% at 0% 30%,var(--painting-shade) 0,var(--painting-shade) 35%,transparent 100%)}
+.login-scene-grain{position:absolute;inset:0;z-index:1;--grain-opacity:.2}
+
+.login-painted .app-header{background:none;border:0;box-shadow:none;padding-inline:var(--login-inset);padding-top:6px;height:var(--header-height)}
+.login-painted .app-header .logo{height:40px}
+.login-wordmark{font-size:1.25rem;font-weight:700;color:var(--color-on-painting);text-shadow:0 1px 8px var(--painting-text-shadow)}
+
+/* One left edge, --login-inset, for the logo, headline, tagline and card. The
+ * stack is centred vertically in the space under the header, so the hill shows
+ * below the card on any screen tall enough to hold it. */
+.login-painted .login-content{flex-direction:column;align-items:flex-start;justify-content:center;gap:clamp(28px,5vh,48px);padding:5vh var(--login-inset) 40px}
+/* No box behind the text. A feathered shade over the sky (the scene's ::after,
+ * above the painting and below the text) holds the cream type above 3:1 over
+ * any part of the sky strip, so it does not depend on which pixels the art
+ * (or Exh-vsw0's sliding sky layer) puts behind it. The tagline and wordmark
+ * are sized as large text (>=18.66px semibold/bold), as is the headline. */
+.login-intro{max-width:34rem}
+/* The ending always starts the second line. Fraunces's italic y overhangs its
+ * origin by about .12em, so indent it by that much: the ink, not the glyph box,
+ * sits on the shared left edge. */
+.login-headline em{font-style:italic;font-weight:inherit;margin-inline-start:.12em}
+.login-headline{font-size:clamp(44px,6.4vw,92px);line-height:.95;letter-spacing:-.02em;color:var(--color-on-painting);text-shadow:0 2px 18px var(--painting-text-shadow);text-wrap:balance}
+.login-headline-ending{white-space:nowrap}
+.login-headline-carousel{display:inline-block;position:relative;width:3em}
+/* The hidden word supplies the surrounding text's baseline. The clip has
+ * extra room above and below it for Fraunces's ascenders and descenders. */
+.login-headline-carousel::before{content:"tools";visibility:hidden}
+.login-headline-window{position:absolute;inset:-.14em 0 auto;height:1.30em;overflow:hidden}
+.login-headline-words{position:absolute;inset:0 0 auto;display:grid;grid-auto-rows:1.30em;line-height:.95}
+.login-headline-words span{padding-block-start:.14em;padding-inline-start:.02em}
+/* A 21s loop rests on tools for about 12s and on the other words for about
+ * 2s each. Start 10s into the first tools hold so the first change is visible
+ * sooner. The duplicate tools row makes the loop seam invisible. */
+@property --login-word-feather{
+  syntax:"<percentage>";inherits:false;initial-value:0%;
+}
+@media (prefers-reduced-motion:no-preference){
+  .login-headline-words{animation:login-headline-words 21s cubic-bezier(.22,.77,.31,1) -10s infinite}
+  .login-headline-window{
+    mask-image:linear-gradient(to bottom,transparent,#000 var(--login-word-feather),#000 calc(100% - var(--login-word-feather)),transparent);
+    animation:login-headline-feather 21s linear -10s infinite;
+  }
+}
+@keyframes login-headline-words{
+  0%,58%{transform:translateY(0)}
+  61%,71%{transform:translateY(-20%)}
+  74%,84%{transform:translateY(-40%)}
+  87%,97%{transform:translateY(-60%)}
+  100%{transform:translateY(-80%)}
+}
+/* Match the slide intervals above, leaving stationary glyphs unmasked. */
+@keyframes login-headline-feather{
+  0%,58%,61%,71%,74%,84%,87%,97%,100%{--login-word-feather:0%}
+  59%,60%,72%,73%,85%,86%,98%,99%{--login-word-feather:24%}
+}
+.login-tagline{margin-block-start:16px;max-width:36ch;font-size:1.1875rem;font-weight:700;line-height:1.35;text-wrap:balance;color:var(--color-on-painting);text-shadow:0 1px 8px var(--painting-text-shadow)}
+.login-painted .login{max-width:340px;align-items:stretch;padding:22px 24px 24px}
+.login-painted .login-sub{margin:0;font-weight:700;color:var(--color-ink)}
+.login-painted .login-form{margin-top:14px}
+.login-painted .login-clerk{max-width:400px;background:var(--color-panel);box-shadow:var(--shadow-panel);padding:22px 24px 24px;gap:var(--space-4)}
+/* Clerk draws its own card; inside our box it is flattened so there is one box,
+ * not two. Class selectors (cl-*) are Clerk's stable element hooks. */
+.login-clerk .cl-cardBox,.login-clerk .cl-card{background:transparent;box-shadow:none;border:0;border-radius:0}
+/* Clerk positions the Last used badge just outside its provider button. */
+.login-clerk .cl-cardBox{overflow:visible}
+.login-clerk .cl-card{padding:0}
+.login-clerk .cl-footer{background:transparent;background-image:none}
+/* Clerk draws provider buttons and fields with a 7% ring and its own border
+ * rules win over the appearance object, which leaves the provider buttons
+ * the card's own colour and invisible as buttons in the dark. Give them the
+ * field border (3:1 against the panel in both modes) and a hover fill. The
+ * border is a border, not a box-shadow, so Clerk's focus ring still shows. */
+.login-clerk :is(.cl-socialButtonsIconButton,.cl-socialButtonsBlockButton,.cl-formFieldInput){border:1px solid var(--color-field-border)!important}
+.login-clerk :is(.cl-socialButtonsIconButton,.cl-socialButtonsBlockButton):hover{background:var(--color-subtle)}
+
+/* The hosted card changes height when Clerk promotes the last-used provider
+ * or switches authentication steps. Give it space before using the fit scale. */
+.login-hosted{height:100dvh;min-height:0;overflow:clip;contain:paint}
+.login-hosted .app-header-slot{flex-shrink:0}
+.login-hosted .login-content{
+  flex:none;margin-block:auto;gap:clamp(20px,4.5dvh,48px);padding-block:clamp(10px,2.5dvh,34px) 16px;
+  transform:scale(var(--login-fit,1));transform-origin:var(--login-inset) 0;
+}
+.login-hosted .login-headline{font-size:clamp(38px,min(6.4vw,8.6dvh),92px)}
+.login-hosted .login-tagline{margin-top:clamp(14px,2.6dvh,26px)}
+.login-hosted .login-clerk{padding-block:18px}
+
+@media (max-height:920px){
+  .login-hosted .cl-card{gap:16px}
+  .login-hosted .cl-header{gap:8px}
+  .login-hosted .cl-main,.login-hosted .cl-form{gap:14px}
+  .login-hosted .cl-footer{padding-block:4px;margin-top:-4px}
+  .login-hosted :is(.cl-footerAction,.cl-footerItem){padding-block:9px}
+}
+
+@media (max-width:600px){
+  /* Sky gradient on top, painting at the bottom of the page. */
+  /* The painting owns a band at the bottom of the page, and the content reserves
+   * that band (less its faded top edge), so a short screen scrolls instead of
+   * letting the form cover the figure. */
+  .login-painted{--login-inset:20px;--login-painting-h:clamp(240px,40dvh,380px);min-height:100dvh;background:linear-gradient(var(--painting-sky-top),var(--painting-sky-bottom))}
+  .login-scene{position:absolute;background:linear-gradient(var(--painting-sky-top),var(--painting-sky-bottom))}
+  .login-scene-composite{inset:auto 0 0;height:var(--login-painting-h);-webkit-mask-image:linear-gradient(transparent 0,#000 28%);mask-image:linear-gradient(transparent 0,#000 28%)}
+  .login-scene-image{object-position:50% 100%}
+  .login-scene::after{background:linear-gradient(var(--painting-shade) 0,var(--painting-shade) 30%,transparent 62%)}
+  .login-painted .app-header{position:static;padding-inline:var(--login-inset);padding-top:6px;min-height:0;height:var(--header-height)}
+  .login-painted .app-header-slot{min-height:0}
+
+  .login-painted .login-content{justify-content:flex-start;padding:2vh var(--login-inset) calc(var(--login-painting-h) - 12px);gap:22px}
+  .login-headline{font-size:clamp(40px,12vw,56px)}
+  .login-tagline{margin-top:12px}
+  .login-painted .login{max-width:none;padding:16px 18px 18px}
+  .login-painted .login-form{margin-top:8px;gap:4px}
+  .login-painted .login-form .login-label+.field{margin-bottom:6px}
+  .login-hosted .login-content{margin-block:0;gap:22px;padding-block:clamp(8px,1.8dvh,16px) 12px;transform-origin:top center}
+  .login-hosted .login-headline{font-size:clamp(32px,min(12vw,6.2dvh),56px)}
+  .login-hosted .login-clerk{padding-block:16px}
+}
+
+@media (max-height:650px){
+  .login-hosted .login-content{gap:12px}
+  .login-hosted .login-tagline{font-size:1rem;margin-top:10px}
+  .login-hosted .cl-card{gap:12px}
+  .login-hosted .cl-main,.login-hosted .cl-form{gap:10px}
+  .login-hosted :is(.cl-footerAction,.cl-footerItem){padding-block:7px}
+}
+
+@media (max-width:360px){
+  .login-tagline br{display:none}
+}
+
+@media (min-width:601px) and (max-height:480px){
+  .login-hosted .app-header-slot{display:contents}
+  .login-hosted .app-header{position:absolute;inset:0 auto auto 0;padding-inline:20px}
+  .login-hosted .login-content{flex-direction:row;gap:20px;padding:12px 20px}
+  .login-hosted .login-intro{flex:0 1 260px;min-width:0;padding-top:54px}
+  .login-hosted .login-headline{font-size:clamp(32px,5vw,42px)}
+}
+
+@media (forced-colors:active){.login-scene{display:none}.login-intro,.login-wordmark{color:CanvasText;text-shadow:none}}

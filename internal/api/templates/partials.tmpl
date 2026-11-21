@@ -13,10 +13,26 @@
      document (internal/render) — artifacts are visitor-authored files and
      own their own <head> (architecture.md §1). */}}
 {{define "pwaHead"}}<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f1e9d6">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#14182e">
 <link rel="apple-touch-icon" href="{{asset "icons/apple-touch-icon-180.png"}}">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Exhibit">{{end}}
+
+{{/* fontsHead loads the brand typefaces (Exh-wjqh), self-hosted from the app
+     origin like icons and htmx: no third-party host sees a page view, and no
+     third-party request can hold a page blank. web/fonts builds the files into
+     assets/fonts: Schibsted Grotesk as one variable woff2 (wght 400-800) and
+     Fraunces as a static instance pinned at opsz 72, wght 600, SOFT 100,
+     WONK 0, which has no variation axes (font-variation-settings cannot
+     change it; any other weight or setting means widening web/fonts/build.mjs,
+     the single source for those settings). fonts.css declares the @font-faces
+     with display=swap, and the system fallbacks in tokens.css keep text
+     readable until, or without, the files. The text face is preloaded: every
+     page uses it. App-origin pages only, never the render surface. */}}
+{{define "fontsHead"}}<link rel="preload" href="{{asset "fonts/schibsted-grotesk.woff2"}}" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="{{asset "fonts/fonts.css"}}">{{end}}
 
 {{/* tagDots renders a gallery card's tags as color alone (av-uvc6): one dot
      per tag, in the card's single meta row beside the title. The name is not

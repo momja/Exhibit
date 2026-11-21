@@ -43,7 +43,11 @@ home-screen widget shows a slice of its app.
   `pointer-events: none`, where there is no gesture a prompt could belong to.
 - **Optional.** No widget means the card renders a **default tile** — a
   monogram on a tint derived from the artifact's id, plain server-rendered
-  markup with no frame to load.
+  markup with no frame to load. The tint is one of six palette hues
+  (`tile.Palette`, snapped from the id, Exh-z8i2), with a static SVG grain
+  (`.grain`, `--grain-url` in `tokens.css`) over it that only default tiles
+  carry; widget frames never get it. The standalone share tile has its own
+  `img-src data:` CSP for the grain.
 
 A **static widget** is just a widget with no `<script>`: the natural answer for
 a stateless tool (a calculator, a converter) that has nothing to report but
@@ -54,7 +58,7 @@ still wants a face. There is no separate mechanism for it.
 | Surface | What it does |
 |---|---|
 | `GET RENDER_ORIGIN/w/:artifactID` | Serves the widget document (`internal/render`). 404 when the artifact has none. |
-| `GET RENDER_ORIGIN/s/:shareID/widget` | Serves the widget through the artifact's anonymous link (av-ei5h): share row authorizes, owner's state inlined, share framing applies. An artifact with no widget serves its default tile instead (av-cp7j): a static monogram document, no script, CSP of inline style only. The share panel's embed snippet therefore appears whenever the link exists. |
+| `GET RENDER_ORIGIN/s/:shareID/widget` | Serves the widget through the artifact's anonymous link (av-ei5h): share row authorizes, owner's state inlined, share framing applies. An artifact with no widget serves its default tile instead (av-cp7j): a static monogram document, no script, CSP of inline style and `data:` images only. The share panel's embed snippet therefore appears whenever the link exists. |
 | Gallery card | Frames the widget, or renders the default tile (`cardWidget` partial). |
 | Artifact edit page | "Gallery widget" panel: source editor, live preview, Generate / Remove. The page's Save button saves both artifact and widget edits. |
 | Agent chat | `set_widget` / `get_widget` tools; the preview pane shows the tile. |
@@ -243,9 +247,9 @@ markup, so the tile starts from a sane floor and can override anything.
 - Read on both a light and a dark card: the gallery follows the system color
   scheme (av-xie4). Declare `color-scheme: light dark`, keep the background
   transparent, and put colors in custom properties with dark values under
-  `@media (prefers-color-scheme: dark)`. Light: text `#111`, muted `#888`,
-  accent `#23559e`, hairline `#e0e0e0`. Dark: text `#e8eaed`, muted
-  `#9aa0a9`, accent `#7eaaf0`, hairline `#2f333a`.
+  `@media (prefers-color-scheme: dark)`. Light: text `#1f2a1c`, muted `#5a6453`,
+  accent `#1f2a1c`, hairline `#e0d6bd`. Dark: text `#efe8d6`, muted
+  `#a09b8d`, accent `#efe8d6`, hairline `#2c3258`.
 - A widget that declares no `color-scheme` is drawn on an opaque light canvas
   when the gallery is dark, because a frame whose scheme differs from its
   embedder's is not composited transparently. Older light-only widgets

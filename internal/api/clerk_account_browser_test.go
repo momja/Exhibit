@@ -21,6 +21,61 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestClerkLoginFitsAfterProviderCardGrows(t *testing.T) {
+	ro, _ := newLoginTestRouter(t, nil, nil, func(c *Config) {
+		c.Clerk = hostedLoginStub{}
+		c.ClerkPublishableKey = "pk_test_example"
+		c.ClerkFrontendAPI = "https://example.clerk.accounts.dev"
+	})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/gallery/clerk-client.js") {
+			w.Header().Set("Content-Type", "text/javascript")
+			fmt.Fprint(w, `
+				export async function clerkClient() {
+					return { mountSignIn(mount) {
+						const provider = document.createElement('button');
+						provider.id = 'test-provider';
+						provider.textContent = 'Continue with Google';
+						provider.style.height = '280px';
+						mount.append(provider);
+					} };
+				}
+				export const clerkClientAfterLoad = clerkClient;
+			`)
+			return
+		}
+		ro.ServeHTTP(w, r)
+	}))
+	defer srv.Close()
+	ro.cfg.AppOrigin = srv.URL
+
+	browser, err := chromium.New(chromiumtest.Start(t))
+	require.NoError(t, err)
+	ctx, cancel, err := browser.Tab(context.Background())
+	require.NoError(t, err)
+	defer cancel()
+	ctx, timeout := context.WithTimeout(ctx, 25*time.Second)
+	defer timeout()
+	const fits = `(() => {
+		window.scrollTo(0, innerHeight);
+		const header = document.querySelector('.app-header').getBoundingClientRect();
+		const intro = document.querySelector('.login-intro').getBoundingClientRect();
+		const card = document.querySelector('.login-clerk').getBoundingClientRect();
+		return intro.top >= header.bottom && card.bottom < innerHeight && window.scrollY === 0 &&
+			document.documentElement.scrollHeight === innerHeight;
+	})()`
+	require.NoError(t, chromedp.Do(ctx,
+		chromedp.EmulateViewport(320, 568),
+		chromedp.Navigate(srv.URL+"/auth/login"),
+		chromedp.WaitVisible(chromedp.CSS("#test-provider")),
+		chromedp.Poll[chromedp.Void](fits),
+		chromedp.Evaluate[chromedp.Void](`document.querySelector('#test-provider').style.height = '520px'`),
+		chromedp.Poll[chromedp.Void](fits),
+		chromedp.EmulateViewport(1400, 960),
+		chromedp.Poll[chromedp.Void](fits+` && document.querySelector('.login-content').style.getPropertyValue('--login-fit') === '1'`),
+	))
+}
+
 // Stub only the provider UI boundary. Use the real Settings page, authenticated
 // routes, Stimulus, and deletion to exercise the single account-menu entry point.
 func TestClerkAccountBrowser(t *testing.T) {

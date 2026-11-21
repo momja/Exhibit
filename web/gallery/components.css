@@ -8,6 +8,7 @@
  * The .btn family, .card surface, and .spacer moved here from the three page
  * stylesheets, where they were triplicated verbatim; values are unchanged. */
 
+body{font-family:var(--font-sans)}
 :where(button,input,select,textarea){font-family:inherit}
 
 /* --- buttons ---------------------------------------------------------- */
@@ -43,16 +44,18 @@
  * keeps a disabled button from lighting up under the pointer as though it
  * would do something. */
 .btn:disabled{opacity:.55;cursor:not-allowed}
-.btn:disabled:hover{background:var(--brand-blue)}
+/* A disabled accent or danger fill is repainted rather than faded: at .55 the
+ * label fell to ~1.3:1 against it. The label must stay at 3:1 or better. */
+.btn:not(.btn-sec,.btn-warn,.btn-danger,.btn-danger-soft):disabled,.btn:not(.btn-sec,.btn-warn,.btn-danger,.btn-danger-soft):disabled:hover{opacity:1;background:var(--color-accent-disabled);color:var(--color-on-accent-disabled)}
+.btn-danger:disabled,.btn-danger:disabled:hover{opacity:1;background:var(--color-danger-tint);color:var(--color-danger-ink)}
 .btn-sec:disabled:hover{background:var(--color-panel);border-color:var(--color-border);color:var(--color-ink-soft)}
-.btn-danger:disabled:hover{background:var(--color-danger)}
 
 /* --- app bar ---------------------------------------------------------- */
 /* Every standard header shares a 56px band and 44px controls. Class-based sizing
  * works both directly under body and inside a gallery controller root. */
 .app-header-slot{display:contents}
 .app-header{box-sizing:border-box;position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:12px;min-height:var(--header-height);flex-shrink:0;padding:0 16px;background:var(--color-panel);border-bottom:1px solid var(--color-hairline-strong);box-shadow:var(--shadow-header)}
-.app-header .logo{height:24px;width:auto;display:block;flex:0 0 auto}
+.app-header .logo{height:18px;width:auto;display:block;flex:0 0 auto}
 .app-header a[hidden]{display:none}
 .app-header a{color:var(--brand-blue);text-decoration:none;font-size:0.875rem;display:inline-flex;align-items:center;gap:5px}
 .app-header-title{font-size:1.125rem;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -94,7 +97,7 @@
 .editor-save-status[data-state=attention]{color:var(--color-warn-ink-soft)}
 .app-header [data-save-editor]{width:auto;min-width:82px;padding:0 12px;font-size:.875rem}
 .app-header [data-save-editor] .header-link-label{position:static;width:auto;height:auto;margin:0;padding:0;overflow:visible;clip:auto;white-space:nowrap}
-.editor-save-message{display:grid;grid-template-columns:16px minmax(0,1fr);gap:8px;position:absolute;right:0;top:calc(100% + 6px);width:360px;max-width:calc(100vw - 32px);padding:12px;border:1px solid var(--color-border);border-left:3px solid var(--color-warn-strong);border-radius:8px;background:var(--color-panel);color:var(--color-ink-soft);box-shadow:var(--shadow-card);font-size:.8125rem;line-height:1.5;overflow-wrap:anywhere}
+.editor-save-message{display:grid;grid-template-columns:16px minmax(0,1fr);gap:8px;position:absolute;right:0;top:calc(100% + 6px);width:360px;max-width:calc(100vw - 32px);padding:12px;border:1px solid var(--color-border);border-left:3px solid var(--color-warn-strong);border-radius:8px;background:var(--color-panel);color:var(--color-ink-soft);box-shadow:var(--shadow-panel);font-size:.8125rem;line-height:1.5;overflow-wrap:anywhere}
 .editor-save-message>.ph{font-size:16px;line-height:1.25;color:var(--color-warn-ink-soft)}
 .editor-save-message[hidden]{display:none}
 
@@ -156,7 +159,7 @@ body.pip-dragging .pip-grip{cursor:grabbing}
 .pip-popup[hidden]{display:none}
 @keyframes pip-pop{from{opacity:0;scale:.96}}
 .pip-menu{min-width:236px;font-size:0.8125rem}
-.pip-info-title{margin:0;padding:6px 10px 0;font-size:0.9375rem;font-weight:600;line-height:1.4;overflow-wrap:anywhere}
+.pip-info-title{margin:0;padding:6px 10px 0;font-size:1.0625rem;line-height:1.4;overflow-wrap:anywhere}
 .pip-info-meta{padding:6px 10px 0;color:var(--color-muted);font-size:var(--text-helper);line-height:var(--line-helper)}
 /* The receipt is the shared capabilityPopover partial, which is a hidden
    hover popover elsewhere; here it is the card's body, always shown. */
@@ -192,7 +195,7 @@ body.pip-dragging .pip-grip{cursor:grabbing}
 }
 
 /* --- surfaces --------------------------------------------------------- */
-.card{background:var(--color-panel);border-radius:var(--radius-lg);padding:var(--space-6);box-shadow:var(--shadow-card)}
+.card{background:var(--color-panel);border-radius:var(--radius-lg);padding:var(--space-6);box-shadow:var(--shadow-panel)}
 
 /* --- card widget (av-fafu) --------------------------------------------- */
 /* The tile at the top of an artifact card: either a live widget frame from the
@@ -217,10 +220,16 @@ body.pip-dragging .pip-grip{cursor:grabbing}
 .card-widget{position:relative;height:132px;margin:calc(var(--space-6) * -1) calc(var(--space-6) * -1) 0;border-radius:var(--radius-lg) var(--radius-lg) 0 0;overflow:hidden;background:var(--color-panel);border-bottom:1px solid var(--color-hairline)}
 .card-widget-frame{position:absolute;inset:0;z-index:1;display:block;width:100%;height:100%;border:0;background:transparent;pointer-events:none}
 /* Default tile: a monogram on a tint derived from the artifact id (--tile-hue
- * comes from the server, so the same artifact always wears the same face).
- * The saturation/lightness halves are tokens, so the tile darkens with the
- * page while keeping its hue. */
-.card-widget-default{position:absolute;inset:0;z-index:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(140deg,hsl(var(--tile-hue) var(--tile-face-top)),hsl(calc(var(--tile-hue) + 28) var(--tile-face-bottom)))}
+ * comes from the server and is always one of tile.Palette, so the same artifact
+ * always wears the same face). The saturation/lightness halves are tokens, so
+ * the tile darkens with the page while keeping its hue. */
+.card-widget-default{position:absolute;inset:0;z-index:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(150deg,hsl(var(--tile-hue) var(--tile-face-top)),hsl(var(--tile-hue) var(--tile-face-bottom)))}
+/* Grain (Exh-z8i2): a shared utility. Put .grain on any positioned surface;
+ * its noise sits above the surface's own background and below its content
+ * (give that content position:relative and z-index:1). Static data: image, no
+ * script, no animation. */
+.grain{isolation:isolate}
+.grain::before{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;background:var(--grain-url);mix-blend-mode:overlay;opacity:var(--grain-opacity)}
 /* With a live frame the monogram is a fallback, not a backdrop: widgets render
  * on a transparent background by contract, so leaving it painted underneath
  * would show through the widget. It comes back — and the frame goes — only
@@ -228,7 +237,10 @@ body.pip-dragging .pip-grip{cursor:grabbing}
 .card-widget.has-frame .card-widget-default{display:none}
 .card-widget.has-frame.widget-failed .card-widget-default{display:flex}
 .card-widget.has-frame.widget-failed .card-widget-frame{display:none}
-.card-widget-monogram{display:flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:16px;background:hsl(var(--tile-hue) var(--tile-mono-fill));box-shadow:0 1px 4px hsl(var(--tile-hue) var(--tile-mono-shadow));color:hsl(var(--tile-hue) var(--tile-mono-ink));font-size:1.375rem;font-weight:600;letter-spacing:.5px}
+.card-widget-monogram{position:relative;z-index:1;display:flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:14px;background:hsl(var(--tile-hue) var(--tile-mono-fill));box-shadow:0 1px 3px hsl(var(--tile-hue) var(--tile-mono-shadow));color:hsl(var(--tile-hue) var(--tile-mono-ink));font-size:1.375rem;font-weight:600;letter-spacing:.5px}
+/* Forced colors repaint backgrounds with system colors, so noise would only
+ * dirty the canvas under the letters: drop it, and give the plate an edge. */
+@media (forced-colors:active){.grain::before{display:none}.card-widget-default{background:Canvas}.card-widget-monogram{border:1px solid CanvasText}}
 
 /* Collapsible section (<details>/<summary>) with a muted summary line — the
  * edit page's security section (av-p0a1) was the first user; the artifact
@@ -335,7 +347,7 @@ input,select,textarea{font-size:var(--field-font-size)}
 .capability-popover-origins code{display:block;background:var(--color-ground);padding:1px var(--space-2);border-radius:var(--radius-sm);margin-top:var(--space-1);font-family:monospace;word-break:break-all}
 .capability-popover-section{padding-top:var(--space-4);border-top:1px solid var(--color-hairline)}
 .capability-popover-manage{display:flex;align-items:center;min-height:var(--control-height-sm);margin-top:var(--space-4);padding-top:var(--space-4);border-top:1px solid var(--color-hairline);color:var(--brand-blue);text-decoration:none}
-.capability-popover-manage:hover{text-decoration:underline}
+.capability-popover-manage:hover,.capability-popover-manage:focus-visible{text-decoration:underline}
 
 /* --- banners ----------------------------------------------------------------
  * A strip of page chrome that says something the tool inside the frame cannot be
@@ -604,3 +616,8 @@ input[type=checkbox]:disabled{opacity:.55;cursor:not-allowed}
 .copy-field-status{margin:0;font-size:0.8125rem;color:var(--color-ink-soft)}
 .copy-field-status:not(:empty){margin-top:var(--space-2)}
 @media(max-width:600px){.copy-field-input{min-height:46px}.copy-field-action{width:44px}.copy-field-input{padding-right:50px}}
+/* Page headline (Exh-wjqh): the one Fraunces title per page. Apply to a single
+ * element; Exh-odyv and Exh-90b2 decide where. Weight 600 is the only instance
+ * web/fonts ships, so font-synthesis:none stops a heavier page rule from
+ * faking bold on it. */
+.font-headline{font-family:var(--font-display);font-weight:600;font-synthesis:none}

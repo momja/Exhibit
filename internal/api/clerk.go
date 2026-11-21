@@ -64,13 +64,22 @@ func (ro *Router) renderClerkLogin(w http.ResponseWriter, r *http.Request, mode 
 	} else if mode == "logout" {
 		title = "Sign out"
 	}
+	// The sign-out page redirects straight back, so it neither plays the
+	// descent nor spends it; it re-arms it for the sign-in page that follows.
+	descend := false
+	if mode == "logout" {
+		ro.clearCookie(w, descentCookieName)
+	} else {
+		descend = ro.playsDescent(w, r)
+	}
 	page, err := renderPage("clerkLogin", struct {
 		Header  appHeaderView
 		Favicon template.URL
 		Clerk   *clerkView
 		Mode    string
 		Next    string
-	}{authPageHeader(title), template.URL(exhibitLogoDataURI), ro.clerkView(r), mode, next})
+		Descend bool
+	}{paintedAuthHeader(title), template.URL(exhibitLogoDataURI), ro.clerkView(r), mode, next, descend})
 	if err != nil {
 		serverError(w, r, "Clerk login render", err)
 		return

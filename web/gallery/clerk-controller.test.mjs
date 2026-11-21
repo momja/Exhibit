@@ -19,7 +19,7 @@ for (const failure of ['denied', 'network']) {
     t.after(() => { globalThis.fetch = old.fetch; globalThis.window = old.window; globalThis.testClerk = old.clerk; });
     const { default: Controller } = await import(`data:text/javascript,${encodeURIComponent(source)}#${failure}`);
     const controller = new Controller();
-    Object.assign(controller, { element: { isConnected: true }, modeValue: 'signin', nextValue: '/', statusTarget: { textContent: '' }, hasRecoveryTarget: true, recoveryTarget: { hidden: true } });
+    Object.assign(controller, { element: { isConnected: true, closest: () => null }, modeValue: 'signin', nextValue: '/', statusTarget: { textContent: '' }, hasRecoveryTarget: true, recoveryTarget: { hidden: true } });
     await controller.connect();
     assert.equal(controller.recoveryTarget.hidden, false);
     assert.ok(controller.statusTarget.textContent.length > 0);
@@ -45,7 +45,7 @@ test('only the account button defers loading Clerk', async () => {
   const { default: Controller } = await import(`data:text/javascript,${encodeURIComponent(deferred)}#modes`);
   for (const mode of ['user', 'signin']) {
     const controller = new Controller();
-    Object.assign(controller, { element: { isConnected: true }, modeValue: mode, nextValue: '/', statusTarget: { textContent: '' }, hasRecoveryTarget: false, mountTarget: {}, setAccountState: () => {} });
+    Object.assign(controller, { element: { isConnected: true, closest: () => null }, modeValue: mode, nextValue: '/', statusTarget: { textContent: '' }, hasRecoveryTarget: false, mountTarget: {}, setAccountState: () => {} });
     await controller.connect();
   }
   assert.deepEqual(calls, ['after-load', 'now']);
@@ -73,7 +73,7 @@ for (const mode of ['signed-in', 'signin', 'signup']) {
     for (const next of ['/', '/%2F/evil.test', '/ok', '/ok?x=//y']) {
       const controller = new Controller();
       Object.assign(controller, {
-        element: { isConnected: true }, modeValue: mode === 'signup' ? 'signup' : 'signin',
+        element: { isConnected: true, closest: () => null }, modeValue: mode === 'signup' ? 'signup' : 'signin',
         nextValue: next, statusTarget: { textContent: '' }, hasRecoveryTarget: false, mountTarget: {},
       });
       await controller.connect();
@@ -106,7 +106,7 @@ for (const mode of ['signin', 'signup', 'already signed in']) {
     globalThis.window = { location: { replace: value => { destination = value; } } };
     const { default: Controller } = await import(`data:text/javascript,${encodeURIComponent(source)}#oauth-${encodeURIComponent(mode)}`);
     const controller = new Controller();
-    Object.assign(controller, { element: { isConnected: true }, modeValue: mode === 'signup' ? 'signup' : 'signin', nextValue: next, statusTarget: { textContent: '' }, hasRecoveryTarget: false, mountTarget: {} });
+    Object.assign(controller, { element: { isConnected: true, closest: () => null }, modeValue: mode === 'signup' ? 'signup' : 'signin', nextValue: next, statusTarget: { textContent: '' }, hasRecoveryTarget: false, mountTarget: {} });
     await controller.connect();
     assert.equal(destination, next);
     if (mode === 'already signed in') assert.equal(refreshed, true);

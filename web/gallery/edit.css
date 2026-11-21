@@ -3,14 +3,14 @@
  * --brand-blue) and components.css (shared .btn/.field/... classes); only
  * edit-page-specific rules live here. */
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(--color-ink);min-height:100vh}
+body{background:var(--color-ground);color:var(--color-ink);min-height:100vh}
 main{padding:var(--page-top) var(--page-gutter);max-width:900px;margin:0 auto}
 .edit-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px}
-.edit-heading h1{font-size:var(--page-title-size);font-weight:650;letter-spacing:-.025em;line-height:1.25;overflow-wrap:anywhere}
+.edit-heading h1{font-size:var(--page-title-size);letter-spacing:-.01em;line-height:1.25;overflow-wrap:anywhere}
 .edit-heading p{margin-bottom:4px}
 .edit-card>label{display:block;margin-bottom:6px}
 @media(max-width:600px){main{padding:var(--page-top) var(--page-gutter)}.edit-heading{align-items:flex-start;flex-direction:column;gap:8px}.edit-heading h1{font-size:var(--page-title-size)}.edit-card{padding:16px}.edit-card>.btn-row{flex-wrap:wrap}}
-.edit-card{background:var(--color-panel);border-radius:10px;padding:20px;box-shadow:var(--shadow-card)}
+.edit-card{background:var(--color-panel);border-radius:10px;padding:20px;box-shadow:var(--shadow-panel)}
 .edit-card>h2{font-size:0.9375rem;font-weight:600;margin-bottom:12px;color:var(--color-ink-soft)}
 .edit-card>input[type=text]{width:100%;min-height:var(--control-height);line-height:1.4;padding:7px 10px;border:1px solid var(--color-field-border);border-radius:6px;font-size:var(--field-font-size);margin-bottom:10px;outline:none}
 .edit-card>input[type=text]:focus{border-color:var(--brand-blue)}

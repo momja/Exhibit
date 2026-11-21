@@ -1,0 +1,282 @@
+{
+  "day-composite-960.webp": {
+    "width": 960,
+    "height": 540,
+    "bytes": 45760
+  },
+  "day-composite-960.avif": {
+    "width": 960,
+    "height": 540,
+    "bytes": 27710
+  },
+  "day-composite-1600.webp": {
+    "width": 1600,
+    "height": 900,
+    "bytes": 127352
+  },
+  "day-composite-1600.avif": {
+    "width": 1600,
+    "height": 900,
+    "bytes": 80679
+  },
+  "day-composite-2560.webp": {
+    "width": 2560,
+    "height": 1440,
+    "bytes": 252730
+  },
+  "day-composite-2560.avif": {
+    "width": 2560,
+    "height": 1440,
+    "bytes": 174474
+  },
+  "day-sky-960.webp": {
+    "width": 960,
+    "height": 852,
+    "bytes": 21232
+  },
+  "day-sky-960.avif": {
+    "width": 960,
+    "height": 852,
+    "bytes": 14452
+  },
+  "day-sky-1600.webp": {
+    "width": 1600,
+    "height": 1420,
+    "bytes": 84858
+  },
+  "day-sky-1600.avif": {
+    "width": 1600,
+    "height": 1420,
+    "bytes": 57487
+  },
+  "day-sky-2560.webp": {
+    "width": 2560,
+    "height": 2272,
+    "bytes": 211416
+  },
+  "day-sky-2560.avif": {
+    "width": 2560,
+    "height": 2272,
+    "bytes": 163336
+  },
+  "day-clouds-960.webp": {
+    "width": 960,
+    "height": 540,
+    "bytes": 36270
+  },
+  "day-clouds-960.avif": {
+    "width": 960,
+    "height": 540,
+    "bytes": 27235
+  },
+  "day-clouds-1600.webp": {
+    "width": 1600,
+    "height": 900,
+    "bytes": 92968
+  },
+  "day-clouds-1600.avif": {
+    "width": 1600,
+    "height": 900,
+    "bytes": 66590
+  },
+  "day-clouds-2560.webp": {
+    "width": 2560,
+    "height": 1440,
+    "bytes": 186522
+  },
+  "day-clouds-2560.avif": {
+    "width": 2560,
+    "height": 1440,
+    "bytes": 125769
+  },
+  "day-hill-960.webp": {
+    "width": 960,
+    "height": 540,
+    "bytes": 31338
+  },
+  "day-hill-960.avif": {
+    "width": 960,
+    "height": 540,
+    "bytes": 25148
+  },
+  "day-hill-1600.webp": {
+    "width": 1600,
+    "height": 900,
+    "bytes": 78562
+  },
+  "day-hill-1600.avif": {
+    "width": 1600,
+    "height": 900,
+    "bytes": 59557
+  },
+  "day-hill-2560.webp": {
+    "width": 2560,
+    "height": 1440,
+    "bytes": 149208
+  },
+  "day-hill-2560.avif": {
+    "width": 2560,
+    "height": 1440,
+    "bytes": 110442
+  },
+  "day-phone-750.webp": {
+    "width": 750,
+    "height": 1625,
+    "bytes": 100488
+  },
+  "day-phone-750.avif": {
+    "width": 750,
+    "height": 1625,
+    "bytes": 67797
+  },
+  "day-phone-1170.webp": {
+    "width": 1170,
+    "height": 2535,
+    "bytes": 187406
+  },
+  "day-phone-1170.avif": {
+    "width": 1170,
+    "height": 2535,
+    "bytes": 126358
+  },
+  "dusk-composite-960.webp": {
+    "width": 960,
+    "height": 540,
+    "bytes": 21826
+  },
+  "dusk-composite-960.avif": {
+    "width": 960,
+    "height": 540,
+    "bytes": 15162
+  },
+  "dusk-composite-1600.webp": {
+    "width": 1600,
+    "height": 900,
+    "bytes": 55648
+  },
+  "dusk-composite-1600.avif": {
+    "width": 1600,
+    "height": 900,
+    "bytes": 40018
+  },
+  "dusk-composite-2560.webp": {
+    "width": 2560,
+    "height": 1440,
+    "bytes": 116120
+  },
+  "dusk-composite-2560.avif": {
+    "width": 2560,
+    "height": 1440,
+    "bytes": 89093
+  },
+  "dusk-sky-960.webp": {
+    "width": 960,
+    "height": 852,
+    "bytes": 7156
+  },
+  "dusk-sky-960.avif": {
+    "width": 960,
+    "height": 852,
+    "bytes": 5288
+  },
+  "dusk-sky-1600.webp": {
+    "width": 1600,
+    "height": 1420,
+    "bytes": 20430
+  },
+  "dusk-sky-1600.avif": {
+    "width": 1600,
+    "height": 1420,
+    "bytes": 14452
+  },
+  "dusk-sky-2560.webp": {
+    "width": 2560,
+    "height": 2272,
+    "bytes": 70532
+  },
+  "dusk-sky-2560.avif": {
+    "width": 2560,
+    "height": 2272,
+    "bytes": 50897
+  },
+  "dusk-clouds-960.webp": {
+    "width": 960,
+    "height": 540,
+    "bytes": 40454
+  },
+  "dusk-clouds-960.avif": {
+    "width": 960,
+    "height": 540,
+    "bytes": 29748
+  },
+  "dusk-clouds-1600.webp": {
+    "width": 1600,
+    "height": 900,
+    "bytes": 101642
+  },
+  "dusk-clouds-1600.avif": {
+    "width": 1600,
+    "height": 900,
+    "bytes": 71162
+  },
+  "dusk-clouds-2560.webp": {
+    "width": 2560,
+    "height": 1440,
+    "bytes": 197378
+  },
+  "dusk-clouds-2560.avif": {
+    "width": 2560,
+    "height": 1440,
+    "bytes": 133477
+  },
+  "dusk-hill-960.webp": {
+    "width": 960,
+    "height": 540,
+    "bytes": 25974
+  },
+  "dusk-hill-960.avif": {
+    "width": 960,
+    "height": 540,
+    "bytes": 20557
+  },
+  "dusk-hill-1600.webp": {
+    "width": 1600,
+    "height": 900,
+    "bytes": 66114
+  },
+  "dusk-hill-1600.avif": {
+    "width": 1600,
+    "height": 900,
+    "bytes": 48345
+  },
+  "dusk-hill-2560.webp": {
+    "width": 2560,
+    "height": 1440,
+    "bytes": 124462
+  },
+  "dusk-hill-2560.avif": {
+    "width": 2560,
+    "height": 1440,
+    "bytes": 93954
+  },
+  "dusk-phone-750.webp": {
+    "width": 750,
+    "height": 1625,
+    "bytes": 46630
+  },
+  "dusk-phone-750.avif": {
+    "width": 750,
+    "height": 1625,
+    "bytes": 34718
+  },
+  "dusk-phone-1170.webp": {
+    "width": 1170,
+    "height": 2535,
+    "bytes": 92548
+  },
+  "dusk-phone-1170.avif": {
+    "width": 1170,
+    "height": 2535,
+    "bytes": 68407
+  }
+}

@@ -7,6 +7,7 @@
 <title>Edit: {{.Title}} — Exhibit</title>
 <link rel="icon" type="image/svg+xml" href="{{.Favicon}}">
 {{template "pwaHead"}}
+{{template "fontsHead"}}
 {{template "clerkScripts" .Clerk}}
 <link rel="stylesheet" href="{{asset "phosphor/regular.css"}}">
 <link rel="stylesheet" href="{{asset "gallery/tokens.css"}}">
@@ -19,7 +20,7 @@
 <body data-controller="unsaved-changes" data-editor-return-url="{{.Return.URL}}" data-action="click->unsaved-changes#navigate input->unsaved-changes#refresh change->unsaved-changes#refresh exhibit:editor-changed->unsaved-changes#refresh exhibit:editor-exit->unsaved-changes#allowExit pageshow@window->unsaved-changes#restore beforeunload@window->unsaved-changes#beforeUnload">
 {{template "appHeader" .Header}}
 <main>
-<div class="edit-heading"><div><h1 id="edit-title">{{.Title}}</h1></div></div>
+<div class="edit-heading"><div><h1 id="edit-title" class="font-headline">{{.Title}}</h1></div></div>
 <div class="edit-card">
 
   {{/* The title is the one field that belongs to no section, so it stays

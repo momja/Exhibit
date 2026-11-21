@@ -966,6 +966,91 @@ type Identity struct{ ExternalID, Email string }
   `Config.LocalUsers` is read at startup, so the first CLI-created account needs a
   restart.
 
+**Painted sign-in page** (Exh-90b2): `/auth/login` (local form, failure page and
+the hosted Clerk page) is the brand's front door. `loginScene` renders a fixed
+`.login-scene` stage behind the page: one `<picture>` of the static composite
+(day, or dusk under `prefers-color-scheme: dark`; the portrait crop at 600px
+and below; AVIF before WebP; explicit dimensions) from `/assets/hero-art/`, and
+the shared `.grain` layer over it. Only the active mode and one width download.
+The sky/clouds/hill layers belong to the descent (below), so the form
+(`.login-content`, a sibling of the stage) is never restructured or moved. The headline and
+tagline sit directly on the sky: a feathered shade (`--painting-shade`, a
+radial gradient in the scene's `::after`, no visible edge) keeps cream text
+above 3:1 over any part of the sky, so contrast does not depend on which
+pixels, or later which animated layer, are behind it. The headline is large
+text, and the tagline and wordmark are sized as large text too (19px and 20px at weight 700,
+the WCAG bold threshold; 600 would count as normal text and need 4.5:1). The box is
+the ordinary `.login` card; for Clerk, `.login-clerk` is the box and Clerk's own
+card is flattened inside it (`clerkAuthAppearance`, plus `.cl-*` rules). On
+phones the painting owns a band at the bottom of the page. Local sign-in
+reserves that band below the form. Hosted sign-in keeps the page within the
+viewport, tightens card spacing on short screens, and fits the content if a
+Clerk step still needs more room. The OAuth consent page keeps the plain card
+(`.login-painted` scopes the art).
+
+The last word of the headline rotates in a fixed CSS slot. The first change
+starts after about two seconds. Later cycles rest on “tools” for about twelve
+seconds and on each other word for about two. Assistive technology and
+reduced-motion users get the static headline.
+
+**Sign-in descent** (Exh-vsw0): on a visit the server marks, the scenery moves
+for 3.6s (`cubic-bezier(.5,0,.15,1)`) as a camera coming down out of the sky.
+The page is scriptless except for that visit's one external module
+(`login-descent.js`, no inline script) and a `<noscript><style>`. The body
+carries `.login-descend`, and the sky/clouds/hill `<picture>`s sit inert inside a
+`<template>` in `.login-layers-stage` (AVIF then WebP, `srcset`/`sizes` choosing
+the width), so nothing downloads until the module asks.
+
+*Starts on the sky, not the finished picture.* On such a visit the composite is
+`opacity:0` and the scene shows its plain sky colour, so the descent does not
+read as a rewind. The composite is revealed (a 300ms crossfade, via
+`.login-descent-skip`) when the run is skipped, immediately under
+`prefers-reduced-motion: reduce` (a CSS media rule, independent of the module),
+without JS (the `<noscript>` style), and, should the module never arrive, by a
+delayed CSS animation at 3.2s. Non-animating visits are unchanged: composite
+first paint, no script. Opacity changes nothing in layout, so there is no shift,
+and the form is in place and focused from the first frame in every case.
+
+*Gated on decoded layers.* The module returns to the composite path under
+reduced motion; otherwise it clones the layers in, waits for every `decode()`,
+and only then adds `.login-descent-go`, which is what the CSS animates
+(`login-descent.css`, inside `no-preference`; outside it the layers are
+`display:none`). Past 1.5s (3s for hosted sign-in, below) it gives up: scenery
+arriving mid-animation or after it would be worse than none. Giving up, or
+reduced motion turning on at any point (a `change` listener), is permanent: the
+layers are removed, the composite is shown, and nothing restarts. The listeners
+and the pending Clerk wait are released with an `AbortController`. The once-only
+cookie is already spent on a skipped run; that is the accepted trade-off. A
+repeat visit loads no script and no layer art.
+
+The layers start 832/1216/1600 units lower (sky, clouds, hill, in 2560-wide
+units) and end at rest, which is the production placement (sky at y=-832, clouds
+and hill at 0) over a frame sized and positioned as the composite's
+`object-fit: cover; object-position: 78% 50%` would draw it (phones: the
+960x2080 crop at (1540,192), bottom-aligned, same mask). The scene is a size
+container so the frame is plain `cqw`/`cqh` arithmetic. The layers fade in over
+300ms at the start and cover the (invisible) composite. Nothing above the text
+changes state when the motion ends (the layers keep `will-change: transform`),
+so text anti-aliasing and the panel shadow are identical across the end of the
+animation (measured on the natural timeline). The descent moves only the
+scenery. The form never moves, fades or loses focus, and the grain and shade
+stay fixed above the art.
+
+Hosted sign-in sets `data-descent-after="clerk"`: the module waits for
+`exhibit:clerk-loaded` (dispatched by `clerk-client.js` after `Clerk.load`) before
+cloning the layers, so the scenery never competes with Clerk's scripts, and the
+overall deadline is 3s.
+
+*Once per sign-out.* `playsDescent` (`internal/api/auth.go`) adds `.login-descend`
+only when the `exhibit_descent_seen` cookie is absent, and sets it in the same
+response, so a reload, a rejected password or a second tab shows the final
+frame. The cookie's value is the constant `1`: host-only, `HttpOnly`,
+`SameSite=Lax`, `Secure` with `APP_ORIGIN`, one year. `POST /auth/logout` clears
+it. Hosted Clerk sets `afterSignOutUrl` to `/auth/logout`, so a sign-out from the
+account menu passes through the server, which clears it (that page redirects to
+`/auth/login` and neither plays nor spends the animation). Sessions that merely
+expire do not replay it.
+
 ### 3.8a Administration (av-utap)
 
 Acting on your own account (§3.8b) needs a session. Acting on someone else's needs

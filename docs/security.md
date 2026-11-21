@@ -311,8 +311,13 @@ for its own reason rather than by the rule above:
 
 - `GET /auth/login` mints short-lived state/verifier cookies before any session
   exists. Forging it starts a login the attacker cannot finish. (On an instance
-  with a local credential it renders the login page and mints nothing; it is
+  with a local credential it renders the login page and mints no login state; it is
   declared by its worse case.)
+- `GET /auth/login` also sets `exhibit_descent_seen=1` the first time, to play
+  the sign-in animation once (Exh-vsw0). It is not a credential or an identifier:
+  a constant, host-only, `HttpOnly`, `SameSite=Lax`, `Secure` with `APP_ORIGIN`,
+  cleared at sign-out; forging, stealing or deleting it changes only whether a
+  background image moves. It is never set on the render origin.
 - `GET /auth/sso` is that provider redirect split out, so the login page has
   something to point its SSO button at when both login paths exist. Same
   cookies, same reason.
@@ -321,7 +326,13 @@ for its own reason rather than by the rule above:
   the `state` it must match was parked in a cookie by this origin.
 - `GET /auth/logout` revokes a session. A forged request achieves nothing worse
   than logging the user out, and logout stays a link because that is the
-  affordance people expect.
+  affordance people expect. In hosted mode it is the page that signs out of
+  Clerk, and Clerk's own sign-out lands on it too (`afterSignOutUrl`,
+  Exh-vsw0); a forged one still only signs the user out and re-arms the
+  descent. `GET /auth/signup` (hosted only) sets the same descent marker as
+  `/auth/login` and nothing else. `TestNoAppOriginGETRouteMutates` walks the
+  hosted configuration too, so these routes are declared, and
+  `TestHostedDescentCookieOnlyTouchesTheMarker` pins what they write.
 
 `POST /auth/local` — the local credential's login (av-q30x) — is on an unsafe
 method and so is covered by condition 1 like any other mutation. It is worth

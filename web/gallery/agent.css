@@ -3,7 +3,7 @@
  * tokens.css, which already supplies --brand-blue/--brand-blue-hover. */
 *{box-sizing:border-box;margin:0;padding:0}
 [hidden]{display:none!important}
-body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(--color-ink);display:flex;flex-direction:column;height:100vh}
+body{background:var(--color-ground);color:var(--color-ink);display:flex;flex-direction:column;height:100vh}
 .banner-err{background:var(--color-danger-tint);border-bottom:1px solid var(--color-danger-tint-border);color:var(--color-danger-ink);padding:8px 20px;font-size:13px}
 .layout{display:flex;flex:1;overflow:hidden}
 .chat{position:relative;width:clamp(280px,var(--agent-chat-width,460px),calc(100% - 280px));min-width:280px;flex-shrink:0;display:flex;flex-direction:column;background:var(--color-panel);border-right:1px solid var(--color-hairline)}
@@ -19,7 +19,7 @@ body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(-
 .chat-bar{position:absolute;top:10px;right:12px;z-index:2;pointer-events:none}
 /* This inset scrolls away with the messages instead of clipping every turn. */
 .chat:has(#history-btn:not([hidden])) #messages{padding-top:56px;scroll-padding-top:56px}
-.hist-btn,.history-back{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;font:inherit;font-size:13px;border:1px solid var(--color-border);border-radius:6px;background:var(--color-panel);color:var(--color-ink-soft);cursor:pointer}
+.hist-btn,.history-back{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;font:inherit;font-size:13px;border:1px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-panel);color:var(--color-ink-soft);cursor:pointer}
 .hist-btn{pointer-events:auto;padding:7px 12px;border-radius:999px;box-shadow:var(--shadow-card-hover)}
 .hist-btn:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px}
 .hist-btn:hover,.history-back:hover{border-color:var(--brand-blue);color:var(--brand-blue)}
@@ -48,7 +48,7 @@ body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(-
 .resume-view{display:inline-flex;align-items:center;gap:6px;border:none;background:transparent;color:var(--brand-blue);font:inherit;font-size:13px;cursor:pointer;padding:0 0 4px}
 .resume-view:hover{text-decoration:underline}
 .resume-cancel{border:none;background:transparent;color:var(--color-ink-mid);font:inherit;font-size:13px;cursor:pointer;padding:4px 0}
-.resume-cancel:hover{color:var(--brand-blue)}
+.resume-cancel:hover,.resume-cancel:focus-visible{color:var(--brand-blue);text-decoration:underline}
 .resume-status{font-size:12.5px;color:var(--color-danger-ink);min-height:1em}
 .resume-note{padding:14px 16px;border-top:1px solid var(--color-hairline);font-size:12.5px;color:var(--color-ink-mid);line-height:1.5}
 .msg{max-width:92%;font-size:14px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}
@@ -76,7 +76,8 @@ body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(-
 .msg.assistant table{display:block;max-width:100%;overflow-x:auto;border-collapse:collapse}
 .msg.assistant :is(th,td){border:1px solid var(--color-border);padding:6px 10px;text-align:left;min-width:90px}
 .msg.assistant th{background:var(--color-ground);font-weight:600}
-.msg.assistant a{color:var(--brand-blue);text-decoration:underline;text-underline-offset:2px}
+.msg.assistant a{color:var(--color-link);text-decoration:underline;text-underline-offset:2px}
+.msg.assistant a:hover{color:var(--color-link-hover)}
 .msg.assistant a:focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px}
 .msg.assistant input[type="checkbox"]{margin-right:6px}
 .msg.assistant hr{border:0;border-top:1px solid var(--color-border)}
@@ -96,6 +97,7 @@ body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(-
 .question-option-label{display:block;white-space:pre-wrap}
 .question-option-description{display:block;color:var(--color-muted);font-size:12px;margin-top:2px;white-space:pre-wrap}
 .question-other{margin-top:7px}
+.question-other summary:hover,.question-other summary:focus-visible{text-decoration:underline}
 .question-other summary{width:fit-content;color:var(--brand-blue);font-size:13px;cursor:pointer;padding-block:3px}
 .agent-questions textarea{display:block;width:100%;resize:vertical;min-height:39px;max-height:160px;border:0;border-bottom:1px solid var(--color-border);border-radius:0;padding:8px 0;font:inherit;font-size:var(--field-font-size);background:transparent;color:var(--color-ink)}
 .agent-questions textarea:focus{border-color:var(--brand-blue)}
@@ -151,10 +153,11 @@ body{font-family:system-ui,sans-serif;background:var(--color-ground);color:var(-
 .preview{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--color-subtle)}
 .preview-bar{background:var(--color-panel);border-bottom:1px solid var(--color-hairline);padding:8px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:12px;font-size:13px;flex-shrink:0;min-height:41px}
 .preview-bar a,.preview-bar .preview-open{color:var(--brand-blue);text-decoration:none}
+.preview-bar a:hover,.preview-bar a:focus-visible,.preview-bar .preview-open:hover,.preview-bar .preview-open:focus-visible{text-decoration:underline}
 .preview-open{font:inherit;background:none;border:0;padding:0;cursor:pointer}
 .preview-bar .title{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .preview-bar .spacer{flex:1}
-.snip-btn{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;font-size:13px;border:1px solid var(--color-border);border-radius:6px;background:var(--color-panel);cursor:pointer}
+.snip-btn{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;font-size:13px;border:1px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-panel);cursor:pointer}
 .snip-btn:hover:not(:disabled){border-color:var(--brand-blue);color:var(--brand-blue)}
 .snip-btn:disabled{color:var(--color-faint);cursor:default}
 .snip-btn.active{background:var(--brand-blue);color:var(--color-on-accent);border-color:var(--brand-blue)}

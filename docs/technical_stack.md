@@ -32,6 +32,7 @@ safety" (§12).
 | Reusable UI behavior | **Stimulus** — self-hosted ES module, Go partials own markup (§9) | explicit component initialization in vanilla JS |
 | Response compression | `chi` `middleware.Compress` — gzip, explicit type allowlist | brotli (better ratio, new dependency) |
 | Agent harness | **Pi Bolt 1.0.8 / Pi 1.4.0** (native `pi --mode rpc` sidecar per session; runtime-loaded TS tools extension; keys AES-GCM at rest; per-session scoped API credentials; `internal/mockllm` for tests) | Claude Agent SDK (heavier, vendor-tied) |
+| Fonts | **Schibsted Grotesk** (text) and **Fraunces** (one headline per page), SIL OFL, self-hosted from the app origin by `web/fonts` (woff2, Fraunces a static instance), `display=swap`, system-ui / Georgia fallbacks (§9) | Google Fonts CDN (rejected, see §9) |
 | Icons | **Phosphor Icons** — self-hosted / embedded on app origin, no CDN (§9) | Lucide / Heroicons |
 | Hosted login | Clerk Go SDK + ClerkJS / Clerk UI from the application Frontend API domain; enabled only by Clerk configuration | Replacing self-hosted login |
 | Login (optional) | Generic OIDC via discovery — `coreos/go-oidc/v3` + `golang.org/x/oauth2`, exchanged once for our own session (§10) | auth at the operator's proxy (also supported); vendor SDK (rejected) |
@@ -340,11 +341,36 @@ hand-rolled HTML escaping the old string-concatenated pages needed.)
 CodeMirror and the renderer iframe are islands of client JS inside these
 server-rendered pages.
 
+**The logo is two artworks** (Exh-bv8l). `internal/api/logo.svg` is the flat mark:
+the frame alone in a tight viewBox, with no wire, nail or shadow, and no ids. It is
+the header, sign-in, Clerk and admin mark, the app and render-origin favicon, and the
+source `web/pwa-icons` rasterizes into the PWA, maskable and link-preview icons (those
+PNGs are generated into `internal/api/assets/icons` and never committed; the maskable
+safe zone is computed from the viewBox). `internal/api/logo-hanging.svg` adds the nail,
+wire and a single down-right shadow, and only the 404 hero uses it, as an `<img>` data
+URI. `TestHangingLogoGeometry` (`internal/api/logo_test.go`) verifies that its nail, wire apex and frame
+centre share one axis and that the wire's legs land symmetrically. The wire and nail
+lighten under `prefers-color-scheme: dark`; their paint is a presentation attribute,
+because an inline `style` would outrank that rule (a test pins it). Per-artifact favicons
+(`internal/artifacticon`) are separate.
+
+**Logo pigments (Exh-d5ku).** Both artworks are painted in the hero painting's
+pigments, named in `internal/color/brand.go`: blue `#2f6fc4`, red `#d9432b`, yellow
+`#f2b63c`, the cream cell `#f6efdc`, and ink `#1f2a1c` for the frame and strokes.
+`TestLogoArtworkUsesBrandPigments` holds each SVG to those constants (the wire's dark-mode paint and the shadow are allowed in the hanging mark only). The frame stroke is 1.5 units so the cream cell keeps an edge at 16-18px. The flat mark
+needs no dark-mode lightening: on dusk the ink frame sinks into the ground, but the
+pigment blocks and the cream cell still define the edge. The hanging wire and nail
+sit on the bare page, so they keep their lighter dark-mode paint. The manifest's
+`theme_color` and `background_color` and the PWA/OG canvases take paper
+(`#f1e9d6`), the ground the app opens on, because a manifest cannot follow the
+colour scheme; the old logo blue is no longer an app surface colour (artifact fixtures and samples may still use it, being artifact content). The `theme-color` metas in `pwaHead` give the browser chrome paper in light and dusk in dark; a test pins them, the manifest and `web/pwa-icons` to `--color-ground`.
+
 Artifact viewer tabs and direct render documents share a generated SVG favicon
 from `internal/artifacticon`: an asymmetric Mondrian grid inspired by the logo,
 with up to three tag-colored panels in gallery tag order. The panels have similar
-areas, with one smaller panel always white. Untagged artifacts use Exhibit’s red,
-blue, and yellow; unused tag panels stay white. Render-time icon links replace
+areas, with one smaller panel always cream. Untagged artifacts use the logo pigments
+(red, blue, yellow) on an ink ground; unused tag panels and the fixed panel use the
+logo's cream. Render-time icon links replace
 stored favicon links without changing the saved source; widgets retain their
 existing rendering. Other app pages and the automatic `/favicon.ico` routes keep
 the full Exhibit logo.
@@ -536,6 +562,23 @@ keyboard and a landscape tablet is wide and still touched. The standing rule whe
 adding a control: size it from the token, never a literal `px` — a hardcoded size
 opts it out of the bump silently, and the symptom only shows up on a phone.
 
+**Palette (Exh-plvh).** Light is a paper ground (`#f1e9d6`) and dark is dusk
+(`#14182e`). The UI accent, `--brand-blue`, is ink (cream in the dark) and fills
+every button and accent mark; the logo's pigments live in `internal/color` and
+no longer feed it. Inline text links alone use `--color-link` (slate, light blue
+in the dark): an anchor inside a sentence or note, never a button, banner
+action or text-only control, which stay ink. Slate sits only ~1.9:1 from ink, so
+colour is never the cue: every `--color-link` consumer keeps its underline and
+takes `--color-link-hover` on hover. Text-only controls with no icon or button
+shape underline on `:hover` and `:focus-visible`. Panels, dialogs, the sign-in
+box and Clerk float on `--shadow-panel`; `--shadow-card` is the tiles' ring.
+Primary hover is a perceptibly lighter ink (darker cream), and a disabled
+accent button is repainted at 3:1 or better rather than faded. Danger, warning and success
+are separate hues: success is a green kept out of the accent's role.
+`internal/api/palette_contrast_test.go` parses `tokens.css` and holds every
+text/surface pair to WCAG AA in both modes, so a changed value fails without a
+browser. Clerk panels take the same tokens through `clerk-appearance.js`.
+
 **Dark mode follows the system (av-xie4).** There is no in-app toggle: every
 app-origin page reads `prefers-color-scheme`. `tokens.css` declares
 `color-scheme: light dark` on `:root`, so native controls, scrollbars and form
@@ -543,9 +586,9 @@ fields follow, and it holds the whole dark palette in one
 `@media (prefers-color-scheme: dark)` block that redefines the same tokens. A
 page sheet takes every color from a token and never writes a literal, which is
 what makes a new component dark-ready for free; a color the palette lacks is a
-new token with a value in both places. In the dark the accent is a light blue
-with dark text on its fills (`--color-on-accent`), because no single blue
-reads both as link text on a dark panel and under white button text. The
+new token with a value in both places. In the dark the accent is cream
+with dark text on its fills (`--color-on-accent`), mirroring ink with cream
+text in the light. The
 CodeMirror bundle swaps One Dark in and out through a `Compartment` on the
 media query's `change` event, so the editor follows a live setting change
 without losing its buffer. The render origin is untouched: an artifact owns
@@ -554,6 +597,37 @@ opaque canvas, so an artifact or widget that declares no scheme keeps a light
 background on a dark page. The widget base stylesheet therefore leaves
 `color-scheme` to the widget, and the agent's prompt asks artifacts and
 widgets to declare `light dark` themselves (`docs/widgets.md`).
+
+**Fonts: self-hosted, like icons and htmx (Exh-wjqh).** The brand typefaces
+are vendored by the `web/fonts` asset workspace from exact-pinned
+`@fontsource-variable` packages (lockfile integrity; SIL OFL, licence files
+shipped beside the fonts) into `assets/fonts`, and loaded through the shared
+`fontsHead` partial that every app-origin page head includes (a preload of the
+text face plus `fonts.css`, served at a versioned asset URL). The first
+version loaded them from Google Fonts and was reversed: that stylesheet is
+render-blocking, so a network that silently drops packets to Google left every
+page blank for tens of seconds, and every page view sent the visitor's IP and
+the instance's hostname to a third party. Schibsted Grotesk ships as one
+variable woff2 narrowed to wght 400-800 (the weights the gallery CSS uses).
+Fraunces ships as two static instances, upright and italic (the sign-in
+headline's "small", Exh-90b2), each pinned at opsz 72, wght 600, SOFT 100,
+WONK 0, made with fontTools' instancer (python3 + fonttools/brotli, the same
+build dependency as the Phosphor subset; the build fails without it). It has
+no variation axes, so `font-variation-settings` cannot change it, and
+`web/fonts/build.mjs` is the single source for those settings. Any other
+Fraunces weight or setting means widening that build. `.font-headline` sets the
+family, weight 600 and `font-synthesis:none`. `--font-sans` falls back to
+`system-ui` and `--font-display` to Georgia. CodeMirror and code stay monospace.
+
+**One headline per page (Exh-odyv).** Each app page carries exactly one
+`.font-headline` element, on its natural top heading and never on a decorative
+one: the gallery tabs' `h1.gallery-heading` (inside `#gallery-content`, so a
+space switch swaps it), the edit title, the Settings, admin and Add-to-Gallery
+lede headings, the 404 headline and the detail pill's `pip-info-title`. A page
+rule must not set `font-weight` or `font-variation-settings` on it. Gallery
+cards have no outline: the tile is full-bleed inside `--radius-lg` with only
+`--shadow-card` (a hairline ring and a soft lift, both modes) around it, and
+buttons take `--radius-md`.
 
 **Icons: Phosphor Icons — the required icon set for all new UI.** Standardize on
 [Phosphor Icons](https://phosphoricons.com) so every future story inherits one consistent
@@ -755,15 +829,24 @@ Turso/libSQL territory and a larger commitment — out of scope for the default 
   worker. None of these are part of a release — they're things a deployer adds around
   the image.
 - **Build-time only:** Go toolchain, Node + esbuild (to bundle CodeMirror and vendor
-  the Phosphor icon and htmx assets — see `build_assets.md`), python3 +
+  the Phosphor icon, brand font and htmx assets — see `build_assets.md`), python3 +
   fonttools/brotli (to subset the Phosphor font to the `web/icons/icons.txt`
-  registry — see `build_assets.md` §6), `goose` (migrations are embedded
+  registry — see `build_assets.md` §6 — and to instance the self-hosted Fraunces
+  font, `web/fonts`, `build_assets.md` §8), `goose` (migrations are embedded
   and run from the binary). Dev-only: golangci-lint (`make lint`, not vendored) and
   ESLint for the editor workspace (§5).
 
 The deliberate outcome: in production it's one small image and one process by default,
 with safety and richness added as opt-in Compose profiles — matching the spec's promise
 that the easy path and the serious path share almost all of the same system.
+
+One workspace commits its encoded output: `web/hero-art/images/` holds the responsive
+sign-in hero paintings (WebP/AVIF) and a manifest. `design_files/` is dockerignored and
+the Node stage has neither the lossless masters nor the matting dependencies, so the
+build cannot re-encode them; `web/hero-art/build.mjs` copies the files and fails when
+any size differs from the manifest. The encoder (`sharp`) lives outside `web/` in
+`design_files/brand-refresh/tools/hero-export`, whose `npm run check` guards against
+byte drift. See `build_assets.md`.
 
 The Node-built assets (CodeMirror bundle, Phosphor Icons, htmx) are generated into
 `internal/api/assets/` at build time and **not** committed to git. See `build_assets.md`

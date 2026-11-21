@@ -7,6 +7,7 @@
 <title>{{if .Grid.Title}}{{.Grid.Title}} · {{end}}Exhibit</title>
 <link rel="icon" type="image/svg+xml" href="{{.Favicon}}">
 {{template "pwaHead"}}
+{{template "fontsHead"}}
 {{template "clerkScripts" .Clerk}}
 <link rel="stylesheet" href="{{asset "phosphor/regular.css"}}">
 <link rel="stylesheet" href="{{asset "gallery/tokens.css"}}">
@@ -55,9 +56,9 @@ const READ_ONLY = {{if .ReadOnly}}true{{else}}false{{end}};
 <div id="{{.Grid.ID}}">
 {{if or .Spaces .Grid.Filters.Sections}}<div class="gallery-layout{{if not .Spaces}} gallery-layout-solo{{end}}">{{template "gallerySpaces" .}}{{end -}}
 <main id="main-content" tabindex="-1">
-{{/* The active space already names the destination; the heading exists only
-     so the main region still has an accessible label. */}}
-<h1 class="sr-only">{{.Grid.Title}}</h1>
+{{/* The page's one display headline (Exh-odyv). It lives in this region so a
+     space switch swaps it with the content it names. */}}
+<h1 class="gallery-heading font-headline">{{.Grid.Title}}</h1>
 {{if .Grid.HideSearch}}{{if not .Grid.Activity}}<div hidden>{{template "gallerySearch" .Grid}}</div>{{end}}{{end}}
 {{if .Grid.SearchPage}}<div class="gallery-page-search">{{template "gallerySearch" .Grid}}</div>{{end}}
 {{/* Cards share their tile, title, status marks, and action menu with every
