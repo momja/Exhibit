@@ -139,6 +139,21 @@
             <i class="ph ph-caret-down" aria-hidden="true"></i>
           </span>
         </label>
+        {{/* AI (Exh-zue3): window.exhibit.ai. Shown only where the instance
+             offers AI; "Allowed" is also the owner's consent to spend their
+             own allowance. People it is shared with each agree to pay for
+             their own use when they first meet it. */}}
+        {{if .InferenceEnabled}}<label class="row">
+          <span class="spacer field-label">AI</span>
+          <span class="feature-select">
+            <select id="ai-select" class="select" aria-describedby="ai-select-hint">
+              <option value="false">Ask first</option>
+              <option value="true">Always allow</option>
+            </select>
+            <i class="ph ph-caret-down" aria-hidden="true"></i>
+          </span>
+        </label>
+        <p class="form-help" id="ai-select-hint">Lets this tool send text, including its saved data, to an AI service. Each person who uses it pays from their own AI allowance.</p>{{end}}
       </div>
     </div>
   </details>
@@ -341,6 +356,7 @@ let linksApproved = {{if .LinksApproved}}true{{else}}false{{end}};
 let cameraApproved = {{if .CameraApproved}}true{{else}}false{{end}};
 let microphoneApproved = {{if .MicrophoneApproved}}true{{else}}false{{end}};
 let geolocationApproved = {{if .GeolocationApproved}}true{{else}}false{{end}};
+let inferenceApproved = {{if .InferenceApproved}}true{{else}}false{{end}};
 </script>
 <script src="{{asset "gallery/api.js"}}"></script>
 <script type="module" src="{{asset "gallery/edit.js"}}"></script>
@@ -352,5 +368,7 @@ let geolocationApproved = {{if .GeolocationApproved}}true{{else}}false{{end}};
 <script type="module" src="{{asset "gallery/assets-export.js"}}"></script>
 <script type="module" src="{{asset "gallery/versions.js"}}"></script>
 <script type="module" src="{{asset "gallery/tags.js"}}"></script>
+{{template "inferencePrompt" .Title}}
+<div class="ai-notices">{{template "inferenceBanner"}}</div>
 </body>
 </html>{{end}}

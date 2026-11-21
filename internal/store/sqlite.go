@@ -127,7 +127,7 @@ func scanArtifact(rows interface{ Scan(...any) error }, extra ...any) (*Artifact
 	var a Artifact
 	// Scan timestamps as any — the modernc sqlite driver may return them as time.Time or string
 	var createdAt, updatedAt any
-	columns := []any{&a.ID, &a.OwnerID, &a.Title, &a.SourceBlobID, &a.SourceURL, &a.Tier, &createdAt, &updatedAt, &a.DownloadsApproved, &a.ClipboardApproved, &a.LinksApproved, &a.CameraApproved, &a.MicrophoneApproved, &a.GeolocationApproved, &a.WidgetBlobID, &a.ShareStateMode, &a.ShareAttribution, &a.ShareGrantCount, &a.SharePublicLink, &a.VersionSeq}
+	columns := []any{&a.ID, &a.OwnerID, &a.Title, &a.SourceBlobID, &a.SourceURL, &a.Tier, &createdAt, &updatedAt, &a.DownloadsApproved, &a.ClipboardApproved, &a.LinksApproved, &a.CameraApproved, &a.MicrophoneApproved, &a.GeolocationApproved, &a.InferenceApproved, &a.WidgetBlobID, &a.ShareStateMode, &a.ShareAttribution, &a.ShareGrantCount, &a.SharePublicLink, &a.VersionSeq}
 	err := rows.Scan(append(columns, extra...)...)
 	if err != nil {
 		return nil, err
@@ -149,8 +149,8 @@ func scanArtifact(rows interface{ Scan(...any) error }, extra ...any) (*Artifact
 //
 // Sharing indicators are derived from indexed tables on every read (Exh-grj9),
 // so badges follow link/grant writes and cascades without rollup triggers.
-const artifactCols = "id, owner_id, title, source_blob_id, source_url, tier, created_at, updated_at, downloads_approved, clipboard_approved, links_approved, camera_approved, microphone_approved, geolocation_approved, widget_blob_id, share_state_mode, share_attribution, (SELECT COUNT(*) FROM share_grants g WHERE g.artifact_id = artifacts.id), EXISTS (SELECT 1 FROM share_links l WHERE l.artifact_id = artifacts.id), (SELECT MAX(seq) FROM artifact_versions WHERE artifact_id = artifacts.id)"
-const artifactColsA = "a.id, a.owner_id, a.title, a.source_blob_id, a.source_url, a.tier, a.created_at, a.updated_at, a.downloads_approved, a.clipboard_approved, a.links_approved, a.camera_approved, a.microphone_approved, a.geolocation_approved, a.widget_blob_id, a.share_state_mode, a.share_attribution, (SELECT COUNT(*) FROM share_grants g WHERE g.artifact_id = a.id), EXISTS (SELECT 1 FROM share_links l WHERE l.artifact_id = a.id), (SELECT MAX(seq) FROM artifact_versions WHERE artifact_id = a.id)"
+const artifactCols = "id, owner_id, title, source_blob_id, source_url, tier, created_at, updated_at, downloads_approved, clipboard_approved, links_approved, camera_approved, microphone_approved, geolocation_approved, inference_approved, widget_blob_id, share_state_mode, share_attribution, (SELECT COUNT(*) FROM share_grants g WHERE g.artifact_id = artifacts.id), EXISTS (SELECT 1 FROM share_links l WHERE l.artifact_id = artifacts.id), (SELECT MAX(seq) FROM artifact_versions WHERE artifact_id = artifacts.id)"
+const artifactColsA = "a.id, a.owner_id, a.title, a.source_blob_id, a.source_url, a.tier, a.created_at, a.updated_at, a.downloads_approved, a.clipboard_approved, a.links_approved, a.camera_approved, a.microphone_approved, a.geolocation_approved, a.inference_approved, a.widget_blob_id, a.share_state_mode, a.share_attribution, (SELECT COUNT(*) FROM share_grants g WHERE g.artifact_id = a.id), EXISTS (SELECT 1 FROM share_links l WHERE l.artifact_id = a.id), (SELECT MAX(seq) FROM artifact_versions WHERE artifact_id = a.id)"
 
 func (s *SQLiteStore) PutArtifact(ctx context.Context, a *Artifact) error {
 	now := a.CreatedAt
@@ -423,7 +423,7 @@ func artifactListPage(query string, args []any, limit, offset int) (string, []an
 // accepted by the handler and then stored as a value no later read can scan.
 //
 // The order is the order the UI shows them in: downloads, clipboard, links,
-// camera, microphone, location.
+// camera, microphone, location, AI.
 var ApprovalColumns = []string{
 	"downloads_approved",
 	"clipboard_approved",
@@ -431,6 +431,7 @@ var ApprovalColumns = []string{
 	"camera_approved",
 	"microphone_approved",
 	"geolocation_approved",
+	"inference_approved",
 }
 
 // approvalArtifactColumns is ApprovalColumns as a set, for the per-key check in
@@ -472,6 +473,7 @@ var updatableArtifactColumns = map[string]bool{
 	"camera_approved":      true,
 	"microphone_approved":  true,
 	"geolocation_approved": true,
+	"inference_approved":   true,
 	// Whose state a recipient writes (av-6xjd). It became writable here when
 	// the owner got a control for it; the value is checked below rather than
 	// merely allowed, because unlike a title this column is read as an enum by
@@ -1388,10 +1390,12 @@ func (s *SQLiteStore) DeleteAgentKey(ctx context.Context, ownerID int64) error {
 func (s *SQLiteStore) RecordAgentUsage(ctx context.Context, u AgentUsage) error {
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO agent_usage (owner_id, session_id, provider, model, paid_by, source,
-		     input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, cost_micros)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		     input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, cost_micros,
+		     artifact_id, kind, cost_source)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		u.OwnerID, u.SessionID, u.Provider, u.Model, u.PaidBy, u.Source,
-		u.InputTokens, u.OutputTokens, u.CacheReadTokens, u.CacheWriteTokens, u.CostMicros)
+		u.InputTokens, u.OutputTokens, u.CacheReadTokens, u.CacheWriteTokens, u.CostMicros,
+		nullString(u.ArtifactID), nullString(u.Kind), costSourceOrDefault(u.CostSource))
 	return err
 }
 
@@ -1415,11 +1419,14 @@ const datetimeLayout = "2006-01-02 15:04:05"
 
 // OwnerAgentSpend is one owner's platform-paid agent spend since a time —
 // what the per-owner budget meters (av-99f4). BYO-key rows are the owner's
-// own money and guardrail rows are the operator's overhead, so neither
-// counts against the owner's budget.
+// own money and the agent's guardrail rows are the operator's overhead, so
+// neither counts against the owner's budget. A guardrail screen of an
+// artifact's AI call (artifact_id set) does count: the viewer causes every
+// one, and leaving them out would let refused requests spend without limit
+// on an instance with only an owner cap (Exh-hwjg).
 func (s *SQLiteStore) OwnerAgentSpend(ctx context.Context, ownerID int64, since time.Time) (UsageTotals, error) {
 	return s.usageTotals(ctx,
-		"owner_id=? AND paid_by='platform' AND source != 'guardrail' AND recorded_at >= ?",
+		"owner_id=? AND paid_by='platform' AND (source != 'guardrail' OR artifact_id IS NOT NULL) AND recorded_at >= ?",
 		ownerID, since.UTC().Format(datetimeLayout))
 }
 

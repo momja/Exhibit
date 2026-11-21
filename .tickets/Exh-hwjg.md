@@ -1,6 +1,6 @@
 ---
 id: Exh-hwjg
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-11-04T05:47:02Z
@@ -35,3 +35,9 @@ Keeping this in one place is what makes the epic's accounting rule hold: separat
 - An anonymous or public-link principal is refused by the core even if the endpoint let it through.
 - No provider or model identifier in any platform-mode result.
 
+
+## Notes
+
+**2026-11-20T06:19:13Z**
+
+Done: internal/inference (payer = the viewer, always; platform via AGENT_API_KEY, BYOK via the viewer's stored key), migration 056 metering in agent_usage (source artifact_inference, artifact_id, kind, cost_source provider|catalog|none; metered before error mapping; absent usage recorded as none, not zero), shared agent owner/instance caps, rate belts, guardrail screen. Platform mode without an owner or instance cap refuses to start.

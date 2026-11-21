@@ -235,6 +235,13 @@ func TestLibraryGrantRefusesOtherRouteFamilies(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "A", a.Title)
 	assert.Equal(t, "inherit", a.ShareAttribution)
+	// AI spends the viewer's money, so only the owner approves it.
+	w = doWithToken(t, r, "PATCH", "/api/artifacts/"+id, issued.Token, map[string]any{"inference_approved": true, "title": "hijacked"})
+	require.Equal(t, 400, w.Code, w.Body.String())
+	a, err = r.cfg.Store.GetArtifact(context.Background(), defaultOwnerID, id)
+	require.NoError(t, err)
+	assert.Equal(t, "A", a.Title)
+	assert.False(t, a.InferenceApproved)
 }
 
 func TestAgentGrantRevocationAndDigestOnlyStorage(t *testing.T) {

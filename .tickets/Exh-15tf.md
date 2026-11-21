@@ -1,6 +1,6 @@
 ---
 id: Exh-15tf
-status: open
+status: closed
 deps: [Exh-gd3g, Exh-x16u]
 links: []
 created: 2026-11-04T05:37:11Z
@@ -18,6 +18,7 @@ Built-in and connected agents should reach for decide() when a tool needs a judg
 
 - internal/agentguidance: describe only the kinds the instance has configured. Rules: use decide() for anything that drives logic (route, gate, classify, score), keep thresholds in the artifact's code and treat low confidence as a real outcome; use complete() for prose; check window.exhibit.ai.available() and handle unavailable (shared via public link, opened directly, exported); never put saved data in a prompt without the person's knowledge.
 - With inference disabled, the guidance says nothing about it, so the agent doesn't write calls that cannot work.
+- When generating AI-enabled artifacts, explain that both HTML and ZIP exports disable all Exhibit AI methods ([Exh-i902](Exh-i902.md)). Teach the artifact to handle unavailable, disable AI-dependent actions with an explanation, and preserve usable non-AI functionality where possible. Never invent a provider-key prompt, direct provider fallback or reconnection to Exhibit to bypass that export behavior. The editable source remains available for users to rewire independently.
 - An example artifact under examples/ that uses decide() to triage items and complete() to summarise them, with a widget that reads the saved result, and that still works with either kind missing.
 - docs/inference.md covering configuration of both models (INFERENCE_MODEL and INFERENCE_DECISION_MODEL), the payer rule, limits and the approval flow; PRD and architecture entries per the docs convention.
 
@@ -25,4 +26,11 @@ Built-in and connected agents should reach for decide() when a tool needs a judg
 
 - Prompt golden tests cover each combination: neither, complete only, decide only, both.
 - The example artifact runs against mock providers in a browser test, and degrades with each kind removed.
+- Both export formats of the example artifact clearly disable AI actions and make no inference requests; the source bundle preserves its inference call sites.
 - Configuration variables documented beside the AGENT_* table.
+
+## Notes
+
+**2026-11-20T06:19:13Z**
+
+Done: shared agentguidance AI section rendered only for offered kinds (Pi: from inference.Service.InstanceKinds(); MCP: EXHIBIT_AI_KINDS), golden tests for none/complete/decide/both; examples/inference-triage (tool, widget, README, Chromium tests for every kind combination).

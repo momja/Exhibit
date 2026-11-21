@@ -1,5 +1,5 @@
-// Package mockllm is a deterministic OpenAI-compatible chat-completions
-// server used to exercise the agent pipeline end to end without real provider
+// Package mockllm serves deterministic OpenAI-compatible chat-completions
+// and System One classification responses for agent/inference tests without provider
 // credentials. `cmd/mockllm` serves it as a standalone process (the exhibit
 // extension registers it as the "exhibit-mock" pi provider when MOCK_LLM_URL
 // is set); Go tests mount Handler() on an httptest server instead.
@@ -40,12 +40,17 @@ import (
 	"strings"
 )
 
-// Handler serves the OpenAI-compatible chat-completions endpoints, at both
-// the bare and /v1-prefixed paths clients use.
+// Handler serves scripted agent chat and inference responses. Chat accepts
+// bare, /v1 and /api/v1 paths; System One classification accepts the same
+// prefixes. See inference.go for the explicit inference script markers.
 func Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/chat/completions", handleChat)
 	mux.HandleFunc("/v1/chat/completions", handleChat)
+	mux.HandleFunc("/api/v1/chat/completions", handleChat)
+	for _, path := range []string{"/systemone", "/v1/systemone", "/api/v1/systemone"} {
+		mux.HandleFunc(path, handleClassify)
+	}
 	return mux
 }
 
@@ -108,6 +113,10 @@ func handleChat(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "messages must not be empty", http.StatusBadRequest)
 		return
 	}
+	if isInferenceChat(req.Messages) {
+		handleInferenceChat(w, r, req.Messages)
+		return
+	}
 	plan := decide(req.Messages)
 	log.Printf("turn: %d messages -> %s", len(req.Messages), plan.kind)
 	streamPlan(w, plan)
@@ -118,7 +127,7 @@ type turnPlan struct {
 	text string
 	// usage, when set, rides the final chunk as OpenAI's usage block, so the
 	// caller sees a real token count (the guard screen reports it, av-gust).
-	usage    map[string]int
+	usage    map[string]any
 	toolName string
 	toolArgs map[string]any
 }
@@ -326,7 +335,7 @@ func screenPlan(messages []chatMessage) turnPlan {
 			last, _ = textOf(m.Content)
 		}
 	}
-	usage := map[string]int{"prompt_tokens": 180, "completion_tokens": 1, "total_tokens": 181}
+	usage := map[string]any{"prompt_tokens": 180, "completion_tokens": 1, "total_tokens": 181}
 	switch {
 	case strings.Contains(last, "mock-policy-violation"):
 		return turnPlan{kind: "text", text: "BLOCK", usage: usage}

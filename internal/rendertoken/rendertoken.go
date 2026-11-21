@@ -499,3 +499,17 @@ func (s *Signer) tag(artifactID, claims string) string {
 	mac.Write([]byte(claims))
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
+
+// ArtifactChannel is the value the app page and an authorized artifact render
+// share for inference and saved-data sync. A different document in the same
+// frame window does not have the value. It is stable per artifact and viewer
+// across reloads and has a MAC label separate from render token tags.
+func (s *Signer) ArtifactChannel(artifactID string, viewerID int64) string {
+	mac := hmac.New(sha256.New, s.key[:])
+	mac.Write([]byte("exhibit-artifact-channel"))
+	mac.Write([]byte{0})
+	mac.Write([]byte(artifactID))
+	mac.Write([]byte{0})
+	mac.Write([]byte(strconv.FormatInt(viewerID, 10)))
+	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+}

@@ -105,6 +105,15 @@ type Artifact struct {
 	// header rather than anything the frame can be handed. It does not affect
 	// the CSP, and approving it approves no capture device.
 	GeolocationApproved bool `json:"geolocation_approved"`
+	// InferenceApproved is the owner's first-use approval for AI (Exh-zbwk):
+	// window.exhibit.ai calls in the frame, which the host performs through
+	// POST /api/artifacts/:id/inference. It is the owner's decision that the
+	// tool may send text, possibly including saved data, to an AI service, and
+	// it is also the owner's consent to spend their own allowance. A named
+	// recipient additionally consents for themselves
+	// (artifact_inference_consents), because each recipient pays for their
+	// own calls. It affects neither the CSP nor the Permissions-Policy.
+	InferenceApproved bool `json:"inference_approved"`
 	// WidgetBlobID is the blob holding this artifact's widget — the small,
 	// informative document its gallery card renders (av-fafu). Empty means the
 	// artifact has no widget and its card falls back to the default tile. The
@@ -292,6 +301,16 @@ const (
 	UsageSourceTool       = "tool"
 	UsageSourceCompaction = "compaction"
 	UsageSourceGuardrail  = "guardrail"
+	// UsageSourceInference is an artifact's own AI call (Exh-hwjg). Its row
+	// names the artifact and the kind, and its OwnerID is the viewer who paid.
+	UsageSourceInference = "artifact_inference"
+
+	// Where a row's CostMicros came from. Provider: the provider reported it.
+	// Catalog: Pi's price table estimated it from tokens. None: no usage was
+	// reported, which is unknown spend rather than zero spend.
+	CostSourceProvider = "provider"
+	CostSourceCatalog  = "catalog"
+	CostSourceNone     = "none"
 )
 
 // AgentUsage is one recorded usage event, attributed to the owner and session
@@ -309,6 +328,13 @@ type AgentUsage struct {
 	CacheReadTokens  int64
 	CacheWriteTokens int64
 	CostMicros       int64
+
+	// ArtifactID and Kind are set on inference rows only (Exh-hwjg).
+	ArtifactID string
+	Kind       string
+	// CostSource is one of CostSource*; empty records as catalog, which is
+	// what every agent row has always been.
+	CostSource string
 }
 
 // UsageTotals is an aggregate over recorded usage rows.
@@ -703,6 +729,13 @@ type Store interface {
 	OwnerAgentSpend(ctx context.Context, ownerID int64, since time.Time) (UsageTotals, error)
 	SessionAgentSpend(ctx context.Context, ownerID int64, sessionID string) (UsageTotals, error)
 	InstanceAgentSpend(ctx context.Context, since time.Time) (UsageTotals, error)
+
+	// Artifact inference (Exh-zue3). See inference.go in this package.
+	OwnerInferenceSpend(ctx context.Context, ownerID int64, since time.Time) (UsageTotals, error)
+	InferenceUsageByArtifact(ctx context.Context, payerID int64, since time.Time) ([]InferenceUsage, error)
+	HasInferenceConsent(ctx context.Context, viewerID ViewerID, artifactID string) (bool, error)
+	SetInferenceConsent(ctx context.Context, viewerID ViewerID, artifactID string, allowed bool) error
+	ListInferencePermissions(ctx context.Context, viewerID ViewerID) ([]InferencePermission, error)
 
 	// Shares are created, listed and revoked by the artifact's owner.
 	// Anonymous links and grants are independent: revoking a link leaves all

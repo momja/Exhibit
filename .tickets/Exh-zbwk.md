@@ -1,6 +1,6 @@
 ---
 id: Exh-zbwk
-status: open
+status: closed
 deps: [Exh-hwjg]
 links: []
 created: 2026-11-04T05:36:51Z
@@ -24,6 +24,7 @@ Artifact code calls a method on window.exhibit.ai. The preamble posts the call t
   - Artifact-level: a new inference_approved column in store.ApprovalColumns, set only by the owner through the ordinary first-use prompt in app chrome. It names the artifact and says that text it sends, possibly including saved data, goes to an AI service. Revocable from the artifact's security settings and shown in the capability cluster.
   - Viewer-level: because a recipient spends their own allowance, each viewer also consents once per artifact, in the same shape as relay consent. For the owner it is one prompt covering both. A recipient of an approved artifact is asked only about their own spend; a recipient of an unapproved one gets the refusal explained in chrome with no button (av-awr4).
 - Version preview: allowed for the owner and metered.
+- Exports: both HTML and ZIP use the unavailable stand-in specified by [Exh-i902](Exh-i902.md), never a live host inference bridge or local inference relay. The export behavior is the same whether online or offline.
 - Errors reaching the artifact are one stable set shared by every kind (unavailable, not_approved, no_key, limit_reached, invalid_request, rate_limited, provider_error, plus kind-specific codes each provider ticket names), never upstream text.
 
 ## Acceptance Criteria
@@ -33,3 +34,9 @@ Artifact code calls a method on window.exhibit.ai. The preamble posts the call t
 - A named recipient's call is charged to the recipient; the owner's ledger is unchanged.
 - Public link, anonymous, widget and top-level renders cannot cause a call. Tested at the endpoint, not only by absence of the bridge.
 - security.md §4 and PRD §6.3 describe the capability and its two consents.
+
+## Notes
+
+**2026-11-20T06:19:13Z**
+
+Done: unavailable stand-in on every render, aiBridgeScript only on framed renders with a viewer (not widgets, public shares, anonymous, top-level), POST/GET /api/artifacts/:id/inference, PUT/DELETE …/inference/consent, inference-host.js dialog/banners on detail, agent preview and version previews; Edit → Permissions AI row; posture glyph; Settings → AI in artifacts (allowance as a share, usage per tool, revocable permissions). Fixed during the demo: the frame's first call could be lost before the host module attached — calls now wait for __avAIHostReady and flush exactly once (browser test). UI decisions: one dialog with owner/recipient copy; recipient of an unapproved tool gets a banner, no button, including when the tool only checks available().
