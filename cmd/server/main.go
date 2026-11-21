@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/exec"
 	"strings"
@@ -356,7 +357,15 @@ func main() {
 		// answer every request with URLs nobody can reach while looking
 		// healthy. Passing the raw values makes an unset origin a startup
 		// failure instead.
-		h, err := api.NewHostDispatcher(router, router.RenderHandler(),
+		var appHandler http.Handler = router
+		if target := os.Getenv("MCP_PROXY_URL"); target != "" {
+			var err error
+			appHandler, err = api.NewMCPProxy(router, os.Getenv("APP_ORIGIN"), os.Getenv("MCP_URL"), target)
+			if err != nil {
+				fatal("MCP proxy", err)
+			}
+		}
+		h, err := api.NewHostDispatcher(appHandler, router.RenderHandler(),
 			os.Getenv("APP_ORIGIN"), os.Getenv("RENDER_ORIGIN"))
 		if err != nil {
 			fatal("single listener", err)
@@ -538,6 +547,7 @@ func newLocalCredential() *auth.Credential {
 }
 
 const usage = `subcommands:
+  fly                    supervise core and MCP on one Fly machine
   hash-password          print a LOGIN_PASSWORD_HASH value for a password read from stdin
   user list              list the accounts on this instance
   user add <name>        provision an account, password read from stdin
@@ -554,6 +564,11 @@ const usage = `subcommands:
 // binary would have to be kept in agreement with all three.
 func runSubcommand(args []string) {
 	switch args[0] {
+	case "fly":
+		if err := serveFly(); err != nil {
+			fatal("fly supervisor", err)
+		}
+		return
 	case "hash-password":
 		hashPassword()
 	case "user":

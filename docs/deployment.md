@@ -838,6 +838,16 @@ Anything arriving under an unrecognized hostname — the platform's own
 `*.fly.dev` name, a health check by IP — gets the app surface, which is
 authenticated. Only the exact `RENDER_ORIGIN` hostname reaches the renderer.
 
+With the optional Fly MCP wiring (§5.3), the core also accepts
+`MCP_PROXY_URL=http://127.0.0.1:8090` in single-listener mode. Only the exact app
+hostname's `/mcp`, `/.well-known/oauth-protected-resource/mcp` and bare
+`/.well-known/oauth-protected-resource` paths are forwarded, without rewriting
+paths or buffering streams. `MCP_URL` must equal `APP_ORIGIN + /mcp`.
+Browser session cookies are removed before forwarding; bearer verification
+remains in the separate MCP process. Render dispatch takes precedence, including
+for those paths; unknown hosts do not reach MCP. OAuth stays on the core.
+Without `MCP_PROXY_URL`, the core has no MCP transport route.
+
 ### 5.2 Fly.io
 
 `fly.toml` at the repo root deploys a single machine with a volume at `/data`.
@@ -846,10 +856,11 @@ server picks between them by `Host` (§5.1). Fly's proxy routes by port and
 cannot map two hostnames to two ports, which is the whole reason that flag
 exists.
 
-The committed file carries nothing specific to any one deployment: no app name,
-no region, no hostnames. Pass the app name to every command with `-a`, and set
-everything else with `fly secrets set`. That way you deploy from a clean clone
-without editing a tracked file, and `git status` stays empty.
+The committed file pins this hosted instance's app origin to
+`https://exhibit.dizzard.net` and MCP to `https://exhibit.dizzard.net/mcp` (§5.3).
+App name, region, render hostname and credentials remain operator supplied.
+For another deployment, change the four public URL values together. Fly secrets
+override `[env]`; stale URL secrets must be removed or updated before deploying.
 
 Pick your two hostnames first. They have to differ, and the server exits at
 startup if they are missing or the same.
@@ -859,13 +870,12 @@ APP=exhibit                            # your app name
 fly apps create "$APP"
 fly volumes create exhibit_data --size 1 --region sea -a "$APP"
 
-fly certs add exhibit.example.com   -a "$APP"    # the app
+fly certs add exhibit.dizzard.net   -a "$APP"    # the app and MCP
 fly certs add artifacts.example.com -a "$APP"    # the renderer
 # add the DNS records fly prints for each, then wait for both to go green:
 fly certs list -a "$APP"
 
 fly secrets set -a "$APP" \
-  APP_ORIGIN="https://exhibit.example.com" \
   RENDER_ORIGIN="https://artifacts.example.com" \
   AUTH_TOKEN="$(openssl rand -hex 32)" \
   EXHIBIT_SECRET="$(openssl rand -hex 32)"
@@ -881,13 +891,11 @@ warning about it. Change it before you put anything in the library:
 fly ssh console -a "$APP" -C "/server user passwd admin"
 ```
 
-#### Why the origins are secrets
+#### Where the origins persist
 
-They are not secret. `fly secrets set` is simply the only per-deployment
-mechanism Fly persists. `fly deploy -e APP_ORIGIN=...` applies to that one
-deploy, so the next `fly deploy` without the same flags drops it and the
-instance comes back up on its localhost defaults, serving links that point
-nowhere.
+The public app/MCP URLs persist in the committed `[env]` config. The render
+origin is deployment specific and persists through `fly secrets set`. Avoid
+one-off `fly deploy -e` overrides, which the next deployment can drop.
 
 To avoid that failure being quiet, `SINGLE_LISTENER` requires both origins to
 be set explicitly. Miss one and the machine refuses to boot, and the log says
@@ -950,13 +958,63 @@ and none of the files.
 `exhibit-mcp` connects a person's own agent to their library over Streamable
 HTTP. It is an optional satellite, with no database, operator token or secrets
 of its own. Every request carries the caller's library grant and is checked
-with the core; revocation takes effect on the next request. The core never
-serves `/mcp`, even with `MCP_URL` set (Exh-uhvu).
+with the core; revocation takes effect on the next request. The core never implements MCP transport, even with `MCP_URL` set (Exh-uhvu);
+the optional single-listener proxy below only forwards to the satellite.
 
 The release image contains both `/server` and `/exhibit-mcp` from the same
 revision. Compose's `mcp` profile runs the second entrypoint as a separate
 process, without Pi or the core's data volume. Outside Compose, run
 `exhibit-mcp` without arguments with the environment below.
+
+#### Fly: stable app-host path
+
+The selected endpoint is **`https://exhibit.dizzard.net/mcp`**. Reusing the app
+hostname avoids another DNS name/certificate and preserves the OAuth issuer.
+`fly.toml` pins both `MCP_URL` and `MCP_PUBLIC_URL` to that endpoint, and both
+`APP_ORIGIN` and `EXHIBIT_PUBLIC_URL` to `https://exhibit.dizzard.net`. Keep
+`EXHIBIT_SECRET` unchanged to preserve signed client registrations.
+
+The single Fly process group runs `/server fly`: Fly's process command supplies
+`fly` to the image's `/server` entrypoint ([Fly process documentation](https://fly.io/docs/launch/processes/)).
+That supervisor starts the core plus `/exhibit-mcp` on the **same machine**,
+forwards shutdown, and stops the sibling if either child exits. The satellite
+receives only its API/public URLs, body limit and loopback bind address, with no
+operator secret environment. It shares the machine's OS identity, so this is
+not process-level secret isolation. Do not create a second MCP process group:
+Fly process groups create separate machines, incompatible with this loopback
+proxy. `SINGLE_LISTENER=1` dispatches render first, then the app-host MCP paths
+via `MCP_PROXY_URL`; all remaining app routes stay on the core.
+The satellite binds `127.0.0.1:8090` and calls `http://127.0.0.1:8080`.
+Forwarded requests bypass core router access logging, body-limit middleware and
+common response headers; the satellite enforces `MAX_REQUEST_BODY_BYTES` itself.
+The supervisor allows five seconds for shutdown before killing its children,
+matching Fly's default kill timeout; a slower core shutdown can be cut short.
+
+For a live rollout, an authorized operator must inspect existing Fly URL
+secrets (which override `[env]`) and remove/update any stale `APP_ORIGIN`,
+`EXHIBIT_PUBLIC_URL`, `MCP_URL` and `MCP_PUBLIC_URL` overrides. Confirm the
+app hostname's existing Fly certificate and DNS records; if absent, provision
+them using §5.2 and the records Fly reports. This path needs **no new MCP DNS
+record or certificate**. `force_https=true` in `fly.toml` supplies HTTP-to-HTTPS
+redirects. These are required rollout checks, not claims about current cloud
+state. Deploy only with separate deployment authority.
+
+After rollout, verify HTTP redirects and valid TLS at the app hostname, then
+check both resource metadata paths, the core authorization-server metadata and
+Settings → Connected agents for the stable URLs (no `*.fly.dev`). From a clean
+client run:
+
+```sh
+claude mcp add --transport http exhibit https://exhibit.dizzard.net/mcp
+```
+
+Complete browser approval, call one library tool, and confirm Settings still
+lists and revokes an existing grant. Stored grants are unchanged; clients using
+the old address need re-adding with the stable endpoint. Pending OAuth codes
+are ephemeral and must be requested again after restart. Fly auto-stop also
+discards in-memory MCP sessions, so clients must initialize a fresh session after
+a cold start. Repository tests do
+not establish live DNS, TLS, redirect or clean-client acceptance.
 
 #### Configure and start it
 

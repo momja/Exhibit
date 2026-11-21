@@ -1,10 +1,9 @@
-# Exhibit on Fly.io. See docs/deployment.md §5.2 for the commands that go with
+# Exhibit on Fly.io. See docs/deployment.md §5.2/§5.3 for the commands that go with
 # this file.
 #
-# This file is committed and carries nothing specific to any one deployment: no
-# app name, no region, no hostnames, no secrets. Supply the app name with
-# `fly deploy -a <name>` and everything else with `fly secrets set`. What is
-# left here is true of every Fly deployment of Exhibit.
+# The product app/MCP URLs are pinned here. Supply the app name/region and
+# RENDER_ORIGIN separately; secrets remain in `fly secrets set`. Existing Fly
+# secrets override [env]: remove stale URL secrets when applying this config.
 #
 # TWO ORIGINS, ONE PORT. Exhibit serves the app and the artifact renderer from
 # two different hostnames, and that split is the artifact sandbox boundary
@@ -21,10 +20,20 @@
 
 [build]
 
+[processes]
+  # /server is the image entrypoint; this starts /server fly, supervising both
+  # binaries on the SAME machine (not a separate Fly MCP process group).
+  app = "fly"
+
 [env]
   # Both surfaces on one listener, chosen by Host header (see above).
   SINGLE_LISTENER = "1"
   ADDR = ":8080"
+  APP_ORIGIN = "https://exhibit.dizzard.net"
+  EXHIBIT_PUBLIC_URL = "https://exhibit.dizzard.net"
+  MCP_URL = "https://exhibit.dizzard.net/mcp"
+  MCP_PUBLIC_URL = "https://exhibit.dizzard.net/mcp"
+  MCP_PROXY_URL = "http://127.0.0.1:8090"
 
   # SQLite and artifact bodies both live on the mounted volume below.
   DATA_DIR = "/data"
@@ -35,7 +44,6 @@
 # across deploys. `fly deploy -e` does not: it applies to one deploy, and the
 # next one without the same flags silently drops it.
 #
-#   APP_ORIGIN           https://exhibit.example.com
 #   RENDER_ORIGIN        https://artifacts.example.com   (a different hostname)
 #   AUTH_TOKEN           the API bearer token
 #   EXHIBIT_SECRET       set it explicitly. Left unset it is generated onto the
@@ -45,9 +53,7 @@
 #   OIDC_CLIENT_SECRET   if you delegate login to an identity provider
 #   AGENT_API_KEY        only for platform mode; read §4.1 first
 #
-# The two origins are not secret. They go here anyway because secrets are the
-# only per-deployment mechanism Fly persists, and an origin that reverts to its
-# localhost default is an instance whose every link points nowhere.
+# RENDER_ORIGIN must remain a different hostname from the pinned APP_ORIGIN.
 
 [http_service]
   internal_port = 8080

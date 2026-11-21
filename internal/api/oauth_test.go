@@ -36,6 +36,10 @@ type oauthInstance struct {
 }
 
 func newOAuthInstance(t *testing.T) oauthInstance {
+	return newOAuthInstanceWithProxy(t, false)
+}
+
+func newOAuthInstanceWithProxy(t *testing.T, proxy bool) oauthInstance {
 	t.Helper()
 	in := newTwoOwnerInstance(t)
 	srv := httptest.NewUnstartedServer(nil)
@@ -45,8 +49,17 @@ func newOAuthInstance(t *testing.T) oauthInstance {
 	cfg := in.ro.cfg
 	cfg.AppOrigin = "http://" + srv.Listener.Addr().String()
 	cfg.MCPURL = "http://" + service.Listener.Addr().String() + "/mcp"
+	if proxy {
+		cfg.MCPURL = cfg.AppOrigin + "/mcp"
+	}
 	in.ro = NewRouter(cfg)
 	srv.Config.Handler = in.ro
+	if proxy {
+		app, err := NewMCPProxy(in.ro, cfg.AppOrigin, cfg.MCPURL, "http://"+service.Listener.Addr().String())
+		require.NoError(t, err)
+		srv.Config.Handler, err = NewHostDispatcher(app, in.ro.RenderHandler(), cfg.AppOrigin, "http://render.test")
+		require.NoError(t, err)
+	}
 	serviceHandler, err := mcpserver.NewHTTPHandler(mcpserver.HTTPConfig{BaseURL: cfg.AppOrigin, ExhibitPublicURL: cfg.AppOrigin, PublicURL: cfg.MCPURL})
 	require.NoError(t, err)
 	service.Config.Handler = serviceHandler
@@ -114,13 +127,23 @@ func (in oauthInstance) exchange(t *testing.T, form url.Values) (int, map[string
 }
 
 func TestOAuthDiscoveryNamesThisInstance(t *testing.T) {
-	in := newOAuthInstance(t)
-	resp, err := http.Get(in.service.URL + "/.well-known/oauth-protected-resource/mcp")
+	for _, proxy := range []bool{false, true} {
+		t.Run(map[bool]string{false: "direct satellite", true: "app host proxy"}[proxy], func(t *testing.T) { testOAuthDiscovery(t, proxy) })
+	}
+}
+
+func testOAuthDiscovery(t *testing.T, proxy bool) {
+	in := newOAuthInstanceWithProxy(t, proxy)
+	endpoint, err := url.Parse(in.ro.cfg.MCPURL)
+	require.NoError(t, err)
+	endpoint.Path = "/.well-known/oauth-protected-resource/mcp"
+	resp, err := http.Get(endpoint.String())
 	require.NoError(t, err)
 	var prm map[string]any
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&prm))
 	resp.Body.Close()
 	assert.Equal(t, []any{in.srv.URL}, prm["authorization_servers"])
+	assert.Equal(t, in.ro.cfg.MCPURL, prm["resource"])
 
 	resp, err = http.Get(in.srv.URL + "/.well-known/oauth-authorization-server")
 	require.NoError(t, err)
@@ -311,7 +334,13 @@ func readBody(t *testing.T, resp *http.Response) string {
 // actual HTTP services. Every tool call then spends the resulting library grant
 // at the core API, including after the owner revokes the connection.
 func TestOAuthWithTheSDKClient(t *testing.T) {
-	in := newOAuthInstance(t)
+	for _, proxy := range []bool{false, true} {
+		t.Run(map[bool]string{false: "direct satellite", true: "app host proxy"}[proxy], func(t *testing.T) { testOAuthWithSDKClient(t, proxy) })
+	}
+}
+
+func testOAuthWithSDKClient(t *testing.T, proxy bool) {
+	in := newOAuthInstanceWithProxy(t, proxy)
 	in.artifactOne = seedOwnedArtifact(t, in.ro, in.ownerOne, "00000000-0000-4000-8000-000000000001", ownerOneTitle, ownerOneBody, ownerOneState)
 	jar, err := cookiejar.New(nil)
 	require.NoError(t, err)
@@ -368,7 +397,7 @@ func TestOAuthWithTheSDKClient(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	session, err := mcp.NewClient(&mcp.Implementation{Name: "sdk", Version: "test"}, nil).Connect(ctx,
-		&mcp.StreamableClientTransport{Endpoint: in.service.URL + "/mcp", OAuthHandler: handler}, nil)
+		&mcp.StreamableClientTransport{Endpoint: in.ro.cfg.MCPURL, OAuthHandler: handler}, nil)
 	require.NoError(t, err)
 	defer session.Close()
 	call := func(name string, args any) string {
