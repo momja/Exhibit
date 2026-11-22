@@ -16,8 +16,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The descent (Exh-vsw0) in a real browser: the form is usable and focused on
-// the first frame and never moves; the layers settle exactly where the composite
+// The descent (Exh-vsw0) in a real browser: the form is usable from the
+// first frame and never moves; the layers settle exactly where the composite
 // image is drawn; and a visitor who asked for no motion gets no animation and
 // downloads none of the layer art.
 // awaitLoginStyled returns once the form exists and every stylesheet in the page
@@ -58,7 +58,7 @@ func TestLoginDescentBrowser(t *testing.T) {
 				return ok
 			}
 			require.True(t, eval(`document.body.classList.contains('login-descend')`), "the first visit is marked to animate in both cases")
-			require.True(t, eval(`document.activeElement.id === 'username'`), "the form has focus on the first frame")
+			require.True(t, eval(`document.activeElement === document.body && !document.querySelector('.login-form [autofocus]')`), "sign-in fields do not take focus on load")
 			require.True(t, eval(`document.querySelector('.login-headline .sr-only').textContent === 'tools'`), "the accessible headline stays fixed")
 			if motion == "no-preference" {
 				require.True(t, eval(`(() => {
