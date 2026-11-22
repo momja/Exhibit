@@ -71,6 +71,11 @@ func TestClerkLoginFitsAfterProviderCardGrows(t *testing.T) {
 		chromedp.Poll[chromedp.Void](fits),
 		chromedp.Evaluate[chromedp.Void](`document.querySelector('#test-provider').style.height = '520px'`),
 		chromedp.Poll[chromedp.Void](fits),
+		// Headless Chromium has no device insets. Supply a bottom inset to
+		// check that the growing card stays clear of the browser controls.
+		chromedp.Evaluate[chromedp.Void](`document.body.style.paddingBottom = '80px'`),
+		chromedp.Poll[chromedp.Void](fits+` && document.querySelector('.login-clerk').getBoundingClientRect().bottom < innerHeight - 80`),
+		chromedp.Evaluate[chromedp.Void](`document.body.style.paddingBottom = ''`),
 		chromedp.EmulateViewport(1400, 960),
 		chromedp.Poll[chromedp.Void](fits+` && document.querySelector('.login-content').style.getPropertyValue('--login-fit') === '1'`),
 	))

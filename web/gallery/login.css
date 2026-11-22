@@ -49,7 +49,12 @@
  * (.login-scene); the form never sits inside it, so nothing the animation
  * story (Exh-vsw0) does to the scene can move or delay the form.
  */
-.login-painted{--login-inset:40px;position:relative;isolation:isolate;background:var(--painting-sky-top)}
+.login-painted{
+  --login-inset:40px;
+  position:relative;isolation:isolate;background:var(--painting-sky-top);
+  /* Keep controls inside the safe area while the scene fills the whole page. */
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
 
 /* The stage: fixed to the viewport on desktop, the whole page on phones. */
 .login-scene{container-type:size;position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none;background:var(--painting-sky-top)}
@@ -59,7 +64,8 @@
 .login-scene::after{content:"";position:absolute;inset:0;z-index:2;background:radial-gradient(ellipse 62% 80% at 0% 30%,var(--painting-shade) 0,var(--painting-shade) 35%,transparent 100%)}
 .login-scene-grain{position:absolute;inset:0;z-index:1;--grain-opacity:.2}
 
-.login-painted .app-header{background:none;border:0;box-shadow:none;padding-inline:var(--login-inset);padding-top:6px;height:var(--header-height)}
+.login-painted .app-header-slot{display:contents}
+.login-painted .app-header{position:relative;min-height:0;background:none;border:0;box-shadow:none;padding-inline:var(--login-inset);padding-top:6px;height:var(--header-height)}
 .login-painted .app-header .logo{height:40px}
 .login-wordmark{font-size:1.25rem;font-weight:700;color:var(--color-on-painting);text-shadow:0 1px 8px var(--painting-text-shadow)}
 
@@ -134,7 +140,6 @@
 /* The hosted card changes height when Clerk promotes the last-used provider
  * or switches authentication steps. Give it space before using the fit scale. */
 .login-hosted{height:100dvh;min-height:0;overflow:clip;contain:paint}
-.login-hosted .app-header-slot{flex-shrink:0}
 .login-hosted .login-content{
   flex:none;margin-block:auto;gap:clamp(20px,4.5dvh,48px);padding-block:clamp(10px,2.5dvh,34px) 16px;
   transform:scale(var(--login-fit,1));transform-origin:var(--login-inset) 0;
@@ -161,8 +166,6 @@
   .login-scene-composite{inset:auto 0 0;height:var(--login-painting-h);-webkit-mask-image:linear-gradient(transparent 0,#000 28%);mask-image:linear-gradient(transparent 0,#000 28%)}
   .login-scene-image{object-position:50% 100%}
   .login-scene::after{background:linear-gradient(var(--painting-shade) 0,var(--painting-shade) 30%,transparent 62%)}
-  .login-painted .app-header{position:static;padding-inline:var(--login-inset);padding-top:6px;min-height:0;height:var(--header-height)}
-  .login-painted .app-header-slot{min-height:0}
 
   .login-painted .login-content{justify-content:flex-start;padding:2vh var(--login-inset) calc(var(--login-painting-h) - 12px);gap:22px}
   .login-headline{font-size:clamp(40px,12vw,56px)}
@@ -188,8 +191,7 @@
 }
 
 @media (min-width:601px) and (max-height:480px){
-  .login-hosted .app-header-slot{display:contents}
-  .login-hosted .app-header{position:absolute;inset:0 auto auto 0;padding-inline:20px}
+  .login-hosted .app-header{position:absolute;inset:env(safe-area-inset-top) auto auto env(safe-area-inset-left);padding-inline:20px}
   .login-hosted .login-content{flex-direction:row;gap:20px;padding:12px 20px}
   .login-hosted .login-intro{flex:0 1 260px;min-width:0;padding-top:54px}
   .login-hosted .login-headline{font-size:clamp(32px,5vw,42px)}
