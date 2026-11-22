@@ -170,6 +170,8 @@ func TestGalleryCardRendersWidgetOrDefaultTile(t *testing.T) {
 	// (av-c5aq): one HMAC per card, no round trip per card.
 	assert.Contains(t, page, `src="http://render.test/w/`+withWidget+`?t=`)
 	assert.NotContains(t, page, `http://render.test/w/`+plain)
+	// Both cards render the same grain surface, including the framed card fallback.
+	assert.Equal(t, 2, strings.Count(page, `class="card-widget-default grain"`))
 	// "Mortgage Calculator" -> MC on the default tile.
 	assert.Contains(t, page, `<span class="card-widget-monogram">MC</span>`)
 	// "Run Log" -> RL, present even though that card HAS a widget: the default
