@@ -170,6 +170,33 @@ func TestWorkerScreensThroughMockAndPreservesUsageOnFailure(t *testing.T) {
 	}
 }
 
+func TestWorkerArtifactGuardrailFailsClosedWithoutRetrying(t *testing.T) {
+	for _, status := range []int{http.StatusTooManyRequests, http.StatusOK} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			var requests atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				requests.Add(1)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(status)
+				if status == http.StatusOK {
+					_, _ = io.WriteString(w, `{"answers":{"violates":{"type":"bool","probability":-0.1}},"usage":{"input_tokens":100}}`)
+				} else {
+					_, _ = io.WriteString(w, `{"error":{"message":"Mock rate limit"}}`)
+				}
+			}))
+			defer server.Close()
+			worker := startTestWorker(t, server.URL)
+			verdict, err := worker.Screen(deadline(t, 10*time.Second), ScreenJob{
+				Provider: "openrouter", Model: testDecisionModel, APIKey: "test-guard-key",
+				Context: completeJob("", "Suggest a color.").Context,
+			})
+			if err == nil || verdict.Allowed || !verdict.Dispatched || requests.Load() != 1 {
+				t.Fatalf("screen verdict = %+v, err = %v, mock requests = %d", verdict, err, requests.Load())
+			}
+		})
+	}
+}
+
 func TestWorkerArtifactGuardrailScreensFullContext(t *testing.T) {
 	m := newMockProvider(t)
 	w := startTestWorker(t, m.URL)

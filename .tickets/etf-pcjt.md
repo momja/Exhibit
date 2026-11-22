@@ -18,4 +18,3 @@ Malformed decide responses can turn JSON null or omitted choice probabilities in
 ## Acceptance Criteria
 
 Reject null or missing required numeric fields and absent or null probabilities for any offered choice. Preserve valid numeric zeros and existing range and choice validation. Return the stable provider error for invalid replies and preserve metering. Add focused regression tests with mocked classifier answers.
-

@@ -107,6 +107,28 @@ func TestGuardrailScreensStructuredRepairBeforeDispatch(t *testing.T) {
 	}
 }
 
+func TestUsageWriteFailureStopsTheNextPaidDispatch(t *testing.T) {
+	for _, source := range []string{store.UsageSourceGuardrail, store.UsageSourceInference} {
+		t.Run(source, func(t *testing.T) {
+			s, rt, ledger := newTestService(t, configureTestGuardrail)
+			ledger.failSource, ledger.writeErr = source, errors.New("mock ledger outage")
+			rt.screenReply = func(ScreenJob) (ScreenVerdict, error) {
+				return ScreenVerdict{Allowed: true, Dispatched: true}, nil
+			}
+			if _, err := s.Run(t.Context(), structuredColorCall()); code(err) != CodeProviderError {
+				t.Fatalf("Run error = %v, want %s", err, CodeProviderError)
+			}
+			wantCalls := 0
+			if source == store.UsageSourceInference {
+				wantCalls = 1
+			}
+			if rt.calls() != wantCalls || len(rt.screens) != 1 {
+				t.Fatalf("paid dispatches: %d completions, %d screens", rt.calls(), len(rt.screens))
+			}
+		})
+	}
+}
+
 func TestSpendCapsGateEveryGuardrailAndInferenceDispatch(t *testing.T) {
 	for _, limit := range []string{"owner", "instance"} {
 		for _, tc := range []struct {

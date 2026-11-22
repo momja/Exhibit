@@ -51,14 +51,19 @@ func (f *fakeRuntime) calls() int { f.mu.Lock(); defer f.mu.Unlock(); return len
 
 // fakeLedger is an in-memory agent_usage.
 type fakeLedger struct {
-	mu   sync.Mutex
-	rows []store.AgentUsage
-	err  error
+	mu         sync.Mutex
+	rows       []store.AgentUsage
+	err        error
+	writeErr   error
+	failSource string
 }
 
 func (l *fakeLedger) RecordAgentUsage(_ context.Context, u store.AgentUsage) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	if l.writeErr != nil && u.Source == l.failSource {
+		return l.writeErr
+	}
 	l.rows = append(l.rows, u)
 	return nil
 }

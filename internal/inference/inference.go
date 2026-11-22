@@ -388,8 +388,12 @@ func (s *Service) Run(ctx context.Context, call Call) (json.RawMessage, error) {
 	defer cancel()
 	callID := "inference:" + uuid.NewString()
 	var gate func(Job) error
+	var meterErr error
 	if p.paidBy == store.PaidByPlatform {
 		gate = func(job Job) error {
+			if meterErr != nil {
+				return usageWriteRefusal()
+			}
 			if err := s.checkSpend(ctx, call.ViewerID); err != nil || s.cfg.Guardrail == nil {
 				return err
 			}
@@ -402,7 +406,7 @@ func (s *Service) Run(ctx context.Context, call Call) (json.RawMessage, error) {
 	}
 	job := Job{Kind: call.Kind, Provider: p.cred.Provider, Model: model, APIKey: p.cred.APIKey}
 	meter := func(o Outcome) {
-		s.meter(call, callID, p, model, o)
+		meterErr = s.meter(call, callID, p, model, o)
 	}
 	return k.run(ctx, s.cfg.Runtime, job, req, meter, gate)
 }
@@ -413,9 +417,11 @@ func (s *Service) screen(ctx context.Context, call Call, callID string, input js
 	g := s.cfg.Guardrail
 	verdict, err := s.cfg.Runtime.Screen(ctx, ScreenJob{Provider: g.Provider, Model: g.Model, APIKey: g.APIKey, Context: input})
 	if verdict.Dispatched || verdict.Usage != nil {
-		s.record(store.AgentUsage{OwnerID: call.ViewerID, SessionID: callID, Provider: g.Provider, Model: g.Model,
+		if writeErr := s.record(store.AgentUsage{OwnerID: call.ViewerID, SessionID: callID, Provider: g.Provider, Model: g.Model,
 			PaidBy: store.PaidByPlatform, Source: store.UsageSourceGuardrail, ArtifactID: call.ArtifactID},
-			verdict.Usage)
+			verdict.Usage); writeErr != nil {
+			return usageWriteRefusal()
+		}
 	}
 	if err != nil {
 		slog.WarnContext(ctx, "inference guardrail failed closed", slog.String("artifact_id", call.ArtifactID), slog.String("err", err.Error()))
@@ -430,17 +436,17 @@ func (s *Service) screen(ctx context.Context, call Call, callID string, input js
 // meter records one provider outcome. Usage missing from a failed or
 // canceled call is recorded as a zero-token row with cost_source none: the
 // call happened and its spend is unknown, which is different from free.
-func (s *Service) meter(call Call, callID string, p *payer, model string, o Outcome) {
+func (s *Service) meter(call Call, callID string, p *payer, model string, o Outcome) error {
 	if !o.Dispatched {
-		return
+		return nil
 	}
-	s.record(store.AgentUsage{
+	return s.record(store.AgentUsage{
 		OwnerID: call.ViewerID, SessionID: callID, Provider: p.cred.Provider, Model: model,
 		PaidBy: p.paidBy, Source: store.UsageSourceInference, ArtifactID: call.ArtifactID, Kind: string(call.Kind),
 	}, o.Usage)
 }
 
-func (s *Service) record(row store.AgentUsage, u *Usage) {
+func (s *Service) record(row store.AgentUsage, u *Usage) error {
 	if u == nil {
 		row.CostSource = store.CostSourceNone
 	} else {
@@ -456,9 +462,15 @@ func (s *Service) record(row store.AgentUsage, u *Usage) {
 	// is the only record of money that was spent.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := s.cfg.Ledger.RecordAgentUsage(ctx, row); err != nil {
+	err := s.cfg.Ledger.RecordAgentUsage(ctx, row)
+	if err != nil {
 		slog.Error("inference usage row failed", slog.String("artifact_id", row.ArtifactID), slog.String("err", err.Error()))
 	}
+	return err
+}
+
+func usageWriteRefusal() error {
+	return refuse(CodeProviderError, "The AI request could not continue because usage could not be recorded.")
 }
 
 // checkSpend applies the agent's monthly ceilings to a platform-paid call:

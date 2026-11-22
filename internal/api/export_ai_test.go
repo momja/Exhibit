@@ -256,3 +256,50 @@ func TestRelayBundleExportDisablesAIBrowser(t *testing.T) {
 	assertUnavailableResults(t, exportAIResults(t, srv.URL+"/__exhibit/render"))
 	assert.Empty(t, log.requests(), "the bundled page makes no requests")
 }
+
+func TestTriageExampleExportsDisableAIBrowser(t *testing.T) {
+	browser, err := chromium.New(chromiumtest.Start(t))
+	require.NoError(t, err)
+	ro, _ := newAIExportRouter(t)
+	id := createArtifact(t, ro, map[string]any{"title": "Feedback triage", "body": triageExampleSource(t)})
+	standalone := exportGet(t, ro, id)
+	require.Equal(t, http.StatusOK, standalone.Code)
+	zip := doJSON(t, ro, http.MethodGet, "/api/artifacts/"+id+"/relay-bundle", nil)
+	require.Equal(t, http.StatusOK, zip.Code, zip.Body.String())
+	zipPath := filepath.Join(t.TempDir(), "triage.zip")
+	require.NoError(t, os.WriteFile(zipPath, zip.Body.Bytes(), 0o600))
+	app, err := bundle.Read(zipPath)
+	require.NoError(t, err)
+
+	var log requestLog
+	mux := http.NewServeMux()
+	srv := httptest.NewServer(log.wrap(map[string]bool{"/export.html": true, "/__exhibit/render": true}, mux))
+	t.Cleanup(srv.Close)
+	runner, err := bundle.NewServer(app, bundle.ServerOptions{
+		AllowedHosts: []string{strings.TrimPrefix(srv.URL, "http://")}, StatePath: filepath.Join(t.TempDir(), "state.json"),
+	})
+	require.NoError(t, err)
+	t.Cleanup(runner.Close)
+	mux.Handle("/", runner)
+	mux.HandleFunc("GET /export.html", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = io.WriteString(w, standalone.Body.String())
+	})
+	for _, path := range []string{"/export.html", "/__exhibit/render"} {
+		ctx, cancel, err := browser.Tab(t.Context())
+		require.NoError(t, err)
+		t.Cleanup(cancel)
+		ctx, timeout := context.WithTimeout(ctx, 30*time.Second)
+		require.NoError(t, chromedp.Do(ctx,
+			chromedp.Navigate(srv.URL+path),
+			chromedp.Poll[chromedp.Void](`document.getElementById('ai-status').textContent.includes('AI isn’t available here')`),
+			chromedp.SetValue(chromedp.CSS("#new-items"), "A sign-in issue"),
+			chromedp.Click(chromedp.CSS("#add-items")),
+			chromedp.Poll[chromedp.Void](`document.querySelector('#items li.item').textContent.includes('A sign-in issue') && document.getElementById('triage-ai').disabled && document.getElementById('summary-ai').disabled`),
+		), "triage example in %s", path)
+		timeout()
+	}
+	for _, request := range log.requests() {
+		assert.NotContains(t, request, "/inference")
+	}
+}

@@ -119,7 +119,7 @@ export default function (pi: ExtensionAPI) {
 					} : registry;
 					const verdict = await screen(screenRegistry, {
 						provider: request.provider, model: request.model, apiKey: request.apiKey,
-						dataFence: "", policy: DEFAULT_POLICY,
+						dataFence: "", policy: DEFAULT_POLICY, maxRetries: 0,
 					}, text, controller.signal, (usage) => { screenUsage = usage; });
 					send({ id, result: { allowed: verdict.allowed }, usage: screenUsage });
 					return;

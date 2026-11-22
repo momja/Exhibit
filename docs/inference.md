@@ -154,7 +154,8 @@ calls and agent calls share the same spend totals. The configured
 cap overrides are deferred. Platform mode requires at least one of these caps.
 User-paid calls are outside the operator's caps. With `GUARDRAIL_*` set,
 Exhibit screens the full input before each platform-paid call, including
-schema repairs. A refusal or failed screen prevents the call.
+schema repairs. Each screen makes one provider request. A refusal, invalid
+verdict, or failed usage write prevents the next paid step in that request.
 
 Per-call belts, whoever pays: 30 calls a minute per viewer and 60 per artifact
 (bursts of 10), 4 in flight per viewer, 60 s for complete and 20 s for decide.
@@ -187,7 +188,8 @@ complete, classify with all three question types, overlapping calls with
 distinct keys, independent cancel, upstream errors redacted, restart without
 replay; the core with a fake runtime; the endpoint's principal, approval and
 consent rules; the render placement of the stand-in and bridge; and the
-Chromium round trip through the real worker and a local mock provider.
+triage example running in Chromium through the real worker and a local mock
+provider, with both AI controls disabled in each export format.
 
 **Not verified: live provider compatibility.** No paid provider call was made.
 In particular Pi's OpenRouter classifier route (`/api/v1/systemone`) has not
