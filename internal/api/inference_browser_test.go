@@ -4,13 +4,18 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/chromedp/chromedp"
 	"github.com/momja/Exhibit/internal/chromium"
 	"github.com/momja/Exhibit/internal/chromium/chromiumtest"
+	"github.com/momja/Exhibit/internal/inference"
+	"github.com/momja/Exhibit/internal/mockllm"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,6 +28,47 @@ import (
 // approval, and the answer reaches the artifact, which saves both results so
 // the test can read them through the state API.
 func TestInferenceBridgeBrowser(t *testing.T) {
+	exerciseInferenceBridgeBrowser(t, func(t *testing.T, ro *Router) func() int {
+		return withPlatformInference(t, ro).calls
+	}, "a summary", 1)
+}
+
+func TestInferenceBridgeThroughMockProviderBrowser(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Chromium integration disabled in short test runs")
+	}
+	piBin := os.Getenv("PI_BIN")
+	if piBin == "" {
+		piBin = "pi"
+	}
+	piBin, err := exec.LookPath(piBin)
+	if err != nil {
+		t.Skip("no Pi executable; set PI_BIN to the pinned Pi Bolt binary")
+	}
+	exerciseInferenceBridgeBrowser(t, func(t *testing.T, ro *Router) func() int {
+		var calls atomic.Int32
+		handler := mockllm.Handler()
+		provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			calls.Add(1)
+			handler.ServeHTTP(w, r)
+		}))
+		t.Cleanup(provider.Close)
+		worker, err := inference.NewWorker(inference.WorkerConfig{PiBin: piBin, WorkDir: t.TempDir(), MockURL: provider.URL})
+		require.NoError(t, err)
+		t.Cleanup(worker.Close)
+		const model = "openai/gpt-4.1-nano"
+		ro.cfg.Inference, err = inference.New(inference.Config{
+			Enabled: true, Platform: &inference.Credential{Provider: "openrouter", APIKey: "test-platform-key"},
+			ChatModel: model, DecisionModel: "typesafe/jev-1.14", Ledger: ro.cfg.Store, Runtime: worker,
+			Guardrail: &inference.Guardrail{Provider: "openrouter", Model: model, APIKey: "test-guard-key"},
+		})
+		require.NoError(t, err)
+		return func() int { return int(calls.Load()) }
+	}, "Summary: Summarize", 2)
+}
+
+func exerciseInferenceBridgeBrowser(t *testing.T, configure func(*testing.T, *Router) func() int, wantAnswer string, wantCalls int) {
+	t.Helper()
 	browser, err := chromium.New(chromiumtest.Start(t))
 	require.NoError(t, err)
 	ctx, cancel, err := browser.Tab(context.Background())
@@ -32,7 +78,7 @@ func TestInferenceBridgeBrowser(t *testing.T) {
 	defer timeout()
 
 	ro := newTestRouter(t)
-	rt := withPlatformInference(t, ro)
+	calls := configure(t, ro)
 	body := `<!doctype html><html><head><script>
 var windowReceivedAIResult = false;
 window.addEventListener('message', function (event) {
@@ -74,14 +120,14 @@ window.exhibit.ai.available().then(function (a) {
 	))
 	assert.Equal(t, `{"complete":true,"decide":true}`, getState(t, ro, id)["available"],
 		"a call made before the host listened still settles, with the real answer")
-	assert.Zero(t, rt.calls(), "nothing runs before the owner allows it")
+	assert.Zero(t, calls(), "nothing runs before the owner allows it")
 
 	require.NoError(t, chromedp.Do(ctx, chromedp.Click(chromedp.CSS("#ai-allow"))))
 	require.Eventually(t, func() bool { return getState(t, ro, id)["answer"] != "" }, 10*time.Second, 50*time.Millisecond)
-	assert.Equal(t, "a summary", getState(t, ro, id)["answer"])
+	assert.Equal(t, wantAnswer, getState(t, ro, id)["answer"])
 	assert.Equal(t, "false", getState(t, ro, id)["windowReceivedAIResult"],
 		"AI responses stay on the requesting document's ports, off the navigable frame window")
-	assert.Equal(t, 1, rt.calls(), "one call, sent once")
+	assert.Equal(t, wantCalls, calls(), "the completion and any configured screen are each sent once")
 	a, err := ro.cfg.Store.GetArtifact(t.Context(), 1, id)
 	require.NoError(t, err)
 	assert.True(t, a.InferenceApproved, "Allow is the owner's approval")

@@ -148,12 +148,13 @@ Providers follow the agent. With `AGENT_API_KEY` + `AGENT_PROVIDER` the
 instance pays (platform mode); otherwise each viewer's own stored agent key
 pays, using `INFERENCE_MODEL` / `INFERENCE_DECISION_MODEL` when they resolve
 for that viewer's provider and a per-provider default otherwise. Platform-paid
-calls count against the agent's `AGENT_SPEND_CAP_OWNER_CENTS` and
-`AGENT_SPEND_CAP_INSTANCE_CENTS` — one total shared with the agent — and
-enabling inference in platform mode without one of those two caps is a startup
-failure (session and turn caps do not bound artifact calls). User-paid calls
-are not limited by the operator's caps. With `GUARDRAIL_*` set, platform-paid
-inputs are screened first and a failed screen refuses (fail closed).
+calls and agent calls share the same spend totals. The configured
+`AGENT_SPEND_CAP_OWNER_CENTS` applies separately to each viewer, and
+`AGENT_SPEND_CAP_INSTANCE_CENTS` bounds the instance total. Account-specific
+cap overrides are deferred. Platform mode requires at least one of these caps.
+User-paid calls are outside the operator's caps. With `GUARDRAIL_*` set,
+Exhibit screens the full input before each platform-paid call, including
+schema repairs. A refusal or failed screen prevents the call.
 
 Per-call belts, whoever pays: 30 calls a minute per viewer and 60 per artifact
 (bursts of 10), 4 in flight per viewer, 60 s for complete and 20 s for decide.
@@ -185,7 +186,8 @@ Automated: the real worker (pinned Pi Bolt 1.0.8 / Pi 1.4.0, and the `pi` on
 complete, classify with all three question types, overlapping calls with
 distinct keys, independent cancel, upstream errors redacted, restart without
 replay; the core with a fake runtime; the endpoint's principal, approval and
-consent rules; the render placement of the stand-in and bridge.
+consent rules; the render placement of the stand-in and bridge; and the
+Chromium round trip through the real worker and a local mock provider.
 
 **Not verified: live provider compatibility.** No paid provider call was made.
 In particular Pi's OpenRouter classifier route (`/api/v1/systemone`) has not
