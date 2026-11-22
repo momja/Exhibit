@@ -1,12 +1,12 @@
 ---
 id: egt-56hv
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-22T22:03:58Z
 type: bug
 priority: 2
-assignee: Claude Sonnet 5.5
+assignee: Codex
 parent: Exh-od5a
 tags: [ui, brand]
 ---
