@@ -1,0 +1,14 @@
+# Selected existing agent/guardrail regressions; pinned native Pi Bolt 1.0.8 on PATH.
+# Test summary extracted from full output in /tmp/Exh-urrg-review/agent-mock-regression-tests.txt.
+=== RUN   TestGuardrailBlocksAPromptBeforeTheAgentRuns
+--- PASS: TestGuardrailBlocksAPromptBeforeTheAgentRuns (1.09s)
+=== RUN   TestGuardrailFailsClosed
+--- PASS: TestGuardrailFailsClosed (0.83s)
+=== RUN   TestGuardrailAllowedPromptShowsNoRefusal
+--- PASS: TestGuardrailAllowedPromptShowsNoRefusal (0.79s)
+=== RUN   TestAgentSessionReadsTheArtifactItself
+--- PASS: TestAgentSessionReadsTheArtifactItself (1.09s)
+=== RUN   TestPlatformModeRunsASessionWithNoStoredKey
+--- PASS: TestPlatformModeRunsASessionWithNoStoredKey (1.05s)
+PASS
+ok  	github.com/momja/Exhibit/internal/api	4.879s

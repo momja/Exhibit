@@ -1,0 +1,242 @@
+{
+  "at": "2026-11-05T03:38:07Z",
+  "chat_model": "openai/gpt-4.1-nano",
+  "classifier_model": "typesafe/jev-1.14",
+  "go_ready_rss_kib": 7712,
+  "go_warm_rss_kib": 10648,
+  "local_fixture": true,
+  "runs": [
+    {
+      "kind": "complete",
+      "last_result": {
+        "api": "openai-completions",
+        "content": [
+          {
+            "text": "OK",
+            "type": "text"
+          }
+        ],
+        "durationMs": 3,
+        "model": "openai/gpt-4.1-nano",
+        "provider": "openrouter",
+        "rawStopReason": "stop",
+        "responseId": "fake-1",
+        "role": "assistant",
+        "stopReason": "stop",
+        "timestamp": 1793849888091,
+        "usage": {
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "cost": {
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "input": 0.00001,
+            "output": 4.0000000000000003e-7,
+            "total": 0.0000104,
+            "totalFromProvider": true
+          },
+          "input": 100,
+          "output": 1,
+          "reasoning": 0,
+          "totalTokens": 101
+        }
+      },
+      "latency_ms": [
+        5.101,
+        3.996,
+        4.712,
+        3.874,
+        4.377,
+        3.558,
+        3.659,
+        3.623,
+        3.654,
+        3.413,
+        4.207,
+        4.557,
+        3.52,
+        3.64,
+        3.657,
+        3.824,
+        4.024,
+        3.6,
+        3.647,
+        3.446
+      ],
+      "max_ms": 5.101,
+      "median_ms": 3.659,
+      "min_ms": 3.413,
+      "path": "worker"
+    },
+    {
+      "kind": "complete",
+      "last_result": {
+        "text": "OK",
+        "usage": {
+          "completion_tokens": 1,
+          "cost": 0.0000104,
+          "is_byok": false,
+          "prompt_tokens": 100,
+          "total_tokens": 101
+        }
+      },
+      "latency_ms": [
+        1.48,
+        1.62,
+        1.537,
+        1.707,
+        1.773,
+        1.659,
+        1.475,
+        1.619,
+        1.476,
+        2.047,
+        1.504,
+        1.603,
+        1.581,
+        1.634,
+        1.605,
+        1.67,
+        1.506,
+        1.742,
+        1.549,
+        1.521
+      ],
+      "max_ms": 2.047,
+      "median_ms": 1.605,
+      "min_ms": 1.475,
+      "path": "direct"
+    },
+    {
+      "kind": "classify",
+      "last_result": {
+        "answers": {
+          "positive": {
+            "probability": 0.98,
+            "type": "bool"
+          },
+          "rating": {
+            "confidence": 0.95,
+            "score": 0.9,
+            "type": "score"
+          },
+          "sentiment": {
+            "choice": "positive",
+            "confidence": 0.96,
+            "probabilities": {
+              "negative": 0.02,
+              "positive": 0.98
+            },
+            "type": "choice"
+          }
+        },
+        "api": "typesafe-system-one",
+        "model": "typesafe/jev-1.14",
+        "provider": "openrouter",
+        "stopReason": "stop",
+        "timestamp": 1793849888187,
+        "usage": {
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "cost": {
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "input": 0.0000042000000000000004,
+            "output": 0,
+            "total": 0.0000042000000000000004,
+            "totalFromProvider": false
+          },
+          "input": 100,
+          "output": 0,
+          "totalTokens": 100
+        }
+      },
+      "latency_ms": [
+        3.499,
+        3.017,
+        3.084,
+        2.834,
+        2.747,
+        3.284,
+        3.279,
+        2.511,
+        2.526,
+        2.335,
+        2.818,
+        2.916,
+        2.808,
+        2.886,
+        2.72,
+        2.608,
+        2.769,
+        3.143,
+        3.265,
+        2.509
+      ],
+      "max_ms": 3.499,
+      "median_ms": 2.834,
+      "min_ms": 2.335,
+      "path": "worker"
+    },
+    {
+      "kind": "classify",
+      "last_result": {
+        "answers": {
+          "positive": {
+            "noul": 0.98,
+            "type": "noul"
+          },
+          "rating": {
+            "confidence": 0.95,
+            "score": 0.9,
+            "type": "score"
+          },
+          "sentiment": {
+            "choice": "positive",
+            "confidence": 0.96,
+            "probabilities": {
+              "negative": 0.02,
+              "positive": 0.98
+            },
+            "type": "choice"
+          }
+        },
+        "usage": {
+          "input_tokens": 100,
+          "output_tokens": 0
+        }
+      },
+      "latency_ms": [
+        1.591,
+        1.75,
+        1.737,
+        1.638,
+        1.573,
+        1.566,
+        1.666,
+        1.522,
+        1.412,
+        1.735,
+        1.616,
+        1.695,
+        1.577,
+        1.699,
+        1.465,
+        1.622,
+        1.561,
+        1.666,
+        1.56,
+        1.506
+      ],
+      "max_ms": 1.75,
+      "median_ms": 1.616,
+      "min_ms": 1.412,
+      "path": "direct"
+    }
+  ],
+  "runtime": "1.4.0 (Pi-Bolt 1.0.8, linux-arm64, JIT off)",
+  "samples_per_path": 20,
+  "startup_ms": 142.498,
+  "worker_ready_rss_kib": 80812,
+  "worker_warm_rss_kib": 91940
+}
