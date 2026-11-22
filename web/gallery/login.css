@@ -157,15 +157,46 @@
 }
 
 @media (max-width:600px){
+  /* Safari uses the root background color for the browser area past the
+   * painted page edge. Match the hill there once the visitor scrolls. */
+  html:has(> .login-painted){
+    --login-chrome-sky:#315d94;
+    --login-chrome-hill:#79823a;
+    background-color:var(--login-chrome-hill);
+  }
+  @supports (animation-timeline:scroll(root)){
+    html:has(> .login-painted:not(.login-hosted)){
+      animation:login-chrome-color linear both;
+      animation-timeline:scroll(root);
+      animation-range:0px var(--header-height);
+    }
+  }
+  @media (prefers-color-scheme:dark){
+    html:has(> .login-painted){
+      --login-chrome-sky:#101a34;
+      --login-chrome-hill:#27362f;
+    }
+  }
+  @keyframes login-chrome-color{
+    from{background-color:var(--login-chrome-sky)}
+    to{background-color:var(--login-chrome-hill)}
+  }
+
   /* Sky gradient on top, painting at the bottom of the page. */
   /* The painting owns a band at the bottom of the page, and the content reserves
    * that band (less its faded top edge), so a short screen scrolls instead of
    * letting the form cover the figure. */
   .login-painted{--login-inset:20px;--login-painting-h:clamp(240px,40dvh,380px);min-height:100dvh;background:linear-gradient(var(--painting-sky-top),var(--painting-sky-bottom))}
   .login-scene{position:absolute;background:linear-gradient(var(--painting-sky-top),var(--painting-sky-bottom))}
+  /* Continue the painting into the space Safari can reveal around its toolbar. */
+  .login-painted:not(.login-hosted) .login-scene{bottom:calc(100dvh - 100lvh)}
   .login-scene-composite{inset:auto 0 0;height:var(--login-painting-h);-webkit-mask-image:linear-gradient(transparent 0,#000 28%);mask-image:linear-gradient(transparent 0,#000 28%)}
   .login-scene-image{object-position:50% 100%}
-  .login-scene::after{background:linear-gradient(var(--painting-shade) 0,var(--painting-shade) 30%,transparent 62%)}
+  .login-scene::after{
+    background:
+      linear-gradient(to top,var(--login-chrome-hill),transparent 24px),
+      linear-gradient(var(--painting-shade) 0,var(--painting-shade) 30%,transparent 62%);
+  }
 
   .login-painted .login-content{justify-content:flex-start;padding:2vh var(--login-inset) calc(var(--login-painting-h) - 12px);gap:22px}
   .login-headline{font-size:clamp(40px,12vw,56px)}
