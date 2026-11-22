@@ -21,15 +21,13 @@ import (
 type kindSpec struct {
 	timeout time.Duration
 	prepare func(payload json.RawMessage) (*prepared, error)
-	run     func(ctx context.Context, rt Runtime, job Job, req *prepared, meter func(Outcome), gate func() error) (json.RawMessage, error)
+	run     func(ctx context.Context, rt Runtime, job Job, req *prepared, meter func(Outcome), gate func(Job) error) (json.RawMessage, error)
 }
 
 // prepared is a validated payload.
 type prepared struct {
-	// screenText is what the guardrail judges.
-	screenText string
-	complete   *completeRequest
-	decide     *decideRequest
+	complete *completeRequest
+	decide   *decideRequest
 }
 
 var kinds = map[Kind]kindSpec{
@@ -136,13 +134,7 @@ func prepareComplete(payload json.RawMessage) (*prepared, error) {
 		compact, _ := json.Marshal(schema)
 		req.Schema, req.SchemaRaw = schema, string(compact)
 	}
-	var screen strings.Builder
-	screen.WriteString(in.System)
-	for _, m := range in.Messages {
-		screen.WriteString("\n")
-		screen.WriteString(m.Content)
-	}
-	return &prepared{complete: req, screenText: screen.String()}, nil
+	return &prepared{complete: req}, nil
 }
 
 func (r *completeRequest) context(extra ...completeMessage) json.RawMessage {
@@ -171,7 +163,7 @@ func (r *completeRequest) context(extra ...completeMessage) json.RawMessage {
 	return out
 }
 
-func runComplete(ctx context.Context, rt Runtime, job Job, p *prepared, meter func(Outcome), gate func() error) (json.RawMessage, error) {
+func runComplete(ctx context.Context, rt Runtime, job Job, p *prepared, meter func(Outcome), gate func(Job) error) (json.RawMessage, error) {
 	req := p.complete
 	job.MaxTokens = req.MaxTokens
 	job.Context = req.context()
@@ -206,11 +198,10 @@ func runComplete(ctx context.Context, rt Runtime, job Job, p *prepared, meter fu
 
 // callOnce runs one provider call, meters it, then maps its failure. The
 // order matters: a call that failed may still have been billed. gate runs
-// first, before every paid call — a screen or a first answer may have used
-// the last of the allowance, and a repair must not start past it.
-func callOnce(ctx context.Context, rt Runtime, job Job, meter func(Outcome), gate func() error) (Result, error) {
+// against the final job before every platform-paid dispatch, including repairs.
+func callOnce(ctx context.Context, rt Runtime, job Job, meter func(Outcome), gate func(Job) error) (Result, error) {
 	if gate != nil {
-		if err := gate(); err != nil {
+		if err := gate(job); err != nil {
 			return Result{}, err
 		}
 	}
@@ -521,8 +512,6 @@ func prepareDecide(payload json.RawMessage) (*prepared, error) {
 	if len(in.Questions) == 0 || len(in.Questions) > MaxDecideQuestions {
 		return nil, invalid(fmt.Sprintf("decide() takes between 1 and %d questions.", MaxDecideQuestions))
 	}
-	var screen strings.Builder
-	screen.Write(compactState)
 	for id, q := range in.Questions {
 		if !questionID.MatchString(id) {
 			return nil, invalid("Question names must be identifiers of up to 40 letters, digits and underscores.")
@@ -533,8 +522,6 @@ func prepareDecide(payload json.RawMessage) (*prepared, error) {
 		if strings.TrimSpace(q.Instructions) == "" || len(q.Instructions) > MaxInstructionsBytes {
 			return nil, invalid(fmt.Sprintf("Each question needs instructions of up to %d characters.", MaxInstructionsBytes))
 		}
-		screen.WriteString("\n")
-		screen.WriteString(q.Instructions)
 		switch q.Type {
 		case "bool":
 			var c map[string]string
@@ -571,10 +558,10 @@ func prepareDecide(payload json.RawMessage) (*prepared, error) {
 			return nil, invalid("Question type must be \"bool\", \"choice\" or \"score\".")
 		}
 	}
-	return &prepared{decide: &decideRequest{State: compactState, Questions: in.Questions}, screenText: screen.String()}, nil
+	return &prepared{decide: &decideRequest{State: compactState, Questions: in.Questions}}, nil
 }
 
-func runDecide(ctx context.Context, rt Runtime, job Job, p *prepared, meter func(Outcome), gate func() error) (json.RawMessage, error) {
+func runDecide(ctx context.Context, rt Runtime, job Job, p *prepared, meter func(Outcome), gate func(Job) error) (json.RawMessage, error) {
 	req := p.decide
 	questions := map[string]any{}
 	for id, q := range req.Questions {

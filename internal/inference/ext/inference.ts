@@ -13,7 +13,7 @@
  *   { id, op: "resolve", provider, kind: "complete"|"decide", model }
  *   { id, op: "complete", provider, model, apiKey, context, maxTokens }
  *   { id, op: "classify", provider, model, apiKey, context }
- *   { id, op: "screen", provider, model, apiKey, text }
+ *   { id, op: "screen", provider, model, apiKey, context }
  *   { id, op: "cancel" }                          (id names the job)
  *
  * Replies are notify messages prefixed SIGNAL, each { id, result } or
@@ -101,6 +101,13 @@ export default function (pi: ExtensionAPI) {
 			let screenUsage: unknown;
 			try {
 				if (op === "screen") {
+					if (!request.context || typeof request.context !== "object" || Array.isArray(request.context)) {
+						send({ id, error: "invalid_request" });
+						return;
+					}
+					// Carry the same JSON object as the inference job so the RPC
+					// envelope does not have to escape the entire context again.
+					const text = JSON.stringify(request.context);
 					// In mock mode the screen goes to the mock as well: the shared
 					// guard helper takes no fetch option of its own, so the
 					// registry it is handed adds it to both of its calls.
@@ -113,7 +120,7 @@ export default function (pi: ExtensionAPI) {
 					const verdict = await screen(screenRegistry, {
 						provider: request.provider, model: request.model, apiKey: request.apiKey,
 						dataFence: "", policy: DEFAULT_POLICY,
-					}, String(request.text ?? ""), controller.signal, (usage) => { screenUsage = usage; });
+					}, text, controller.signal, (usage) => { screenUsage = usage; });
 					send({ id, result: { allowed: verdict.allowed }, usage: screenUsage });
 					return;
 				}

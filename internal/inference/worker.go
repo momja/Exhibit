@@ -361,7 +361,7 @@ func (w *Worker) Screen(ctx context.Context, job ScreenJob) (ScreenVerdict, erro
 	if err != nil {
 		return ScreenVerdict{}, err
 	}
-	r, err := g.call(ctx, envelope{ID: w.nextID(), Op: "screen", Provider: job.Provider, Model: job.Model, APIKey: job.APIKey, Text: job.Text})
+	r, err := g.call(ctx, envelope{ID: w.nextID(), Op: "screen", Provider: job.Provider, Model: job.Model, APIKey: job.APIKey, Context: job.Context})
 	if errors.Is(err, errNotSent) || r.Error == "busy" || r.Error == "invalid_request" {
 		return ScreenVerdict{}, ErrProvider
 	}
@@ -392,7 +392,6 @@ type envelope struct {
 	APIKey    string          `json:"apiKey,omitempty"`
 	Context   json.RawMessage `json:"context,omitempty"`
 	MaxTokens int             `json:"maxTokens,omitempty"`
-	Text      string          `json:"text,omitempty"`
 }
 
 type reply struct {

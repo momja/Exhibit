@@ -387,16 +387,17 @@ func (s *Service) Run(ctx context.Context, call Call) (json.RawMessage, error) {
 	ctx, cancel := context.WithTimeout(ctx, k.timeout)
 	defer cancel()
 	callID := "inference:" + uuid.NewString()
-	var gate func() error
+	var gate func(Job) error
 	if p.paidBy == store.PaidByPlatform {
-		gate = func() error { return s.checkSpend(ctx, call.ViewerID) }
-		if s.cfg.Guardrail != nil {
-			if err := gate(); err != nil {
-				return nil, err
+		gate = func(job Job) error {
+			if err := s.checkSpend(ctx, call.ViewerID); err != nil || s.cfg.Guardrail == nil {
+				return err
 			}
-			if err := s.screen(ctx, call, callID, req.screenText); err != nil {
-				return nil, err
+			if err := s.screen(ctx, call, callID, job.Context); err != nil {
+				return err
 			}
+			// The screen is metered and may have spent the last of either cap.
+			return s.checkSpend(ctx, call.ViewerID)
 		}
 	}
 	job := Job{Kind: call.Kind, Provider: p.cred.Provider, Model: model, APIKey: p.cred.APIKey}
@@ -408,9 +409,9 @@ func (s *Service) Run(ctx context.Context, call Call) (json.RawMessage, error) {
 
 // screen runs the operator's guardrail over a platform-paid input. A screen
 // that fails to reach a verdict refuses, as the agent's does (fail closed).
-func (s *Service) screen(ctx context.Context, call Call, callID, text string) error {
+func (s *Service) screen(ctx context.Context, call Call, callID string, input json.RawMessage) error {
 	g := s.cfg.Guardrail
-	verdict, err := s.cfg.Runtime.Screen(ctx, ScreenJob{Provider: g.Provider, Model: g.Model, APIKey: g.APIKey, Text: text})
+	verdict, err := s.cfg.Runtime.Screen(ctx, ScreenJob{Provider: g.Provider, Model: g.Model, APIKey: g.APIKey, Context: input})
 	if verdict.Dispatched || verdict.Usage != nil {
 		s.record(store.AgentUsage{OwnerID: call.ViewerID, SessionID: callID, Provider: g.Provider, Model: g.Model,
 			PaidBy: store.PaidByPlatform, Source: store.UsageSourceGuardrail, ArtifactID: call.ArtifactID},

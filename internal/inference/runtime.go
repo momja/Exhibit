@@ -19,7 +19,7 @@ type Runtime interface {
 	// error: it says whether the call may have reached the provider and what
 	// it reported spending, so the caller meters before it maps the error.
 	Run(ctx context.Context, job Job) (Result, Outcome, error)
-	// Screen runs the usage-policy guardrail over text.
+	// Screen runs the usage-policy guardrail over the full provider context.
 	Screen(ctx context.Context, job ScreenJob) (ScreenVerdict, error)
 }
 
@@ -71,7 +71,8 @@ type UsageCost struct {
 
 // ScreenJob is one guardrail screen.
 type ScreenJob struct {
-	Provider, Model, APIKey, Text string
+	Provider, Model, APIKey string
+	Context                 json.RawMessage
 }
 
 // ScreenVerdict is a screen's answer and what it spent.

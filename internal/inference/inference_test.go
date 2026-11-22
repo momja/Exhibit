@@ -15,13 +15,12 @@ import (
 
 // fakeRuntime answers from a script and records every job.
 type fakeRuntime struct {
-	mu       sync.Mutex
-	jobs     []Job
-	screens  []ScreenJob
-	models   map[string]bool // provider|kind|model
-	reply    func(Job) (Result, Outcome, error)
-	verdict  ScreenVerdict
-	screenEr error
+	mu          sync.Mutex
+	jobs        []Job
+	screens     []ScreenJob
+	models      map[string]bool // provider|kind|model
+	reply       func(Job) (Result, Outcome, error)
+	screenReply func(ScreenJob) (ScreenVerdict, error)
 }
 
 func (f *fakeRuntime) Resolve(_ context.Context, provider string, kind Kind, model string) (bool, error) {
@@ -42,7 +41,10 @@ func (f *fakeRuntime) Screen(_ context.Context, job ScreenJob) (ScreenVerdict, e
 	f.mu.Lock()
 	f.screens = append(f.screens, job)
 	f.mu.Unlock()
-	return f.verdict, f.screenEr
+	if f.screenReply != nil {
+		return f.screenReply(job)
+	}
+	return ScreenVerdict{Allowed: true}, nil
 }
 
 func (f *fakeRuntime) calls() int { f.mu.Lock(); defer f.mu.Unlock(); return len(f.jobs) }
@@ -92,7 +94,7 @@ func newTestService(t *testing.T, mutate func(*Config)) (*Service, *fakeRuntime,
 		"openrouter|complete|chat-1":          true,
 		"openrouter|decide|judge-1":           true,
 		"anthropic|complete|claude-haiku-4-5": true,
-	}, verdict: ScreenVerdict{Allowed: true}}
+	}}
 	led := &fakeLedger{}
 	cfg := Config{
 		Enabled: true, Platform: &Credential{Provider: "openrouter", APIKey: "platform-key"},
@@ -143,6 +145,9 @@ func TestBYOKCallUsesTheViewersOwnKeyNeverTheOwners(t *testing.T) {
 	keys := map[int64]Credential{owner: {Provider: "openrouter", APIKey: "owner-key"}, recipient: {Provider: "anthropic", APIKey: "recipient-key"}}
 	s, rt, led := newTestService(t, func(c *Config) {
 		c.Platform = nil
+		configureTestGuardrail(c)
+		zero := int64(0)
+		c.Caps = SpendCaps{OwnerMicrosPerMonth: &zero, InstanceMicrosPerMonth: &zero}
 		c.Keys = func(_ context.Context, v int64) (Credential, bool, error) { k, ok := keys[v]; return k, ok, nil }
 	})
 	if _, err := s.Run(context.Background(), completeCall(recipient)); err != nil {
@@ -154,6 +159,9 @@ func TestBYOKCallUsesTheViewersOwnKeyNeverTheOwners(t *testing.T) {
 	}
 	if led.rows[0].OwnerID != recipient || led.rows[0].PaidBy != store.PaidByUser {
 		t.Fatalf("row = %+v", led.rows[0])
+	}
+	if len(rt.screens) != 0 {
+		t.Fatal("a BYOK call reached the platform guardrail")
 	}
 	// A viewer with no key of their own gets no_key; nobody else's key is used.
 	delete(keys, recipient)
@@ -436,14 +444,18 @@ func TestGuardrailScreensPlatformCallsAndFailsClosed(t *testing.T) {
 	s, rt, led := newTestService(t, func(c *Config) {
 		c.Guardrail = &Guardrail{Provider: "openrouter", Model: "jev", APIKey: "guard-key"}
 	})
-	rt.verdict = ScreenVerdict{Allowed: false, Usage: &Usage{Input: 3}}
+	rt.screenReply = func(ScreenJob) (ScreenVerdict, error) {
+		return ScreenVerdict{Usage: &Usage{Input: 3}}, nil
+	}
 	if _, err := s.Run(context.Background(), completeCall(owner)); code(err) != CodeInvalidRequest {
 		t.Fatalf("blocked = %v", err)
 	}
 	if rt.calls() != 0 || len(led.rows) != 1 || led.rows[0].Source != store.UsageSourceGuardrail {
 		t.Fatalf("calls=%d rows=%+v", rt.calls(), led.rows)
 	}
-	rt.verdict, rt.screenEr = ScreenVerdict{Dispatched: true}, ErrProvider
+	rt.screenReply = func(ScreenJob) (ScreenVerdict, error) {
+		return ScreenVerdict{Dispatched: true}, ErrProvider
+	}
 	if _, err := s.Run(context.Background(), completeCall(owner)); code(err) != CodeProviderError {
 		t.Fatalf("screen failure = %v", err)
 	}

@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -17,6 +18,7 @@ import (
 	"time"
 
 	"github.com/momja/Exhibit/internal/mockllm"
+	"github.com/momja/Exhibit/internal/store"
 )
 
 // These tests run the real Pi worker: the pinned binary, ext/inference.ts,
@@ -159,12 +161,80 @@ func TestWorkerScreensThroughMockAndPreservesUsageOnFailure(t *testing.T) {
 	} {
 		before := m.count()
 		verdict, err := w.Screen(deadline(t, 20*time.Second), ScreenJob{
-			Provider: "openrouter", Model: tc.model, APIKey: "test-guard-key", Text: tc.text,
+			Provider: "openrouter", Model: tc.model, APIKey: "test-guard-key", Context: completeJob("", tc.text).Context,
 		})
 		if (err != nil) != tc.wantErr || !verdict.Dispatched || verdict.Usage == nil || m.count() != before+1 {
 			t.Errorf("screen %s (%q) = %+v, %v, %d mock requests; want usage and one mock request",
 				tc.model, tc.text, verdict, err, m.count()-before)
 		}
+	}
+}
+
+func TestWorkerArtifactGuardrailScreensFullContext(t *testing.T) {
+	m := newMockProvider(t)
+	w := startTestWorker(t, m.URL)
+	for _, tc := range []struct {
+		name         string
+		kind         Kind
+		payload      string
+		wantCode     string
+		wantKeys     []string
+		marker       string
+		markerScreen int
+	}{
+		{
+			name: "completion schema", kind: KindComplete,
+			payload:  `{"prompt":"Suggest a color.","schema":{"type":"string","description":"mock-policy-violation"}}`,
+			wantCode: CodeInvalidRequest, wantKeys: []string{"Bearer guard-key"}, marker: "mock-policy-violation",
+		},
+		{
+			name: "classifier criteria", kind: KindDecide,
+			payload:  `{"state":{"color":"blue"},"questions":{"blue":{"type":"bool","instructions":"Is the paint blue?","criteria":{"true":"mock-policy-violation","false":"A different shade"}}}}`,
+			wantCode: CodeInvalidRequest, wantKeys: []string{"Bearer guard-key"}, marker: "mock-policy-violation",
+		},
+		{
+			// The mock only fills properties declared in the schema. It
+			// omits shade on both calls and triggers one repair.
+			name: "structured repair", kind: KindComplete, payload: string(structuredColorCall().Payload),
+			wantCode: CodeInvalidOutput, wantKeys: []string{"Bearer guard-key", "Bearer platform-key", "Bearer guard-key", "Bearer platform-key"},
+			marker: "did not match the required JSON Schema", markerScreen: 2,
+		},
+		{
+			// Go escapes ampersands in JSON. The escaped context fits in the
+			// worker's envelope, but wrapping it in a JSON string would not.
+			name: "large escaped context", kind: KindComplete,
+			payload:  `{"prompt":"` + strings.Repeat("&", 40<<10) + ` End of color sample."}`,
+			wantKeys: []string{"Bearer guard-key", "Bearer platform-key"}, marker: "End of color sample.",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, _, ledger := newTestService(t, func(cfg *Config) {
+				configureTestGuardrail(cfg)
+				cfg.Guardrail.Model = testChatModel
+				cfg.ChatModel, cfg.DecisionModel, cfg.Runtime = testChatModel, testDecisionModel, w
+			})
+			before := m.count()
+			_, err := s.Run(context.Background(), Call{
+				ArtifactID: "art-1", ViewerID: recipient, Kind: tc.kind, Payload: json.RawMessage(tc.payload),
+			})
+			if code(err) != tc.wantCode || tc.wantCode == "" && err != nil {
+				t.Fatalf("Run: %v, want %s", err, tc.wantCode)
+			}
+			m.mu.Lock()
+			keys, bodies := slices.Clone(m.keys[before:]), slices.Clone(m.bodies[before:])
+			m.mu.Unlock()
+			if !slices.Equal(keys, tc.wantKeys) || len(ledger.rows) != len(tc.wantKeys) {
+				t.Fatalf("provider keys = %v, ledger rows = %+v", keys, ledger.rows)
+			}
+			if !strings.Contains(bodies[tc.markerScreen], tc.marker) {
+				t.Fatalf("guard request is missing %q", tc.marker)
+			}
+			for i, key := range keys {
+				if row := ledger.rows[i]; key == "Bearer guard-key" && (row.Source != store.UsageSourceGuardrail || row.InputTokens == 0) {
+					t.Errorf("guardrail usage = %+v", row)
+				}
+			}
+		})
 	}
 }
 
