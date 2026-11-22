@@ -602,12 +602,16 @@ func checkAnswers(req *decideRequest, raw json.RawMessage) (json.RawMessage, err
 	if json.Unmarshal(raw, &got) != nil {
 		return nil, errors.New("answers are not an object")
 	}
+	// Pointers distinguish missing and null numbers from explicit zeroes.
+	inRange := func(n *float64, max float64) bool {
+		return n != nil && *n >= 0 && *n <= max
+	}
 	unit := func(raw json.RawMessage) (float64, bool) {
-		var f float64
-		if json.Unmarshal(raw, &f) != nil || math.IsNaN(f) || f < 0 || f > 1 {
+		var f *float64
+		if json.Unmarshal(raw, &f) != nil || !inRange(f, 1) {
 			return 0, false
 		}
-		return f, true
+		return *f, true
 	}
 	out := map[string]any{}
 	for id, q := range req.Questions {
@@ -635,29 +639,29 @@ func checkAnswers(req *decideRequest, raw json.RawMessage) (json.RawMessage, err
 			if !ok {
 				return nil, fmt.Errorf("question %s: bad confidence", id)
 			}
-			var probs map[string]float64
+			var probs map[string]*float64
 			if json.Unmarshal(a["probabilities"], &probs) != nil {
 				return nil, fmt.Errorf("question %s: bad probabilities", id)
 			}
 			clean := map[string]float64{}
 			for _, label := range q.options {
 				p := probs[label]
-				if math.IsNaN(p) || p < 0 || p > 1 {
+				if !inRange(p, 1) {
 					return nil, fmt.Errorf("question %s: bad probability", id)
 				}
-				clean[label] = p
+				clean[label] = *p
 			}
 			out[id] = map[string]any{"type": "choice", "choice": choice, "probabilities": clean, "confidence": conf}
 		case "score":
-			var score float64
-			if json.Unmarshal(a["score"], &score) != nil || math.IsNaN(score) || score < 0 || score > float64(q.levels-1) {
+			var score *float64
+			if json.Unmarshal(a["score"], &score) != nil || !inRange(score, float64(q.levels-1)) {
 				return nil, fmt.Errorf("question %s: score off the scale", id)
 			}
 			conf, ok := unit(a["confidence"])
 			if !ok {
 				return nil, fmt.Errorf("question %s: bad confidence", id)
 			}
-			out[id] = map[string]any{"type": "score", "score": score, "confidence": conf}
+			out[id] = map[string]any{"type": "score", "score": *score, "confidence": conf}
 		}
 	}
 	return json.Marshal(out)

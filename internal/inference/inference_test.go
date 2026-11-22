@@ -318,13 +318,86 @@ func TestDecideReturnsTypedAnswersAndIsMeteredUnderItsOwnKind(t *testing.T) {
 	}
 	// An answer outside the question's shape is a provider error, metered.
 	rt.reply = func(Job) (Result, Outcome, error) {
-		return Result{StopReason: "stop", Answers: json.RawMessage(`{"ok":{"probability":0.5},"pick":{"choice":"z","confidence":1,"probabilities":{}},"rate":{"score":1,"confidence":1}}`)}, Outcome{Dispatched: true}, nil
+		return Result{StopReason: "stop", Answers: json.RawMessage(`{"ok":{"probability":0.5},"pick":{"choice":"z","confidence":1,"probabilities":{"a":0.5,"b":0.5}},"rate":{"score":1,"confidence":1}}`)}, Outcome{Dispatched: true}, nil
 	}
 	if _, err := s.Run(context.Background(), decideCall(owner)); code(err) != CodeProviderError {
 		t.Fatalf("bad answer = %v", err)
 	}
 	if len(led.rows) != 2 {
 		t.Fatalf("rows = %d", len(led.rows))
+	}
+}
+
+func TestDecideRequiresNumericAnswersAndPreservesExplicitZeros(t *testing.T) {
+	const (
+		boolAnswer   = `{"probability":0}`
+		choiceAnswer = `{"choice":"a","confidence":0,"probabilities":{"a":1,"b":0,"extra":0}}`
+		scoreAnswer  = `{"score":0,"confidence":0}`
+		wantZeros    = `{"ok":{"probability":0,"type":"bool"},"pick":{"choice":"a","confidence":0,"probabilities":{"a":1,"b":0},"type":"choice"},"rate":{"confidence":0,"score":0,"type":"score"}}`
+	)
+	for _, tc := range []struct {
+		name     string
+		question string
+		answer   string
+	}{
+		{name: "explicit zeros"},
+		{"missing bool probability", "ok", `{}`},
+		{"null bool probability", "ok", `{"probability":null}`},
+		{"out of range bool probability", "ok", `{"probability":1.1}`},
+		{"missing choice confidence", "pick", `{"choice":"a","probabilities":{"a":1,"b":0}}`},
+		{"null choice confidence", "pick", `{"choice":"a","confidence":null,"probabilities":{"a":1,"b":0}}`},
+		{"missing probability map", "pick", `{"choice":"a","confidence":0}`},
+		{"null probability map", "pick", `{"choice":"a","confidence":0,"probabilities":null}`},
+		{"missing selected probability", "pick", `{"choice":"a","confidence":0,"probabilities":{"b":0}}`},
+		{"missing unselected probability", "pick", `{"choice":"a","confidence":0,"probabilities":{"a":1}}`},
+		{"null choice probability", "pick", `{"choice":"a","confidence":0,"probabilities":{"a":1,"b":null}}`},
+		{"string choice probability", "pick", `{"choice":"a","confidence":0,"probabilities":{"a":1,"b":"0"}}`},
+		{"out of range choice probability", "pick", `{"choice":"a","confidence":0,"probabilities":{"a":1,"b":-0.1}}`},
+		{"missing score", "rate", `{"confidence":0}`},
+		{"null score", "rate", `{"score":null,"confidence":0}`},
+		{"off-scale score", "rate", `{"score":2.1,"confidence":0}`},
+		{"missing score confidence", "rate", `{"score":0}`},
+		{"null score confidence", "rate", `{"score":0,"confidence":null}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			answers := map[string]json.RawMessage{
+				"ok": json.RawMessage(boolAnswer), "pick": json.RawMessage(choiceAnswer), "rate": json.RawMessage(scoreAnswer),
+			}
+			if tc.question != "" {
+				answers[tc.question] = json.RawMessage(tc.answer)
+			}
+			raw, err := json.Marshal(answers)
+			if err != nil {
+				t.Fatal(err)
+			}
+			s, rt, led := newTestService(t, nil)
+			rt.reply = func(Job) (Result, Outcome, error) {
+				return Result{StopReason: "stop", Answers: raw}, Outcome{
+					Dispatched: true,
+					Usage:      &Usage{Input: 5, Cost: UsageCost{Total: 0.002}},
+				}, nil
+			}
+			out, err := s.Run(context.Background(), decideCall(recipient))
+			if tc.question == "" {
+				if err != nil || string(out) != wantZeros {
+					t.Errorf("run = %s, %v, want %s", out, err, wantZeros)
+				}
+			} else {
+				var e *Error
+				if out != nil || !errors.As(err, &e) || e.Code != CodeProviderError ||
+					e.Message != "The AI service returned an answer that did not fit the questions." {
+					t.Errorf("run = %s, %v, want the fixed provider error and no output", out, err)
+				}
+			}
+			if rt.calls() != 1 || len(led.rows) != 1 {
+				t.Fatalf("provider calls = %d, usage rows = %d, want one each", rt.calls(), len(led.rows))
+			}
+			row := led.rows[0]
+			if row.OwnerID != recipient || row.Kind != "decide" || row.Source != store.UsageSourceInference ||
+				row.InputTokens != 5 || row.CostMicros != 2000 {
+				t.Errorf("unexpected usage row: %+v", row)
+			}
+		})
 	}
 }
 

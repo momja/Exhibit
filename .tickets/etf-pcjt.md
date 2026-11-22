@@ -1,6 +1,6 @@
 ---
 id: etf-pcjt
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-22T01:00:03Z
