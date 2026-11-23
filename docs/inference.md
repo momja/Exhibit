@@ -97,6 +97,10 @@ summary drafts.
 | Agent or MCP credential | never | — |
 | Owner's version preview | yes, metered | owner |
 
+A version preview keeps AI, unlike devices and location, which it is denied:
+only the owner can open one, they open it on purpose, and it spends their own
+allowance on code that was the live, approved artifact when it was current.
+
 Two consents, one prompt each, both in Exhibit's own chrome and never in the
 artifact's DOM:
 

@@ -21,9 +21,13 @@ type fakeRuntime struct {
 	models      map[string]bool // provider|kind|model
 	reply       func(Job) (Result, Outcome, error)
 	screenReply func(ScreenJob) (ScreenVerdict, error)
+	resolveErr  error
 }
 
 func (f *fakeRuntime) Resolve(_ context.Context, provider string, kind Kind, model string) (bool, error) {
+	if f.resolveErr != nil {
+		return false, f.resolveErr
+	}
 	return f.models[provider+"|"+string(kind)+"|"+model], nil
 }
 
@@ -565,4 +569,41 @@ func TestUsageDecodingKeepsUnknownAndProviderCostApart(t *testing.T) {
 	if u := decodeUsage(json.RawMessage(`{"cost":{"total":0,"totalFromProvider":true}}`)); u == nil || u.Cost != (UsageCost{TotalFromProvider: true}) {
 		t.Fatalf("usage = %+v, want a provider-reported zero cost", u)
 	}
+}
+
+// A failure resolving the payer — the runtime down, or the key store
+// unreadable — reaches the caller as a stable code with server-authored words,
+// never as the raw internal error.
+func TestPayerResolutionFailuresAreStableCodes(t *testing.T) {
+	t.Run("runtime unavailable while resolving a model", func(t *testing.T) {
+		s, rt, _ := newTestService(t, func(c *Config) {
+			c.Platform = nil
+			c.Keys = func(context.Context, int64) (Credential, bool, error) {
+				return Credential{Provider: "openrouter", APIKey: "viewer-key"}, true, nil
+			}
+		})
+		rt.resolveErr = fmt.Errorf("worker readiness: %w: secret-detail", ErrRuntimeUnavailable)
+		_, err := s.Run(context.Background(), completeCall(recipient))
+		if code(err) != CodeUnavailable {
+			t.Fatalf("code = %q (%v), want %q", code(err), err, CodeUnavailable)
+		}
+		if strings.Contains(err.Error(), "secret-detail") {
+			t.Fatalf("internal detail reached the caller: %v", err)
+		}
+	})
+	t.Run("key store unreadable", func(t *testing.T) {
+		s, _, _ := newTestService(t, func(c *Config) {
+			c.Platform = nil
+			c.Keys = func(context.Context, int64) (Credential, bool, error) {
+				return Credential{}, false, errors.New("decrypt: secret-detail")
+			}
+		})
+		_, err := s.Run(context.Background(), completeCall(recipient))
+		if code(err) != CodeProviderError {
+			t.Fatalf("code = %q (%v), want %q", code(err), err, CodeProviderError)
+		}
+		if strings.Contains(err.Error(), "secret-detail") {
+			t.Fatalf("internal detail reached the caller: %v", err)
+		}
+	})
 }

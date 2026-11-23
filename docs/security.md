@@ -1341,6 +1341,12 @@ possibly including saved data, to a third party. So:
   only from a marked frame with the channel for its artifact and viewer. Each
   reply travels through a message port held by the requesting document, so a
   page that replaces the document in the same frame cannot receive its results.
+  The channel is not a secret from the artifact: its script can read it, and an
+  artifact can hand it to a page it navigates its own frame to. That gives the
+  page nothing the artifact did not have (the same AI calls as the same viewer,
+  the same saved data), and navigation already sends data past the CSP. The
+  channel keeps stale or unrelated documents, and a frame left open across an
+  account switch, from using the host.
   Browser inference requests carry that channel to the server, which checks it
   against the current authenticated viewer. An artifact left open during an
   account switch cannot use the new account's consent or allowance.

@@ -272,7 +272,10 @@ func (s *Service) resolvePayer(ctx context.Context, viewerID int64) (*payer, err
 	}
 	cred, ok, err := s.cfg.Keys(ctx, viewerID)
 	if err != nil {
-		return nil, err
+		// Whatever the store or decryption said stays in the log: the
+		// caller gets a stable code and server-authored words.
+		slog.ErrorContext(ctx, "inference key lookup failed", slog.String("err", err.Error()))
+		return nil, refuse(CodeProviderError, "Your AI key could not be read. Try again later.")
 	}
 	if !ok || cred.APIKey == "" {
 		return nil, refuse(CodeNoKey, "Add your own AI key to use AI in artifacts.")
@@ -285,7 +288,8 @@ func (s *Service) resolvePayer(ctx context.Context, viewerID int64) (*payer, err
 			}
 			ok, err := s.resolve(ctx, cred.Provider, kind, candidate)
 			if err != nil {
-				return nil, err
+				slog.WarnContext(ctx, "inference model resolution failed", slog.String("err", err.Error()))
+				return nil, mapRuntimeError(ctx, err)
 			}
 			if ok {
 				p.models[kind] = candidate

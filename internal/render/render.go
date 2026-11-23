@@ -641,7 +641,9 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 	// unattended, behind pointer-events:none, in a card the user did not open.
 	// A version view is denied them for the opposite reason: it is opened on
 	// purpose, but it is a look at code the artifact used to have, and an
-	// approval is a decision about the artifact as it is now.
+	// approval is a decision about the artifact as it is now. (AI is the
+	// exception: only the owner can open a version view, and it spends their
+	// own allowance.)
 	devices := devicePolicy{}
 	if doc.kind == kindArtifact {
 		devices = devicePolicyOf(a)
@@ -1507,8 +1509,11 @@ const aiBridgeScript = `
   // connect-src source. An anonymous visitor keeps the stand-in installed
   // above: there is nobody to pay, and the endpoint refuses them anyway.
   if (window.parent !== window && !ANONYMOUS) {
-    // The host answers only calls carrying this document's channel, which a
-    // page navigated into this frame does not have.
+    // The host answers only calls carrying this channel, which binds a call
+    // to this viewer's frame for this artifact on the host page. It is not a
+    // secret from the artifact — its own script can read it, and already acts
+    // as itself — so it does not stop an artifact from handing it to a page it
+    // navigates to; it stops a stray document and a stale page.
     var ARTIFACT_CHANNEL = %ARTIFACT_CHANNEL%;
     // A call is sent only once the host has said it is listening
     // (__avAIHostReady): the host's module can attach after this frame's
