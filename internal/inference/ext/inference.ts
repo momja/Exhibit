@@ -26,6 +26,7 @@
  * provider request to that server, keeping the request path, so Pi's real
  * adapters talk to internal/mockllm. Requests cannot choose an endpoint.
  */
+import { randomUUID } from "node:crypto";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { DEFAULT_POLICY, screen } from "./guard.ts";
 
@@ -41,6 +42,14 @@ export default function (pi: ExtensionAPI) {
 	const fetchOverride = mockURL
 		? { fetch: (url: any, init: any) => fetch(mockURL.replace(/\/$/, "") + new URL(String(url)).pathname, init) }
 		: {};
+
+	// OpenCode and OpenCode Go refuse a request with no session id (400
+	// MissingSessionID) and Pi sends x-opencode-session only from options.sessionId,
+	// which a direct registry call, unlike an agent session, never sets. A fresh
+	// random id per provider call satisfies that and links nothing: no two calls,
+	// viewers or artifacts share one, and other providers use it only as a cache
+	// key that a one-off id never hits.
+	const callSession = () => ({ sessionId: randomUUID() });
 
 	if (mockURL) {
 		// BYOK viewers whose agent key is the mock provider resolve here.
@@ -108,15 +117,16 @@ export default function (pi: ExtensionAPI) {
 					// Carry the same JSON object as the inference job so the RPC
 					// envelope does not have to escape the entire context again.
 					const text = JSON.stringify(request.context);
-					// In mock mode the screen goes to the mock as well: the shared
-					// guard helper takes no fetch option of its own, so the
-					// registry it is handed adds it to both of its calls.
-					const screenRegistry = mockURL ? {
+					// The shared guard helper takes no fetch or session option of
+					// its own, so the registry it is handed adds both to each of
+					// its calls: the mock endpoint in mock mode, and the one-off
+					// session id providers like OpenCode Go require (callSession).
+					const screenRegistry = {
 						getModelOfType: (type: "classifier", provider: string, model: string) => registry.getModelOfType(type, provider, model),
 						find: (provider: string, model: string) => registry.find(provider, model),
-						classify: (m: any, c: any, o: any) => registry.classify(m, c, { ...o, ...fetchOverride }),
-						complete: (m: any, c: any, o: any) => registry.complete(m, c, { ...o, ...fetchOverride }),
-					} : registry;
+						classify: (m: any, c: any, o: any) => registry.classify(m, c, { ...callSession(), ...o, ...fetchOverride }),
+						complete: (m: any, c: any, o: any) => registry.complete(m, c, { ...callSession(), ...o, ...fetchOverride }),
+					};
 					const verdict = await screen(screenRegistry, {
 						provider: request.provider, model: request.model, apiKey: request.apiKey,
 						dataFence: "", policy: DEFAULT_POLICY, maxRetries: 0,
@@ -132,6 +142,7 @@ export default function (pi: ExtensionAPI) {
 					apiKey: request.apiKey,
 					signal: controller.signal,
 					maxRetries: 0,
+					...callSession(),
 					...fetchOverride,
 				};
 				if (op === "complete" && Number.isInteger(request.maxTokens)) options.maxTokens = request.maxTokens;

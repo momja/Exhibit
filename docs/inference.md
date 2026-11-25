@@ -195,9 +195,21 @@ consent rules; the render placement of the stand-in and bridge; and the
 triage example running in Chromium through the real worker and a local mock
 provider, with both AI controls disabled in each export format.
 
-**Not verified: live provider compatibility.** No paid provider call was made.
-In particular Pi's OpenRouter classifier route (`/api/v1/systemone`) has not
-been checked against OpenRouter's current decisions endpoint
-(`/api/alpha/decisions`). Before enabling in production, run one manual
-complete and one decide against the real provider with a real key and confirm
-answers and usage arrive.
+**Verified live, once, for `complete` only.** On 2026-11-25 a platform-mode
+dev instance on OpenCode Go (`deepseek-v4.1-flash`) answered a plain `complete`
+and a schema-constrained `complete` from an artifact, through the host bridge
+and the warm worker, and metered both with `cost_source = catalog`. That check
+found a bug no mock could: OpenCode Go refuses a request without a session id
+(`400 MissingSessionID`), and the worker's direct registry calls sent none, so
+every call failed as `provider_error`. The worker now gives each provider call
+a fresh random `sessionId`.
+
+**Not verified: `decide`, and OpenRouter.** No classifier model was available
+on the provider tried, so `decide` has not run against any real provider. In
+particular Pi's OpenRouter classifier route (`/api/v1/systemone`) has not been
+checked against OpenRouter's current decisions endpoint
+(`/api/alpha/decisions`). Before enabling `decide`, run one manual `decide`
+against the real provider with a real key and confirm answers and usage arrive.
+A provider's own error text is deliberately never logged, so a provider that
+rejects every call shows only `provider_error`; run the call once through a
+build that logs it, as the check above did.

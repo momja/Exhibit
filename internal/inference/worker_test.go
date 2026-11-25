@@ -24,7 +24,8 @@ import (
 // These tests run the real Pi worker: the pinned binary, ext/inference.ts,
 // Pi's model registry and its OpenRouter adapters, against internal/mockllm.
 // They need a Pi executable (PI_BIN, else `pi` on PATH) and skip without one.
-// What they cannot prove is live provider compatibility; see docs/inference.md.
+// What they cannot prove is live provider compatibility, which has only been
+// checked by hand for complete; see docs/inference.md.
 
 const (
 	testChatModel     = "openai/gpt-4.1-nano"
@@ -48,12 +49,15 @@ func piForTest(t *testing.T) string {
 // in-flight requests.
 type mockProvider struct {
 	*httptest.Server
-	mu      sync.Mutex
-	calls   int
-	keys    []string
-	bodies  []string
-	leaks   atomic.Int32
-	blocker chan struct{}
+	mu    sync.Mutex
+	calls int
+	keys  []string
+	// sessions is each request's X-Session-Id, which Pi derives from the
+	// call's sessionId option (OpenCode Go's x-opencode-session likewise).
+	sessions []string
+	bodies   []string
+	leaks    atomic.Int32
+	blocker  chan struct{}
 }
 
 func newMockProvider(t *testing.T) *mockProvider {
@@ -69,6 +73,7 @@ func newMockProvider(t *testing.T) *mockProvider {
 		m.mu.Lock()
 		m.calls++
 		m.keys = append(m.keys, auth)
+		m.sessions = append(m.sessions, r.Header.Get("X-Session-Id"))
 		m.bodies = append(m.bodies, text)
 		m.mu.Unlock()
 		r.Body = io.NopCloser(bytes.NewReader(body))
@@ -144,6 +149,27 @@ func TestWorkerCompleteRoundTripReportsUsage(t *testing.T) {
 	}
 	if m.keys[0] != "Bearer key-A" {
 		t.Fatalf("provider saw %q", m.keys[0])
+	}
+}
+
+// OpenCode Go answers 400 MissingSessionID to a request with no session id, and
+// Pi sets that header only from options.sessionId, which a direct registry call
+// never has unless the extension supplies it. The first live check failed on
+// exactly this while every mock-backed test passed. The id must also be fresh
+// per call, so it never ties two viewers' or artifacts' calls together.
+func TestWorkerSendsEachProviderCallItsOwnSessionID(t *testing.T) {
+	m := newMockProvider(t)
+	w := startTestWorker(t, m.URL)
+	for _, key := range []string{"key-A", "key-B"} {
+		if _, _, err := w.Run(deadline(t, 20*time.Second), completeJob(key, "Summarize this note please")); err != nil {
+			t.Fatalf("run %s: %v", key, err)
+		}
+	}
+	if len(m.sessions) != 2 || m.sessions[0] == "" || m.sessions[1] == "" {
+		t.Fatalf("provider requests carried session ids %q; every call needs one", m.sessions)
+	}
+	if m.sessions[0] == m.sessions[1] {
+		t.Fatalf("two calls shared session id %q", m.sessions[0])
 	}
 }
 
