@@ -275,6 +275,44 @@ func TestStructuredOutputIsValidatedWithOneRepair(t *testing.T) {
 	}
 }
 
+// A reasoning model can spend its whole maxTokens thinking and answer with
+// nothing. That is billed, but it is not an answer: the artifact must get an
+// error it can act on, never "" as if the model had said it, and a schema call
+// must not pay for a repair of a reply that was never written.
+func TestAnEmptyAnswerIsNeverASuccess(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		payload string
+		stop    string
+	}{
+		{"plain, ran out of tokens", `{"messages":[{"role":"user","content":"Say pong"}],"maxTokens":16}`, "length"},
+		{"plain, model said nothing", `{"messages":[{"role":"user","content":"Say pong"}]}`, "stop"},
+		{"whitespace only", `{"messages":[{"role":"user","content":"Say pong"}]}`, "stop"},
+		{"schema, ran out of tokens", `{"messages":[{"role":"user","content":"Tag it"}],"schema":{"type":"object"},"maxTokens":16}`, "length"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, rt, led := newTestService(t, nil)
+			text := ""
+			if tc.name == "whitespace only" {
+				text = " \n\t"
+			}
+			rt.reply = func(Job) (Result, Outcome, error) {
+				return Result{StopReason: tc.stop, Text: text}, Outcome{Dispatched: true, Usage: &Usage{Input: 5, Output: 16, Cost: UsageCost{Total: 0.001}}}, nil
+			}
+			out, err := s.Run(context.Background(), Call{ArtifactID: "a", ViewerID: owner, Kind: KindComplete, Payload: json.RawMessage(tc.payload)})
+			if code(err) != CodeInvalidOutput {
+				t.Fatalf("out = %s, err = %v; want %s", out, err, CodeInvalidOutput)
+			}
+			if len(rt.jobs) != 1 || len(led.rows) != 1 {
+				t.Fatalf("the one billed call is metered and nothing is retried: jobs = %d, rows = %d", len(rt.jobs), len(led.rows))
+			}
+			if tc.stop == "length" && !strings.Contains(err.Error(), "maxTokens") {
+				t.Fatalf("a length stop should tell the author what to change: %v", err)
+			}
+		})
+	}
+}
+
 func TestInvalidPayloadsAreRefusedWithoutAProviderCall(t *testing.T) {
 	s, rt, _ := newTestService(t, nil)
 	for _, tc := range []struct {

@@ -54,7 +54,10 @@ at most 4096. Schemas use `type`, `properties`, `required`, `items`, `enum`,
 `minimum`/`maximum`, `minLength`/`maxLength`, `description`, `title`; anything
 else is refused before a call. An answer that does not match the schema gets
 one repair attempt, then `invalid_output`; unvalidated output never reaches the
-artifact. decide: at most 8 questions, 2–16 choices, 2–11 score levels, state
+artifact. `maxTokens` caps everything the model generates, hidden reasoning
+included, so a small budget can leave no room for an answer: an empty reply is
+`invalid_output`, never `""` (and is not repaired), so give a reasoning model
+room. decide: at most 8 questions, 2–16 choices, 2–11 score levels, state
 ≤ 16 KB. decide never falls back to a chat model: without a classifier it is
 unavailable, because a probability that means nothing is worse than none.
 
@@ -70,7 +73,7 @@ the message is safe to show.
 | `rate_limited` | Too many calls too fast; try again shortly |
 | `invalid_request` | The request broke a rule above |
 | `provider_error` | The provider failed or answered something unusable |
-| `invalid_output` | complete with a schema: the answer did not fit, after one repair |
+| `invalid_output` | complete: the model wrote no answer (it ran out of `maxTokens`), or with a schema, the answer did not fit, after one repair |
 
 **Write tools that degrade.** Check `available()` first. AI is unavailable on a
 public link, in a widget, in a tab opened directly, and in every export — HTML
@@ -203,6 +206,17 @@ found a bug no mock could: OpenCode Go refuses a request without a session id
 (`400 MissingSessionID`), and the worker's direct registry calls sent none, so
 every call failed as `provider_error`. The worker now gives each provider call
 a fresh random `sessionId`.
+
+A second, independent pass on a fresh instance (19 real calls) also exercised
+the owner's approval prompt (allow and Not now), a recipient's consent prompt
+with the usage row charged to the recipient and never the owner, an artifact
+whose owner never allowed AI (no consent offered), the public link, widget,
+directly opened tab and export (all unavailable, no provider call), the 48 KB
+limit, the in-flight belt (`rate_limited`), and a leak search of everything the
+artifact could see. It found that a reasoning model could spend all of
+`maxTokens` thinking and return `""` as a success; that is now `invalid_output`.
+Not run live: a connected-agent credential (it needs `MCP_URL`), and the
+per-minute token bucket.
 
 **Not verified: `decide`, and OpenRouter.** No classifier model was available
 on the provider tried, so `decide` has not run against any real provider. In

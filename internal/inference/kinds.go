@@ -171,6 +171,15 @@ func runComplete(ctx context.Context, rt Runtime, job Job, p *prepared, meter fu
 	if err != nil {
 		return nil, err
 	}
+	// A reasoning model can spend all of maxTokens thinking and write nothing.
+	// The call is billed and metered, but "" is not an answer, and a repair
+	// cannot fix a reply that was never written.
+	if strings.TrimSpace(res.Text) == "" {
+		if res.StopReason == "length" {
+			return nil, refuse(CodeInvalidOutput, "The AI ran out of room before it wrote an answer. Try a larger maxTokens.")
+		}
+		return nil, refuse(CodeInvalidOutput, "The AI did not write an answer.")
+	}
 	if req.Schema == nil {
 		out, _ := json.Marshal(res.Text)
 		return out, nil
