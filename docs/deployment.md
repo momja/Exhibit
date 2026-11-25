@@ -773,7 +773,7 @@ screen what the agent writes back, or what it saves into an artifact.
 
 ### 4.3 If `pi` is missing
 
-The image ships Pi Bolt 1.0.8 (Pi 1.4.0), with the unchanged Exhibit extensions
+The image ships Pi Bolt 1.3.1 (Pi 1.6.0), with the unchanged Exhibit extensions
 loaded at runtime. It needs no Node installation. Linux amd64 and arm64 archive
 hashes are pinned in the Dockerfile. For source installation, pin updates and
 rollback, see [Pi runtime compatibility](agent.md#pi-runtime-compatibility).

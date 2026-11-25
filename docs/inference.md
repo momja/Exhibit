@@ -189,7 +189,7 @@ inference row is the paying viewer.
 
 ## What is verified, and what is not
 
-Automated: the real worker (pinned Pi Bolt 1.0.8 / Pi 1.4.0, and the `pi` on
+Automated: the real worker (pinned Pi Bolt 1.3.1 / Pi 1.6.0, and the `pi` on
 `PATH`) against `internal/mockllm` through Pi's real OpenRouter adapters —
 complete, classify with all three question types, overlapping calls with
 distinct keys, independent cancel, upstream errors redacted, restart without
