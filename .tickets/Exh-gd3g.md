@@ -1,6 +1,6 @@
 ---
 id: Exh-gd3g
-status: open
+status: closed
 deps: [Exh-hwjg, Exh-zbwk, Exh-urrg]
 links: []
 created: 2026-11-04T05:36:51Z
@@ -31,3 +31,9 @@ It uses the same provider names and the same two modes as the agent (internal/ag
 - complete() with a schema returns validated JSON or a stable error.
 - Startup fails if INFERENCE_ENABLED is set in platform mode without INFERENCE_MODEL.
 - Browser test: an approved artifact's complete() round-trips through the host to the mock provider.
+
+## Notes
+
+**2026-11-20T06:19:13Z**
+
+Done: complete() via INFERENCE_MODEL (platform) or per-provider defaults (BYOK); messages/prompt/system, JSON-Schema subset, one repair then invalid_output; limits 48 KB, maxTokens 1024/4096. window.claude.complete maps to it (not verified against Claude's own runtime contract beyond prompt→string). Live provider compatibility unverified.

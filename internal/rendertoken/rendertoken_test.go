@@ -487,3 +487,20 @@ func claimsOf(tok string) string {
 	}
 	return tok[:i]
 }
+
+// The AI channel is stable for one artifact and viewer, and different for
+// any other pairing or key, so a document cannot borrow another's.
+func TestArtifactChannelIsPerArtifactAndViewer(t *testing.T) {
+	var key [32]byte
+	key[0] = 1
+	s := NewSigner(key)
+	a := s.ArtifactChannel("art-1", 7)
+	if a == "" || a != s.ArtifactChannel("art-1", 7) {
+		t.Fatalf("channel not stable: %q", a)
+	}
+	for _, other := range []string{s.ArtifactChannel("art-2", 7), s.ArtifactChannel("art-1", 8), NewRandomSigner().ArtifactChannel("art-1", 7)} {
+		if other == a {
+			t.Fatal("channel shared across artifacts, viewers or keys")
+		}
+	}
+}

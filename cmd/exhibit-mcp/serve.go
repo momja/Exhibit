@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/momja/Exhibit/internal/agentguidance"
 	"github.com/momja/Exhibit/internal/mcpserver"
 )
 
@@ -23,10 +24,14 @@ func serve() error {
 		}
 		maxBody = value
 	}
+	aiKinds, err := agentguidance.ParseAIKinds(os.Getenv("EXHIBIT_AI_KINDS"))
+	if err != nil {
+		return fmt.Errorf("EXHIBIT_AI_KINDS: %w", err)
+	}
 	handler, err := mcpserver.NewHTTPHandler(mcpserver.HTTPConfig{
 		BaseURL: os.Getenv("EXHIBIT_URL"), PublicURL: os.Getenv("MCP_PUBLIC_URL"),
 		ExhibitPublicURL: os.Getenv("EXHIBIT_PUBLIC_URL"),
-		Version:          version(), MaxRequestBodyBytes: maxBody,
+		Version:          version(), MaxRequestBodyBytes: maxBody, AIKinds: aiKinds,
 	})
 	if err != nil {
 		return err

@@ -1320,6 +1320,60 @@ is allowed; anything that produces egress or bypasses a user decision is not.**
     location cannot read it anywhere, including opened directly with the
     browser's permission already granted for the render origin (verified).
 
+### 4.x AI (Exh-zue3): a bridge whose cost lands on a person
+
+`window.exhibit.ai` is a capability bridge in the download/clipboard family:
+the frame posts to the host, pinned to `APP_ORIGIN`, and the host makes the
+authenticated `POST /api/artifacts/:id/inference`. The frame gets no endpoint,
+credential or `connect-src` source; the CSP and allowlist are untouched.
+
+What is new is that a call spends money and sends the artifact's chosen text,
+possibly including saved data, to a third party. So:
+
+- **Two consents, both enforced server-side.** The owner's
+  `inference_approved` (one `ApprovalColumns` entry, revocable) and, for each
+  named recipient, a consent row to spend *their* allowance. The endpoint
+  refuses `not_approved` without them; the host's prompt is only the UX, and a
+  recipient of an unapproved tool is told so with no button (av-awr4).
+- **Browser requests come from the app origin.** The inference, approval and
+  consent write paths reject a foreign `Origin` or a cross-origin
+  `Sec-Fetch-Site`, including same-site sibling origins. The host accepts calls
+  only from a marked frame with the channel for its artifact and viewer. Each
+  reply travels through a message port held by the requesting document, so a
+  page that replaces the document in the same frame cannot receive its results.
+  The channel is not a secret from the artifact: its script can read it, and an
+  artifact can hand it to a page it navigates its own frame to. That gives the
+  page nothing the artifact did not have (the same AI calls as the same viewer,
+  the same saved data), and navigation already sends data past the CSP. The
+  channel keeps stale or unrelated documents, and a frame left open across an
+  account switch, from using the host.
+  Browser inference requests carry that channel to the server, which checks it
+  against the current authenticated viewer. An artifact left open during an
+  account switch cannot use the new account's consent or allowance.
+  Saved-data resync also checks the viewer and delivers state over a port held
+  by the requesting document. Results an artifact deliberately saves are
+  subject to that artifact's state-sharing policy.
+- **The viewer pays, never the owner.** The core resolves the payer from the
+  request's principal alone. A recipient without a key gets `no_key`, never the
+  owner's key or allowance.
+- **No principal, no call.** Public-mode visitors, agent and MCP credentials
+  are refused by the endpoint *and* by the core. Widgets, public links,
+  top-level renders and exports carry only the unavailable stand-in
+  (`internal/inference/standin`), and none of them holds the app session the
+  endpoint requires; the bridge code is omitted from those documents, not
+  disabled.
+- **Nothing identifying leaves the server.** Results carry a value or a stable
+  code with server-authored text. Provider and model ids, upstream error text
+  (which can echo inputs and keys) and usage never reach a browser.
+- **The worker is not an agent.** One Pi process with no tools, sessions,
+  user extensions or MCP; keys travel per call, never in its environment, argv
+  or home; a prompt the extension does not consume kills the process rather
+  than becoming a model turn.
+- **Residual risk.** An approved tool decides what it sends; the prompt says
+  saved data may be included, and the tool's own UI is the only place that can
+  say exactly what. A tool can spend its viewer's allowance up to the rate
+  belts and the monthly cap; Stop in Settings ends that.
+
 ## 5. Agents: API clients driven by untrusted text
 
 The agent surfaces (`agent.md`, architecture §3.7) execute tool calls an LLM

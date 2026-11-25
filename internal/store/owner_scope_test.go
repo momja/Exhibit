@@ -519,6 +519,13 @@ func TestEveryArtifactScopedMethodTakesAnOwner(t *testing.T) {
 		"DeleteStateAsViewer": "takes the VIEWER; a viewer can only delete on their own behalf (av-v991)",
 		"ClearStateAsViewer":  "takes the VIEWER; erase-all means mine, resolved inside (av-v991, av-q0ub)",
 
+		// Artifact inference consent (Exh-zbwk): a recipient's own decision to
+		// spend their own allowance. Viewer-scoped for the same reason as the
+		// state methods above; SetInferenceConsent resolves readability inside.
+		"HasInferenceConsent":      "takes the VIEWER; reads only that viewer's own consent row",
+		"SetInferenceConsent":      "takes the VIEWER; writes only that viewer's consent after a readable-artifact check",
+		"ListInferencePermissions": "takes the VIEWER; lists owned approvals and that viewer's consents on still-granted artifacts",
+
 		// Out-of-line assets (av-20fk). Both are render-path reads, and the
 		// render path serves shares to people with no account — there is no
 		// owner to scope by, the same exception GetArtifactUnscoped carries.

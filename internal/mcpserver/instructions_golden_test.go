@@ -1,0 +1,69 @@
+package mcpserver
+
+import (
+	"flag"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/momja/Exhibit/internal/agentguidance"
+)
+
+var updateInstructionGoldens = flag.Bool("update-instruction-goldens", false, "rewrite testdata/instructions-*.golden")
+
+// The instructions teach exactly the window.exhibit.ai kinds the instance
+// offers (Exh-15tf). "neither" is the text of an instance without inference
+// and must stay byte-identical to what it was before inference existed.
+func TestInstructionsMatchGoldens(t *testing.T) {
+	cases := map[string]agentguidance.AI{
+		"instructions-ai-none.golden":     {},
+		"instructions-ai-complete.golden": {Complete: true},
+		"instructions-ai-decide.golden":   {Decide: true},
+		"instructions-ai-both.golden":     {Complete: true, Decide: true},
+	}
+	for name, ai := range cases {
+		got := InstructionsFor(ai)
+		path := filepath.Join("testdata", name)
+		if *updateInstructionGoldens {
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, []byte(got), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			continue
+		}
+		want, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(want) != got {
+			t.Errorf("%s: instructions differ from golden; rerun with -update-instruction-goldens and review the diff", name)
+		}
+	}
+	if Instructions != InstructionsFor(agentguidance.AI{}) {
+		t.Error("Instructions must be the no-inference text")
+	}
+}
+
+func TestInstructionsDescribeOnlyOfferedKinds(t *testing.T) {
+	if off := InstructionsFor(agentguidance.AI{}); strings.Contains(off, "exhibit.ai") {
+		t.Error("instructions without inference mention window.exhibit.ai")
+	}
+	if decide := InstructionsFor(agentguidance.AI{Decide: true}); strings.Contains(decide, "complete({") || !strings.Contains(decide, "decide({") {
+		t.Error("decide-only instructions must teach decide() and not complete()")
+	}
+	if complete := InstructionsFor(agentguidance.AI{Complete: true}); strings.Contains(complete, "decide({") || !strings.Contains(complete, "complete({") {
+		t.Error("complete-only instructions must teach complete() and not decide()")
+	}
+}
+
+func TestHTTPHandlerRefusesUnknownAIKind(t *testing.T) {
+	if _, err := NewHTTPHandler(HTTPConfig{BaseURL: "http://core.test", AIKinds: []string{"embed"}}); err == nil {
+		t.Fatal("accepted an unknown AI kind")
+	}
+	if _, err := NewHTTPHandler(HTTPConfig{BaseURL: "http://core.test", AIKinds: []string{"complete", "decide"}}); err != nil {
+		t.Fatal(err)
+	}
+}

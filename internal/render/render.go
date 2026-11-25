@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/momja/Exhibit/internal/inference/standin"
 	stdhtml "html"
 	"io"
 	"log/slog"
@@ -640,7 +641,9 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 	// unattended, behind pointer-events:none, in a card the user did not open.
 	// A version view is denied them for the opposite reason: it is opened on
 	// purpose, but it is a look at code the artifact used to have, and an
-	// approval is a decision about the artifact as it is now.
+	// approval is a decision about the artifact as it is now. (AI is the
+	// exception: only the owner can open a version view, and it spends their
+	// own allowance.)
 	devices := devicePolicy{}
 	if doc.kind == kindArtifact {
 		devices = devicePolicyOf(a)
@@ -718,7 +721,11 @@ func (rd *Renderer) serveDoc(w http.ResponseWriter, r *http.Request, a *store.Ar
 	if !widget {
 		body = injectFavicon(body, artifacticon.DataURI(a.Tags))
 	}
-	out := injectPreambleWithHostMode(body, a.ID, rd.cfg.AppOrigin, state, origins, widget, viewer.Anonymous, versionView, manifest, doc.attribution, a.VersionSeq)
+	artifactChannel := ""
+	if !viewer.Anonymous && viewer.ViewerID > 0 {
+		artifactChannel = rd.cfg.Tokens.ArtifactChannel(a.ID, viewer.ViewerID)
+	}
+	out := injectPreambleWithHostMode(body, a.ID, rd.cfg.AppOrigin, state, origins, widget, viewer.Anonymous, versionView, manifest, doc.attribution, doc.publicShare, artifactChannel, a.VersionSeq)
 	if rd.cfg.RelayEnabled && !widget && !versionView && !viewer.Anonymous && doc.headMeta == "" {
 		out = injectRelay(out, rd.cfg.AppOrigin, a.ID, allowed)
 	}
@@ -1447,14 +1454,21 @@ const shimTemplate = `<script>
       // both halves of its identity are checkable.
       if (e.origin !== API_ORIGIN || e.source !== window.parent) return;
       var d = e.data;
-      if (!d || d.__avStateSync !== true || d.artifactId !== ARTIFACT_ID) return;
-      var changed = applyStateSync(d.state);
-      window.parent.postMessage({
-        __avStateSynced: true, artifactId: ARTIFACT_ID,
-        changed: changed, live: listeningForStorage()
-      }, API_ORIGIN);
+      if (!d || d.__avStateSyncRequest !== true || d.artifactId !== ARTIFACT_ID || typeof ARTIFACT_CHANNEL !== 'string' || !ARTIFACT_CHANNEL) return;
+      var response = new MessageChannel();
+      response.port1.onmessage = function(event) {
+        response.port1.close();
+        var changed = applyStateSync(event.data);
+        window.parent.postMessage({
+          __avStateSynced: true, artifactId: ARTIFACT_ID,
+          changed: changed, live: listeningForStorage()
+        }, API_ORIGIN);
+      };
+      window.parent.postMessage({ __avStateSyncPort: true, artifactId: ARTIFACT_ID,
+        request: d.request, channel: ARTIFACT_CHANNEL }, API_ORIGIN, [response.port2]);
     });
   }
+%s
 %s
 })();
 </script>`
@@ -1479,6 +1493,87 @@ const shimTemplate = `<script>
 // and no sandbox — the document has a real origin where all of this works
 // natively — so none of it installs.
 const bridgeScript = frameLocalScript + capabilityBridgeScript
+
+// aiBridgeScript is window.exhibit.ai's real bridge (Exh-zue3). It is spliced
+// after the capability bridges only for a framed render with a viewer behind
+// it — the artifact page, the agent preview, an owner's version preview —
+// and never for a widget, a public link or an anonymous visitor, which keep
+// the unavailable stand-in. Omission rather than a flag, as for widgets: a
+// document that cannot spend anybody's allowance does not carry the code.
+const aiBridgeScript = `
+  // ---- AI bridge (Exh-zue3) ----
+  // window.exhibit.ai.complete() and decide() post the call to the host frame
+  // pinned to the app origin, like a state write; the host makes the
+  // authenticated request, raises any first-use prompt in its own chrome, and
+  // posts the answer back. This frame gets no endpoint, no credential and no
+  // connect-src source. An anonymous visitor keeps the stand-in installed
+  // above: there is nobody to pay, and the endpoint refuses them anyway.
+  if (window.parent !== window && !ANONYMOUS) {
+    // The host answers only calls carrying this channel, which binds a call
+    // to this viewer's frame for this artifact on the host page. It is not a
+    // secret from the artifact — its own script can read it, and already acts
+    // as itself — so it does not stop an artifact from handing it to a page it
+    // navigates to; it stops a stray document and a stale page.
+    var ARTIFACT_CHANNEL = %ARTIFACT_CHANNEL%;
+    // A call is sent only once the host has said it is listening
+    // (__avAIHostReady): the host's module can attach after this frame's
+    // first call, and a call lost then would never settle. Queued calls are
+    // flushed exactly once, never re-sent, because a delivered complete() may
+    // already have been billed. A call with no host after AI_HOST_WAIT_MS
+    // settles unavailable.
+    var AI_HOST_WAIT_MS = 10000;
+    var aiHostReady = false;
+    var aiQueue = [];
+    window.addEventListener('message', function(e) {
+      if (e.origin !== API_ORIGIN || e.source !== window.parent) return;
+      if (!e.data || e.data.__avAIHostReady !== true || aiHostReady) return;
+      aiHostReady = true;
+      aiQueue.splice(0).forEach(function(send) { send(); });
+    });
+    var aiError = function(code, message) {
+      var err = new Error(message);
+      err.name = 'ExhibitAIError';
+      err.code = code;
+      return err;
+    };
+    var callAI = function(op, payload) {
+      return new Promise(function(resolve, reject) {
+        var msg = { __avInference: true, artifactId: ARTIFACT_ID, channel: ARTIFACT_CHANNEL, op: op };
+        if (payload !== undefined) {
+          try { msg.payload = JSON.parse(JSON.stringify(payload)); }
+          catch (err) {
+            reject(aiError('invalid_request', 'The request must be plain JSON data.'));
+            return;
+          }
+        }
+        var send = function() {
+          // The reply port belongs to this call's document. A navigation can
+          // reuse the frame window but cannot receive anything on this port.
+          var response = new MessageChannel();
+          response.port1.onmessage = function(e) {
+            response.port1.close();
+            var d = e.data;
+            if (d.ok) { resolve(d.value); return; }
+            var error = d.error || {};
+            reject(aiError(error.code || 'provider_error', error.message || 'The AI request failed.'));
+          };
+          window.parent.postMessage(msg, API_ORIGIN, [response.port2]);
+        };
+        if (aiHostReady) { send(); return; }
+        aiQueue.push(send);
+        setTimeout(function() {
+          var at = aiQueue.indexOf(send);
+          if (at < 0) return;
+          aiQueue.splice(at, 1);
+          reject(aiError('unavailable', 'AI is not available here.'));
+        }, AI_HOST_WAIT_MS);
+      });
+    };
+    window.exhibit.ai.available = function() { return callAI('available'); };
+    window.exhibit.ai.complete = function(request) { return callAI('complete', request); };
+    window.exhibit.ai.decide = function(request) { return callAI('decide', request); };
+  }
+`
 
 // frameLocalScript needs no host; attributed shares retain only these local shims.
 const frameLocalScript = `
@@ -2410,6 +2505,7 @@ const capabilityBridgeScript = `    // ---- Unsupported-capability diagnostic (a
         sendReport({ __avNetwork: true, artifactId: ARTIFACT_ID, origin: origin, directive: directive });
       });
     }
+
   }`
 
 // widgetBaseCSS is one of two things a widget render adds that an artifact
@@ -2512,15 +2608,19 @@ const widgetHealthScript = `<script>
 // data the shim must hold before the artifact's first line runs, not a mode
 // flag.
 func injectPreamble(body, artifactID, appOrigin string, state map[string]string, origins originPolicy, widget, anonymous, versionView bool, assetManifest map[string]string, versionSeq ...int) string {
-	return injectPreambleWithHostMode(body, artifactID, appOrigin, state, origins, widget, anonymous, versionView, assetManifest, false, versionSeq...)
+	return injectPreambleWithHostMode(body, artifactID, appOrigin, state, origins, widget, anonymous, versionView, assetManifest, false, false, "", versionSeq...)
 }
 
 // injectPreambleWithHostMode explicitly distinguishes an attributed public share
 // from an app-hosted frame. Public shares inline the owner's saved state but
 // have no authenticated viewer/host to persist through or answer capabilities.
 // Native unsupported APIs reject under browser policy; no host reply is awaited.
-func injectPreambleWithHostMode(body, artifactID, appOrigin string, state map[string]string, origins originPolicy, widget, anonymous, versionView bool, assetManifest map[string]string, noHost bool, versionSeq ...int) string {
+func injectPreambleWithHostMode(body, artifactID, appOrigin string, state map[string]string, origins originPolicy, widget, anonymous, versionView bool, assetManifest map[string]string, noHost, publicShare bool, artifactChannel string, versionSeq ...int) string {
 	bridges := bridgeScript
+	if !noHost && !publicShare && !widget && !anonymous {
+		channel, _ := json.Marshal(artifactChannel)
+		bridges += strings.Replace(aiBridgeScript, "%ARTIFACT_CHANNEL%", string(channel), 1)
+	}
 	if noHost {
 		bridges = frameLocalScript + "\n  }\n"
 		anonymous = true
@@ -2561,7 +2661,9 @@ func injectPreambleWithHostMode(body, artifactID, appOrigin string, state map[st
 	if len(versionSeq) > 0 {
 		version = versionSeq[0]
 	}
-	shim := fmt.Sprintf(shimTemplate, artifactID, version, appOrigin, widget, anonymous, versionView, allowedJSON, blockedJSON, stateJSON, bridges)
+	// The unavailable window.exhibit.ai stand-in goes in every render, before
+	// the bridges, which replace it where a host can serve calls (Exh-zue3).
+	shim := fmt.Sprintf(shimTemplate, artifactID, version, appOrigin, widget, anonymous, versionView, allowedJSON, blockedJSON, stateJSON, standin.Script, bridges)
 	if widget {
 		// No snippet picker: it exists so the user can point at an element in
 		// the *artifact* preview and hand it to the agent. A widget frame is

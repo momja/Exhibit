@@ -136,6 +136,13 @@ describe("screen with a classifier model", () => {
 	it("throws when the answer carries no probability", async () => {
 		await assert.rejects(screen(classifierRegistry({ stopReason: "stop", answers: {} }), cfg, "x"), /no probability/);
 	});
+	it("rejects out-of-range verdicts and passes through the configured retry limit", async () => {
+		for (const value of [-0.1, 1.1, NaN, Infinity]) {
+			const reg = classifierRegistry(answer(value));
+			await assert.rejects(screen(reg, { ...cfg, maxRetries: 0 }, "hello"), /outside/);
+			assert.equal(reg.calls[0].options.maxRetries, 0);
+		}
+	});
 });
 
 describe("input hook", () => {

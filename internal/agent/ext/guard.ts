@@ -78,6 +78,7 @@ export interface GuardConfig {
 	apiKey: string;
 	dataFence: string;
 	policy: string;
+	maxRetries?: number;
 }
 
 export interface Verdict {
@@ -127,7 +128,7 @@ export interface ScreenRegistry {
  * money and then answered garbage still reports what it spent.
  */
 export async function screen(registry: ScreenRegistry, cfg: GuardConfig, message: string, signal?: AbortSignal, report: (usage: unknown) => void = () => {}): Promise<Verdict> {
-	const options = { apiKey: cfg.apiKey, signal };
+	const options = { apiKey: cfg.apiKey, signal, maxRetries: cfg.maxRetries };
 
 	const classifier = registry.getModelOfType("classifier", cfg.provider, cfg.model);
 	if (classifier) {
@@ -147,6 +148,9 @@ export async function screen(registry: ScreenRegistry, cfg: GuardConfig, message
 		}
 		const probability = result.answers?.violates?.probability;
 		if (typeof probability !== "number") throw new Error("classifier returned no probability");
+		if (!Number.isFinite(probability) || probability < 0 || probability > 1) {
+			throw new Error("classifier probability is outside [0, 1]");
+		}
 		return { allowed: probability < CLASSIFIER_BLOCK_THRESHOLD, reason: `p(violates)=${probability.toFixed(3)}` };
 	}
 

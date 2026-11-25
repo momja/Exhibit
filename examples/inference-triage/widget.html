@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Feedback triage</title>
+<style>
+:root{
+  color-scheme:light dark;
+  --text:#111;--muted:#888;--accent:#23559e;--hairline:#e0e0e0;
+  --bug:#b42318;--request:#2f5fb3;--question:#7a4cc2;--praise:#1d7a46;
+}
+@media (prefers-color-scheme:dark){
+  :root{--text:#e8eaed;--muted:#9aa0a9;--accent:#7eaaf0;--hairline:#2f333a;
+    --bug:#ff8a7a;--request:#8db4f2;--question:#c4a7f5;--praise:#7fd3a0}
+}
+html,body{width:100%;height:100%}
+[hidden]{display:none!important}
+body{font-family:system-ui,sans-serif;color:var(--text);display:flex;flex-direction:column;justify-content:center;gap:6px;padding:12px 16px;box-sizing:border-box;overflow:hidden}
+.top{display:flex;align-items:baseline;gap:8px}
+.total{font-size:30px;font-weight:700;line-height:1;letter-spacing:-.5px}
+.label{color:var(--muted);font-size:13px}
+.bar{display:flex;height:6px;border-radius:3px;overflow:hidden;background:var(--hairline)}
+.bar span{display:block;height:100%}
+.legend{display:flex;gap:10px;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden}
+.legend b{color:var(--text);font-weight:600}
+.headline{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+</style>
+</head>
+<body>
+<div class="top"><span id="total" class="total">0</span><span id="label" class="label">No feedback yet</span></div>
+<div id="bar" class="bar" hidden></div>
+<div id="legend" class="legend"></div>
+<div id="headline" class="headline" hidden></div>
+<script>
+// A view of the saved triage. It reads the tool's one key and never calls AI.
+const CATEGORIES = [['bug', 'bugs'], ['request', 'requests'], ['question', 'questions'], ['praise', 'praise']];
+let data = null;
+try { data = JSON.parse(localStorage.getItem('triage.v1') || 'null'); } catch { data = null; }
+const items = data && Array.isArray(data.items) ? data.items : [];
+const counts = { untriaged: 0, urgent: 0 };
+for (const [key] of CATEGORIES) counts[key] = 0;
+for (const item of items) {
+  if (CATEGORIES.some(([key]) => key === item.category)) counts[item.category] += 1;
+  else counts.untriaged += 1;
+  if (item.urgent) counts.urgent += 1;
+}
+document.getElementById('total').textContent = String(items.length);
+if (items.length) {
+  document.getElementById('label').textContent =
+    (items.length === 1 ? 'item' : 'items') +
+    (counts.urgent ? ' · ' + counts.urgent + ' urgent' : '') +
+    (counts.untriaged ? ' · ' + counts.untriaged + ' untriaged' : '');
+  const bar = document.getElementById('bar');
+  const legend = document.getElementById('legend');
+  for (const [key, label] of CATEGORIES) {
+    if (!counts[key]) continue;
+    const segment = document.createElement('span');
+    segment.style.width = (100 * counts[key] / items.length) + '%';
+    segment.style.background = 'var(--' + key + ')';
+    bar.append(segment);
+    const entry = document.createElement('span');
+    const b = document.createElement('b');
+    b.textContent = counts[key];
+    entry.append(b, ' ' + label);
+    legend.append(entry);
+  }
+  bar.hidden = bar.children.length === 0;
+}
+const headline = data && data.summary && data.summary.headline;
+if (headline) {
+  const el = document.getElementById('headline');
+  el.textContent = headline;
+  el.hidden = false;
+}
+</script>
+</body>
+</html>

@@ -82,7 +82,7 @@ func TestCapabilityPopoverSandboxedShowsFullyContained(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 	page := w.Body.String()
 
-	assert.Contains(t, page, "Fully contained — no network, download, clipboard, external link, camera, microphone, or location access")
+	assert.Contains(t, page, "Fully contained — no network, download, clipboard, external link, camera, microphone, location, or AI access")
 	assert.NotContains(t, page, "capability-popover-label")
 	assert.NotContains(t, page, "capability-popover-origins")
 }

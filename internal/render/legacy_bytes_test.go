@@ -4,14 +4,19 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/assert"
 )
 
-// Goldens retain the serveDoc output from 99452599 with the refreshed artifact
-// favicon. Only the randomly minted public link is normalized.
+// Goldens were measured by substituting serveDoc verbatim from 99452599,
+// before running this fixture, and re-measured when every render gained the
+// window.exhibit.ai stand-in and the document channels (Exh-zue3). The random
+// public link and the channel derived from the fixture's signing key are normalized.
+var artifactChannelPattern = regexp.MustCompile(`var ARTIFACT_CHANNEL = "[^"]*";`)
+
 func TestLegacyDocumentBytes(t *testing.T) {
 	rd, _, link, _ := newShareWidgetFixture(t)
 	private := httptest.NewRecorder()
@@ -25,19 +30,16 @@ func TestLegacyDocumentBytes(t *testing.T) {
 		"version":                  serveVersion(vr, "abc", 1, versionToken("abc", 1, 1)),
 	}
 	want := map[string]string{
-		"artifact-and-direct-open": "b80d692af4b0d5a939bf243b6f3c528bd694ff1014b11b4f284c06466f636dff",
-		"widget":                   "c54d487793fb8cc7e8ede1a0e072801b4916f5693a93103fd9cf28b56a29a2fa",
-		"share-widget":             "d4b47afa2d80d41b3bda68b96e811e789898e24dc7a2be6bcade842e7606d936",
-		"share":                    "f368b0b367b0e47980e27fa5484186efb56f5e6a8138eb5af864f7b1c25658e1",
-		"version":                  "4e46950c4a721bdff60e1c02754adaebc75753f6a71418bb04d4ba9471412df6",
+		"artifact-and-direct-open": "bbad43bc2b7f70ca15799ab8fee59c037c9e7fd9fd865302495e50ebd1154386",
+		"widget":                   "f6c61534b9c32d02bc90adeb38a3c9402ba95e06f1eb60ea9cd3211604280893",
+		"share-widget":             "f073709dfcc88b981565a63fd47a10604f6d5a4bfe2d6e88536428cf48c2ea36",
+		"share":                    "8a66190e1b669c866d8e5c4f2048cae48830a2e3551a15fc7f93c5d6ddf96d9c",
+		"version":                  "fa3a462b112a3080275c87d85f21b61a639bda29bce555f1898b05a0cf47288c",
 	}
 	for name, response := range cases {
-		bytes := strings.ReplaceAll(response.Body.String(), link, "PUBLIC-LINK") + "\n" + fmt.Sprint(response.Header())
+		body := artifactChannelPattern.ReplaceAllString(response.Body.String(), `var ARTIFACT_CHANNEL = "CHANNEL";`)
+		bytes := strings.ReplaceAll(body, link, "PUBLIC-LINK") + "\n" + fmt.Sprint(response.Header())
 		got := fmt.Sprintf("%x", sha256.Sum256([]byte(bytes)))
-		if len(want) == 0 {
-			t.Logf("GOLDEN %s %s", name, got)
-		} else {
-			require.Equal(t, want[name], got, name)
-		}
+		assert.Equal(t, want[name], got, name)
 	}
 }

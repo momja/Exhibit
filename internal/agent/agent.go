@@ -78,6 +78,12 @@ type Config struct {
 	// the failure legible. Zero passes nothing, and the extension then learns
 	// of the limit from the 413 alone.
 	MaxRequestBodyBytes int64
+	// InferenceKinds names the window.exhibit.ai kinds this instance offers
+	// artifacts ("complete", "decide"; agentguidance.KindComplete/KindDecide),
+	// so the system prompt teaches exactly those (Exh-15tf). Empty says nothing
+	// about AI. Any other value is a programming error and panics at session
+	// creation.
+	InferenceKinds []string
 }
 
 // providerEnv maps a provider name to the env var pi reads its key from.
@@ -333,7 +339,7 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Session, error)
 			_ = os.RemoveAll(workDir)       // and nothing to keep the directory for
 		}
 	}()
-	sysPrompt := buildSystemPrompt(m.cfg.SystemPrompt, opts)
+	sysPrompt := buildSystemPrompt(m.cfg.SystemPrompt, m.cfg.InferenceKinds, opts)
 	sessionFile := filepath.Join(workDir, sessionFileName)
 	resumeNotice := ""
 	if resume != nil {
@@ -1500,4 +1506,23 @@ func paidByFor(platformPaid bool) string {
 		return store.PaidByPlatform
 	}
 	return store.PaidByUser
+}
+
+// MaterializeGuard writes the usage-policy screen (ext/guard.ts) and the
+// prompt templates it reads into dir, for another Pi extension that imports
+// it. The artifact inference worker screens platform-paid calls with the same
+// screen the agent uses (Exh-hwjg), so the two can never disagree about the
+// policy or how a verdict is reached.
+func MaterializeGuard(dir string) error {
+	src, err := extFS.ReadFile("ext/guard.ts")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(dir, "guard.ts"), src, 0o644); err != nil {
+		return fmt.Errorf("materialize guard: %w", err)
+	}
+	return materializeExtPrompts(filepath.Join(dir, "prompts"))
 }

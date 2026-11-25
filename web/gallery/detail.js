@@ -1,6 +1,7 @@
 import { modalFor } from './modal.js';
 import { apiFetch, apiStateFetch } from './api-module.js';
 import { networkPrompt } from './network-prompt.js';
+import { connectInferenceHost } from './inference-host.js';
 /* Artifact detail (viewer) page script. Served from the app origin at
  * /assets/gallery/detail.js. The page's inline bootstrap <script> defines the
  * per-request globals this file reads (and reassigns) before it loads:
@@ -141,6 +142,8 @@ window.addEventListener('message', function(e) {
 // lose an item, and no polling interval fixes that.
 const STATE_RESYNC_INTERVAL_MS = 5000;
 let stateResyncTimer = null;
+let nextStateResyncRequest = 0;
+let pendingStateResyncRequest = 0;
 
 function stateSyncEnabled() {
   // A visitor with no principal has no rows to keep in step, and their frame
@@ -148,28 +151,38 @@ function stateSyncEnabled() {
   return typeof STATE_WRITABLE === 'boolean' && STATE_WRITABLE;
 }
 
-async function resyncState() {
+function resyncState() {
   if (!stateSyncEnabled() || pendingStateWrites > 0) return;
-  const frame = document.querySelector('iframe');
-  if (!frame || !frame.contentWindow) return;
-  let resp;
-  try {
-    const options = typeof NAVIGATION_POLICY === 'string'
-      ? { headers: { 'X-Exhibit-Relay-Policy': NAVIGATION_POLICY } } : undefined;
-    resp = await apiFetch(window.ExhibitState.url(ID), options);
-  } catch (err) {
-    return;
-  }
-  if (!resp || !resp.ok) return;
-  const state = await resp.json().catch(function () { return null; });
-  if (!state || typeof state !== 'object') return;
-  // targetOrigin '*' because the frame's origin is opaque and matches nothing
-  // else. The payload is the artifact's own state, which the frame already
-  // holds a snapshot of, so there is nothing here to leak to a frame that is
-  // somehow not ours — and the frame checks e.origin against the app origin
-  // before believing it.
-  frame.contentWindow.postMessage({ __avStateSync: true, artifactId: ID, state: state }, '*');
+  const frame = document.querySelector('iframe[data-artifact-channel]');
+  if (!frame?.dataset.artifactChannel) return;
+  // A WindowProxy survives navigation. Only send the request number over
+  // the window and wait for the authorized document to transfer a reply port.
+  pendingStateResyncRequest = ++nextStateResyncRequest;
+  frame.contentWindow?.postMessage({ __avStateSyncRequest: true, artifactId: ID, request: pendingStateResyncRequest }, '*');
 }
+
+window.addEventListener('message', async function (e) {
+  const d = e.data;
+  if (d?.__avStateSyncPort !== true || e.ports.length !== 1) return;
+  const port = e.ports[0];
+  try {
+    const frame = document.querySelector('iframe[data-artifact-channel]');
+    const channel = frame?.dataset.artifactChannel;
+    if (!channel || d.channel !== channel || e.source !== frame.contentWindow || d.artifactId !== ID ||
+        !pendingStateResyncRequest || d.request !== pendingStateResyncRequest || !stateSyncEnabled() || pendingStateWrites > 0) return;
+    pendingStateResyncRequest = 0;
+    const headers = { 'X-Exhibit-State-Channel': channel };
+    if (typeof NAVIGATION_POLICY === 'string') headers['X-Exhibit-Relay-Policy'] = NAVIGATION_POLICY;
+    const resp = await apiFetch(window.ExhibitState.url(ID), { headers });
+    if (!resp?.ok) return;
+    const state = await resp.json();
+    if (state && typeof state === 'object') port.postMessage(state);
+  } catch {
+    // A failed sync leaves the current snapshot available.
+  } finally {
+    port.close();
+  }
+});
 
 // Two triggers, and they answer different questions.
 //
@@ -1012,3 +1025,7 @@ function refetchNote(data) {
 
 // Existing server-rendered toolbar action.
 window.refetchSource = refetchSource;
+
+// window.exhibit.ai calls from the frame (Exh-zue3): consent prompts, the
+// authenticated request and the chrome notices live in inference-host.js.
+connectInferenceHost({ artifactId: () => ID, title: () => null });

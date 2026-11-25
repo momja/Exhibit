@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/momja/Exhibit/internal/inference/standin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -77,8 +78,9 @@ func TestExportFoldsMarkupAssetsBackIn(t *testing.T) {
 	assertSelfContained(t, doc, id)
 }
 
-// The common case must cost nothing and change nothing.
-func TestExportOfAnArtifactWithNoAssetsIsTheBodyItself(t *testing.T) {
+// The common case changes nothing but the AI stand-in every export carries
+// (Exh-i902).
+func TestExportOfAnArtifactWithNoAssetsIsTheBodyPlusTheAIStandIn(t *testing.T) {
 	r := newTestRouter(t)
 	const src = `<!DOCTYPE html><html><head></head><body>hello</body></html>`
 	_, resp := postArtifact(t, r, map[string]any{
@@ -87,7 +89,8 @@ func TestExportOfAnArtifactWithNoAssetsIsTheBodyItself(t *testing.T) {
 
 	w := exportGet(t, r, resp.Artifact.ID)
 	require.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, src, w.Body.String(), "export is identity when there is nothing to fold in")
+	want := `<!DOCTYPE html><html><head>` + standin.Tag + `</head><body>hello</body></html>`
+	assert.Equal(t, want, w.Body.String(), "export adds only the stand-in when there is nothing to fold in")
 	assert.Contains(t, w.Header().Get("Content-Disposition"), `filename="Plain.html"`)
 }
 

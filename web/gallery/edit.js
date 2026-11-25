@@ -22,8 +22,10 @@
  *   cameraApproved     - persisted first-use camera approval (mutable)
  *   microphoneApproved - persisted first-use microphone approval (mutable)
  *   geolocationApproved - persisted first-use location approval (mutable)
+ *   inferenceApproved  - persisted first-use AI approval (mutable, Exh-zue3)
  */
 
+import { connectInferenceHost } from './inference-host.js';
 import { apiFetch, apiEventSource } from './api-module.js';
 import { registerEditorSection, editorChanged, saveEditorChanges } from './editor-session.js';
 
@@ -93,6 +95,15 @@ let linksApprovedDirty = false;
 let cameraApprovedDirty = false;
 let microphoneApprovedDirty = false;
 let geolocationApprovedDirty = false;
+let inferenceApprovedDirty = false;
+// The AI row (Exh-zue3) renders only where the instance offers AI.
+const aiSelect = document.getElementById('ai-select');
+if (aiSelect) aiSelect.value = String(inferenceApproved);
+aiSelect?.addEventListener('change', function(e) {
+  inferenceApproved = e.target.value === 'true';
+  inferenceApprovedDirty = true;
+  renderSecurityPanel();
+});
 
 document.getElementById('dl-select').value = String(downloadsApproved);
 document.getElementById('clip-select').value = String(clipboardApproved);
@@ -186,7 +197,7 @@ function renderSecurityPanel() {
   ({blocked, unapproved} = originGroups(allowlist, savedArtifact.blocked, forgotten));
   document.body.dispatchEvent(new CustomEvent('exhibit:origin-draft-changed'));
 
-  const allowedFeatures = [downloadsApproved, clipboardApproved, linksApproved, cameraApproved, microphoneApproved, geolocationApproved].filter(Boolean).length;
+  const allowedFeatures = [downloadsApproved, clipboardApproved, linksApproved, cameraApproved, microphoneApproved, geolocationApproved, inferenceApproved].filter(Boolean).length;
   document.getElementById('security-summary-text').textContent =
     '· ' + allowlist.length + (allowlist.length === 1 ? ' site' : ' sites') +
     ' · ' + allowedFeatures + (allowedFeatures === 1 ? ' feature allowed' : ' features allowed');
@@ -203,7 +214,7 @@ function artifactDraft() {
     title: document.getElementById('title').value,
     body: document.getElementById('body').value,
     allowlist: [...allowlist], unapproved: [...unapproved], blocked: [...blocked], forgotten: [...forgotten],
-    downloadsApproved, clipboardApproved, linksApproved, cameraApproved, microphoneApproved, geolocationApproved
+    downloadsApproved, clipboardApproved, linksApproved, cameraApproved, microphoneApproved, geolocationApproved, inferenceApproved
   };
 }
 
@@ -212,7 +223,7 @@ function artifactDirty() {
   const {title: savedTitle, body: savedBody, ...savedSettings} = savedArtifact;
   // Sources can be many megabytes. Compare their strings directly rather
   // than serializing another copy on every input event.
-  return linksApprovedDirty || cameraApprovedDirty || microphoneApprovedDirty || geolocationApprovedDirty || pendingSourceFootprint.length > 0 || pendingSourceWarnings.length > 0 || forgotten.length > 0 || title !== savedTitle || body !== savedBody || JSON.stringify(settings) !== JSON.stringify(savedSettings) || !!widgetPanel?.isDirty();
+  return linksApprovedDirty || cameraApprovedDirty || microphoneApprovedDirty || geolocationApprovedDirty || inferenceApprovedDirty || pendingSourceFootprint.length > 0 || pendingSourceWarnings.length > 0 || forgotten.length > 0 || title !== savedTitle || body !== savedBody || JSON.stringify(settings) !== JSON.stringify(savedSettings) || !!widgetPanel?.isDirty();
 }
 
 function discardArtifact() {
@@ -223,10 +234,12 @@ function discardArtifact() {
   downloadsApproved = draft.downloadsApproved; clipboardApproved = draft.clipboardApproved;
   linksApproved = draft.linksApproved; cameraApproved = draft.cameraApproved;
   microphoneApproved = draft.microphoneApproved; geolocationApproved = draft.geolocationApproved;
+  inferenceApproved = draft.inferenceApproved;
+  if (aiSelect) aiSelect.value = String(inferenceApproved);
   for (const [id, value] of [['dl-select', downloadsApproved], ['clip-select', clipboardApproved], ['link-select', linksApproved], ['cam-select', cameraApproved], ['mic-select', microphoneApproved], ['geo-select', geolocationApproved]]) {
     document.getElementById(id).value = String(value);
   }
-  linksApprovedDirty = cameraApprovedDirty = microphoneApprovedDirty = geolocationApprovedDirty = false;
+  linksApprovedDirty = cameraApprovedDirty = microphoneApprovedDirty = geolocationApprovedDirty = inferenceApprovedDirty = false;
   pendingSourceFootprint = [];
   pendingSourceWarnings = [];
   document.getElementById('source-network-warnings').hidden = false;
@@ -260,6 +273,7 @@ async function save() {
   if (cameraApprovedDirty) payload.camera_approved = cameraApproved;
   if (microphoneApprovedDirty) payload.microphone_approved = microphoneApproved;
   if (geolocationApprovedDirty) payload.geolocation_approved = geolocationApproved;
+  if (inferenceApprovedDirty) payload.inference_approved = inferenceApproved;
   const resp = await apiFetch('/api/artifacts/' + ID, {
     method: 'PATCH',
     body: JSON.stringify(payload)
@@ -286,6 +300,7 @@ async function save() {
   if (cameraApproved === submitted.cameraApproved) cameraApprovedDirty = false;
   if (microphoneApproved === submitted.microphoneApproved) microphoneApprovedDirty = false;
   if (geolocationApproved === submitted.geolocationApproved) geolocationApprovedDirty = false;
+  if (inferenceApproved === submitted.inferenceApproved) inferenceApprovedDirty = false;
   document.body.dispatchEvent(new CustomEvent('exhibit:artifact-saved'));
   if (data.footprint_changed) pendingSourceFootprint = data.network_footprint || [];
   pendingSourceWarnings = data.network_warnings || [];
@@ -621,3 +636,6 @@ document.getElementById('title').addEventListener('input', () => {
 });
 // Existing approval controls are rendered by the legacy footprint panel.
 Object.assign(window, {approveOrigins, finishEdit});
+
+// A version preview's window.exhibit.ai calls (Exh-zue3): owner-only, metered.
+connectInferenceHost({ artifactId: () => ID, title: () => null });

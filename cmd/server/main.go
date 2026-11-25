@@ -226,6 +226,15 @@ func main() {
 	agentCreds := agentscope.NewRegistry()
 	var agentMgr *agent.Manager
 	piBin := getenv("PI_BIN", "pi")
+	// Artifact AI (Exh-zue3): window.exhibit.ai, served by one warm Pi worker.
+	inferenceService, inferenceWorker, err := newInferenceService(context.Background(), st, box, platformAgentKey,
+		spendCaps, guardrail, piBin, dataDir+"/inference")
+	if err != nil {
+		fatal("configure artifact inference", err)
+	}
+	if inferenceWorker != nil {
+		defer inferenceWorker.Close()
+	}
 	if path, err := exec.LookPath(piBin); err != nil {
 		slog.Warn("pi binary not found; agent support disabled", slog.String("pi_bin", piBin))
 	} else {
@@ -245,6 +254,9 @@ func main() {
 			// The ceiling the API enforces, so a tool can refuse an oversized
 			// write before sending it rather than after (av-ombn).
 			MaxRequestBodyBytes: maxBodyBytes,
+			// The prompt teaches window.exhibit.ai only when the instance
+			// offers it, and only the kinds it offers (Exh-15tf).
+			InferenceKinds: inferenceKindNames(inferenceService.InstanceKinds()),
 		}, st)
 		if err != nil {
 			fatal("init agent manager", err)
@@ -335,6 +347,7 @@ func main() {
 		routerConfig.ClerkPublishableKey = hostedLogin.PublishableKey
 		routerConfig.ClerkFrontendAPI = hostedLogin.FrontendAPI
 	}
+	routerConfig.Inference = inferenceService
 	router := api.NewRouter(routerConfig)
 	if hostedLogin != nil {
 		go router.RetryHostedAccountDeletions(context.Background())

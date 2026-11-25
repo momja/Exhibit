@@ -70,6 +70,10 @@ Env vars, all optional except `AUTH_TOKEN`.
 | `AGENT_SPEND_CAP_OWNER_CENTS` | *(unset)* | Per-owner agent budget, calendar month (UTC). See [§4.1](#41-letting-the-instance-supply-the-agent-key-platform-mode) — platform mode requires at least one cap |
 | `AGENT_SPEND_CAP_SESSION_CENTS` | *(unset)* | Per-conversation agent ceiling (its whole lifetime) |
 | `AGENT_SPEND_CAP_INSTANCE_CENTS` | *(unset)* | Everything the instance pays for per calendar month — the backstop; guardrail spend included |
+| `INFERENCE_ENABLED` | `false` | Lets artifacts call AI through `window.exhibit.ai` (experimental). Uses the agent's provider configuration and, in platform mode, its owner/instance spend caps — one of which is then required. See [inference.md](inference.md) |
+| `INFERENCE_MODEL` | *(unset)* | Chat model for artifact `complete()` calls; required in platform mode with inference on |
+| `INFERENCE_DECISION_MODEL` | *(unset)* | Classifier model for artifact `decide()` calls; unset makes `decide()` unavailable |
+| `INFERENCE_MOCK_URL` | *(unset)* | Tests and demos only: every artifact-AI provider request goes to this mock server |
 | `AGENT_SPEND_CAP_TURN_SECONDS` | *(0)* | Wall-clock ceiling on one agent turn; the fallback for a response that never reports usage until it ends |
 | `LOGIN_USERNAME` | *(unset)* | Names an account for the bootstrap / break-glass login — how you get in on an empty instance, or after losing a password. Accounts themselves are created with the `user add` subcommand, not here; see [§3.2](#32-log-in-with-a-username-and-password) |
 | `LOGIN_PASSWORD_HASH` | *(unset)* | The **bcrypt hash** of that password, not the password. Produce it with the `hash-password` subcommand. Set with `LOGIN_USERNAME`; it stays accepted for that account for as long as both are set (§3.2) |

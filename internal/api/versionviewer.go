@@ -33,6 +33,8 @@ type versionViewerData struct {
 	WhenISO string
 	// FrameURL is the version document, tokened for this version alone.
 	FrameURL string
+	// ArtifactChannel binds bridge requests to this viewer's frame.
+	ArtifactChannel string
 	// Restorable offers the restore beside the view. The edit page asks for it,
 	// because the decision to return to a version is made there; the chat's is
 	// made in the History card beside the pane, which carries the choice of
@@ -84,15 +86,16 @@ func (ro *Router) versionViewerPartial(w http.ResponseWriter, r *http.Request) {
 
 	vv := newVersionViews([]store.Version{*v})[0]
 	ro.writeFragment(w, r, "versionViewer", versionViewerData{
-		ArtifactID: a.ID,
-		Seq:        v.Seq,
-		Title:      a.Title,
-		Label:      vv.Label,
-		Message:    vv.Message,
-		When:       vv.When,
-		WhenISO:    vv.WhenISO,
-		FrameURL:   ro.renderURLs(r).version(a.ID, v.Seq),
-		Restorable: q.Get("restorable") == "1",
+		ArtifactID:      a.ID,
+		Seq:             v.Seq,
+		Title:           a.Title,
+		Label:           vv.Label,
+		Message:         vv.Message,
+		When:            vv.When,
+		WhenISO:         vv.WhenISO,
+		FrameURL:        ro.renderURLs(r).version(a.ID, v.Seq),
+		ArtifactChannel: ro.renderURLs(r).artifactChannel(a.ID),
+		Restorable:      q.Get("restorable") == "1",
 	})
 }
 

@@ -7,6 +7,7 @@
 package api
 
 import (
+	"crypto/hmac"
 	"errors"
 	"fmt"
 	"html/template"
@@ -118,10 +119,21 @@ func (u renderURLs) mint(id string) string {
 	return u.signer.MintViewer(id, u.ownerID, u.viewerID)
 }
 
-// artifact returns the tokened URL of an artifact's render document, for an
-// iframe src. Links a visitor might click minutes later must NOT use this —
-// they go through openArtifact, which mints at click time (a token embedded in
-// a link goes stale while the page sits open).
+// artifactChannel is the value the render preamble inlines for this viewer.
+func (u renderURLs) artifactChannel(id string) string {
+	if u.signer == nil || u.anonymous || u.viewerID <= 0 {
+		return ""
+	}
+	return u.signer.ArtifactChannel(id, u.viewerID)
+}
+
+func (ro *Router) artifactChannelMatches(r *http.Request, artifactID, channel string) bool {
+	expected := ro.tokens.ArtifactChannel(artifactID, int64(stateViewer(r)))
+	return hmac.Equal([]byte(channel), []byte(expected))
+}
+
+// artifact returns a tokened iframe URL. Links use openArtifact, which mints
+// a fresh token when the visitor clicks.
 func (u renderURLs) artifact(id string) string {
 	policy, err := u.policyPath(id)
 	if err != nil {
@@ -358,7 +370,7 @@ func (ro *Router) galleryEdit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	canGenerate, generateHint := ro.widgetGenerateAvailability(r)
-	page, err := renderEditPage(a, decisions, library, string(src), ro.widgetSource(r, a), ro.pageCredentials(r), ro.renderURLs(r), canGenerate, generateHint, versions, editorReturn(r, a))
+	page, err := renderEditPage(a, decisions, library, string(src), ro.widgetSource(r, a), ro.pageCredentials(r), ro.renderURLs(r), canGenerate, generateHint, versions, editorReturn(r, a), editPageInstance{InferenceEnabled: ro.cfg.Inference.Enabled()})
 	if err != nil {
 		serverError(w, r, "gallery edit render", err)
 		return
@@ -779,6 +791,7 @@ func newCapabilityView(a *store.Artifact, showManage bool) capabilityView {
 		CameraApproved:      a.CameraApproved,
 		MicrophoneApproved:  a.MicrophoneApproved,
 		GeolocationApproved: a.GeolocationApproved,
+		InferenceApproved:   a.InferenceApproved,
 		ShowManage:          showManage,
 	}
 }
@@ -814,7 +827,9 @@ type capabilityView struct {
 	CameraApproved      bool
 	MicrophoneApproved  bool
 	GeolocationApproved bool
-	ShowManage          bool
+	// InferenceApproved is the owner's AI approval (Exh-zue3).
+	InferenceApproved bool
+	ShowManage        bool
 	// Compact is the gallery card's form (av-uvc6): glyphs with no
 	// "Sandboxed" label, and no trigger at all for a sandboxed artifact that
 	// is not shared. There, as for sharing, the absence is the signal. The
@@ -830,7 +845,7 @@ type capabilityView struct {
 // no capability approved. Both partials branch on it, so it is defined once.
 func (v capabilityView) Sandboxed() bool {
 	return len(v.NetworkAllowlist) == 0 && !v.DownloadsApproved && !v.ClipboardApproved &&
-		!v.LinksApproved && !v.CameraApproved && !v.MicrophoneApproved && !v.GeolocationApproved
+		!v.LinksApproved && !v.CameraApproved && !v.MicrophoneApproved && !v.GeolocationApproved && !v.InferenceApproved
 }
 
 // HasTrigger reports whether the cluster renders at all. Only the compact
@@ -1088,14 +1103,15 @@ type detailPageData struct {
 	Header appHeaderView
 	// Favicon is a data: URI (base64 SVG); typed template.URL because
 	// html/template rejects the data: scheme in URL contexts by default.
-	Favicon        template.URL
-	ID             string
-	Title          string
-	FrameURL       string
-	OpenURL        string
-	SourceURL      string
-	SourceRevision string
-	Capability     capabilityView
+	Favicon         template.URL
+	ID              string
+	Title           string
+	FrameURL        string
+	ArtifactChannel string
+	OpenURL         string
+	SourceURL       string
+	SourceRevision  string
+	Capability      capabilityView
 	// ViewerPreference scopes browser preferences to the visitor, including on
 	// shared artifacts. It grants no artifact authority and contains no token.
 	ViewerPreference string
@@ -1162,6 +1178,7 @@ func renderDetailPage(a *store.Artifact, urls renderURLs, creds pageCredentials,
 		ID:                  a.ID,
 		Title:               a.Title,
 		FrameURL:            urls.artifact(a.ID),
+		ArtifactChannel:     urls.artifactChannel(a.ID),
 		OpenURL:             openURL(a.ID),
 		SourceURL:           a.SourceURL,
 		SourceRevision:      store.ContentRevision(a.SourceBlobID),
@@ -1212,6 +1229,9 @@ type editPageData struct {
 	CameraApproved      bool
 	MicrophoneApproved  bool
 	GeolocationApproved bool
+	// AI (Exh-zue3): the approval, and whether the instance offers AI at all.
+	InferenceApproved bool
+	InferenceEnabled  bool
 	// The gallery widget (av-fafu): its source for the editor, and the same
 	// tile view the library renders for the live preview beside it. WidgetSrc
 	// is "" when the artifact has no widget, which is also when Widget renders
@@ -1274,7 +1294,18 @@ func newVersionViews(versions []store.Version) []versionView {
 	return out
 }
 
-func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, library []*store.Tag, src, widgetSrc string, creds pageCredentials, urls renderURLs, canGenerate bool, generateHint string, versions []store.Version, navigation editNavigation) (string, error) {
+// editPageInstance is what the edit page needs to know about the instance
+// rather than the artifact. Optional so tests of the artifact half need not
+// spell it out.
+type editPageInstance struct {
+	InferenceEnabled bool
+}
+
+func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, library []*store.Tag, src, widgetSrc string, creds pageCredentials, urls renderURLs, canGenerate bool, generateHint string, versions []store.Version, navigation editNavigation, instance ...editPageInstance) (string, error) {
+	var inst editPageInstance
+	if len(instance) > 0 {
+		inst = instance[0]
+	}
 	if navigation.URL == "" {
 		navigation = editNavigation{URL: "/search", Label: "Search"}
 	}
@@ -1310,6 +1341,8 @@ func renderEditPage(a *store.Artifact, decisions []store.OriginDecision, library
 		CameraApproved:      a.CameraApproved,
 		MicrophoneApproved:  a.MicrophoneApproved,
 		GeolocationApproved: a.GeolocationApproved,
+		InferenceApproved:   a.InferenceApproved,
+		InferenceEnabled:    inst.InferenceEnabled,
 	})
 }
 
