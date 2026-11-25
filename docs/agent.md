@@ -1112,9 +1112,10 @@ and the real-agent suites cover Exhibit's RPC and session contracts:
   must first check `event.messageType === "user"`.
 - Pi 1.5.0 validates tool arguments with `@earendil-works/pi-schema`. Exhibit's
   extension tools declare the plain JSON Schema subset of TypeBox, so their
-  validation and coercion are unchanged. Pi 1.6.0 hands extensions `readonly`
-  render arrays that a component reuses while it is unchanged; Exhibit
-  registers no message or tool renderers, so it copies nothing before drawing.
+  schemas stay valid and keep their coercion; only the wording of a rejection
+  shown to the model differs. Pi 1.6.0 hands extensions `readonly` render
+  arrays that a component reuses while it is unchanged; Exhibit registers no
+  message or tool renderers, so it copies nothing before drawing.
 
 No RPC, tool, or transcript format adapter change was needed for Pi Bolt.
 Before changing the pin again, build assets and run the API and agent suites
