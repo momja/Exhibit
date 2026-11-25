@@ -2,7 +2,7 @@
 id: Exh-5hmx
 status: closed
 deps: []
-links: []
+links: [egt-rsxd, Exh-g2vv]
 created: 2026-10-19T16:05:35Z
 type: bug
 priority: 1
