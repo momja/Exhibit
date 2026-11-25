@@ -31,7 +31,7 @@ safety" (§12).
 | Partial re-render | **htmx** — self-hosted / embedded on app origin, no CDN (§9) | hand-rolled fetch-and-swap helper |
 | Reusable UI behavior | **Stimulus** — self-hosted ES module, Go partials own markup (§9) | explicit component initialization in vanilla JS |
 | Response compression | `chi` `middleware.Compress` — gzip, explicit type allowlist | brotli (better ratio, new dependency) |
-| Agent harness | **Pi Bolt 1.0.8 / Pi 1.4.0** (native `pi --mode rpc` sidecar per session; runtime-loaded TS tools extension; keys AES-GCM at rest; per-session scoped API credentials; `internal/mockllm` for tests) | Claude Agent SDK (heavier, vendor-tied) |
+| Agent harness | **Pi Bolt 1.3.1 / Pi 1.6.0** (native `pi --mode rpc` sidecar per session; runtime-loaded TS tools extension; keys AES-GCM at rest; per-session scoped API credentials; `internal/mockllm` for tests) | Claude Agent SDK (heavier, vendor-tied) |
 | Fonts | **Schibsted Grotesk** (text) and **Fraunces** (one headline per page), SIL OFL, self-hosted from the app origin by `web/fonts` (woff2, Fraunces a static instance), `display=swap`, system-ui / Georgia fallbacks (§9) | Google Fonts CDN (rejected, see §9) |
 | Icons | **Phosphor Icons** — self-hosted / embedded on app origin, no CDN (§9) | Lucide / Heroicons |
 | Hosted login | Clerk Go SDK + ClerkJS / Clerk UI from the application Frontend API domain; enabled only by Clerk configuration | Replacing self-hosted login |

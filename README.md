@@ -53,7 +53,7 @@ on most systems:
 
 `make` is also required.
 
-The image pins Pi Bolt **1.0.8** (Pi **1.4.0**) and verifies its release archive.
+The image pins Pi Bolt **1.3.1** (Pi **1.6.0**) and verifies its release archive.
 For source installs and the agent integration tests, follow
 [Pi runtime compatibility](docs/agent.md#pi-runtime-compatibility).
 

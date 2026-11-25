@@ -1052,8 +1052,8 @@ when `MOCK_LLM_URL` is set.
 
 ### Pi runtime compatibility
 
-The Dockerfile pins [**Pi Bolt 1.0.8**](https://github.com/opensec-git/Pi-Bolt/releases/tag/bolt-v1.0.8),
-which contains **Pi 1.4.0**. It runs natively on glibc Linux without Node or npm.
+The Dockerfile pins [**Pi Bolt 1.3.1**](https://github.com/opensec-git/Pi-Bolt/releases/tag/bolt-v1.3.1),
+which contains **Pi 1.6.0**. It runs natively on glibc Linux without Node or npm.
 The build verifies SHA-256 hashes pinned alongside the version, uses the baseline
 non-AVX2 archive for amd64 and the ARM64 archive for arm64, and retains the whole
 release directory (assets, native helpers and license notices). The default
@@ -1063,14 +1063,14 @@ that would require coordinating installed paths/timestamps with materialization.
 
 The image exposes both `pi` and `pi-bolt`, preserving the default `PI_BIN=pi`.
 Source installs should use the same release from the
-[upstream installation instructions](https://github.com/opensec-git/Pi-Bolt/blob/bolt-v1.0.8/README.md#quick-start),
+[upstream installation instructions](https://github.com/opensec-git/Pi-Bolt/blob/bolt-v1.3.1/README.md#quick-start),
 keep its adjacent assets, and either put it on `PATH` as `pi` or set
 `PI_BIN=/absolute/path/to/pi-bolt`. Integration tests discover `pi` on `PATH`,
-so provide that name when running them. Standard Pi 1.4.0 on Node ≥22.19.0
+so provide that name when running them. Standard Pi 1.6.0 on Node ≥22.19.0
 remains an option for source installs (`npm install -g --ignore-scripts
---engine-strict @earendil-works/pi-coding-agent@1.4.0`).
+--engine-strict @earendil-works/pi-coding-agent@1.6.0`).
 
-The [upstream Pi release notes](https://github.com/earendil-works/pi/blob/v1.4.0/packages/coding-agent/CHANGELOG.md)
+The [upstream Pi release notes](https://github.com/earendil-works/pi/blob/v1.6.0/packages/coding-agent/CHANGELOG.md)
 and the real-agent suites cover Exhibit's RPC and session contracts:
 
 - Pi 1.0 requires `--model` when passing `--provider`. When the configured
@@ -1110,6 +1110,12 @@ and the real-agent suites cover Exhibit's RPC and session contracts:
   Pi 1.2.0 also expanded `before_agent_start` to custom-message runs; Exhibit
   currently uses no such handler. A future handler reading `event.prompt`
   must first check `event.messageType === "user"`.
+- Pi 1.5.0 validates tool arguments with `@earendil-works/pi-schema`. Exhibit's
+  extension tools declare the plain JSON Schema subset of TypeBox, so their
+  schemas stay valid and keep their coercion; only the wording of a rejection
+  shown to the model differs. Pi 1.6.0 hands extensions `readonly` render
+  arrays that a component reuses while it is unchanged; Exhibit registers no
+  message or tool renderers, so it copies nothing before drawing.
 
 No RPC, tool, or transcript format adapter change was needed for Pi Bolt.
 Before changing the pin again, build assets and run the API and agent suites

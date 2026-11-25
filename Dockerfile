@@ -47,14 +47,14 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /bin/server 
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /bin/exhibit-mcp ./cmd/exhibit-mcp
 
 # --- Native Pi download stage ---
-# Pi Bolt 1.0.8 contains Pi 1.4.0. Pin the version AND release-archive hashes;
+# Pi Bolt 1.3.1 contains Pi 1.6.0. Pin the version AND release-archive hashes;
 # update them together after the real-Pi agent/API compatibility suites pass.
 # amd64 uses the baseline build so the image does not require AVX2. Both builds
 # have JIT off; Exhibit loads its unchanged TypeScript extensions at runtime.
 FROM debian:bookworm-slim AS pi-bolt
 
 ARG TARGETARCH
-ARG PI_BOLT_VERSION=1.0.8
+ARG PI_BOLT_VERSION=1.3.1
 
 RUN apt-get update \
 	&& apt-get install -y --no-install-recommends ca-certificates curl xz-utils \
@@ -64,9 +64,9 @@ RUN set -eu; \
 	pi_bolt_arch="${TARGETARCH:-$(dpkg --print-architecture)}"; \
 	case "$pi_bolt_arch" in \
 		amd64) pi_bolt_archive=pi-bolt-linux-x64-baseline; \
-			pi_bolt_sha256=098816ee9fd2adaa7ae67bfa5061741e0f4b54863a810e4957523b671840f765 ;; \
+			pi_bolt_sha256=a94d397e1ed4754fbf43c6867131c0d12411c2744633c3dfe1117c7f0a43f75d ;; \
 		arm64) pi_bolt_archive=pi-bolt-linux-arm64; \
-			pi_bolt_sha256=f530486723c7ab9004aca51f6f9494b95861fba7287c05ae8804647d63077de1 ;; \
+			pi_bolt_sha256=ddbf1d8c237cbb5d74f2f860dbbdf1ecba7878ed153070fe12f364e48f684660 ;; \
 		*) echo "Unsupported Pi Bolt architecture: $pi_bolt_arch" >&2; exit 1 ;; \
 	esac; \
 	curl --fail --show-error --location --retry 3 \
