@@ -317,8 +317,12 @@ against the prototype in WebKit; the rest are design requirements.
    device.
 3. **Stacking with Safari's own bar.** In a browser tab on iPhone our bar sits
    above Safari's: two bars at the bottom. In a home-screen web app there is
-   only ours. Decide whether the compact strip should be smaller in a browser
-   tab (`display-mode: browser`).
+   only ours. *Decided: leave it.* Safari's toolbar likely never minimises
+   here either, because the page itself does not scroll (only the frame
+   does), so both bars stay. That is accepted: home-screen use is the
+   expected phone path, and the alternatives (resting compact, a thinner
+   strip, or a top bar in `display-mode: browser`) each cost the single
+   behaviour across contexts. Revisit if device QA shows it matters.
 4. **Agent compliance.** Run the built-in agent with real inference (the
    dev-instance skill) on prompts that should opt in (a full-screen map) and
    ones that should not (a calculator, a chat, a tabbed app). Pass: the tag
