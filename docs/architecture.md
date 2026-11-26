@@ -206,6 +206,11 @@ it safe behind the no-auth share path (§7).
     origins already allowed (a redirect, which goes to the banner instead) or
     blocked. Once per origin per load. Framed-only; absent for widgets and anonymous
     viewers. Policy: `security.md` §2.1.
+  - **Bar script** (Exh-i8q4): posts `{__avBar: 'scroll'|'use'|'mode'}` to the
+    host so the artifact bar can shrink and decide band or overlay, and sets
+    `--exhibit-bar` from the host's `{__avBarHeight}` (checked origin, source and
+    range). No authority: a forged message only resizes Exhibit's own bar and
+    band. Framed, host-present, non-widget renders; [artifact-bar.md](artifact-bar.md) §4.
   - **`data:` fetch shim** (agaf-02xs): answers `fetch(data:…)` in-frame, because
     WebKit refuses large `data:` fetches from an opaque origin. Must install before
     any artifact script.
@@ -612,7 +617,7 @@ automatically. Features own API calls and change events. Conventions and browser
 tests: [ui-components.md](ui-components.md).
 
 **Card actions** (Exh-johq): a trailing menu replaces the standalone Edit link,
-sharing `.action-menu` styles with the detail pill. The `actionMenu` Go partial
+sharing `.action-menu` styles with the artifact bar. The `actionMenu` Go partial
 gets its items from `galleryCardActions`; `action-menu-controller.js` handles each
 instance, including cards inserted or replaced by htmx.
 Outside presses, focus leaving and Escape close it; Escape restores trigger focus.
@@ -632,9 +637,17 @@ reattaches it via the owner-scoped `/artifacts/:id/widget/open`, which mints a f
 render token and redirects, so a card scrolled back to after ten minutes still
 loads. Initial loads keep their direct render URL.
 
-**Detail page** (Exh-ghuv): the frame fills the window under a floating,
-draggable control pill. Placement rules are pure geometry in
-`web/gallery/pip-placement.js`; `pip.js` applies them.
+**Detail page** (Exh-ghuv, Exh-i8q4): the frame fills the window above the
+**artifact bar**, one bar pinned to the bottom centre that shrinks to a title
+strip when the artifact is scrolled or used and expands on scroll up, at
+either end, on tap, focus or hover. By default the frame ends above a band the
+bar reserves (`body.pip-inset`), measured from the bar by a `ResizeObserver`,
+so the bar never covers the artifact. An artifact declaring
+`<meta name="exhibit-bar" content="overlay">` gets the whole window and reads
+the bar's height as `var(--exhibit-bar)`. The frame reports scrolling, use
+and the mode through the render preamble's bar script (§3.2). `pip.js` owns
+the state machine; popup geometry is in `web/gallery/pip-placement.js`. Full
+design: [artifact-bar.md](artifact-bar.md).
 
 **The detail page never embeds the artifact's source** (agaf-02xs): Safari stalls on
 a 16 MB page. Show facts about an artifact, never its bytes.
@@ -654,7 +667,7 @@ artifact, defaults to Search, and uses a same-origin referrer for legacy
 entry links. Its ES module records that answer in the address for reloads and
 bookmarks. Gallery Edit links retain the search and filters; a per-tab scroll
 record and a bounded `visible` count restore up to 480 freshly rendered cards.
-The artifact pill's icon-only star control always opens Starred;
+The artifact bar's icon-only star control always opens Starred;
 Edit remains in its action menu.
 
 Save changes stays in the editor. Source and widget writes retain their

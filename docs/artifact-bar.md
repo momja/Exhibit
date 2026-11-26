@@ -82,7 +82,10 @@ same curve so the band and the bar move together.
 - Compaction is refused while a popup (info card, ⋮ menu) is open or focus is
   inside the bar.
 - A tap on the compact strip only expands it. It does not also open the info
-  card under the finger (capture-phase click, `preventDefault`).
+  card under the finger. The bar expands on the `pointerdown` itself, because
+  a tap does not always end in a click (synthetic touch in Chromium does not),
+  and the click that press produces within 800ms is swallowed in the capture
+  phase (`preventDefault`, `stopPropagation`).
 - Mouse hover expands and remembers that hover did it; leaving re-compacts
   after 500ms unless the user pressed something in the bar meanwhile.
 - Compacted controls stay in the tab order (they collapse to `max-width: 0`,
@@ -123,9 +126,16 @@ The host accepts these only when `e.source === frame.contentWindow` for
 
 **Host → frame**: `{__avBarHeight: n}` posted with target `'*'` (the frame's
 origin is opaque, as for the shim's resync). The preamble accepts it only when
-`e.origin === API_ORIGIN && e.source === window.parent`, and only a finite
-number in `[0, 400]`, then sets `--exhibit-bar` on `document.documentElement`
-as an inline style.
+`e.origin === API_ORIGIN && e.source === window.parent`, and only a value of
+type number, finite, in `[0, 400]` (a numeric string is refused), then sets
+`--exhibit-bar` on `document.documentElement` as an inline style.
+
+The host's first message after its controls connect carries `ask: true`, and
+the frame answers it with its `mode` (once its document is parsed). The
+frame's own announcement can go out before the host's module has connected:
+WebKit at 1280×800 showed exactly that race, leaving an opted-in map in band
+mode. Asking once on connect covers that order, and the frame's announcement
+covers the other.
 
 **Where the script is injected**: framed, host-present, non-widget renders —
 the same condition as the capability bridges. Widgets, anonymous `/s/` shares
@@ -134,7 +144,10 @@ receive it; their hosts do not listen, so it is inert there. Gating it to the
 detail frame would need a new render flag and is not worth one.
 
 The prototype's message names (`__avScroll`, `__avBar: true`) are consolidated
-into `__avBar` as above when this is built.
+into `__avBar` as above.
+
+A scroller not seen before is treated as having started at the top, so a
+single jump (`scrollTo`, an anchor link) still reports a direction.
 
 ## 5. Changes by file
 
@@ -249,7 +262,8 @@ against the prototype in WebKit; the rest are design requirements.
    The frame resize then becomes a jump on every state change; under reduced
    motion keep the band at its full height and let only the bar shrink, so the
    artifact never resizes (see open question 1).
-6. **Semantics.** The bar is `role="toolbar"`, which promises arrow-key
+6. **Semantics.** *Resolved: the bar is now `role="group"` with
+   `aria-label="Artifact controls"`; no roving focus.* The bar was `role="toolbar"`, which promises arrow-key
    movement between its controls with a single Tab stop. Neither the shipped
    pill nor the prototype implements that; this is a pre-existing gap. Either
    implement roving focus or drop the role for a labelled group inside the
@@ -312,6 +326,31 @@ against the prototype in WebKit; the rest are design requirements.
 5. **The pill as an agent tool palette.** Exh-ghuv imagined the pill growing
    into one. A bottom bar can still do that, but a palette taller than the
    bar would need the band to grow with it. Out of scope here.
+
+## 8a. As built
+
+Where the implementation settled details this doc left open:
+
+- **Band measurement.** The band (`--pip-reserve`, on `body`) is the distance
+  from the bar's top edge to the window bottom plus the bar's current gap
+  (`--pip-gap`, registered with `@property` so it animates), which includes
+  the safe-area inset without reading `env()` in script. It is re-measured by
+  a `ResizeObserver` on the bar (text size, posture glyphs) and on every
+  animation frame for 400ms after a state change, because the bar also moves
+  as its gap animates, which a `ResizeObserver` does not report. The frame's
+  `bottom` follows that value rather than running a CSS transition of its own.
+- **First paint.** `detail.tmpl` renders `<body class="pip-inset">`, so the band
+  exists before `pip.js` connects; the CSS fallback is the full phone bar.
+- **Reduced motion.** The band keeps its full measured height while the bar is
+  compact (open question 1, answered for this case).
+- **Short windows.** Below 450px tall the bar starts compact.
+- **Overlay contrast.** The bar is drawn solid (`--color-panel`) whenever the
+  band is off.
+- **Verification.** WebKit (Playwright) at 390×844 and 1280×800 over a long
+  page, a sketchpad, an app with its own bottom tab bar, and an opted-in map:
+  20 checks, screenshots kept outside the checkout. Three bugs only WebKit
+  showed were fixed: the band stopping early, the mode race above, and the
+  stale-scroller case.
 
 ## 9. Rollout
 
