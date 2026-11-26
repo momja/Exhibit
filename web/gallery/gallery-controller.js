@@ -3,6 +3,7 @@ import { focusGallerySearch, initializeGallery } from './gallery.js';
 import { eventScope } from './event-scope.js';
 import { GallerySpaceCache, gallerySpaceSnapshot, gallerySnapshotMaxAge } from './gallery-space-cache.js';
 import { canKeepGalleryViewport, captureGalleryViewport, restoreGalleryViewport } from './gallery-viewport.js';
+import { galleryWidgetTabs } from './gallery-widget-tabs.js';
 
 const spacePaths = new Set(['/', '/search', '/shared', '/shared-by-me', '/activity']);
 const tabSelector = '.gallery-spaces [data-gallery-space-link]';
@@ -72,6 +73,8 @@ export default class extends Controller {
     this.events = eventScope();
     this.requests = new Map();
     this.cache = new GallerySpaceCache();
+    this.widgetTabs = galleryWidgetTabs(this.element);
+    this.widgetRestores = new WeakMap();
     this.viewports = new Map();
     this.pointers = new Set();
     this.lastScroll = -Infinity;
@@ -88,6 +91,13 @@ export default class extends Controller {
       on(name, event => this.beforeResponse(event));
     }
     on('htmx:before:swap', event => this.beforeSwap(event));
+    on('htmx:before:settle', event => {
+      const { task } = event.detail;
+      const path = this.widgetRestores.get(task);
+      // htmx can report the leading whitespace as the inserted task target.
+      // Use the live space before its widget observer registers the wells.
+      if (path) this.widgetTabs.restore(path, this.spaceElement);
+    });
     on('htmx:after:swap', event => this.afterSwap(event.detail.ctx));
     on('htmx:finally:swap', event => this.restoreNativeAnchoring(event.detail.ctx));
     on('htmx:finally:request', event => this.finished(event));
@@ -118,6 +128,7 @@ export default class extends Controller {
     for (const name of ['exhibit:artifacts-changed', 'exhibit:capabilities-changed']) {
       this.events.on(this.element, name, () => {
         this.cache.clear();
+        this.widgetTabs?.clear();
         this.cancelRefresh();
       });
     }
@@ -235,6 +246,14 @@ export default class extends Controller {
     if (outgoing && outgoing !== request.tab) {
       this.viewports.set(outgoing, captureGalleryViewport(this.spaceElement));
     }
+    const main = tasks.find(task => task.type === 'main' && task.target === this.spaceElement);
+    if (this.widgetTabs && main && this.spaceElement.id === main.fragment.firstElementChild?.id) {
+      if (outgoing && outgoing !== request.tab && this.cache.read(outgoing)) {
+        this.widgetTabs.park(outgoing, this.spaceElement);
+      }
+      if (request.cached) this.widgetRestores.set(main, request.tab);
+      else if (request.tab) this.widgetTabs.discard(request.tab);
+    }
     this.prepareSpaceSwap(ctx, tasks);
   }
 
@@ -322,6 +341,10 @@ export default class extends Controller {
       const viewport = captureGalleryViewport(this.spaceElement);
       this.prepareSpaceSwap(ctx, tasks);
       if (canKeepGalleryViewport(tasks, incoming, viewport)) {
+        if (this.widgetTabs) {
+          this.widgetTabs.park(refresh.path, this.spaceElement);
+          this.widgetRestores.set(main, refresh.path);
+        }
         refresh.viewport = viewport;
         return;
       }
@@ -383,6 +406,7 @@ export default class extends Controller {
   }
 
   disconnect() {
+    this.widgetTabs?.clear();
     this.cancelRefresh();
     this.gallery?.disconnect();
     this.events.disconnect();

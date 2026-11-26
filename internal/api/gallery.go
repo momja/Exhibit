@@ -856,6 +856,8 @@ type widgetView struct {
 	// ReloadURL marks gallery widgets whose live documents are unloaded away
 	// from the viewport. Re-entry mints a fresh render credential here.
 	ReloadURL string
+	// Version identifies the widget source across gallery fragment requests.
+	Version string
 	// Monogram and Hue drive the default tile. Hue is a plain 0–359 number the
 	// stylesheet feeds to hsl(), so the tint stays a presentation decision.
 	Monogram string
@@ -1016,6 +1018,7 @@ func newGalleryWidgetView(a *store.Artifact, urls renderURLs) widgetView {
 	v := newWidgetView(a, urls)
 	if v.URL != "" {
 		v.ReloadURL = "/artifacts/" + a.ID + "/widget/open"
+		v.Version = store.ContentRevision(a.WidgetBlobID)
 	}
 	return v
 }

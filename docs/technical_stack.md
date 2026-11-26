@@ -493,7 +493,9 @@ routes (`architecture.md` §3.5). The gallery's `gallery-widgets.js` module unlo
 widget documents beyond a 400px viewport buffer and remounts their existing
 server-created iframe nodes on return (av-1a9m). Reloads go through an
 owner-scoped app-origin redirect to obtain a fresh render token; initial loads
-keep their direct render URL. The edit and agent previews keep their own
+keep their direct render URL. Recent cached gallery tabs can keep their
+near-viewport frames alive between visits on browsers with `moveBefore`.
+The edit and agent previews keep their own
 lifecycles. Gallery duplication dispatches the scoped,
 bubbling `exhibit:artifacts-changed` event; the gallery controller retains its
 query and resets paging before firing the form's existing htmx search trigger.

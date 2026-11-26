@@ -277,6 +277,68 @@ func TestGallerySpaceNavigationRacesBrowser(t *testing.T) {
 	check(`modifiedRequests === 0 && location.pathname === '/shared'`)
 }
 
+func TestGalleryRetainsWidgetsAcrossTabsBrowser(t *testing.T) {
+	app, in := galleryNavigationApp(t)
+	require.NoError(t, in.ro.cfg.Store.SetArtifactStarred(t.Context(), store.ViewerID(in.ownerTwo), in.granted, true))
+	browser, err := chromium.New(chromiumtest.Start(t))
+	require.NoError(t, err)
+	ctx, cancel, err := browser.Tab(t.Context())
+	require.NoError(t, err)
+	defer cancel()
+	ctx, cancel = context.WithTimeout(ctx, 35*time.Second)
+	defer cancel()
+	_, err = chromedp.Call(ctx, emulation.SetDeviceMetricsOverride, emulation.SetDeviceMetricsOverrideParams{Width: 390, Height: 844, DeviceScaleFactor: 1, Mobile: true})
+	require.NoError(t, err)
+	run := func(js string) {
+		t.Helper()
+		require.NoError(t, chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](js)))
+	}
+	poll := func(js string) {
+		t.Helper()
+		require.NoError(t, chromedp.Do(ctx, chromedp.Poll[chromedp.Void](js, chromedp.WithPollingTimeout(6*time.Second))), js)
+	}
+	require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(app.URL)))
+	poll(`window.clerkCalls?.mount === 1`)
+	run(`
+		window.visit = path => document.querySelector('.gallery-spaces a[href="' + path + '"]').click();
+		window.frame = () => document.querySelector('#gallery-content .card-widget-frame');
+		window.savedWidgets = {};
+	`)
+	for _, path := range []string{"/", "/search", "/shared", "/activity"} {
+		if path != "/" {
+			run(fmt.Sprintf("visit(%q)", path))
+		}
+		poll(fmt.Sprintf("location.pathname === %q && document.querySelector('.gallery-spaces [aria-current]').getAttribute('href') === %q", path, path))
+		if path != "/activity" {
+			poll(`frame()?.contentWindow && performance.getEntriesByName(frame().src).length > 0 && !frame().closest('.widget-failed')`)
+			run(`savedWidgets[location.pathname] = {node: frame(), window: frame().contentWindow}`)
+		}
+	}
+	poll(`Object.keys(savedWidgets).length === 3 && Object.values(savedWidgets).every(saved => saved.node.isConnected && saved.node.closest('[hidden]') && saved.node.contentWindow === saved.window)`)
+	for _, path := range []string{"/search", "/", "/shared"} {
+		run(fmt.Sprintf("visit(%q)", path))
+		poll(fmt.Sprintf("location.pathname === %q && savedWidgets[%q].node.closest('#gallery-content') && savedWidgets[%q].node.contentWindow === savedWidgets[%q].window", path, path, path, path))
+	}
+	run(`
+		window.incomingWidget = () => document.querySelector('[data-href="/artifacts/incoming-tool"] [data-gallery-widget]');
+		window.oldWidget = incomingWidget().querySelector('iframe');
+		visit('/activity');
+	`)
+	poll(`location.pathname === '/activity' && oldWidget.closest('[hidden]')`)
+	newBlob := "new-incoming-widget"
+	require.NoError(t, in.ro.cfg.Blob.Put(t.Context(), newBlob, strings.NewReader("<html><body>New tile</body></html>")))
+	_, err = in.ro.cfg.Store.CommitVersion(t.Context(), in.ownerOne, in.granted, store.VersionChange{WidgetBlobID: &newBlob})
+	require.NoError(t, err)
+	run(`visit('/shared')`)
+	poll(fmt.Sprintf(`location.pathname === '/shared' && incomingWidget()?.dataset.widgetVersion === %q && incomingWidget().querySelectorAll('iframe').length === 1 && !oldWidget.isConnected`, store.ContentRevision(newBlob)))
+	run(`
+		window.agedWidget = incomingWidget().querySelector('iframe');
+		agedWidget.dataset.galleryMountedAt = performance.now() - 61000;
+		visit('/activity');
+	`)
+	poll(`location.pathname === '/activity' && !agedWidget.isConnected`)
+}
+
 func TestGalleryCachedTabScrollBrowser(t *testing.T) {
 	app, in := galleryNavigationApp(t)
 	browser, err := chromium.New(chromiumtest.Start(t))

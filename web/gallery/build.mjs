@@ -27,7 +27,7 @@ const files = [
   "tokens.css", "components.css", "components.js", "api.js", "api-module.js",
   "artifact-opened.js", "artifact-stars-controller.js", "app-header-controller.js", "controllers.js", "copy-field-controller.js", "floating-header-controller.js", "clerk.js", "clerk-controller.js", "clerk-client.js", "clerk-appearance.js", "clerk-menu.js", "account-deletion-controller.js", "action-menu-controller.js", "outside-press.js", "modal-controller.js", "modal.js", "filter-sheet-controller.js", "unsaved-changes-controller.js", "editor-session.js",
   "event-scope.js", "menu-focus.js", "gallery-controller.js", "gallery-space-controller.js", "space-tabs-controller.js",
-  "gallery-space-cache.js", "gallery-viewport.js",
+  "gallery-space-cache.js", "gallery-viewport.js", "gallery-widget-tabs.js",
   "scroll-chrome.js", "scroll-chrome-controller.js",
   "relay-host-controller.js", "relay-request.js", "connections-controller.js", "connections.css",
   "index.css", "index.js", "gallery.js", "gallery-return.js", "gallery-widgets.js", "duplicate.js",

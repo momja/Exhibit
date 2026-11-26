@@ -614,6 +614,11 @@ reattaches it via the owner-scoped `/artifacts/:id/widget/open`, which mints a f
 render token and redirects, so a card scrolled back to after ten minutes still
 loads. Initial loads keep their direct render URL.
 
+On a cached tab revisit, browsers that can move an iframe without restarting
+it reuse the already mounted widget documents for that tab. Retention follows
+the short gallery cache lifetime and only reuses recently mounted frames whose
+widget revision and render policy still match.
+
 **Detail page** (Exh-ghuv): the frame fills the window under a floating,
 draggable control pill. Placement rules are pure geometry in
 `web/gallery/pip-placement.js`; `pip.js` applies them.

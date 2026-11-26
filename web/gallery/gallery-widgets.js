@@ -55,6 +55,7 @@ export function initializeGalleryWidgets(root) {
       well.append(widget.frame);
     }
     well.classList.add('has-frame');
+    widget.frame.dataset.galleryMountedAt = performance.now();
     widget.frame.dispatchEvent(new Event('exhibit:widget-mounted', { bubbles: true }));
   }
 

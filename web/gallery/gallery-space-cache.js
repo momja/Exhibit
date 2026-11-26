@@ -2,6 +2,10 @@
 // the credentials embedded in the server-rendered widget templates.
 export const gallerySnapshotMaxAge = 60_000;
 
+export function widgetSource(value) {
+  return value?.replace(/\?t=o=[\w.=-]+/g, '?t=');
+}
+
 function parseFragment(html) {
   const template = document.createElement('template');
   template.innerHTML = html;
@@ -14,7 +18,7 @@ function comparableRegions(html) {
     const frame = template.content.firstElementChild;
     for (const attr of ['src', 'srcdoc']) {
       const value = frame.getAttribute(attr);
-      if (value) frame.setAttribute(attr, value.replace(/\?t=[\w-]+\.[\w-]+/g, '?t='));
+      if (value) frame.setAttribute(attr, widgetSource(value));
     }
   }
   return [...fragment.children];
@@ -22,6 +26,10 @@ function comparableRegions(html) {
 
 export function gallerySpaceSnapshot(space) {
   const content = space.cloneNode(true);
+  for (const well of content.querySelectorAll('[data-gallery-widget].has-frame')) {
+    well.querySelector('.card-widget-frame')?.remove();
+    well.classList.remove('has-frame', 'widget-failed');
+  }
   const search = document.getElementById('gallery-search-region').cloneNode(true);
   search.setAttribute('hx-swap-oob', 'outerHTML:#gallery-search-region');
   for (const root of [content, search]) {

@@ -31,7 +31,7 @@ async function loadWidgets({ intersection = true } = {}) {
     disconnect() { this.disconnected = true; }
   }
   const page = loadPageScript([], {
-    Event, IntersectionObserver: intersection ? IntersectionObserver : undefined, MutationObserver
+    Event, performance, IntersectionObserver: intersection ? IntersectionObserver : undefined, MutationObserver
   });
   const root = page.byId("gallery");
   root.isConnected = true;
