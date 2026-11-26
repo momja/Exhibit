@@ -1588,8 +1588,11 @@ const aiBridgeScript = `
 //	{__avBar: 'use'}
 //	{__avBar: 'mode', mode: 'overlay'|'band'}
 //
-// Host → frame: {__avBarHeight: n}, which sets --exhibit-bar on the root
-// element for an artifact that opted into overlay mode.
+// Host → frame: {__avBarHeight: n[, ask: true]}, which sets --exhibit-bar on
+// the root element for an artifact that opted into overlay mode. ask is set
+// once, when the host's controls connect, and the frame answers it with its
+// mode: the frame's own announcement may have gone out before the host was
+// listening.
 //
 // None of these messages carries authority. They name no key, no value and no
 // origin, and the host acts on them only by resizing its own bar or the band
@@ -1623,8 +1626,9 @@ const barScript = `
         if (!el || el === document || el === window) el = document.scrollingElement || document.documentElement;
         if (!el || el.scrollHeight - el.clientHeight < 40) return;
         var top = el.scrollTop;
-        if (!lastTop.has(el)) lastTop.set(el, top);
-        var prev = lastTop.get(el);
+        // A scroller not seen before started at the top, so even a single
+        // jump (scrollTo, an anchor link) is a direction.
+        var prev = lastTop.has(el) ? lastTop.get(el) : 0;
         var dir = '';
         if (top <= 4) dir = 'top';
         else if (top + el.clientHeight >= el.scrollHeight - 4) dir = 'end';
@@ -1682,6 +1686,10 @@ const barScript = `
         var n = d.__avBarHeight;
         if (typeof n !== 'number' || !isFinite(n) || n < 0 || n > 400) return;
         document.documentElement.style.setProperty('--exhibit-bar', n + 'px');
+        // The host asks once, when its controls connect, in case this
+        // document announced its mode before anyone was listening. Answered
+        // only once parsed; a document still loading announces on its own.
+        if (d.ask === true && document.readyState !== 'loading') announceMode();
       });
     })();
   }

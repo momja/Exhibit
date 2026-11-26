@@ -1109,8 +1109,8 @@ func TestBarScriptReportsScrollDirectionAndUse(t *testing.T) {
 	got := barHarness(t, `
 run();
 var doc = document.scrollingElement;
-scrollTo(doc, 100);   // first sighting: no previous position, nothing moved
-scrollTo(doc, 200);   // down
+scrollTo(doc, 100);   // first sighting: counted from the top, so a single jump is down
+scrollTo(doc, 200);   // still down: not re-sent
 scrollTo(doc, 300);   // still down: not re-sent
 scrollTo(doc, 301);   // under 3px: nothing
 scrollTo(doc, 250);   // up
@@ -1225,6 +1225,29 @@ console.log(JSON.stringify(results));
 		if got[label] != want {
 			t.Errorf("%s: --exhibit-bar %q, want %q", label, got[label], want)
 		}
+	}
+}
+
+// The host asks for the mode once when its controls connect, because the
+// frame's own announcement may have gone out before anyone listened. Only a
+// valid message from the host is answered, and only with ask set.
+func TestBarScriptAnswersTheHostsAskWithItsMode(t *testing.T) {
+	got := barHarness(t, `
+run();
+var before = sent().length;
+fire('message', { origin: API_ORIGIN, source: parentWin, data: { __avBarHeight: 0 } });
+var plain = sent().length - before;
+fire('message', { origin: 'https://evil.test', source: parentWin, data: { __avBarHeight: 0, ask: true } });
+fire('message', { origin: API_ORIGIN, source: parentWin, data: { __avBarHeight: 'x', ask: true } });
+var refused = sent().length - before - plain;
+fire('message', { origin: API_ORIGIN, source: parentWin, data: { __avBarHeight: 0, ask: true } });
+console.log(JSON.stringify({ plain: plain, refused: refused, last: sent()[sent().length - 1], total: sent().length - before }));
+`)
+	if got["plain"] != float64(0) || got["refused"] != float64(0) || got["total"] != float64(1) {
+		t.Fatalf("only a valid ask is answered, once: %v", got)
+	}
+	if last, _ := got["last"].(map[string]any); last["__avBar"] != "mode" || last["mode"] != "band" {
+		t.Errorf("answer = %v, want the mode", got["last"])
 	}
 }
 
