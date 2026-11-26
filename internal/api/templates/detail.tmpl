@@ -21,7 +21,7 @@
      and it should not carry the library that refreshes them. */}}
 {{if or .Share .RelayEnabled}}<script src="{{asset "htmx/htmx.min.js"}}"></script>{{end}}
 </head>
-<body{{if .RelayEnabled}} data-controller="relay-host" data-relay-host-artifact-id-value="{{.ID}}" data-relay-host-frame-selector-value=".panels > iframe" data-relay-host-policy-value="{{.RelayPolicy}}"{{end}}>
+<body class="pip-inset"{{if .RelayEnabled}} data-controller="relay-host" data-relay-host-artifact-id-value="{{.ID}}" data-relay-host-frame-selector-value=".panels > iframe" data-relay-host-policy-value="{{.RelayPolicy}}"{{end}}>
 {{template "appHeader" .Header}}
 <div class="panels">
   {{/* No allow="clipboard-*" delegation: the frame's opaque origin matches no
@@ -33,8 +33,8 @@
 </div>
 {{/* The page's notices: the three banners below and the status line. They are
      messages to read and often act on, so they stay until dealt with rather
-     than timing out, and they float over the artifact on the side of the
-     window away from the pill (pip.js sets data-pip-corner on <body>). */}}
+     than timing out, and they float over the top of the artifact, away from
+     the artifact bar at the bottom. */}}
 <div class="pip-notices">
 {{template "inferenceBanner"}}
 {{/* Unsupported-capability warning (av-yvtb): hidden until the render shim
