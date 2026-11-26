@@ -1,6 +1,6 @@
 ---
 id: Exh-1zg6
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-26T18:47:46Z
@@ -21,3 +21,9 @@ The Playwright journey e2e/specs/ui-appearance.spec.ts › 'phone share controls
 - make e2e passes locally against a fresh build of the branch.
 - No application code changes unless the run shows a real layout regression, in which case scope is re-confirmed before proceeding.
 
+
+## Notes
+
+**2026-11-26T18:52:28Z**
+
+Fixed in the spec only. The copy action is #share-link-url-copy (copyField names its button {{.ID}}-copy). Measured at 320/390px in light and dark: link field 46px tall, copy action 44x44 inset 1px inside it, as #287 (Exh-qq4y) designed. So 'equal control heights' was also stale; the journey now asserts the action sits inside the field and is a 44px touch target. No application change. make e2e on this branch: 28 passed, 1 failed. The failure, 'source syntax stays differentiated and readable', is pre-existing on origin/main (fails identically with this change stashed): light-mode syntax text over --color-code-selection #dcd5c1 (set by #308, beca1645) measures about 4.0-4.3:1, below 4.5:1. Out of scope here; reported separately.
