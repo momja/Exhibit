@@ -1096,6 +1096,19 @@ are four families:
   the decision can be spent. Worth its own name precisely because it is the one
   member of the family that must not be read as re-granting anything: the
   decision it records is enforced elsewhere (a response header), not here.
+- **Presentation channel** — tells the host page how the artifact is being
+  used, so the host can lay out its own chrome. The artifact bar's script
+  (Exh-i8q4, `artifact-bar.md` §4) is the one member: it posts which way the
+  frame scrolls, that it was used, and whether the document opted in to an
+  overlaid bar, and it receives the bar's height as a number it writes into
+  `--exhibit-bar`. It carries no authority by construction. The host acts on
+  these messages only to resize Exhibit's own bar and the band below the
+  frame, so the worst a forged message does is the artifact affecting its own
+  presentation. The band is host-owned space outside the frame: the artifact
+  cannot draw into it, and opting in to the overlay only gives the frame the
+  whole window, the same rectangle the pre-bar pill was drawn over. The
+  inbound height is accepted only from `window.parent` with origin
+  `APP_ORIGIN`, and only as a finite number in [0, 400].
 - **Polyfill** — reconstructs an API *absent* in this environment (e.g. File
   System Access pickers, deferred as av-70t9) atop available primitives.
 - **Compatibility shim** — re-implements an operation the browser nominally

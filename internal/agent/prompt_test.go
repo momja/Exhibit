@@ -266,6 +266,17 @@ func TestSystemPromptAsksForLightAndDark(t *testing.T) {
 	assert.NotContains(t, prompt, "paint your own background", "a widget that paints its own surface does not follow the card")
 }
 
+// The artifact bar's overlay opt-in (Exh-i8q4) uses the names the render
+// preamble reads and sets; render_test.go asserts the same strings there.
+func TestSystemPromptTeachesTheBarOptIn(t *testing.T) {
+	for _, opts := range []CreateOpts{{}, {ArtifactID: "a"}} {
+		prompt := buildSystemPrompt("", nil, opts)
+		assert.Contains(t, prompt, "exhibit-bar")
+		assert.Contains(t, prompt, `<meta name="exhibit-bar" content="overlay">`)
+		assert.Contains(t, prompt, "var(--exhibit-bar, 0px)")
+	}
+}
+
 // The prompt teaches only the window.exhibit.ai kinds the instance offers,
 // and nothing about AI when it offers none, so the agent never writes calls
 // that cannot work (Exh-15tf). The byte-for-byte texts are the goldens.

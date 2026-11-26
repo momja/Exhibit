@@ -176,7 +176,9 @@ Renderer construction:
   redirects the page's own `fetch` of a vendored payload to that artifact's asset
   route, and (framed only) the capability bridges plus the **network permission
   reporter**, a `securitypolicyviolation` listener that hands CSP-blocked origins
-  to the host frame to prompt about — into `<head>` *before* any artifact script
+  to the host frame to prompt about, and the **bar script** that reports scrolling
+  and the `exhibit-bar` opt-in to the artifact bar and receives its height as
+  `--exhibit-bar` (`artifact-bar.md`) — into `<head>` *before* any artifact script
   runs.
   Serve the document `Cache-Control:
   no-store` — it's dynamic (inlined state + per-artifact CSP) and must not be cached.
@@ -623,7 +625,7 @@ family, weight 600 and `font-synthesis:none`. `--font-sans` falls back to
 `.font-headline` element, on its natural top heading and never on a decorative
 one: the gallery tabs' `h1.gallery-heading` (inside `#gallery-content`, so a
 space switch swaps it), the edit title, the Settings, admin and Add-to-Gallery
-lede headings, the 404 headline and the detail pill's `pip-info-title`. A page
+lede headings, the 404 headline and the artifact bar's `pip-info-title`. A page
 rule must not set `font-weight` or `font-variation-settings` on it. Gallery
 cards have no outline: the tile is full-bleed inside `--radius-lg` with only
 `--shadow-card` (a hairline ring and a soft lift, both modes) around it, and

@@ -77,12 +77,14 @@ hidden until their controller reveals them.
 The artifact viewer uses the `Floating` variant, populated by
 `artifactHeader`. Its `floatingHeaderView` carries the title, created date,
 posture, and which owner actions are available. `floatingAppHeader` owns the
-pill, both popups, restore tab, and accessibility announcements; its styles
-live in `components.css`. The `floating-header` Stimulus controller connects
-`connectFloatingHeader` from `pip.js` and releases all listeners, observers,
-timers, and animation frames on disconnect. Dragging, docking, hiding,
-restoring, remembered placement, popup dismissal, and keyboard behavior are
-preserved. The artifact still fills the viewport beneath these controls.
+artifact bar and both popups; its styles live in `components.css`. The
+`floating-header` Stimulus controller connects `connectFloatingHeader` from
+`pip.js` and releases all listeners, the observer, timers, animation frames,
+the compact state and the band on disconnect. The bar is pinned to the bottom
+centre and shrinks to a title strip; it is not dragged, docked or hidden, and
+no placement is remembered. Popup dismissal and keyboard behavior are
+preserved. The artifact fills the viewport above the bar's band, or beneath
+the bar when it opts in to the overlay ([artifact-bar.md](artifact-bar.md)).
 
 Standard headers need no new browser controller. Features compose their
 existing controllers and native events. A template audit guards every full

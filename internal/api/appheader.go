@@ -104,7 +104,7 @@ func paintedAuthHeader(title string) appHeaderView {
 	return appHeaderView{Title: title, HideTitle: true, Logo: template.HTML(exhibitLogoSVG + `<span class="login-wordmark" aria-hidden="true">Exhibit</span>`)}
 }
 
-// The viewer keeps its draggable controls as a header variant. Its facts and
+// The viewer keeps its artifact bar (Exh-i8q4) as a header variant. Its facts and
 // permissions are composed by the page, while the library owns the markup,
 // styling and controller lifecycle for the entire floating header.
 type floatingHeaderView struct {

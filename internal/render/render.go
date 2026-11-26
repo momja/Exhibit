@@ -1575,6 +1575,126 @@ const aiBridgeScript = `
   }
 `
 
+// barScript is the frame's half of the artifact bar (Exh-i8q4,
+// docs/artifact-bar.md §4). The host's controls sit in a bar along the bottom
+// of the detail page and shrink while the artifact is being used, the way a
+// mobile browser's toolbar does. The host cannot see scrolling, presses or the
+// document's markup inside the sandboxed, opaque-origin frame, so this script
+// tells it, and the host tells the frame how tall the bar is in return.
+//
+// Frame → host, posted to API_ORIGIN like every other preamble message:
+//
+//	{__avBar: 'scroll', dir: 'down'|'up'|'top'|'end'}
+//	{__avBar: 'use'}
+//	{__avBar: 'mode', mode: 'overlay'|'band'}
+//
+// Host → frame: {__avBarHeight: n[, ask: true]}, which sets --exhibit-bar on
+// the root element for an artifact that opted into overlay mode. ask is set
+// once, when the host's controls connect, and the frame answers it with its
+// mode: the frame's own announcement may have gone out before the host was
+// listening.
+//
+// None of these messages carries authority. They name no key, no value and no
+// origin, and the host acts on them only by resizing its own bar or the band
+// it reserves below the frame. An artifact that forges one can therefore only
+// change its own presentation, which it could do with its own CSS anyway;
+// a foreign page that forges __avBarHeight is refused by the origin and source
+// check below. That is why the script carries no flag and no channel.
+//
+// Spliced in for framed, host-present, non-widget renders: not for widgets
+// (a tile has no bar), not for /s/:id share documents (whatever frames them
+// is not Exhibit's detail page) and not for the attributed no-host share.
+// Version views and the agent preview do receive it; their hosts do not
+// listen, so it is inert there.
+const barScript = `
+  // ---- Artifact bar (Exh-i8q4) ----
+  if (window.parent !== window) {
+    (function() {
+      var barPost = function(msg) {
+        msg.artifactId = ARTIFACT_ID;
+        window.parent.postMessage(msg, API_ORIGIN);
+      };
+
+      // Scroll direction. Captured on window so an inner scroller (a panel
+      // with overflow:auto) counts as well as the document. Positions are
+      // tracked per element, and a direction is sent only when it differs from
+      // the last one sent, so a long scroll is one message, not hundreds.
+      var lastTop = new WeakMap();
+      var lastDir = '';
+      window.addEventListener('scroll', function(e) {
+        var el = e.target;
+        if (!el || el === document || el === window) el = document.scrollingElement || document.documentElement;
+        if (!el || el.scrollHeight - el.clientHeight < 40) return;
+        var top = el.scrollTop;
+        // A scroller not seen before started at the top, so even a single
+        // jump (scrollTo, an anchor link) is a direction.
+        var prev = lastTop.has(el) ? lastTop.get(el) : 0;
+        var dir = '';
+        if (top <= 4) dir = 'top';
+        else if (top + el.clientHeight >= el.scrollHeight - 4) dir = 'end';
+        else if (top - prev >= 3) dir = 'down';
+        else if (prev - top >= 3) dir = 'up';
+        // A movement under 3px leaves the recorded position alone, so a slow
+        // scroll still adds up to a direction.
+        if (!dir) return;
+        lastTop.set(el, top);
+        if (dir === lastDir) return;
+        lastDir = dir;
+        barPost({ __avBar: 'scroll', dir: dir });
+      }, { capture: true, passive: true });
+
+      // Using the artifact (a press or a key) also tucks the bar away, so a
+      // tool that never scrolls is not left with full controls over it.
+      // Forgetting the last direction means the next scroll up is reported
+      // even if the last one sent was also 'up'.
+      var lastUse = 0;
+      var barUsed = function() {
+        var now = Date.now();
+        if (now - lastUse < 300) return;
+        lastUse = now;
+        lastDir = '';
+        barPost({ __avBar: 'use' });
+      };
+      window.addEventListener('pointerdown', barUsed, { capture: true, passive: true });
+      window.addEventListener('keydown', barUsed, { capture: true, passive: true });
+
+      // Mode. <meta name="exhibit-bar" content="overlay"> lets the bar float
+      // over the page; anything else, including no meta at all, keeps the
+      // default band, where the page ends above the bar. Only an exact match
+      // opts in: a misspelling must leave the artifact uncovered.
+      var announceMode = function() {
+        var meta = document.querySelector('meta[name="exhibit-bar"]');
+        var content = meta ? String(meta.getAttribute('content') || '').trim() : '';
+        var mode = content === 'overlay' ? 'overlay' : 'band';
+        if (mode === 'overlay') {
+          // A control focused by keyboard is scrolled clear of the bar
+          // (WCAG 2.4.11), with no cooperation from the artifact.
+          document.documentElement.style.setProperty('scroll-padding-bottom', 'var(--exhibit-bar, 0px)');
+        }
+        barPost({ __avBar: 'mode', mode: mode });
+      };
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', announceMode);
+      else announceMode();
+
+      // The bar's height, from the host. Only the embedding Exhibit page may
+      // set it, and only to a plain number in a sane range: a string, NaN or
+      // an absurd height is ignored rather than coerced.
+      window.addEventListener('message', function(e) {
+        if (e.origin !== API_ORIGIN || e.source !== window.parent) return;
+        var d = e.data;
+        if (!d || typeof d !== 'object' || !('__avBarHeight' in d)) return;
+        var n = d.__avBarHeight;
+        if (typeof n !== 'number' || !isFinite(n) || n < 0 || n > 400) return;
+        document.documentElement.style.setProperty('--exhibit-bar', n + 'px');
+        // The host asks once, when its controls connect, in case this
+        // document announced its mode before anyone was listening. Answered
+        // only once parsed; a document still loading announces on its own.
+        if (d.ask === true && document.readyState !== 'loading') announceMode();
+      });
+    })();
+  }
+`
+
 // frameLocalScript needs no host; attributed shares retain only these local shims.
 const frameLocalScript = `
   if (window.parent !== window) {
@@ -2620,6 +2740,12 @@ func injectPreambleWithHostMode(body, artifactID, appOrigin string, state map[st
 	if !noHost && !publicShare && !widget && !anonymous {
 		channel, _ := json.Marshal(artifactChannel)
 		bridges += strings.Replace(aiBridgeScript, "%ARTIFACT_CHANNEL%", string(channel), 1)
+	}
+	// The artifact bar's half of the protocol (Exh-i8q4): only where Exhibit's
+	// own page frames the render. A share document is framed, if at all, by
+	// whoever embeds the link, and has no bar to report to.
+	if !noHost && !publicShare && !widget {
+		bridges += barScript
 	}
 	if noHost {
 		bridges = frameLocalScript + "\n  }\n"
