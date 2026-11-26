@@ -1,6 +1,10 @@
 package agentguidance
 
-import "testing"
+import (
+	"strings"
+	"testing"
+	"text/template"
+)
 
 type kind string
 
@@ -35,5 +39,30 @@ func TestKindNamesConvertsTypedKinds(t *testing.T) {
 	}
 	if KindNames([]kind(nil)) != nil {
 		t.Fatal("empty input must give nil")
+	}
+}
+
+// barOptInNames are the names the artifact bar's render preamble reads and
+// sets (internal/render barScript, Exh-i8q4). The guidance teaches the same
+// strings, and render_test.go asserts them in the served preamble, so prompt
+// and implementation cannot drift apart. The Pi prompt and the MCP
+// instructions pin them in their own renderings (internal/agent,
+// internal/mcpserver).
+var barOptInNames = []string{
+	"exhibit-bar",
+	`<meta name="exhibit-bar" content="overlay">`,
+	"var(--exhibit-bar, 0px)",
+}
+
+func TestArtifactFormatTeachesTheBarOptIn(t *testing.T) {
+	tmpl := template.Must(template.ParseFS(FS, "artifact_format.tmpl"))
+	var out strings.Builder
+	if err := tmpl.Execute(&out, nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range barOptInNames {
+		if !strings.Contains(out.String(), name) {
+			t.Errorf("artifact_format.tmpl is missing %q", name)
+		}
 	}
 }

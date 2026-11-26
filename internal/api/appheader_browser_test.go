@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/chromedp/cdproto/emulation"
+	"github.com/chromedp/cdproto/input"
 	"github.com/chromedp/chromedp"
 	"github.com/chromedp/chromedp/kb"
 	"github.com/momja/Exhibit/internal/chromium"
@@ -231,9 +232,39 @@ func TestAuthAppHeaderBrowser(t *testing.T) {
 	}
 }
 
+// barTestArtifact is a tall page that scrolls itself, focuses, and reports
+// what it sees, all on the test's request through postMessage: the render
+// frame is cross-origin, so the host page cannot reach into it.
+const barTestArtifact = `<!doctype html>%s
+<style>body{margin:0}.row{height:60px;border-bottom:1px solid #ccc}</style>
+<input id="top" aria-label="top"><div id="rows"></div><button id="last">Last</button><div id="after"></div>
+<script>
+for (let i = 0; i < 60; i++) { const d = document.createElement('div'); d.className = 'row'; document.getElementById(i < 30 ? 'rows' : 'after').append(d); }
+function report(extra) {
+  const root = document.documentElement;
+  parent.postMessage({ barReport: Object.assign({
+    bar: getComputedStyle(root).getPropertyValue('--exhibit-bar').trim(),
+    padding: root.style.scrollPaddingBottom, height: innerHeight }, extra) }, '*');
+}
+addEventListener('message', e => {
+  const d = e.data || {};
+  if (d.cmd === 'scroll') scrollTo(0, d.y);
+  if (d.cmd === 'focusTop') document.getElementById('top').focus();
+  if (d.cmd === 'report') report({});
+});
+document.getElementById('last').addEventListener('focus', function () {
+  requestAnimationFrame(() => report({ lastBottom: this.getBoundingClientRect().bottom }));
+});
+</script>`
+
+// Exh-i8q4 (docs/artifact-bar.md §7): the artifact bar at the bottom centre,
+// a real scroll in a real render frame compacting it, the band resizing the
+// frame, the overlay variable reaching the frame, and the accessibility
+// requirements of §6 that need a browser to show.
 func TestFloatingAppHeaderBrowser(t *testing.T) {
 	ro := newTestRouter(t)
-	id := createArtifact(t, ro, map[string]any{"title": "Floating header", "body": "<!doctype html><h1>Tool</h1>"})
+	bandID := createArtifact(t, ro, map[string]any{"title": "Floating header", "body": fmt.Sprintf(barTestArtifact, "")})
+	overlayID := createArtifact(t, ro, map[string]any{"title": "Edge to edge", "body": fmt.Sprintf(barTestArtifact, `<meta name="exhibit-bar" content="overlay">`)})
 	app := httptest.NewServer(ro)
 	defer app.Close()
 	ro.cfg.AppOrigin = app.URL
@@ -245,41 +276,136 @@ func TestFloatingAppHeaderBrowser(t *testing.T) {
 	ctx, cancel, err := browser.Tab(context.Background())
 	require.NoError(t, err)
 	defer cancel()
-	ctx, cancel = context.WithTimeout(ctx, 45*time.Second)
+	ctx, cancel = context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 	run := func(actions ...chromedp.Action[chromedp.Void]) {
 		t.Helper()
 		require.NoError(t, chromedp.Do(ctx, actions...))
 	}
-	wait := func(expression string) { t.Helper(); run(chromedp.Poll[chromedp.Void](expression)) }
-	run(chromedp.Navigate(app.URL))
-	for _, width := range []int64{1280, 390} {
-		_, err := chromedp.Call(ctx, emulation.SetDeviceMetricsOverride, emulation.SetDeviceMetricsOverrideParams{Width: width, Height: 900, DeviceScaleFactor: 1})
-		require.NoError(t, err)
-		run(chromedp.Evaluate[chromedp.Void](`localStorage.removeItem('exhibit.pipControls')`), chromedp.Navigate(app.URL+"/artifacts/"+id), chromedp.Evaluate[chromedp.Void](fmt.Sprintf(`import(%q).then(({application}) => window.headerApplication = application)`, assetURL("gallery/controllers.js"))))
-		wait(`window.headerApplication?.getControllerForElementAndIdentifier(document.querySelector('[data-app-header]'), 'floating-header') != null`)
-		run(chromedp.Click(chromedp.CSS(`#pip-more`)))
-		wait(`!document.getElementById('pip-menu').hidden`)
-		run(chromedp.KeyEvent(kb.Escape))
-		wait(`document.getElementById('pip-menu').hidden && document.activeElement.id === 'pip-more'`)
-		run(chromedp.Click(chromedp.CSS(`#pip-title`)))
-		wait(`!document.getElementById('pip-info').hidden && document.activeElement.id === 'pip-info'`)
-		run(chromedp.KeyEvent(kb.Escape), chromedp.Focus(chromedp.CSS(`#pip-grip`)), chromedp.KeyEvent(kb.ArrowRight))
-		wait(`document.body.dataset.pipCorner === 'br'`)
-		run(chromedp.KeyEvent(kb.ArrowRight))
-		wait(`!document.getElementById('pip-tab').hidden && document.activeElement.id === 'pip-tab'`)
-		run(chromedp.KeyEvent(kb.Enter))
-		wait(`!document.getElementById('pip').hidden && document.activeElement.id === 'pip-grip'`)
-		run(chromedp.Evaluate[chromedp.Void](`window.savedHeader = document.querySelector('[data-app-header]'); window.savedHeader.remove()`))
-		wait(`window.headerApplication.getControllerForElementAndIdentifier(window.savedHeader, 'floating-header') == null`)
-		run(chromedp.Evaluate[chromedp.Void](`window.savedHeader.querySelector('#pip-more').click()`))
-		closed, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`window.savedHeader.querySelector('#pip-menu').hidden`))
-		require.NoError(t, err)
-		require.True(t, closed, "disconnected controls release their listeners")
-		run(chromedp.Evaluate[chromedp.Void](`document.body.append(window.savedHeader)`))
-		wait(`window.headerApplication.getControllerForElementAndIdentifier(window.savedHeader, 'floating-header') != null`)
-		run(chromedp.Click(chromedp.CSS(`#pip-more`)))
-		wait(`!document.getElementById('pip-menu').hidden`)
+	wait := func(expression, message string) {
+		t.Helper()
+		pollCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		require.NoError(t, chromedp.Do(pollCtx, chromedp.Poll[chromedp.Void](expression)), message)
+	}
+	eval := func(expression string) { t.Helper(); run(chromedp.Evaluate[chromedp.Void](expression)) }
+	open := func(id string) {
+		t.Helper()
+		run(chromedp.Navigate(app.URL+"/artifacts/"+id), chromedp.Evaluate[chromedp.Void](fmt.Sprintf(`import(%q).then(({application}) => window.headerApplication = application)`, assetURL("gallery/controllers.js"))))
+		wait(`window.headerApplication?.getControllerForElementAndIdentifier(document.querySelector('[data-app-header]'), 'floating-header') != null`, "the controller connects")
+		eval(`window.barReports = []; addEventListener('message', e => e.data && e.data.barReport && barReports.push(e.data.barReport))`)
+		// The frame is lazy and its preamble announces the mode once parsed.
+		wait(`document.querySelector('.panels > iframe').contentWindow && (postToFrame = m => document.querySelector('.panels > iframe').contentWindow.postMessage(m, '*'), postToFrame({cmd: 'report'}), barReports.length > 0)`, "the artifact frame is running")
+	}
+	const (
+		// The bar's gap to the window bottom is 12px full and 4px compact, the
+		// band is that gap on either side of the bar, and the frame ends where
+		// the band begins: so the bar never covers the artifact.
+		geometry = `(compact => { const bar = document.getElementById('pip').getBoundingClientRect();
+			const frame = document.querySelector('.panels > iframe').getBoundingClientRect(); const gap = compact ? 4 : 12;
+			return document.getElementById('pip').classList.contains('pip-compact') === compact &&
+				Math.abs(bar.left + bar.width / 2 - innerWidth / 2) < 1 && Math.abs(innerHeight - bar.bottom - gap) < 1 &&
+				(!document.body.classList.contains('pip-inset') || Math.abs(frame.bottom - (bar.top - gap)) < 1); })`
+		compactNow = `document.getElementById('pip').classList.contains('pip-compact')`
+	)
+
+	for _, size := range []struct{ width, height int64 }{{1280, 800}, {390, 844}} {
+		{
+			_, err := chromedp.Call(ctx, emulation.SetDeviceMetricsOverride, emulation.SetDeviceMetricsOverrideParams{Width: size.width, Height: size.height, DeviceScaleFactor: 1})
+			require.NoError(t, err)
+			run(chromedp.Navigate(app.URL), chromedp.Evaluate[chromedp.Void](`localStorage.setItem('exhibit.pipControls', '{"mode":"corner","corner":"tr"}')`))
+			open(bandID)
+			wait(`localStorage.getItem('exhibit.pipControls') === null`, "the pill's saved placement is cleared")
+			wait(geometry+`(false)`, "the full bar sits at the bottom centre above a band the frame ends at")
+			if size.width < 768 {
+				wait(`(() => { const bar = document.getElementById('pip').getBoundingClientRect(); return Math.abs(bar.left - 12) < 1 && Math.abs(innerWidth - bar.right - 12) < 1; })()`, "a phone's bar spans the width")
+			}
+
+			// Popups keep their keyboard behaviour.
+			run(chromedp.Click(chromedp.CSS(`#pip-more`)))
+			wait(`!document.getElementById('pip-menu').hidden && document.getElementById('pip-menu').getBoundingClientRect().bottom <= document.getElementById('pip').getBoundingClientRect().top`, "the menu opens upward")
+			run(chromedp.KeyEvent(kb.Escape))
+			wait(`document.getElementById('pip-menu').hidden && document.activeElement.id === 'pip-more'`, "Escape returns focus")
+			run(chromedp.Click(chromedp.CSS(`#pip-title`)))
+			wait(`!document.getElementById('pip-info').hidden && document.activeElement.id === 'pip-info'`, "the title opens the card")
+			run(chromedp.KeyEvent(kb.Escape))
+			eval(`document.activeElement.blur()`)
+
+			// A real scroll in the render frame compacts the bar, and the band follows it.
+			eval(`postToFrame({cmd: 'scroll', y: 600})`)
+			wait(geometry+`(true)`, "scrolling down compacts the bar and the band shrinks with it")
+			eval(`postToFrame({cmd: 'scroll', y: 300})`)
+			wait(geometry+`(false)`, "scrolling up brings the full bar back")
+			eval(`postToFrame({cmd: 'scroll', y: 600})`)
+			wait(compactNow, "compact again")
+
+			// §6.1: a click with no pointer press behind it (assistive
+			// technology) expands the bar and also opens the card.
+			eval(`document.getElementById('pip-title').click()`)
+			wait(`!`+compactNow+` && !document.getElementById('pip-info').hidden`, "a focus-less click on the compact title opens the card")
+			run(chromedp.KeyEvent(kb.Escape))
+			eval(`document.activeElement.blur()`)
+
+			// §6.1: a touch tap on the strip only expands it.
+			eval(`postToFrame({cmd: 'scroll', y: 300}); setTimeout(() => postToFrame({cmd: 'scroll', y: 900}), 150)`)
+			wait(geometry+`(true)`, "compact again")
+			var strip struct{ X, Y float64 }
+			strip, err = chromedp.Run(ctx, chromedp.Evaluate[struct{ X, Y float64 }](`(() => { const r = document.getElementById('pip').getBoundingClientRect(); return {X: r.left + r.width / 2, Y: r.top + r.height / 2}; })()`))
+			require.NoError(t, err)
+			_, err = chromedp.Call(ctx, emulation.SetTouchEmulationEnabled, emulation.SetTouchEmulationEnabledParams{Enabled: true, MaxTouchPoints: 1})
+			require.NoError(t, err)
+			_, err = chromedp.Call(ctx, input.SynthesizeTapGesture, input.SynthesizeTapGestureParams{X: strip.X, Y: strip.Y, GestureSourceType: input.GestureSourceTypeTouch})
+			require.NoError(t, err)
+			_, err = chromedp.Call(ctx, emulation.SetTouchEmulationEnabled, emulation.SetTouchEmulationEnabledParams{Enabled: false})
+			require.NoError(t, err)
+
+			wait(`!`+compactNow, "a tap expands the strip")
+			ok, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`new Promise(r => setTimeout(() => r(document.getElementById('pip-info').hidden), 200))`, chromedp.EvalAwaitPromise))
+			require.NoError(t, err)
+			require.True(t, ok, "and does not also open the info card under the finger")
+
+			// §6.1: Tab into the compact bar expands it.
+			eval(`postToFrame({cmd: 'scroll', y: 300}); setTimeout(() => postToFrame({cmd: 'scroll', y: 1200}), 150)`)
+			wait(compactNow, "compact again")
+			eval(`document.activeElement.blur(); document.body.focus()`)
+			run(chromedp.KeyEvent(kb.Tab))
+			wait(`document.getElementById('pip').contains(document.activeElement) && !`+compactNow, "a keyboard user never meets a control they cannot see")
+			eval(`document.activeElement.blur()`)
+
+			// §6.4: with a 200% root font size the bar grows and the band follows it.
+			eval(`document.documentElement.style.fontSize = '200%'`)
+			wait(geometry+`(false) && document.getElementById('pip').getBoundingClientRect().height > 80`, "larger text grows the full bar and its band")
+			eval(`postToFrame({cmd: 'scroll', y: 300}); setTimeout(() => postToFrame({cmd: 'scroll', y: 1500}), 150)`)
+			wait(geometry+`(true) && Math.abs(document.getElementById('pip').getBoundingClientRect().height - 60) < 1`, "and the compact one")
+			eval(`document.documentElement.style.fontSize = ''`)
+
+			// Disconnecting releases the controller; reconnecting restores it.
+			eval(`window.savedHeader = document.querySelector('[data-app-header]'); window.savedHeader.remove()`)
+			wait(`window.headerApplication.getControllerForElementAndIdentifier(window.savedHeader, 'floating-header') == null`, "disconnects")
+			wait(`!document.body.classList.contains('pip-inset')`, "the disposer removes the band")
+			eval(`window.savedHeader.querySelector('#pip-more').click()`)
+			closed, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`window.savedHeader.querySelector('#pip-menu').hidden`))
+			require.NoError(t, err)
+			require.True(t, closed, "disconnected controls release their listeners")
+			eval(`document.body.append(window.savedHeader)`)
+			wait(`window.headerApplication.getControllerForElementAndIdentifier(window.savedHeader, 'floating-header') != null`, "reconnects")
+			run(chromedp.Click(chromedp.CSS(`#pip-more`)))
+			wait(`!document.getElementById('pip-menu').hidden`, "and works")
+
+			// The overlay opt-in: a full-height frame told the bar's height.
+			open(overlayID)
+			wait(`!document.body.classList.contains('pip-inset') && Math.abs(document.querySelector('.panels > iframe').getBoundingClientRect().bottom - innerHeight) < 1`, "an opted-in artifact gets the whole window")
+			wait(`(postToFrame({cmd: 'report'}), barReports.at(-1).bar === (innerHeight - document.getElementById('pip').getBoundingClientRect().top + 12) + 'px')`, "--exhibit-bar reaches the frame as the bar's height")
+			wait(`barReports.at(-1).padding === 'var(--exhibit-bar, 0px)'`, "the root's scroll padding keeps focused controls clear of the bar")
+			eval(`postToFrame({cmd: 'scroll', y: 600})`)
+			wait(compactNow+` && (postToFrame({cmd: 'report'}), barReports.at(-1).bar === '38px')`, "and follows the compact bar")
+
+			// §6.2: a control focused by keyboard at the bottom is scrolled clear of the bar.
+			eval(`document.querySelector('.panels > iframe').focus(); postToFrame({cmd: 'scroll', y: 0}); postToFrame({cmd: 'focusTop'})`)
+			wait(`document.activeElement === document.querySelector('.panels > iframe')`, "focus is in the artifact")
+			run(chromedp.KeyEvent(kb.Tab))
+			wait(`(r => r && r.lastBottom !== undefined && r.lastBottom <= r.height - parseFloat(r.bar) + 1)(barReports.at(-1))`, "the focused button clears the bar")
+		}
 	}
 }
 

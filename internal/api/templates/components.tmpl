@@ -45,13 +45,15 @@
 
 {{define "appHeaderActionContent"}}{{if .Icon}}<i class="ph {{.Icon}}" aria-hidden="true"></i>{{end}}{{if not .IconOnly}}<span class="header-link-label"{{if .LabelID}} id="{{.LabelID}}"{{end}}>{{.Label}}</span>{{end}}{{end}}
 
-{{/* Data: floatingHeaderView. This is the viewer's shared header variant;
-     its popups and restore tab stay outside the transformed pill. */}}
+{{/* Data: floatingHeaderView. This is the viewer's shared header variant: the
+     artifact bar pinned to the bottom of the window (Exh-i8q4,
+     docs/artifact-bar.md). Its popups stay outside the bar. The bar is a
+     labelled group, not a toolbar: a toolbar promises one Tab stop with arrow
+     keys between its controls, and these are ordinary Tab stops. */}}
 {{define "floatingAppHeader"}}<header class="app-header-floating" data-app-header data-controller="floating-header">
-<div class="pip" id="pip" role="toolbar" aria-label="Artifact controls">
+<div class="pip" id="pip" role="group" aria-label="Artifact controls">
   <a class="pip-btn" href="/" aria-label="Starred" title="Starred"><i class="ph ph-star" aria-hidden="true"></i></a>
   <span class="pip-sep"></span>
-  <button type="button" class="pip-grip" id="pip-grip" title="Drag to move" aria-label="Move controls by dragging or using the arrow keys. Move past either side to hide them."></button>
   {{/* The posture button opens the info card and summarizes the cluster (Exh-ghuv). The mark is an htmx
        target (av-mf1x): after a runtime origin approval the prompt fires
        exhibit:capabilities-changed on <body>, and the mark and the receipt in
@@ -83,9 +85,9 @@
      receipt's Manage link follows ShowManage, which is the same ReadOnly
      narrowing as everything else on this page.
 
-     Outside the pill rather than inside it: the pill is transformed and
+     Outside the bar rather than inside it: the bar is transformed and
      blurred, and either makes it the containing block of a fixed-position
-     child, which would pin the card to the pill instead of the window. */}}
+     child, which would pin the card to the bar instead of the window. */}}
 <div class="pip-popup pip-info" id="pip-info" role="region" aria-label="About this artifact" tabindex="-1" hidden>
   <h1 class="pip-info-title font-headline" id="pip-info-title">{{.Title}}</h1>
   <div class="pip-info-meta">Created {{.Created}}</div>
@@ -121,15 +123,7 @@
   <a href="/api/artifacts/{{.ID}}/export" download title="Downloads this artifact and its assets, without saved data or connected accounts. AI features are turned off in downloaded copies."><i class="ph ph-download-simple" aria-hidden="true"></i> <span>Download HTML<small class="action-menu-help">Includes assets. No saved data, account access or AI.</small></span></a>
   {{if .SourceURL}}<button type="button" onclick="refetchSource()"><i class="ph ph-arrow-clockwise" aria-hidden="true"></i> Update from source</button>{{end}}
   {{end}}
-  <hr>
-  <button type="button" id="pip-hide"><i class="ph ph-caret-right" aria-hidden="true"></i> Hide controls</button>
 </div>
-{{/* What is left of the controls when they are put away: a tab on the side
-     edge, always visible, that brings them back on a click or a drag. */}}
-<button type="button" class="pip-tab" id="pip-tab" aria-label="Show artifact controls" hidden><i class="ph ph-caret-right" aria-hidden="true"></i><span class="pip-tab-label">{{.Title}}</span></button>
-{{/* Moving or hiding the controls is announced to screen readers and shown
-     nowhere: the visitor who dragged them can already see where they went. */}}
-<div class="sr-only" id="pip-announce" role="status" aria-live="polite"></div>
 
 </header>{{end}}
 

@@ -8,6 +8,8 @@ Third-party libraries, fonts and other resources are allowed. Reach for one when
 
 Support both light and dark mode: the library follows the user's system color scheme, and the artifact should too. Declare color-scheme: light dark, keep every color in a CSS custom property, and give those properties their dark values in one @media (prefers-color-scheme: dark) block.
 
+Exhibit shows its controls in a bar along the bottom of the window. By default the artifact's page ends above that bar, so nothing is covered and you need do nothing. Only a tool whose content is meant to run edge to edge with nothing to tap along the bottom — a full-screen map, photo or canvas — should opt in, with <meta name="exhibit-bar" content="overlay">; never opt in when the tool has its own bottom bar, tabs or input. If you opt in, pad the end of scrolling content and keep any floating control clear of the bar with var(--exhibit-bar, 0px), which Exhibit keeps set to the bar's current height.
+
 An artifact's stored state — everything its localStorage writes land in — is a flat map of string keys to string values, one row per key, visible and editable outside the chat too (the artifact's edit page has a state inspector). sessionStorage never appears here: it is frame-local and is never sent to the server. Values are opaque strings to the API, but artifacts almost always store JSON in them (an object, an array, a number encoded as text). When you read state and the user asks you to change or fix one field, treat the rest of that value as fixed text to reproduce exactly — same key order, spacing, and number formatting — not JSON to regenerate from scratch; a value you were not asked to touch must come back byte-identical.
 
 Tools:

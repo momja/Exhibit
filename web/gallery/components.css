@@ -101,57 +101,66 @@ body{font-family:var(--font-sans)}
 .editor-save-message>.ph{font-size:16px;line-height:1.25;color:var(--color-warn-ink-soft)}
 .editor-save-message[hidden]{display:none}
 
-/* --- floating app header --------------------------------------------- */
-/* While the controls are dragged the frame would swallow pointermove. */
-body.pip-dragging .panels{pointer-events:none}
-body.pip-dragging{cursor:grabbing;user-select:none;-webkit-user-select:none}
-
-/* --- the floating controls (Exh-ghuv) -------------------------------------
- * One pill: back, grip, the title (which opens the info card), share, ⋮.
- * Every radius inside it is concentric with its outline: inner radius =
- * outer radius - (border + padding). The control size grows on a touch screen
- * so each target is a comfortable tap. */
+/* --- the artifact bar (Exh-i8q4, docs/artifact-bar.md) --------------------
+ * One bar pinned to the bottom centre: Starred, the title (which opens the
+ * info card), edit, share, ⋮. It shrinks to a title strip (.pip-compact) when
+ * the artifact is scrolled or used. Every radius inside it is concentric with
+ * its outline: inner radius = outer radius - (border + padding). Sizes are in
+ * rem so larger text grows the bar, and pip.js measures it for the band.
+ * --pip-gap is registered so it animates, and pip.js reads its current value
+ * on every frame of a transition. */
+@property --pip-gap{syntax:"<length>";inherits:true;initial-value:12px}
 .pip{
-  --pip-control:36px;
-  --pip-pad:4px;
+  --pip-control:2.25rem;
+  --pip-pad:0.25rem;
   --pip-h:calc(var(--pip-control) + 2 * var(--pip-pad) + 2px);
-  --pip-inset:12px;
-  position:fixed;left:0;top:0;z-index:30;display:flex;align-items:center;gap:2px;max-width:calc(100vw - 2 * var(--pip-inset));
+  --pip-gap:12px;
+  --pip-ease:cubic-bezier(.32,.72,0,1);
+  position:fixed;z-index:30;display:flex;align-items:center;gap:2px;max-width:calc(100vw - 24px);
+  left:50%;bottom:calc(var(--pip-gap) + env(safe-area-inset-bottom));translate:-50% 0;
   height:var(--pip-h);padding:var(--pip-pad);border:1px solid var(--color-hairline-strong);border-radius:calc(var(--pip-h) / 2);
   background:color-mix(in srgb,var(--color-panel) 88%,transparent);backdrop-filter:blur(14px) saturate(1.5);-webkit-backdrop-filter:blur(14px) saturate(1.5);
   box-shadow:0 4px 18px rgba(0,0,0,.16),0 0 0 .5px rgba(0,0,0,.04);font-size:0.8125rem;
-  /* Bottom-left before pip.js has measured anything, so the first paint is
-     already where the default placement puts it. */
-  translate:var(--pip-inset) calc(100dvh - 100% - var(--pip-inset));
-  transition:scale .16s ease,box-shadow .16s ease,opacity .12s ease}
-@media (pointer:coarse),(max-width:767px){ .pip{--pip-control:44px} }
+  transition:height .32s var(--pip-ease),padding .32s var(--pip-ease),--pip-gap .32s var(--pip-ease),left .32s var(--pip-ease),right .32s var(--pip-ease),
+    background-color .32s ease,box-shadow .32s ease,border-color .32s ease}
+@media (pointer:coarse),(max-width:767px){ .pip{--pip-control:2.75rem} }
 .pip[hidden]{display:none}
-.pip.pip-snapping{transition:translate .42s cubic-bezier(.22,1.28,.36,1),scale .16s ease,box-shadow .16s ease}
-/* LEAVE_MS in pip.js matches this duration. */
-.pip.pip-leaving{transition:translate .22s cubic-bezier(.55,0,.9,.4)}
-.pip.pip-lifted{scale:1.04;box-shadow:0 16px 44px rgba(0,0,0,.3)}
-.pip.pip-will-stash{opacity:.55}
-.pip-btn{width:var(--pip-control);height:var(--pip-control);flex:0 0 auto;border:0;border-radius:50%;background:none;color:var(--color-ink-soft);
+.pip>*{transition:max-width .32s var(--pip-ease),opacity .2s ease,margin .32s var(--pip-ease),padding .32s var(--pip-ease),height .32s var(--pip-ease),font-size .32s var(--pip-ease)}
+.pip-btn{width:var(--pip-control);height:var(--pip-control);max-width:var(--pip-control);overflow:hidden;flex:0 0 auto;border:0;border-radius:50%;background:none;color:var(--color-ink-soft);
   display:inline-flex;align-items:center;justify-content:center;cursor:pointer;text-decoration:none}
 .pip-btn .ph{font-size:1.0625rem}
 .pip-btn:hover,.pip-btn:focus-visible,.pip-btn[aria-expanded=true]{background:var(--color-hover-fill)}
-.pip-sep{width:1px;height:18px;flex:0 0 auto;margin:0 3px;background:var(--color-hairline-strong)}
-/* Mid-pill, so its hover shape is an even rounded rect. The back button at the
-   pill's end is a full circle of the inner radius, concentric with the outline. */
-.pip-grip{width:calc(var(--pip-control) * .74);height:var(--pip-control);flex:0 0 auto;border:0;border-radius:var(--radius-md);background:none;
-  display:flex;align-items:center;justify-content:center;cursor:grab;touch-action:none;color:var(--color-faint)}
-.pip-grip::before{content:"";width:8px;height:14px;background-image:radial-gradient(circle,currentColor 1.3px,transparent 1.7px);background-size:4px 4.7px}
-.pip-grip:hover,.pip-grip:focus-visible,body.pip-dragging .pip-grip{background:var(--color-hover-fill);color:var(--color-ink-soft)}
-body.pip-dragging .pip-grip{cursor:grabbing}
+.pip-sep{width:1px;max-width:1px;height:18px;flex:0 0 auto;margin:0 3px;background:var(--color-hairline-strong)}
 .pip-title{height:var(--pip-control);min-width:0;flex:0 1 auto;display:inline-flex;align-items:center;gap:6px;padding:0 8px 0 9px;
   border:0;border-radius:calc(var(--pip-control) / 2);background:none;color:var(--color-ink);font:inherit;font-weight:600;cursor:pointer}
 .pip-title:hover,.pip-title:focus-visible,.pip-title[aria-expanded=true]{background:var(--color-hover-fill)}
 /* The posture mark: neutral like the cluster it summarizes, never a verdict. */
 #pip-posture,.pip-posture{display:inline-flex;align-items:center;gap:3px;flex:0 0 auto;color:var(--color-muted)}
+#pip-posture,.pip-caret{max-width:120px;overflow:hidden;transition:max-width .32s var(--pip-ease),opacity .2s ease}
 .pip-posture .ph{font-size:0.9375rem}
 .pip-posture .capability-count{font-size:0.71875rem;font-weight:650;margin-right:2px}
 .pip-caret{font-size:0.75rem;color:var(--color-muted);flex:0 0 auto}
 @media (max-width:480px){ .pip-sep{display:none} }
+
+/* Compact: only the title, small, closer to the edge. The controls collapse
+   to nothing rather than display:none, so they stay in the tab order, and
+   focusing one brings the full bar back. A tap on the strip expands it. */
+.pip.pip-compact{--pip-pad:0px;--pip-gap:4px;height:1.875rem;cursor:pointer;
+  background:color-mix(in srgb,var(--color-panel) 72%,transparent);box-shadow:0 1px 6px rgba(0,0,0,.1);border-color:transparent}
+.pip.pip-compact>.pip-btn,.pip.pip-compact>.pip-sep{max-width:0;opacity:0;margin:0;pointer-events:none}
+.pip.pip-compact #pip-posture,.pip.pip-compact .pip-caret{max-width:0;opacity:0}
+.pip.pip-compact .pip-title{height:1.875rem;font-size:0.75rem;font-weight:500;padding:0 14px;gap:0;pointer-events:none}
+.pip.pip-compact .pip-name{max-width:none}
+/* Overlaid on the artifact (an opted-in edge-to-edge tool), the bar is drawn
+   over arbitrary pixels, so it is solid: the title meets 4.5:1 over any
+   content rather than relying on a backdrop blur. */
+body:not(.pip-inset) .pip,body:not(.pip-inset) .pip.pip-compact{background:var(--color-panel)}
+@media (max-width:767px){
+  /* A phone's bar spans the width, and its compact strip is narrower. */
+  .pip{left:12px;right:12px;translate:none;max-width:none}
+  .pip .pip-title{flex:1 1 auto;justify-content:center}
+  .pip.pip-compact{left:22vw;right:22vw}
+}
 
 /* The info card and the ⋮ menu. pip.js sets the side, width and max height. */
 .pip-popup{position:fixed;z-index:40;padding:6px;background:var(--color-panel);border:1px solid var(--color-hairline-strong);border-radius:var(--radius-lg);
@@ -166,32 +175,9 @@ body.pip-dragging .pip-grip{cursor:grabbing}
 .pip-info .capability-popover{position:static;width:auto;max-width:none;margin:0;visibility:visible;opacity:1;pointer-events:auto;
   border:0;border-radius:0;box-shadow:none;background:none;padding:8px 10px 6px;max-height:none;overflow:visible}
 
-
-/* The tab left on a side edge when the controls are put away: always visible,
-   and it slides out a little more under the pointer. */
-.pip-tab{position:fixed;z-index:30;width:20px;height:60px;padding:0;display:flex;align-items:center;justify-content:center;cursor:pointer;touch-action:none;
-  background:color-mix(in srgb,var(--color-panel) 92%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
-  border:1px solid var(--color-hairline-strong);box-shadow:0 2px 10px rgba(0,0,0,.18);color:var(--color-ink-soft);
-  transition:width .18s cubic-bezier(.2,1.4,.4,1),box-shadow .18s ease,transform .26s cubic-bezier(.2,1.3,.4,1)}
-.pip-tab[hidden]{display:none}
-.pip-tab[data-edge=left]{left:0;border-left:0;border-radius:0 14px 14px 0}
-.pip-tab[data-edge=right]{right:0;border-right:0;border-radius:14px 0 0 14px}
-.pip-tab .ph{font-size:0.8125rem;transition:transform .18s ease}
-.pip-tab[data-edge=right] .ph{transform:scaleX(-1)}
-.pip-tab.pip-tab-entering[data-edge=left]{transform:translateX(-100%)}
-.pip-tab.pip-tab-entering[data-edge=right]{transform:translateX(100%)}
-.pip-tab:hover,.pip-tab:focus-visible{width:32px;box-shadow:0 6px 20px rgba(0,0,0,.25);color:var(--color-ink)}
-.pip-tab[data-edge=left]:hover .ph,.pip-tab[data-edge=left]:focus-visible .ph{transform:translateX(2px)}
-.pip-tab[data-edge=right]:hover .ph,.pip-tab[data-edge=right]:focus-visible .ph{transform:scaleX(-1) translateX(2px)}
-.pip-tab-label{position:absolute;top:50%;translate:0 -50%;white-space:nowrap;pointer-events:none;max-width:60vw;overflow:hidden;text-overflow:ellipsis;
-  background:var(--color-slate-ink);color:var(--color-panel);font-size:0.75rem;font-weight:600;padding:5px 9px;border-radius:6px;opacity:0;transition:opacity .15s ease}
-.pip-tab[data-edge=left] .pip-tab-label{left:calc(100% + 8px)}
-.pip-tab[data-edge=right] .pip-tab-label{right:calc(100% + 8px)}
-.pip-tab:hover .pip-tab-label,.pip-tab:focus-visible .pip-tab-label{opacity:1}
-
 @media (prefers-reduced-motion:reduce){
-  .pip.pip-snapping,.pip.pip-leaving{transition:translate .12s ease}
-  .pip-tab,.pip-popup{transition:none;animation:none}
+  .pip,.pip>*{transition-duration:.01s}
+  .pip-popup{transition:none;animation:none}
 }
 
 /* --- surfaces --------------------------------------------------------- */
@@ -532,10 +518,8 @@ button.banner-action{background:none;border:0;padding:0;font:inherit;cursor:poin
 
 .pip-name{min-width:0;max-width:22ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (pointer:coarse),(max-width:767px){
-  .pip-grip{min-width:44px}
   .pip-title{min-width:44px}
   .pip-menu a,.pip-menu button{min-height:44px}
-  .pip-tab,.pip-tab:hover,.pip-tab:focus-visible{width:44px;min-height:60px}
 }
 @media(max-width:480px){
   .pip-title{gap:4px;padding:0 4px}

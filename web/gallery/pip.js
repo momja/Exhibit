@@ -1,254 +1,192 @@
-/* The shared floating header (Exh-ghuv).
+/* The artifact bar (Exh-i8q4, docs/artifact-bar.md).
  *
- * The artifact fills the window and the page's chrome is one pill over it,
- * which behaves like picture-in-picture on macOS and iOS: drag it by the grip,
- * let go, and it springs to a corner; let go against a side edge and it is put
- * away, leaving a tab that brings it back. Its placement is remembered on this
- * origin, so it stays where the visitor left it across artifacts.
+ * The artifact fills the window and the page's controls are one bar pinned to
+ * the bottom centre, like Safari's address bar on iOS. While the artifact is
+ * scrolled down or used, the bar shrinks to a strip showing only the title;
+ * scrolling back up, reaching either end, tapping it, focusing into it or (with
+ * a mouse) pointing at it brings the full controls back.
  *
- * The rules (which corner, when to stash, where a popup goes) are in
- * pip-placement.js. This module measures the page, asks, and applies.
+ * By default the frame ends above the bar (a reserved band, body.pip-inset)
+ * and follows it as it changes size, so the bar never covers the artifact. An
+ * artifact that opts in with <meta name="exhibit-bar" content="overlay"> gets
+ * the whole window instead, and is told the bar's height, which it reads as
+ * var(--exhibit-bar).
+ *
+ * Scrolling happens inside the sandboxed frame, which this page cannot see.
+ * The render preamble's bar script posts {__avBar: 'scroll' | 'use' | 'mode'}.
+ * Its identity is the frame's window, and the most a forged message can do is
+ * resize this bar or the band: the artifact affecting its own presentation.
  */
-import {
-  VELOCITY_WINDOW_MS, arrowMove, cornerForTab, cornerPosition, isLeft,
-  pointerVelocity, popupPlacement, releaseCorner, stashEdgeAt
-} from './pip-placement.js';
+import { popupPlacement } from './pip-placement.js';
 import { moveMenuFocus } from './menu-focus.js';
 
-const STORE_KEY = 'exhibit.pipControls';
-const DRAG_SLOP_PX = 4;      // less movement than this is a press, not a drag
-const TAB_PULL_PX = 6;       // pulling a tab this far turns the press into a drag
-const LEAVE_MS = 220;        // the pill's slide off-screen, matched in components.css
+// Where the shipped pill remembered its corner. Read by nothing now; removed
+// once so stale placements do not linger in visitors' storage.
+const LEGACY_PLACEMENT_KEY = 'exhibit.pipControls';
+// Leaving a bar that hover expanded compacts it again after this long, which
+// also forgives a slightly unsteady pointer (WCAG 1.4.13).
+const HOVER_LEAVE_MS = 500;
+// A click this soon after a press that expanded the compact strip is that
+// press's own click, and is swallowed.
+const PRESS_CLICK_MS = 800;
+// The bar's transitions are 0.32s (components.css); the band follows a little
+// longer so it lands on the final position.
+const TRANSITION_FOLLOW_MS = 400;
+// A window this short (400% zoom on a laptop, a phone in landscape) starts
+// compact: the full band would take a third of it.
+const SHORT_VIEWPORT_PX = 450;
 
 // The Stimulus controller connects this behavior to one server-rendered
 // header and disposes listeners, observers and pending work on disconnect.
 export function connectFloatingHeader(root) {
-  let connected = true;
   const listeners = [];
-  const timers = new Set();
-  const frames = new Set();
   function listen(target, type, handler, options) {
     target.addEventListener(type, handler, options);
     listeners.push(() => target.removeEventListener(type, handler, options));
   }
-  function later(callback, delay) {
-    const id = setTimeout(() => { timers.delete(id); if (connected) callback(); }, delay);
-    timers.add(id);
-    return id;
-  }
+  let frameID = 0;
   function nextFrame(callback) {
-    const id = requestAnimationFrame(() => { frames.delete(id); if (connected) callback(); });
-    frames.add(id);
-    return id;
+    frameID = requestAnimationFrame(() => { frameID = 0; callback(); });
   }
   const pill = root.querySelector('#pip');
-  const grip = root.querySelector('#pip-grip');
-  const tab = root.querySelector('#pip-tab');
-  const announcer = root.querySelector('#pip-announce');
   const popups = [
-    { panel: root.querySelector('#pip-info'), trigger: root.querySelector('#pip-title'), align: 'pill' },
-    { panel: root.querySelector('#pip-menu'), trigger: root.querySelector('#pip-more'), align: 'trigger' }
+    { panel: root.querySelector('#pip-info'), trigger: root.querySelector('#pip-title'), align: 'pill', side: 'left' },
+    { panel: root.querySelector('#pip-menu'), trigger: root.querySelector('#pip-more'), align: 'trigger', side: 'right' }
   ];
+  try { localStorage.removeItem(LEGACY_PLACEMENT_KEY); } catch (e) { /* storage refused: nothing to clear */ }
 
-  function viewport() { return { width: innerWidth, height: innerHeight }; }
-  function pillSize() { return { width: pill.offsetWidth, height: pill.offsetHeight }; }
-  function inset() {
-    return parseFloat(getComputedStyle(pill).getPropertyValue('--pip-inset')) || 12;
+  function artifactFrame() { return document.querySelector('.panels > iframe'); }
+  function anyPopupOpen() { return popups.some(p => !p.panel.hidden); }
+  const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+
+  // ------------------------------------------------------------ band/overlay
+  // The space the bar takes from the bottom of the window: from the bar's top
+  // edge down, plus the same gap again above it. Measured rather than
+  // computed, so larger text (a bigger rem) grows the band with the bar, and
+  // it includes the safe-area inset the bar sits above.
+  let overlay = false;
+  let reserve = 0;
+  function measureReserve() {
+    const gap = parseFloat(getComputedStyle(pill).getPropertyValue('--pip-gap')) || 0;
+    return Math.max(0, Math.round(innerHeight - pill.getBoundingClientRect().top + gap));
   }
-  function announce(text) { announcer.textContent = text; }
-
-  // ---------------------------------------------------------------- placement
-  // {mode: 'corner', corner: 'bl'} or {mode: 'stashed', edge: 'left', yFraction}.
-  let placement = loadPlacement();
-  let position = { x: 0, y: 0 };
-
-  function loadPlacement() {
-    try {
-      const saved = JSON.parse(localStorage.getItem(STORE_KEY));
-      if (saved && saved.mode === 'corner' && /^[tb][lr]$/.test(saved.corner)) return saved;
-      if (saved && saved.mode === 'stashed' && /^(left|right)$/.test(saved.edge)) return saved;
-    } catch (e) { /* storage refused or unreadable: the default is fine */ }
-    return { mode: 'corner', corner: 'bl' };
+  // ask: the frame answers with its mode (on connect, in case the frame
+  // announced it before this listener existed).
+  function applyBar(ask) {
+    document.body.classList.toggle('pip-inset', !overlay);
+    // Under reduced motion the band stays at its full height while the bar
+    // shrinks, so the artifact is never resized by a state change.
+    const frozen = !overlay && compact && reducedMotion?.matches && reserve > 0;
+    if (!frozen) reserve = measureReserve();
+    document.body.style.setProperty('--pip-reserve', reserve + 'px');
+    const frame = artifactFrame();
+    // In band mode the frame is told 0, so an artifact that opted in somewhere
+    // else still lays out correctly here. The frame's origin is opaque, so '*'.
+    if (frame && frame.contentWindow) frame.contentWindow.postMessage(ask === true ? { __avBarHeight: overlay ? reserve : 0, ask: true } : { __avBarHeight: overlay ? reserve : 0 }, '*');
   }
-  function savePlacement() {
-    try { localStorage.setItem(STORE_KEY, JSON.stringify(placement)); } catch (e) { /* not remembered */ }
-  }
-
-  // motion: 'snap' springs, 'leave' slides off-screen, anything else jumps.
-  function setPosition(x, y, motion) {
-    pill.classList.toggle('pip-snapping', motion === 'snap');
-    pill.classList.toggle('pip-leaving', motion === 'leave');
-    pill.style.translate = x + 'px ' + y + 'px';
-    position = { x: x, y: y };
-  }
-
-  function applyPlacement(motion) {
-    document.body.dataset.pipCorner = placement.mode === 'corner' ? placement.corner : 'stashed';
-    if (placement.mode === 'corner') {
-      tab.hidden = true;
-      pill.hidden = false;
-      const p = cornerPosition(placement.corner, pillSize(), viewport(), inset());
-      setPosition(p.x, p.y, motion);
-    } else {
-      pill.hidden = true;
-      showTab(false);
-    }
-  }
-
-  function snapTo(corner) {
-    placement = { mode: 'corner', corner: corner };
-    savePlacement();
-    applyPlacement('snap');
-  }
-
-  function stash(edge, centerY) {
-    closePopups();
-    placement = { mode: 'stashed', edge: edge, yFraction: centerY / innerHeight };
-    savePlacement();
-    document.body.dataset.pipCorner = 'stashed';
-    setPosition(edge === 'left' ? -pillSize().width - 24 : innerWidth + 24, position.y, 'leave');
-    later(function () {
-      if (placement.mode !== 'stashed') return;
-      pill.hidden = true;
-      showTab(true);
-    }, LEAVE_MS);
-  }
-
-  function tabCenterY() {
-    const half = tab.offsetHeight / 2 || 30;
-    return Math.min(innerHeight - half - 8, Math.max(half + 8, placement.yFraction * innerHeight));
-  }
-
-  function showTab(animate) {
-    tab.dataset.edge = placement.edge;
-    tab.style.top = (tabCenterY() - (tab.offsetHeight || 60) / 2) + 'px';
-    tab.hidden = false;
-    if (!animate) return;
-    tab.classList.add('pip-tab-entering');
-    nextFrame(function () {
-      nextFrame(function () { tab.classList.remove('pip-tab-entering'); });
-    });
-  }
-
-  function restoreFromTab() {
-    const edge = placement.edge;
-    const y = tabCenterY();
-    const corner = cornerForTab(edge, y, innerHeight);
-    tab.hidden = true;
-    pill.hidden = false;
-    const size = pillSize();
-    // Start just off-screen beside the tab, then spring into the corner.
-    setPosition(edge === 'left' ? -size.width : innerWidth, y - size.height / 2, null);
-    nextFrame(function () {
-      snapTo(corner);
-      grip.focus({ preventScroll: true });
-    });
-    announce('Controls restored');
-  }
-
-  // ---------------------------------------------------------------- dragging
-  let drag = null;
-
-  function beginDrag(pointerX, pointerY) {
-    closePopups();
-    // Freeze an in-flight snap where it is drawn, before measuring the grab.
-    const [x, y] = getComputedStyle(pill).translate.split(' ').map(parseFloat);
-    setPosition(x, y, null);
-    drag = {
-      offsetX: pointerX - position.x, offsetY: pointerY - position.y,
-      startX: pointerX, startY: pointerY, pointerX: pointerX, moved: false,
-      samples: [{ t: performance.now(), x: pointerX, y: pointerY }]
+  // The bar's size changes with its state (animated, so on every frame of the
+  // transition), with the text size, and when the posture mark gains a glyph.
+  const observer = new ResizeObserver(() => applyBar());
+  // The bar also moves while it changes state (its gap to the window
+  // animates), which a ResizeObserver does not see, so a state change follows
+  // the bar on every frame of its transition.
+  let followFrame = 0;
+  function followTransition() {
+    window.cancelAnimationFrame?.(followFrame);
+    const until = Date.now() + TRANSITION_FOLLOW_MS;
+    const step = () => {
+      applyBar();
+      followFrame = Date.now() < until ? requestAnimationFrame(step) : 0;
     };
-    // Lift about the grab point, so the pill stays under the pointer as it scales.
-    pill.style.transformOrigin = drag.offsetX + 'px ' + drag.offsetY + 'px';
-    pill.classList.add('pip-lifted');
-    document.body.classList.add('pip-dragging');
+    followFrame = requestAnimationFrame(step);
   }
+  observer.observe(pill);
 
-  function moveDrag(pointerX, pointerY) {
-    const now = performance.now();
-    drag.samples.push({ t: now, x: pointerX, y: pointerY });
-    while (drag.samples.length > 2 && now - drag.samples[0].t > VELOCITY_WINDOW_MS) drag.samples.shift();
-    if (Math.hypot(pointerX - drag.startX, pointerY - drag.startY) > DRAG_SLOP_PX) drag.moved = true;
-    drag.pointerX = pointerX;
-    setPosition(pointerX - drag.offsetX, pointerY - drag.offsetY, null);
-    // The only cue while dragging: over a stash zone the pill fades.
-    pill.classList.toggle('pip-will-stash', drag.moved && !!stashEdgeAt(pointerX, innerWidth));
+  // ---------------------------------------------------------------- compact
+  let compact = false;
+  let hoverOpened = false;
+  let leaveTimer = 0;
+  function setCompact(next) {
+    if (next && (anyPopupOpen() || pill.contains(document.activeElement))) return;
+    if (next === compact) return;
+    compact = next;
+    pill.classList.toggle('pip-compact', compact);
+    applyBar();
+    followTransition();
   }
+  function expand() { hoverOpened = false; clearTimeout(leaveTimer); setCompact(false); }
 
-  function endDrag() {
-    const edge = stashEdgeAt(drag.pointerX, innerWidth);
-    const corner = releaseCorner(position, pillSize(), pointerVelocity(drag.samples, performance.now()), viewport());
-    const moved = drag.moved;
-    drag = null;
-    pill.classList.remove('pip-lifted', 'pip-will-stash');
-    document.body.classList.remove('pip-dragging');
-    if (!moved) { applyPlacement('snap'); return; }
-    if (edge) stash(edge, position.y + pillSize().height / 2);
-    else snapTo(corner);
-  }
-
-  listen(grip, 'pointerdown', function (e) {
-    if (e.button !== 0) return;
-    e.preventDefault();
-    grip.setPointerCapture(e.pointerId);
-    beginDrag(e.clientX, e.clientY);
-  });
-
-  // A press on the tab restores the controls; pulling it out drags them out.
-  let tabPress = null;
-  listen(tab, 'pointerdown', function (e) {
-    if (e.button !== 0) return;
-    tab.setPointerCapture(e.pointerId);
-    tabPress = { x: e.clientX, y: e.clientY, pulled: false };
-  });
-
-  listen(window, 'pointermove', function (e) {
-    if (drag) { moveDrag(e.clientX, e.clientY); return; }
-    if (tabPress && !tabPress.pulled && Math.hypot(e.clientX - tabPress.x, e.clientY - tabPress.y) > TAB_PULL_PX) {
-      tabPress.pulled = true;
-      tab.hidden = true;
-      pill.hidden = false;
-      const gripCenterX = grip.offsetLeft + grip.offsetWidth / 2;
-      setPosition(e.clientX - gripCenterX, e.clientY - pillSize().height / 2, null);
-      beginDrag(e.clientX, e.clientY);
-      drag.moved = true;
+  listen(window, 'message', function (e) {
+    const frame = artifactFrame();
+    if (!frame || e.source !== frame.contentWindow) return;
+    const d = e.data;
+    if (!d || typeof d.__avBar !== 'string') return;
+    if (d.__avBar === 'mode') {
+      overlay = d.mode === 'overlay';
+      applyBar();
+    } else if (d.__avBar === 'use' || (d.__avBar === 'scroll' && d.dir === 'down')) {
+      // A press inside the frame has already taken focus there; the popup it
+      // dismisses (window blur) must not hold the bar open.
+      if (d.__avBar === 'use' && document.activeElement === frame) closePopups();
+      hoverOpened = false;
+      setCompact(true);
+    } else if (d.__avBar === 'scroll' && (d.dir === 'up' || d.dir === 'top' || d.dir === 'end')) {
+      setCompact(false);
     }
   });
-  function finishPointer() {
-    if (drag) endDrag();
-    if (tabPress) {
-      const pulled = tabPress.pulled;
-      tabPress = null;
-      if (!pulled) restoreFromTab();
-    }
-  }
-  listen(window, 'pointerup', finishPointer);
-  listen(window, 'pointercancel', finishPointer);
-  // Enter or Space on the tab arrives as a click with no pointer press behind it.
-  listen(tab, 'click', function (e) { if (e.detail === 0) restoreFromTab(); });
 
-  listen(grip, 'keydown', function (e) {
-    if (placement.mode !== 'corner') return;
-    const move = arrowMove(placement.corner, e.key);
-    if (!move) return;
-    e.preventDefault();
-    if (move.corner) { snapTo(move.corner); return; }
-    stash(move.edge, position.y + pillSize().height / 2);
-    later(function () { tab.focus(); }, LEAVE_MS + 10);
-    announce('Controls hidden. Press Enter on the tab to bring them back.');
+  // A pointer press on the compact strip expands it and does nothing else:
+  // the title under the finger should not also open the info card. The bar
+  // expands on the press itself (a tap does not always end in a click), and
+  // only a click that press started, moments later, is swallowed. A click with
+  // no press behind it (a screen reader's or voice control's activation)
+  // expands the bar and also activates the control, so nobody activates twice
+  // without being told why.
+  let compactPressAt = -Infinity;
+  listen(pill, 'pointerdown', function () {
+    hoverOpened = false;
+    clearTimeout(leaveTimer);
+    if (!compact) return;
+    compactPressAt = Date.now();
+    setCompact(false);
+  }, true);
+  listen(pill, 'click', function (e) {
+    const fromCompactPress = Date.now() - compactPressAt < PRESS_CLICK_MS;
+    compactPressAt = -Infinity;
+    if (fromCompactPress) { e.preventDefault(); e.stopPropagation(); return; }
+    if (compact) expand();
+  }, true);
+  // Compacted controls stay in the tab order; focusing one brings them back.
+  listen(pill, 'focusin', expand);
+
+  // With a mouse, pointing at the strip brings the controls back, and leaving
+  // again tucks them away if hovering was all that opened them.
+  listen(pill, 'pointerenter', function (e) {
+    if (e.pointerType !== 'mouse') return;
+    clearTimeout(leaveTimer);
+    if (compact) { setCompact(false); hoverOpened = true; }
+  });
+  listen(pill, 'pointerleave', function (e) {
+    if (e.pointerType !== 'mouse' || !hoverOpened) return;
+    leaveTimer = setTimeout(function () { hoverOpened = false; setCompact(true); }, HOVER_LEAVE_MS);
   });
 
   // ---------------------------------------------------------------- popups
-  // The info card (from the title) and the ⋮ menu. One open at a time.
+  // The info card (from the title) and the ⋮ menu. One open at a time, both
+  // opening upward from the bar.
+  function viewport() { return { width: innerWidth, height: innerHeight }; }
+  function inset() {
+    return parseFloat(getComputedStyle(pill).getPropertyValue('--pip-gap')) || 12;
+  }
   function openPopup(popup) {
     closePopups();
+    expand();
     const panel = popup.panel;
     panel.hidden = false;
     popup.trigger.setAttribute('aria-expanded', 'true');
     const pillRect = pill.getBoundingClientRect();
     const place = popupPlacement({
-      corner: placement.corner,
+      side: popup.side,
       pill: pillRect,
       anchor: popup.align === 'pill' ? pillRect : popup.trigger.getBoundingClientRect(),
       align: popup.align,
@@ -304,7 +242,7 @@ export function connectFloatingHeader(root) {
   // the popup without moving focus away from the artifact.
   listen(window, 'blur', function () {
     nextFrame(function () {
-      if (document.activeElement === document.querySelector('iframe')) closePopups();
+      if (document.activeElement === artifactFrame()) closePopups();
     });
   });
   listen(window, 'keydown', function (e) {
@@ -322,43 +260,23 @@ export function connectFloatingHeader(root) {
       else moveMenuFocus(e, items);
     }
   });
-
-  listen(root.querySelector('#pip-hide'), 'click', function () {
-    stash(isLeft(placement.corner) ? 'left' : 'right', position.y + pillSize().height / 2);
-    later(function () { tab.focus(); }, LEAVE_MS + 10);
-    announce('Controls hidden. Press Enter on the tab to bring them back.');
-  });
-
   listen(window, 'resize', function () {
-    if (drag) return;
     closePopups();
-    applyPlacement(null);
+    applyBar();
   });
 
-  // The pill's width is not fixed: the posture mark gains a glyph when an
-  // approval lands (the htmx swap), and the icon font can arrive after the first
-  // layout. A pill docked on the right keeps its corner only if it re-docks when
-  // it changes size.
-  let dockedWidth = 0;
-  const observer = new ResizeObserver(function () {
-    const width = pill.offsetWidth;
-    if (width === dockedWidth || drag || pill.hidden || placement.mode !== 'corner') return;
-    dockedWidth = width;
-    applyPlacement(null);
-  });
-  observer.observe(pill);
-
-  applyPlacement(null);
+  applyBar(true);
+  if (innerHeight < SHORT_VIEWPORT_PX) setCompact(true);
 
   return () => {
-    connected = false;
     for (const remove of listeners) remove();
-    for (const id of timers) clearTimeout(id);
-    for (const id of frames) window.cancelAnimationFrame?.(id);
+    if (frameID) window.cancelAnimationFrame?.(frameID);
+    if (followFrame) window.cancelAnimationFrame?.(followFrame);
+    clearTimeout(leaveTimer);
     observer.disconnect();
     closePopups();
-    document.body.classList.remove('pip-dragging');
-    pill.classList.remove('pip-lifted', 'pip-will-stash', 'pip-snapping', 'pip-leaving');
-    tab.classList.remove('pip-tab-entering');
+    pill.classList.remove('pip-compact');
+    document.body.classList.remove('pip-inset');
+    document.body.style.removeProperty('--pip-reserve');
   };
 }

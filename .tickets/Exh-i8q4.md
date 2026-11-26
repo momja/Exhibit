@@ -1,6 +1,6 @@
 ---
 id: Exh-i8q4
-status: in_progress
+status: closed
 deps: []
 links: [Exh-ghuv]
 created: 2026-11-26T05:49:21Z
@@ -348,3 +348,15 @@ today's overlay pill, which already covers artifact content.
 
 Everything in the Design section's Decisions (§1), Behaviour (§3), protocol (§4) and Accessibility (§6) holds, verified by the tests in §7 (Node page-script, Chromium browser, template and render tests) plus WebKit runs at 390x844 and 1280x800 with screenshots saved outside the checkout. docs/artifact-bar.md is committed, and architecture.md, security.md, technical_stack.md and ui-components.md are updated as §5 lists. The agent guidance paragraph ships with its names pinned by tests. A real-inference agent check (open question 4) is recorded on the epic. Grip, drag, stash, hide-controls and placement persistence are removed.
 
+
+## Notes
+
+**2026-11-26T07:43:57Z**
+
+Open question 4, agent compliance, checked with real inference (exhibit-dev, platform mode, opencode-go/deepseek-v4.1-flash, branch @ f0dd11a8), one prompt per session through the built-in agent API. Pass 5/5:
+- 'full-screen map of a small fictional town … zoom buttons floating bottom right': <meta name="exhibit-bar" content="overlay">, three floating controls at calc(Npx + var(--exhibit-bar, 0px)).
+- 'full-screen drawing canvas … floating color picker': opted in, picker at calc(18px + var(--exhibit-bar,0px)).
+- 'simple calculator': no tag.
+- 'chat-style notes app … input and send button fixed at the bottom': no tag.
+- 'habit tracker … tab bar fixed along the bottom': no tag.
+Every use of the variable kept the 0px fallback. One earlier map session stalled at the provider for 30 minutes and was reaped idle without saving; the rerun saved after about 290s of generation. Single run per prompt, one model: indicative, not a guarantee.
