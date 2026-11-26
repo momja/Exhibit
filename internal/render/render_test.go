@@ -2,6 +2,10 @@ package render
 
 import (
 	"context"
+	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -993,5 +997,244 @@ func TestPrependToHeadOpensTheHead(t *testing.T) {
 		if got := prependToHead(tc.in, "X"); got != tc.want {
 			t.Errorf("%s: got %q, want %q", tc.name, got, tc.want)
 		}
+	}
+}
+
+// barMarker is a line only barScript contains, so its presence in a served
+// document is the script's presence.
+const barMarker = "// ---- Artifact bar (Exh-i8q4) ----"
+
+// The artifact bar's frame half (Exh-i8q4) goes only where Exhibit's own page
+// frames the render: the detail frame, and the version and agent previews,
+// whose hosts ignore it. A widget tile, a public link and the attributed share
+// wrapper carry none of it. Top-level renders are excluded at runtime by the
+// script's own window.parent guard (TestBarScriptIsInertTopLevel).
+func TestBarScriptPlacement(t *testing.T) {
+	rd, st, link, _ := newShareWidgetFixture(t)
+
+	private := serve(t, rd, "abc")
+	if !strings.Contains(private, barMarker) {
+		t.Fatal("a framed artifact render carries the bar script")
+	}
+	// The names the agent guidance tells artifacts to use (agentguidance_test.go
+	// pins the same strings), so prompt and implementation cannot drift apart.
+	for _, name := range []string{`exhibit-bar`, `meta[name="exhibit-bar"]`, `'overlay'`, `'--exhibit-bar'`, `var(--exhibit-bar, 0px)`} {
+		if !strings.Contains(private, name) {
+			t.Errorf("served preamble is missing %s", name)
+		}
+	}
+
+	if got := serveWidget(t, rd, "abc").Body.String(); strings.Contains(got, barMarker) {
+		t.Error("a widget has no bar and gets no bar script")
+	}
+	if got := serveShare(t, rd, link).Body.String(); strings.Contains(got, barMarker) {
+		t.Error("a public link is not framed by Exhibit's detail page and gets no bar script")
+	}
+
+	rd.cfg.ShareAttributionEnabled = true
+	if err := st.UpdateArtifact(context.Background(), 1, "abc", map[string]any{"share_attribution": "show"}); err != nil {
+		t.Fatal(err)
+	}
+	attributed := serveShare(t, rd, link).Body.String()
+	if !strings.Contains(attributed, `id="exhibit-attribution"`) {
+		t.Fatal("fixture: expected the attributed share document")
+	}
+	if strings.Contains(attributed, barMarker) {
+		t.Error("the attributed, host-less share gets no bar script")
+	}
+
+	vr, _ := newVersionedRenderer(t)
+	if got := serveVersion(vr, "abc", 1, versionToken("abc", 1, 1)).Body.String(); !strings.Contains(got, barMarker) {
+		t.Error("a version preview carries the bar script (its host does not listen, so it is inert)")
+	}
+}
+
+// barHarnessPrelude is a minimal fake window and document for barScript:
+// listeners are recorded so a scenario can fire events, and every postMessage
+// is captured with its target origin.
+const barHarnessPrelude = `
+var API_ORIGIN = 'https://app.test', ARTIFACT_ID = 'abc';
+var listeners = {}, docListeners = {}, posted = [], now = 1000;
+Date.now = function() { return now; };
+var parentWin = { postMessage: function(msg, target) { posted.push({ msg: msg, target: target }); } };
+var rootStyle = {}, root = { style: { setProperty: function(k, v) { rootStyle[k] = v; } } };
+var metaContent = null;
+var document = {
+  readyState: 'complete',
+  documentElement: root,
+  scrollingElement: { scrollTop: 0, scrollHeight: 2000, clientHeight: 500 },
+  querySelector: function(sel) {
+    if (sel !== 'meta[name="exhibit-bar"]' || metaContent === null) return null;
+    return { getAttribute: function() { return metaContent; } };
+  },
+  addEventListener: function(type, fn) { (docListeners[type] = docListeners[type] || []).push(fn); }
+};
+var window = {
+  parent: parentWin,
+  addEventListener: function(type, fn) { (listeners[type] = listeners[type] || []).push(fn); }
+};
+function fire(type, e) { (listeners[type] || []).forEach(function(fn) { fn(e); }); }
+function scrollTo(el, top) { el.scrollTop = top; fire('scroll', { target: el }); }
+function sent() { return posted.map(function(p) { return p.msg; }); }
+function run() { eval(BAR_SCRIPT); }
+`
+
+// barHarness runs barScript in node against barHarnessPrelude's fakes, then
+// the scenario, which drives them and prints one JSON object. Skipped without
+// node, like the other node suites (node is already a build dependency).
+func barHarness(t *testing.T, scenario string) map[string]any {
+	t.Helper()
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node not installed; the bar script's behaviour tests need it")
+	}
+	script, _ := json.Marshal(barScript)
+	js := barHarnessPrelude + "var BAR_SCRIPT = " + string(script) + ";\n" + scenario
+	path := filepath.Join(t.TempDir(), "bar.js")
+	if err := os.WriteFile(path, []byte(js), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command(node, path).CombinedOutput()
+	if err != nil {
+		t.Fatalf("node: %v\n%s", err, out)
+	}
+	var result map[string]any
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("decode %q: %v", out, err)
+	}
+	return result
+}
+
+func TestBarScriptReportsScrollDirectionAndUse(t *testing.T) {
+	got := barHarness(t, `
+run();
+var doc = document.scrollingElement;
+scrollTo(doc, 100);   // first sighting: no previous position, nothing moved
+scrollTo(doc, 200);   // down
+scrollTo(doc, 300);   // still down: not re-sent
+scrollTo(doc, 301);   // under 3px: nothing
+scrollTo(doc, 250);   // up
+scrollTo(doc, 1498);  // within 4px of the end
+scrollTo(doc, 2);     // top
+var small = { scrollTop: 0, scrollHeight: 530, clientHeight: 500 };
+scrollTo(small, 20);  // under 40px of overflow: ignored
+fire('scroll', { target: document }); // the document maps to scrollingElement: top, not re-sent
+fire('pointerdown', {});
+now += 100; fire('keydown', {});      // within 300ms: throttled
+now += 300; fire('keydown', {});
+scrollTo(doc, 2);     // top again, reported because use reset the last direction
+console.log(JSON.stringify({ sent: sent(), targets: posted.map(function(p) { return p.target; }) }));
+`)
+	want := `[{"__avBar":"mode","artifactId":"abc","mode":"band"},` +
+		`{"__avBar":"scroll","artifactId":"abc","dir":"down"},` +
+		`{"__avBar":"scroll","artifactId":"abc","dir":"up"},` +
+		`{"__avBar":"scroll","artifactId":"abc","dir":"end"},` +
+		`{"__avBar":"scroll","artifactId":"abc","dir":"top"},` +
+		`{"__avBar":"use","artifactId":"abc"},` +
+		`{"__avBar":"use","artifactId":"abc"},` +
+		`{"__avBar":"scroll","artifactId":"abc","dir":"top"}]`
+	gotSent, err := json.Marshal(got["sent"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(gotSent) != want {
+		t.Errorf("messages:\n got %s\nwant %s", gotSent, want)
+	}
+	for _, target := range got["targets"].([]any) {
+		if target != "https://app.test" {
+			t.Errorf("posted to %v, want the app origin", target)
+		}
+	}
+}
+
+// Only an exact "overlay" (whitespace trimmed) opts in: a misspelling must
+// leave the artifact uncovered. Overlay also pads keyboard focus clear of the
+// bar (docs/artifact-bar.md §6.2).
+func TestBarScriptModeRequiresExactOverlay(t *testing.T) {
+	for content, want := range map[string]string{
+		"null":           "band", // no meta at all
+		`"overlay"`:      "overlay",
+		`"  overlay\n"`:  "overlay",
+		`"Overlay"`:      "band",
+		`"overlay band"`: "band",
+		`"overlays"`:     "band",
+		`""`:             "band",
+	} {
+		got := barHarness(t, `
+metaContent = `+content+`;
+run();
+console.log(JSON.stringify({ mode: sent()[0].mode, padding: rootStyle['scroll-padding-bottom'] || '' }));
+`)
+		if got["mode"] != want {
+			t.Errorf("content %s: mode %v, want %s", content, got["mode"], want)
+		}
+		wantPadding := ""
+		if want == "overlay" {
+			wantPadding = "var(--exhibit-bar, 0px)"
+		}
+		if got["padding"] != wantPadding {
+			t.Errorf("content %s: scroll-padding-bottom %q, want %q", content, got["padding"], wantPadding)
+		}
+	}
+}
+
+func TestBarScriptModeWaitsForTheParsedDocument(t *testing.T) {
+	got := barHarness(t, `
+document.readyState = 'loading';
+run();
+var before = sent().length;
+metaContent = 'overlay';
+(docListeners.DOMContentLoaded || []).forEach(function(fn) { fn(); });
+console.log(JSON.stringify({ before: before, mode: sent()[0].mode }));
+`)
+	if got["before"] != float64(0) || got["mode"] != "overlay" {
+		t.Errorf("got %v, want no message before DOMContentLoaded and overlay after", got)
+	}
+}
+
+func TestBarScriptHeightReceiverAcceptsOnlyTheHostsSaneNumbers(t *testing.T) {
+	got := barHarness(t, `
+run();
+var results = {};
+function offer(label, e) {
+  delete rootStyle['--exhibit-bar'];
+  fire('message', e);
+  results[label] = rootStyle['--exhibit-bar'] || '';
+}
+function from(n) { return { origin: API_ORIGIN, source: parentWin, data: { __avBarHeight: n } }; }
+offer('number', from(54));
+offer('zero', from(0));
+offer('max', from(400));
+offer('fraction', from(30.5));
+offer('string', from('54'));
+offer('negative', from(-1));
+offer('over', from(401));
+offer('nan', from(NaN));
+offer('infinity', from(Infinity));
+offer('null', from(null));
+offer('missing', { origin: API_ORIGIN, source: parentWin, data: {} });
+offer('foreignOrigin', { origin: 'https://evil.test', source: parentWin, data: { __avBarHeight: 54 } });
+offer('foreignSource', { origin: API_ORIGIN, source: {}, data: { __avBarHeight: 54 } });
+console.log(JSON.stringify(results));
+`)
+	for label, want := range map[string]string{
+		"number": "54px", "zero": "0px", "max": "400px", "fraction": "30.5px",
+		"string": "", "negative": "", "over": "", "nan": "", "infinity": "", "null": "",
+		"missing": "", "foreignOrigin": "", "foreignSource": "",
+	} {
+		if got[label] != want {
+			t.Errorf("%s: --exhibit-bar %q, want %q", label, got[label], want)
+		}
+	}
+}
+
+func TestBarScriptIsInertTopLevel(t *testing.T) {
+	got := barHarness(t, `
+window.parent = window;
+run();
+console.log(JSON.stringify({ listeners: Object.keys(listeners).length, posted: posted.length }));
+`)
+	if got["listeners"] != float64(0) || got["posted"] != float64(0) {
+		t.Errorf("top-level: got %v, want no listeners and no messages", got)
 	}
 }
