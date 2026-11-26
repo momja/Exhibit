@@ -299,6 +299,9 @@ func TestGalleryRetainsWidgetsAcrossTabsBrowser(t *testing.T) {
 	}
 	require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(app.URL)))
 	poll(`window.clerkCalls?.mount === 1`)
+	canMove, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`typeof Element.prototype.moveBefore === 'function'`))
+	require.NoError(t, err)
+	require.True(t, canMove, "widget retention test needs Chromium with Element.moveBefore")
 	run(`
 		window.visit = path => document.querySelector('.gallery-spaces a[href="' + path + '"]').click();
 		window.frame = () => document.querySelector('#gallery-content .card-widget-frame');
@@ -321,7 +324,10 @@ func TestGalleryRetainsWidgetsAcrossTabsBrowser(t *testing.T) {
 	}
 	run(`
 		window.incomingWidget = () => document.querySelector('[data-href="/artifacts/incoming-tool"] [data-gallery-widget]');
+		window.ownedWidget = () => document.querySelector('[data-href="/artifacts/owned-tool"] [data-gallery-widget] iframe');
 		window.oldWidget = incomingWidget().querySelector('iframe');
+		window.unchangedWidget = ownedWidget();
+		window.unchangedWindow = unchangedWidget.contentWindow;
 		visit('/activity');
 	`)
 	poll(`location.pathname === '/activity' && oldWidget.closest('[hidden]')`)
@@ -331,6 +337,10 @@ func TestGalleryRetainsWidgetsAcrossTabsBrowser(t *testing.T) {
 	require.NoError(t, err)
 	run(`visit('/shared')`)
 	poll(fmt.Sprintf(`location.pathname === '/shared' && incomingWidget()?.dataset.widgetVersion === %q && incomingWidget().querySelectorAll('iframe').length === 1 && !oldWidget.isConnected`, store.ContentRevision(newBlob)))
+	unchanged, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`ownedWidget() === unchangedWidget && ownedWidget().contentWindow === unchangedWindow &&
+		[...document.querySelectorAll('#gallery-content [data-gallery-widget]')].every(well => well.querySelectorAll('iframe').length <= 1)`))
+	require.NoError(t, err)
+	require.True(t, unchanged, "refresh keeps the unchanged iframe and does not duplicate any frames")
 	run(`
 		window.agedWidget = incomingWidget().querySelector('iframe');
 		agedWidget.dataset.galleryMountedAt = performance.now() - 61000;
