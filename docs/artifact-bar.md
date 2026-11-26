@@ -2,8 +2,7 @@
 
 Replaces the draggable picture-in-picture pill on the artifact detail page
 (Exh-ghuv) with one bar pinned to the bottom centre of the window, in the
-manner of iOS Safari's address bar. Status: designed and prototyped on
-`prototype/pip-bottom-bar`; not yet ticketed or shipped.
+manner of iOS Safari's address bar. Epic [Exh-i8q4](../.tickets/Exh-i8q4.md); prototyped on `prototype/pip-bottom-bar`.
 
 ## 1. Decisions
 
