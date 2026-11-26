@@ -82,6 +82,14 @@ func TestAgentPreviewWithoutArtifactRendersEmptyState(t *testing.T) {
 	}
 }
 
+func TestAgentPreviewReloadBeforeTranscriptIsSaved(t *testing.T) {
+	r := newTestRouter(t)
+	id := createArtifact(t, r, map[string]any{"title": "Counter", "body": "<h1>Counter</h1>"})
+	page := getPage(t, r, "/agent?artifact="+id+"&saved_session=pending")
+	assert.Contains(t, page, `id="pv-frame"`)
+	assert.NotContains(t, page, `id="history-messages"`)
+}
+
 // An unknown artifact answers 404 with the user-facing fragmentError
 // partial, which htmx swaps into the pane in place of the stale preview —
 // the visitor learns the artifact is gone instead of staring at its old body.

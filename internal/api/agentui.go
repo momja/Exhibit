@@ -188,6 +188,7 @@ func (ro *Router) agentPage(w http.ResponseWriter, r *http.Request) {
 	// A deep link selects a conversation for reading. Merely opening a
 	// historical entry never resumes a process or rolls back the artifact.
 	conversation := r.URL.Query().Get("conversation")
+	optionalConversation := false
 	if live := r.URL.Query().Get("live"); live != "" {
 		if ro.cfg.Agent != nil {
 			if session := ro.cfg.Agent.Get(ownerIDFromCtx(r.Context()), live); session != nil && session.ArtifactID() == r.URL.Query().Get("artifact") {
@@ -197,6 +198,11 @@ func (ro *Router) agentPage(w http.ResponseWriter, r *http.Request) {
 		if data.LiveSession == "" {
 			conversation = live
 		}
+	} else if conversation == "" && artifact != nil {
+		// A reload can land before the first turn has settled and its
+		// transcript has been stored. The saved artifact is already available.
+		conversation = r.URL.Query().Get("saved_session")
+		optionalConversation = true
 	}
 	if conversation != "" {
 		transcript, head, err := ro.transcript(r, ownerIDFromCtx(r.Context()), r.URL.Query().Get("artifact"), conversation)
@@ -204,11 +210,13 @@ func (ro *Router) agentPage(w http.ResponseWriter, r *http.Request) {
 			serverError(w, r, "activity conversation", err)
 			return
 		}
-		if transcript == nil {
+		if transcript == nil && !optionalConversation {
 			ro.notFound(w, r)
 			return
 		}
-		data.Conversation = &agentTranscriptData{conversationView: newConversationView(*transcript, head), HeadSeq: head, Messages: agent.Messages(transcript), AgentEnabled: ro.cfg.Agent != nil}
+		if transcript != nil {
+			data.Conversation = &agentTranscriptData{conversationView: newConversationView(*transcript, head), HeadSeq: head, Messages: agent.Messages(transcript), AgentEnabled: ro.cfg.Agent != nil}
+		}
 	}
 	data.DirectOpen.OpenURL = data.Preview.OpenURL
 	data.DirectOpen.ViewerPreference = strconv.FormatInt(ownerIDFromCtx(r.Context()), 10)

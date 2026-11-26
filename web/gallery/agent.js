@@ -549,6 +549,14 @@ function handleAgentEvent(ev) {
       // fires once create_artifact/write_artifact has landed, which makes it
       // the trigger for re-rendering the preview pane.
       artifact = {id: ev.artifactId, title: ev.title || 'Artifact'};
+      if (ev.action === 'created' && sessionId && !observingSession) {
+        // Bind the current history entry without touching the live session.
+        // On reload the server can show whatever it has saved of this chat.
+        const url = new URL(window.location.href);
+        url.searchParams.set('artifact', artifact.id);
+        url.searchParams.set('saved_session', sessionId);
+        window.history.replaceState(window.history.state, '', url);
+      }
       refreshPreview();
       nudgePreview();
       let note = ev.action === 'created' ? 'Artifact created.' : 'Artifact updated.';
