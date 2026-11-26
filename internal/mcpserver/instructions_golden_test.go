@@ -67,3 +67,13 @@ func TestHTTPHandlerRefusesUnknownAIKind(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// The artifact bar's overlay opt-in (Exh-i8q4) uses the names the render
+// preamble reads and sets; render_test.go asserts the same strings there.
+func TestInstructionsTeachTheBarOptIn(t *testing.T) {
+	for _, name := range []string{"exhibit-bar", `<meta name="exhibit-bar" content="overlay">`, "var(--exhibit-bar, 0px)"} {
+		if !strings.Contains(Instructions, name) {
+			t.Errorf("instructions are missing %q", name)
+		}
+	}
+}
