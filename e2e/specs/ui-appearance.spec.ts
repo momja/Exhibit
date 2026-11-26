@@ -267,17 +267,19 @@ test('phone share controls and choices compose cleanly in both themes', async ({
         const replace = rect('#share-link-replace');
         const helper = rect('.share-replace-row > span');
         const link = rect('#share-link-url');
-        const copy = rect('#share-link-copy');
+        const copy = rect('#share-link-url-copy');
         const choices = [...panel.querySelectorAll('.state-choice > span')].map(element => element.getBoundingClientRect());
         return {
           helperBelow: helper.top >= replace.bottom - .5,
-          equalControlHeights: Math.abs(link.height - copy.height) < 1 && copy.height >= 44,
+          // copyField insets its copy action inside the link field (#287).
+          copyInsideLink: copy.left >= link.left && copy.right <= link.right && copy.top >= link.top && copy.bottom <= link.bottom,
+          copyTouchTarget: copy.width >= 44 && copy.height >= 44,
           stackedChoices: choices[1].top >= choices[0].bottom && Math.abs(choices[0].left - choices[1].left) < 1,
           wideChoices: choices.every(choice => choice.width >= 200),
           fits: panel.scrollWidth <= panel.clientWidth,
         };
       });
-      expect(layout, `${width}px ${colorScheme}`).toEqual({ helperBelow: true, equalControlHeights: true, stackedChoices: true, wideChoices: true, fits: true });
+      expect(layout, `${width}px ${colorScheme}`).toEqual({ helperBelow: true, copyInsideLink: true, copyTouchTarget: true, stackedChoices: true, wideChoices: true, fits: true });
       await page.locator('#share-close').click();
     }
   }
