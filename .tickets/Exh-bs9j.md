@@ -53,3 +53,33 @@ This improves source review without pretending the agent has a browser. If this 
 **How to judge whether prevention works.** Obtain the original failing source, exact trigger and fixing diff; minimize them into a fixture that fails before and passes after the artifact fix. Add benign fixtures so warnings and checks do not reject intentional horizontal scrollers or legitimate fixed controls. Verify new guidance reaches both Pi and MCP with their existing prompt tests, then compare artifact generations under old/new prompts against behavioral checks. Prompt snapshots alone prove delivery of instructions, not a reduction in defects. No original-bug regression result is claimed here because the failing source and exact symptom were unavailable.
 
 Only this investigation note is persisted. No application prompt, harness, production artifact, stored data or permissions were changed.
+
+**2026-11-26T21:58:59Z**
+
+### Clarified failure: focus zoom with pinch recovery disabled
+
+The owner supplied the exact symptom: tapping the Add field focused it and zoomed into it; pinch-to-zoom could not zoom back out. The owner considers disabling pinch zoom to make the artifact feel app-like an incomplete artifact implementation. This supersedes the earlier note's uncertainty about the reported symptom. The exact fixing version and historical source diff remain unverified.
+
+A fresh fetch of the [shared artifact](https://artifacts.dizzard.net/s/371ddbb3-1fd2-40d8-919c-b9d1f5a80334) still serves version 28 and contains all three zoom restrictions:
+
+- Viewport: `maximum-scale=1.0, user-scalable=no`.
+- Root CSS: `html{touch-action:pan-x pan-y;}` (no `pinch-zoom`).
+- Document-wide `gesturestart` / `gesturechange` handlers that call `preventDefault()`, immediately below the comment `Prevent Safari's pinch gestures for an app-like fixed-scale view.`
+
+The current Add input specifies `font-size:17px`. These observations support the distinction between preventing the focus-zoom trigger and preserving the user's ability to recover or intentionally zoom. They do not establish whether version 28 still reproduces the reported focus zoom on the owner's device. No live artifact was edited or exercised with state-changing interactions.
+
+Exhibit has already encountered the related focus-zoom pattern in its own UI: [av-3qmf](av-3qmf.md) fixed small editable-control text while retaining user zoom. Its measured touch sizing is useful precedent, not evidence of the historical artifact's font size. The old artifact source is still unavailable, so small text remains an unverified explanation of this incident's initial zoom trigger.
+
+**Narrowed prompt recommendation.** Add the following to the shared artifact-authoring guidance, without applying an unsolicited source rewrite:
+
+> Preserve browser pinch-to-zoom and text enlargement. An app-like appearance is not a reason to lock viewport scale or cancel native zoom gestures. On touch devices, size editable controls to at least 16 CSS px without visually shrinking them with transforms, and let the layout accommodate larger text. Keep focused inputs and their actions reachable when the keyboard opens. Treat preventing focus zoom and preserving user zoom as separate requirements. Scope custom gestures to the surface that needs them, and keep page zoom available. Do not claim iOS focus or gesture behavior was tested unless it was.
+
+This is a practical baseline, not a guarantee that one font-size threshold resolves every iOS zoom behavior. A dedicated canvas may legitimately own local gestures; that does not justify document-wide suppression across the artifact. The broader principle is to retain platform affordances while achieving the requested appearance and interaction.
+
+**Narrowed harness recommendation.** First add save-result diagnostics for explicit viewport zoom locks, page-wide touch rules excluding pinch, and document-wide gesture cancellation. Return a concrete source finding to the agent and require it to resolve newly introduced restrictions before declaring the work complete, unless that behavior was explicitly requested. Keep existing/imported artifacts editable; diagnostics must not prevent repair saves or silently strip code. Viewport parsing is deterministic; CSS/JS gesture findings require scope analysis and should initially be advisory. A throwaway source check against version 28 found both viewport failures and both gesture-review signals. This demonstrates detection of the anti-pattern, not reproduction of the iOS symptom.
+
+The viewport checks align with the [W3C ACT viewport rule](https://www.w3.org/WAI/standards-guidelines/act/rules/b4f0c3/), which flags `user-scalable=no` and maximum scale below 2. The rule also notes that modern browsers can ignore viewport limits; those flags alone therefore do not prove which restriction trapped this user. [MDN's touch-action reference](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/touch-action) documents browser gesture handling and its intersection with ancestor rules. Treat the viewport, CSS and JS restrictions as separate paths, rather than fixing only the viewport tag.
+
+For regression coverage, separately check (1) editable-control computed text sizes on touch profiles, (2) the absence of unintended page-wide zoom suppression, and (3) real iPhone focus -> keyboard open -> blur/dismiss -> intentional pinch zoom in/out, with adjacent actions reachable throughout. A passing desktop screenshot, synthetic gesture event, or root-font enlargement check cannot certify that final device flow. The general isolated-browser tool remains useful longer-term, but this source-level policy can catch the agent's explicit zoom-disabling choice without waiting for it.
+
+Investigation update only: application prompts, harness and production artifacts remain unchanged. The physical-device QA acceptance criteria above are not marked complete.
