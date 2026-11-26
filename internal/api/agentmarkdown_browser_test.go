@@ -45,16 +45,21 @@ func markdownBrowserFixture(t *testing.T) (http.Handler, string, chan []byte) {
 		transcript.WriteByte('\n')
 	}
 	keepConversation(t, router, id, "markdown", "Markdown examples", transcript.String())
+	handler, events := agentBrowserStream(router, "markdown")
+	return handler, id, events
+}
+
+func agentBrowserStream(router *Router, session string) (http.Handler, chan []byte) {
 	events := make(chan []byte, 32)
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/agent/sessions", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusCreated, map[string]string{"id": "markdown", "sse_ticket": "fixture"})
+		writeJSON(w, http.StatusCreated, map[string]string{"id": session, "sse_ticket": "fixture"})
 	})
-	mux.HandleFunc("POST /api/agent/sessions/markdown/prompt", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /api/agent/sessions/"+session+"/prompt", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	})
-	mux.HandleFunc("DELETE /api/agent/sessions/markdown", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })
-	mux.HandleFunc("GET /api/agent/sessions/markdown/events", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("DELETE /api/agent/sessions/"+session, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	mux.HandleFunc("GET /api/agent/sessions/"+session+"/events", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.WriteHeader(http.StatusOK)
 		w.(http.Flusher).Flush()
@@ -77,7 +82,7 @@ func markdownBrowserFixture(t *testing.T) (http.Handler, string, chan []byte) {
 		}
 	})
 	mux.Handle("/", router)
-	return mux, id, events
+	return mux, events
 }
 
 func TestAgentMarkdownBrowser(t *testing.T) {

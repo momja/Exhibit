@@ -77,12 +77,15 @@
        artifact and state saves re-fetch it: the artifact-saved hook fires the
        exhibit:artifact-saved event on <body>, htmx GETs the fragment for the
        session's current artifact, and swaps it in. The wiring lives here, in
-       markup, so agent.js never rebuilds markup the template already owns. */}}
+       markup, so agent.js never rebuilds markup the template already owns.
+       Disable htmx's attribute transition here. It copies the old iframe's
+       src to the replacement, then removes the src set by relay-host when it
+       restores the attributes from the fragment. */}}
   <div class="preview" id="pane-preview" role="region" aria-label="Preview" tabindex="-1"
        hx-get="/partials/agent-preview"
        hx-trigger="exhibit:artifact-saved from:body"
        hx-vals='js:{artifact: previewArtifactId()}'
-       hx-swap="innerHTML" hx-sync="this:queue last">{{template "agentPreview" .Preview}}</div>
+       hx-swap="innerHTML settle:0" hx-sync="this:queue last">{{template "agentPreview" .Preview}}</div>
   {{/* This request source survives pane swaps. Serialize both refresh types,
        then resolve the live tile by ID when the response arrives. A queued full
        refresh supersedes queued tile work; tile work joins an existing queued
