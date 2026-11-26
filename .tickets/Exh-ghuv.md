@@ -2,7 +2,7 @@
 id: Exh-ghuv
 status: closed
 deps: []
-links: []
+links: [Exh-i8q4]
 created: 2026-10-18T16:55:44Z
 type: feature
 priority: 2
@@ -43,3 +43,7 @@ Prototype review decisions (demo: paper canvas frame 07-pip-demo):
 **2026-10-18T22:26:00Z**
 
 Popup placement (supersedes the 'hang off their own trigger' line in the previous note): the info card is flush with the pill's corner-side edge and matches the pill's width (280px minimum, never wider than the window less 8px each side). The ⋮ menu still hangs off its own button. Both open 8px off the pill toward the screen centre, choose that side from the docked corner rather than the pill's geometry (on a phone the pill spans most of the width), and cap their height at the room left before the 12px window inset, scrolling past that. Verified in all four corners at 1280×800, 1024×420, 900×300 and 390×844, contained and with grants.
+
+**2026-11-26T05:49:24Z**
+
+Superseded by Exh-i8q4 (artifact bar): the grip, drag, corner snapping, edge stash and 'Hide controls' are replaced by one bottom-pinned bar that shrinks on scroll or use, with a reserved band by default and an opt-in overlay. The info card and ⋮ menu remain.
