@@ -158,6 +158,11 @@
    * letting the form cover the figure. */
   .login-painted{--login-inset:20px;--login-painting-h:clamp(240px,40dvh,380px);min-height:100dvh;background:linear-gradient(var(--painting-sky-top),var(--painting-sky-bottom))}
   .login-scene{position:absolute;background:linear-gradient(var(--painting-sky-top),var(--painting-sky-bottom))}
+  /* Let the document scroll past the viewport so Safari can draw the scene
+   * behind its floating toolbar. Keep the body height for Clerk fitting. */
+  .login-hosted{overflow:visible;contain:none}
+  .login-hosted::after{content:"";position:absolute;top:100%;width:1px;height:80px;pointer-events:none}
+  .login-hosted .login-scene{bottom:-80px}
   .login-scene-composite{inset:auto 0 0;height:var(--login-painting-h);-webkit-mask-image:linear-gradient(transparent 0,#000 28%);mask-image:linear-gradient(transparent 0,#000 28%)}
   .login-scene-image{object-position:50% 100%}
   .login-scene::after{background:linear-gradient(var(--painting-shade) 0,var(--painting-shade) 30%,transparent 62%)}

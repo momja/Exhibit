@@ -25,3 +25,9 @@ Community reports on Safari 26 say it ends the viewport above its floating toolb
 
 On a physical iPhone running iOS Safari 26, in light and dark mode, the sign-in page shows no hard edge or black band at the toolbar; the header and card stay clear of it; desktop layout and the card's fit-to-viewport behaviour are unchanged.
 
+
+## Notes
+
+**2026-11-27T16:44:32Z**
+
+Candidate: allow the hosted phone document to scroll beyond its viewport-height body and extend the painted scene into that space, while retaining the body height used by Clerk fit. Safari 26 toolbar compositing remains unverified; physical iPhone testing in light and dark is required before acceptance.
