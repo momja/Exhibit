@@ -47,7 +47,7 @@
 
 @media (max-width:600px){
   /* The phone shows the 960x2080 crop at (1540,192) of the extended scene, its
-   * bottom edge on the page's bottom: the frame is 2560u wide with u = width/960. */
+   * bottom edge on the page's bottom (or the iOS-only toolbar bleed): the frame is 2560u wide with u = width/960. */
   .login-layers{inset:auto 0 0;height:var(--login-painting-h);-webkit-mask-image:linear-gradient(transparent 0,#000 28%);mask-image:linear-gradient(transparent 0,#000 28%)}
   .login-layers-stage{--w:calc(100cqw*2560/960);left:calc(var(--u)*-1540);top:auto;bottom:0}
 }

@@ -135,6 +135,7 @@
  * or switches authentication steps. Give it space before using the fit scale. */
 .login-hosted{height:100dvh;min-height:0;overflow:clip;contain:paint}
 .login-hosted .app-header-slot{flex-shrink:0}
+.login-content-clip{display:contents}
 .login-hosted .login-content{
   flex:none;margin-block:auto;gap:clamp(20px,4.5dvh,48px);padding-block:clamp(10px,2.5dvh,34px) 16px;
   transform:scale(var(--login-fit,1));transform-origin:var(--login-inset) 0;
@@ -158,6 +159,15 @@
    * letting the form cover the figure. */
   .login-painted{--login-inset:20px;--login-painting-h:clamp(240px,40dvh,380px);min-height:100dvh;background:linear-gradient(var(--painting-sky-top),var(--painting-sky-bottom))}
   .login-scene{position:absolute;background:linear-gradient(var(--painting-sky-top),var(--painting-sky-bottom))}
+  /* iOS WebKit needs scrolling paint behind its floating toolbar. */
+  @supports (-webkit-touch-callout:none){
+    html:has(.login-hosted){background:#293b35}
+    .login-hosted{--login-toolbar-bleed:80px;overflow-x:clip;overflow-y:visible;contain:none}
+    /* Estimated toolbar bleed; confirm on a physical device. */
+    .login-hosted::after{content:"";position:absolute;top:100%;width:1px;height:var(--login-toolbar-bleed);pointer-events:none}
+    .login-hosted .login-scene{bottom:calc(-1 * var(--login-toolbar-bleed))}
+    .login-hosted .login-content-clip{display:flex;flex:1;min-height:0;overflow:clip;flex-direction:column}
+  }
   .login-scene-composite{inset:auto 0 0;height:var(--login-painting-h);-webkit-mask-image:linear-gradient(transparent 0,#000 28%);mask-image:linear-gradient(transparent 0,#000 28%)}
   .login-scene-image{object-position:50% 100%}
   .login-scene::after{background:linear-gradient(var(--painting-shade) 0,var(--painting-shade) 30%,transparent 62%)}
@@ -195,4 +205,4 @@
   .login-hosted .login-headline{font-size:clamp(32px,5vw,42px)}
 }
 
-@media (forced-colors:active){.login-scene{display:none}.login-intro,.login-wordmark{color:CanvasText;text-shadow:none}}
+@media (forced-colors:active){.login-hosted::after{content:none}.login-scene{display:none}.login-intro,.login-wordmark{color:CanvasText;text-shadow:none}}

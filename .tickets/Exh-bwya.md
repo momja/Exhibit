@@ -1,6 +1,6 @@
 ---
 id: Exh-bwya
-status: open
+status: in_progress
 deps: []
 links: [Exh-od5a]
 created: 2026-11-20T16:09:54Z
@@ -25,3 +25,13 @@ Community reports on Safari 26 say it ends the viewport above its floating toolb
 
 On a physical iPhone running iOS Safari 26, in light and dark mode, the sign-in page shows no hard edge or black band at the toolbar; the header and card stay clear of it; desktop layout and the card's fit-to-viewport behaviour are unchanged.
 
+
+## Notes
+
+**2026-11-27T16:44:32Z**
+
+Candidate: allow the hosted phone document to scroll beyond its viewport-height body and extend the painted scene into that space, while retaining the body height used by Clerk fit. Safari 26 toolbar compositing remains unverified; physical iPhone testing in light and dark is required before acceptance.
+
+**2026-11-27T17:08:59Z**
+
+Round 2: gated the estimated 80px toolbar bleed to narrow iOS WebKit; clipped hosted content independently of the scene, retained 100dvh fitting, added a ground canvas color and disabled the spacer in forced colors. Updated architecture and descent documentation. Physical iPhone validation remains required; ticket stays in progress.

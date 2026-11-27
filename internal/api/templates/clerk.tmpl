@@ -25,7 +25,7 @@
 </head>
 <body class="login-page login-painted login-hosted{{if .Descend}} login-descend{{end}}"{{if .Descend}} data-descent-after="clerk"{{end}}>{{template "loginScene" .Descend}}
 {{template "appHeader" .Header}}
-<div class="login-content">
+<div class="login-content-clip"><div class="login-content">
 {{template "loginIntro"}}
 <main class="login login-clerk">
 <div data-controller="clerk" data-clerk-mode-value="{{.Mode}}" data-clerk-next-value="{{.Next}}">
@@ -38,7 +38,7 @@
 </div>
 <noscript>Enable JavaScript to sign in to Exhibit.</noscript>
 </main>
-</div>
+</div></div>
 </body>
 </html>{{end}}
 
