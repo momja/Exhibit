@@ -48,6 +48,10 @@
               hx-target="#history" hx-swap="innerHTML" onclick="openHistory()"><i class="ph ph-clock-counter-clockwise"></i> History</button>
     </div>
     <template id="agent-message-template">{{template "agentMessage" ""}}</template>
+    {{/* The working indicator (Exh-s8yu): a pencil that boils while the agent
+         thinks, three baked drawings cycled by agent.css. agent.js clones it on
+         thinking_start and removes it when the turn moves on. */}}
+    <template id="agent-thinking-template"><div class="thinking is-boiling">{{inlineSVG "phosphor/pencil-simple-boil.svg"}}thinking…</div></template>
     <div id="messages"></div>
     <div id="history">{{if .Conversation}}{{template "agentTranscript" .Conversation}}{{end}}</div>
     <div class="composer">

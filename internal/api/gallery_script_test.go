@@ -25,14 +25,6 @@ import (
 // since a machine with no node has no built assets either and would already be
 // failing the tests around this one.
 func TestGalleryPageScriptSuite(t *testing.T) {
-	node, err := exec.LookPath("node")
-	if err != nil {
-		t.Skip("node not installed; gallery page-script tests need it (so does `make assets`)")
-	}
-	dir, err := filepath.Abs(filepath.Join("..", "..", "web", "gallery"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	// Named explicitly rather than by a --test directory walk, so a file added
 	// with a typo'd name is a missing test rather than a silent no-op.
 	suites := []string{
@@ -59,6 +51,7 @@ func TestGalleryPageScriptSuite(t *testing.T) {
 		"session-preparation.test.mjs",
 		"agent.preparation.test.mjs",
 		"agent.history.test.mjs",
+		"agent.thinking.test.mjs",
 		"agent-resize.test.mjs",
 		"agent-questions.test.mjs",
 		"message-actions.test.mjs",
@@ -79,15 +72,29 @@ func TestGalleryPageScriptSuite(t *testing.T) {
 		// The same, for the geolocation gate's section of bridgeScript.
 		"render.geolocation.test.mjs",
 	}
+	runNodeTestSuites(t, "gallery", suites...)
+}
+
+// runNodeTestSuites runs the named `node --test` files in web/<workspace>.
+func runNodeTestSuites(t *testing.T, workspace string, suites ...string) {
+	t.Helper()
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("node not installed; web/" + workspace + " tests need it (so does `make assets`)")
+	}
+	dir, err := filepath.Abs(filepath.Join("..", "..", "web", workspace))
+	if err != nil {
+		t.Fatal(err)
+	}
 	cmd := exec.Command(node, append([]string{"--experimental-vm-modules", "--test"}, suites...)...)
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("web/gallery page-script tests failed: %v\n%s", err, out)
+		t.Fatalf("web/%s tests failed: %v\n%s", workspace, err, out)
 	}
 	// `node --test` exits 0 when it matched no files at all, which would make
 	// this a test that passes by running nothing.
 	if !strings.Contains(string(out), "# pass ") && !strings.Contains(string(out), "pass ") {
-		t.Fatalf("no page-script tests appear to have run:\n%s", out)
+		t.Fatalf("no web/%s tests appear to have run:\n%s", workspace, out)
 	}
 }

@@ -1,6 +1,6 @@
 ---
 id: Exh-s8yu
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-16T03:29:55Z
@@ -46,3 +46,9 @@ Baked asset adds 2 KB gzipped or less.
 The av-c7hu rotation workaround (CIRCLE_NOTCH_PATH, the thinking-spin keyframes) is removed if nothing else uses it.
 Screenshots or a short screen recording of the indicator attached to the PR, light and dark.
 
+
+## Notes
+
+**2026-11-16T08:45:52Z**
+
+Shipped as a filmstrip, not three visibility animations: the three frames sit one 256-unit cell apart behind a one-cell viewBox, and one steps(3) translate animation slides the strip. The ticket's per-frame scheme leaves a ~1.25µs gap at each hand-off (the 33.333% keyframe is short of 1/3), and WebKit 27.2 rendered blank frames there (2 of ~24 two-second runs). The noise permutation uses a Fisher-Yates shuffle instead of the prototype's random-comparator sort, so frames differ from /tmp/bake but keep its character. Baked asset: 2479 bytes raw, 1095 gzipped (level 9).

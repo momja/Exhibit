@@ -25,6 +25,7 @@ var templatesFS embed.FS
 // yields the cacheable, build-versioned URL (assets.go).
 var pageTemplates = template.Must(template.New("").Funcs(template.FuncMap{
 	"asset":         assetURL,
+	"inlineSVG":     inlineSVG,
 	"agentMarkdown": agentMarkdown,
 	"tagColorName":  color.PresetName,
 	"tagColors":     newTagColorPickerView,

@@ -670,12 +670,26 @@ sign-in form, user menu, and account/security panels.
 
 **Anything that rotates is a path, not a glyph (av-c7hu).** Browsers snap a
 glyph's baseline to whole device pixels, so a spinning webfont icon turns about
-a point a fraction of a pixel off its own center and wobbles; on the agent
-page's spinner the ring sat 0.13-0.21px above its pivot. That spinner is
-therefore Phosphor's `circle-notch` path inlined as an SVG (`spinnerIcon` in
-`web/gallery/agent.js`), centered in its viewBox at any pixel ratio. A static
-icon is unaffected and stays a glyph. The details caret in `components.css`
-dodges the same offset by swapping two glyphs instead of rotating one.
+a point a fraction of a pixel off its own center and wobbles; the agent page's
+old spinner sat 0.13-0.21px above its pivot. A static icon is unaffected and
+stays a glyph. The details caret in `components.css` dodges the same offset by
+swapping two glyphs instead of rotating one.
+
+**The agent's working indicator boils (Exh-s8yu).** Nothing rotates there now:
+a pencil-simple is redrawn three slightly different ways and cycled at 8 fps,
+the hand-drawn line boil. The frames are baked by the icon build
+(`web/icons/boil.mjs`) from the pinned `@phosphor-icons/core` drawing with
+seeded noise, so every build writes the same bytes, into
+`phosphor/pencil-simple-boil.svg`: the three frames side by side as a
+filmstrip, one 256-unit cell apart, behind a viewBox that shows one cell. The
+agent template inlines it with `{{inlineSVG …}}` into a `<template>` that
+`agent.js` clones, so the page script holds no path data and the icon takes
+`currentColor`. `agent.css` slides the strip a whole cell at a time with one
+`steps(3)` animation. One animation is what makes "exactly one frame shows"
+hold at every instant; three per-frame visibility animations leave a gap at
+each hand-off that WebKit renders as a blank frame. This is the only boiling icon; a new one is another
+`bakeBoil` call in `web/icons/build.mjs`, never frames drawn in the browser
+or shipped as raster.
 
 ## 10. Auth
 
