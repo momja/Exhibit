@@ -109,7 +109,6 @@ func boolEnv(name string) (bool, error) {
 	return v, nil
 }
 
-// inferenceKindNames spells kinds the way agent guidance takes them.
 // inferenceGuidanceNames is what the agent's prompt teaches: the offered
 // kinds, plus "images" when complete() can take them (Exh-v81w).
 func inferenceGuidanceNames(ctx context.Context, svc *inference.Service) []string {
@@ -120,6 +119,7 @@ func inferenceGuidanceNames(ctx context.Context, svc *inference.Service) []strin
 	return names
 }
 
+// inferenceKindNames spells kinds the way agent guidance takes them.
 func inferenceKindNames(kinds []inference.Kind) []string {
 	names := make([]string, 0, len(kinds))
 	for _, k := range kinds {
