@@ -1,6 +1,8 @@
 # Exhibit
 
-<img src="internal/api/logo.svg" width="88" alt="Exhibit logo">
+<p align="center">
+  <img src="internal/api/logo.svg" width="128" alt="Exhibit logo">
+</p>
 
 > [!WARNING]
 > This is in very early development and there will be future breaking changes.
