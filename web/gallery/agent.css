@@ -115,7 +115,7 @@ body{background:var(--color-ground);color:var(--color-ink);display:flex;flex-dir
 .question-actions{display:flex;align-items:center;flex-wrap:wrap;gap:12px}
 .question-submit{min-height:44px;gap:8px}
 .question-skip,#interaction-retry{border:0;background:transparent;color:var(--color-muted);font:inherit;font-size:13px;cursor:pointer;padding:10px 8px;min-height:44px}
-.question-skip:hover,#interaction-retry:hover{color:var(--brand-blue)}
+:is(.question-skip,#interaction-retry):is(:hover,:focus-visible){color:var(--brand-blue);text-decoration:underline}
 .question-skip-confirmation{border-left:2px solid var(--color-border);padding:10px 0 0 12px;margin-top:12px;font-size:13px}
 .question-skip-confirmation[hidden]{display:none}
 .question-skip-confirmation p{margin:0}

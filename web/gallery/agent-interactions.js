@@ -160,7 +160,10 @@ export async function respondToInteraction(sessionId, requestId, responseBody) {
     focusAfterResponse.delete(key);
     if (card.dataset.pending === 'true') {
       enabledFields.forEach(field => { field.disabled = false; });
-      if (focusedField?.isConnected && card.contains(focusedField)) focusedField.focus();
+      if (focusedField?.isConnected && card.contains(focusedField) &&
+          (!document.activeElement || document.activeElement === document.body || card.contains(document.activeElement))) {
+        focusedField.focus();
+      }
     }
     return false;
   } finally {

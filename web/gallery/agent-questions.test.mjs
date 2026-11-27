@@ -300,3 +300,20 @@ test('a terminal response does not steal focus when the person moves to chat', a
   await p.submit();
   assert.notEqual(p.card.focused, true);
 });
+
+
+test('a failed response does not steal focus after the person moves to chat', async () => {
+  let reject;
+  const p = await fixture({ responses: [() => new Promise((_, fail) => { reject = fail; })] });
+  await p.type('A monthly calendar');
+  const field = p.questions[0].text;
+  field.isConnected = true;
+  field.focus();
+  const sending = p.submit();
+  const composer = p.byId('input');
+  p.setFocus(composer);
+  reject(new Error('Network unavailable'));
+  await sending;
+  assert.equal(p.document.activeElement, composer);
+  assert.equal(field.disabled, false);
+});
