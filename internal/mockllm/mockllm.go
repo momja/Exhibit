@@ -287,6 +287,12 @@ func questionPlan(userText string) (turnPlan, bool) {
 			{"label": "Simple list"},
 		}},
 	}
+	if strings.Contains(userText, "mock-ask-questions-mixed") {
+		questions = append(questions, map[string]any{
+			"id": "priorities", "question": "What matters most for your meals?", "multiSelect": true,
+			"options": []map[string]string{{"label": "Quick to cook", "description": "Ready in about 30 minutes"}, {"label": "Budget friendly"}, {"label": "More variety"}},
+		})
+	}
 	if strings.Contains(userText, "mock-ask-questions") {
 		questions = append(questions, map[string]any{"id": "goal", "question": "What should the plan help you with?"})
 	}

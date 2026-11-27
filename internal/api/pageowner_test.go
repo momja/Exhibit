@@ -197,6 +197,9 @@ var appOriginGETOwnerScope = []pageOwnerRoute{
 	{route: "/api/agent/sessions/{sessionID}/questions/{requestID}", scopedByHandler: true, coveredBy: "agentquestions_test.go",
 		why: "reads an in-memory agent session rather than a stored artifact; agentSession uses the request owner with Manager.Get, proven with live questions and two accounts by TestAgentQuestionsArePrivateToSessionOwner"},
 
+	{route: "/api/agent/sessions/{sessionID}/interactions/{requestID}", scopedByHandler: true, coveredBy: "agentinteractions_test.go",
+		why: "generic interaction reads and actions use owner-scoped agentSession; live two-account coverage also rejects scoped agent credentials"},
+
 	// The authenticated API group, which runs authMiddleware +
 	// ownerMiddleware. Its owner scoping is av-ep8k's, pinned by
 	// owner_scope_test.go; the rows are here so this walk covers the whole

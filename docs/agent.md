@@ -276,83 +276,100 @@ not change tool parameters, prompt wording, or owner/artifact scope.
   prompt saying elements were selected, and the model reads them with
   `get_selection`. Page JS composes no envelope at all.
 
+## Agent panel interactions
+
+The panel delivers server-owned, typed interactions. Questions are the first
+implemented kind. `internal/agent/interactions.go` owns identity, tool-call
+correlation, lifecycle, revision checks, cancellation and SSE change events;
+`questions.go` owns question validation and the Pi input/reply adapter. The
+session stores one interaction map, not a second question lifecycle.
+
+Each interaction has `id`, `kind`, `state`, `revision`, `blocking`, `toolCallId`
+and a typed payload. States are `pending`, `completed`, `cancelled` (explicit
+skip), `expired` (tool/session stopped), and `blocked` (policy refused a reply).
+A new request starts at revision 1; every accepted transition increments it.
+Only blocking pending interactions pause the runaway-turn clock and suspend
+ordinary prompts. Idle-session expiration still applies while waiting.
+
+`exhibit_interaction` SSE events contain the request ID, kind, current state,
+revision, pending flag and blocking flag. `agent-interactions.js` fetches
+`GET /api/agent/sessions/:sessionID/interactions/:requestID`; Go renders the
+`agentInteraction` partial and htmx inserts or replaces that region. Replayed
+revisions preserve drafts; retired sessions abort requests and reject late
+swaps. A newly inserted interaction reveals its beginning, not its footer.
+Browser-only question draft behavior belongs to the `agent-questions` Stimulus
+controller, registered in `web/gallery/controllers.js`.
+
+Actions POST to the same interaction URL with the reviewed `revision` and a
+kind-specific `action`. Missing revisions and incompatible actions are rejected;
+stale or duplicate replies return `409`. The owner-scoped routes never let an
+agent credential reply for the person. A successful HTTP response is followed
+by a canonical fragment refresh even if its SSE event was lost. Failed writes
+leave the revision and form pending for retry.
+
+To add a kind, define its typed payload, validate its creation, add its explicit
+action handler and template, then project a safe read-only history summary.
+Reuse the shared lifecycle and delivery module. Keep domain authorization and
+writes in the existing domain handler; agent text or markup must never grant
+access. Approvals must bind the reviewed proposal revision; connection setup
+must complete only after the server verifies the required connection and grant.
+Status displays should not block the agent. No additional kinds or permission
+grants are implemented here.
+
+Interactions remain scoped to a live session. Completed question summaries are
+projected into the existing persisted conversation transcript. A server restart
+does not restore a waiting Pi RPC or automatically resume an agent. A future
+connection/approval kind that must outlive a session should reference its durable
+domain request and reconcile from that record rather than reuse the live RPC as
+its source of truth.
+
 ## Questions in the chat
 
-The agent can call `ask_user` with one to four related questions. Each has a
-unique `id`, a plain-language `question`, and optionally up to six
-`options[{label, description?}]`. Setting `multiSelect: true` allows several
-suggestions to be chosen. Clicking a single choice answers it immediately.
-For questions with choices, “Something else” reveals a text field; open
-questions show the field directly. Enter or the send icon commits a written
-answer (Shift+Enter adds a line). When questions are stacked, the agent resumes
-as soon as the last answer is committed. Questions that allow multiple
-selections have a “Done” action so choosing the first item does not send an
-unfinished set. Nothing is selected in advance.
+The agent calls `ask_user` with one to four related questions. Each has a unique
+`id`, a plain-language `question`, and optionally up to six
+`options[{label, description?}]`. `multiSelect: true` permits several choices.
+No answer is preselected. Clicking a choice edits the draft; it never sends it.
+The progress label counts answered questions, and **Send answers** submits the
+whole set only when every question has an answer. Missing answers are identified
+and focused. Choices remain editable until submission.
 
-The system prompt encourages the agent to interpret the person's intended
-outcome, clarify vague details, confirm meaningful assumptions, and offer
-helpful suggestions. Questions are short and use everyday language. Option
-descriptions are reserved for differences that help someone choose. The chat
-shows the questions directly, with rounded, bordered option buttons that highlight when selected
-and no surrounding card
-or introductory copy. There is no Continue button or general comments field;
-the ordinary chat composer remains available to answer or redirect the agent.
+“Write a different answer” opens a text field; open questions display it directly.
+A single-choice custom answer replaces the selected option, and selecting an
+option replaces the custom answer. Multiple selections may include written
+details. Plain Enter writes a newline. Ctrl+Enter or Cmd+Enter submits the whole
+set, except during IME composition.
 
-![A question in the agent chat](screenshots/Exh-br5h/01-questions-desktop.png)
+**Skip questions** applies to the whole set and sends no drafted answers. If
+there is a draft, an inline confirmation offers **Keep answering** or
+**Skip questions**. Explicit skip renders “Questions skipped. No answers were
+sent.” Stop or session expiration renders “Questions closed. No answers were
+sent.” Neither grants permission or invents a choice. Completed replies render
+an “Answers sent” summary; chat redirection renders “Replied in chat.”
 
-The extension uses an abortable Pi `input` request with the private title
-`exhibit:questions:v1`. Go validates and tracks the request, then emits
-`exhibit_questions` over SSE. `agent-questions.js`, a native ES module, asks
-htmx to fetch the server-rendered `agentQuestions` partial from
-`GET /api/agent/sessions/:sessionID/questions/:requestID`. The person's reply
-is sent to the same URL with `POST`:
+Structured replies use:
 
 ```json
-{"answers":[{"id":"view","selected":["A weekly view"]},{"id":"goal","text":"Plan meals for my family"}]}
+{"revision":1,"action":"answer","answers":[{"id":"view","selected":["A weekly view"]},{"id":"goal","text":"Plan meals for my family"}]}
 ```
 
-A message from the chat composer replies to the whole request instead:
+The ordinary chat composer can redirect the entire question set:
 
 ```json
-{"message":"Actually, make a shopping list instead."}
+{"revision":1,"action":"message","message":"Actually, make a shopping list instead."}
 ```
 
-Both endpoints use the owner-scoped session lookup, and the sidecar's scoped
-artifact credential cannot answer on the person's behalf. Answers must match
-every question exactly once, in order; choices must be among that question's
-suggestions. Question and option limits count Unicode characters. A chat
-message is limited to 8,000 characters and cannot be mixed with
-structured answers or cancellation. It goes to the model as the person's own
-words, without inventing answers to unfilled questions. An already answered
-or cancelled request returns `409`. The answer
-travels back to the waiting tool through `extension_ui_response`, rather than
-starting another prompt. The composer uses the question reply endpoint while
-questions are pending; direct prompt requests still return `409`.
+Skip uses `{"revision":1,"action":"skip"}`. Replies travel to the waiting tool
+through the existing abortable Pi `extension_ui_response`, not a new prompt.
+The question-only GET/POST routes remain compatibility adapters; the panel uses
+the revision-checked interaction routes.
 
-Written replies and selected suggestions pass through the same configured
-usage-policy screen as direct prompts, including its timeout and fail-closed
-behavior. Refused text is excluded from the agent's tool result and saved
-question answers. Attached screenshots and selected elements travel separately
-as artifact data; they are not treated as instructions or screened as the
-person's words. Attachments remain in the composer if sending fails.
-Images use the same count, MIME-type and decoded-size checks as direct prompts.
-A later refusal affects only its own question; earlier answers remain intact
-in both the live chat and saved history.
-
-Question loads are tied to the active session. Closing or replacing it aborts
-outstanding fetches, ignores late failures, and prevents delayed swaps from
-restoring obsolete forms or error banners.
-
-“Skip” posts `{"cancelled":true}` and tells the agent no answer was
-given. Stop aborts the tool through Pi's signal; it does not submit answers.
-Neither is agreement or permission. A reconnect preserves unfinished drafts
-and fetches the current request state instead of reviving answered forms.
-Completed questions and answers remain in the chat and saved history. The
-runaway-turn timer pauses while waiting for a person and resumes after a reply.
-An abandoned question still expires under the ordinary session idle timeout
-(30 minutes by default), so a lost browser cannot strand a waiting process.
-Background widget-generation sessions do not register `ask_user`, since that
-action has no chat surface for answering questions.
+Written replies and selected suggestions pass through the configured usage-policy
+screen, just like direct prompts. Refused replies are removed from live and saved
+summaries. Images and selected elements remain untrusted artifact data, with the
+same validation as composer attachments; a failed send preserves them for retry.
+Questions and answers are safely projected into history, never arbitrary tool
+result markup. Background widget generation does not register `ask_user` because
+it has no person-facing chat surface.
 
 ## Artifact state (av-lvi1)
 

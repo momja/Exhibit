@@ -86,38 +86,47 @@ body{background:var(--color-ground);color:var(--color-ink);display:flex;flex-dir
 .tool-chip.done{color:var(--color-success);border-color:var(--color-success-tint-border);background:var(--color-success-tint)}
 .tool-chip.fail{color:var(--color-danger-ink);border-color:var(--color-danger-tint-border);background:var(--color-danger-soft)}
 .tool-chip i{font-size:13px}
-.agent-questions{align-self:stretch;margin-block:10px;font-size:14px;line-height:1.5;overflow-wrap:anywhere}
-.agent-questions fieldset{border:0;min-width:0;margin:0 0 26px}
+/* Interaction markup comes from Go partials; only drafts live in the controller. */
+.agent-questions{align-self:stretch;margin-block:14px;font-size:14px;line-height:1.5;overflow-wrap:anywhere}
+.question-heading{display:flex;align-items:baseline;justify-content:space-between;gap:12px;font-weight:600}
+.question-progress{color:var(--color-muted);font-size:12px;font-weight:400;white-space:nowrap}
+.question-help,.question-instruction{color:var(--color-muted);font-size:12px;margin:6px 0 18px}
+.question-instruction{margin:0 0 8px}
+.agent-questions fieldset{border:0;padding:0;min-width:0;margin:0 0 22px}
 .agent-questions legend{font-weight:600;padding:0;margin-bottom:8px;white-space:pre-wrap}
 .question-options{display:grid;gap:8px}
-.question-option{display:flex;align-items:center;justify-content:flex-start;width:100%;padding:10px 14px;min-height:44px;border:1px solid var(--color-border);border-radius:14px;background:var(--color-ground);color:inherit;font:inherit;text-align:left;cursor:pointer}
+.question-option{display:flex;align-items:center;justify-content:flex-start;gap:10px;width:100%;padding:10px 12px;min-height:44px;border:1px solid var(--color-border);border-radius:12px;background:var(--color-ground);color:inherit;font:inherit;text-align:left;cursor:pointer}
+.question-option>i{flex-shrink:0;opacity:0}
 .question-option:hover{border-color:var(--brand-blue);background:var(--color-accent-tint)}
 .question-option[aria-pressed="true"]{border-color:var(--brand-blue);background:var(--color-accent-tint);color:var(--color-accent-tint-ink)}
+.question-option[aria-pressed="true"]>i{opacity:1}
 .question-option:disabled{cursor:default}
 .question-option-label{display:block;white-space:pre-wrap}
 .question-option-description{display:block;color:var(--color-muted);font-size:12px;margin-top:2px;white-space:pre-wrap}
-.question-other{margin-top:7px}
+.question-other{margin-top:4px}
 .question-other summary:hover,.question-other summary:focus-visible{text-decoration:underline}
-.question-other summary{width:fit-content;color:var(--brand-blue);font-size:13px;cursor:pointer;padding-block:3px}
-.agent-questions textarea{display:block;width:100%;resize:vertical;min-height:39px;max-height:160px;border:0;border-bottom:1px solid var(--color-border);border-radius:0;padding:8px 0;font:inherit;font-size:var(--field-font-size);background:transparent;color:var(--color-ink)}
+.question-other summary{width:fit-content;min-height:44px;display:flex;align-items:center;color:var(--brand-blue);font-size:13px;cursor:pointer;padding-block:8px}
+.agent-questions textarea{display:block;width:100%;resize:vertical;min-height:64px;max-height:180px;border:1px solid var(--color-border);border-radius:8px;padding:10px;font:inherit;font-size:var(--field-font-size);background:var(--color-ground);color:var(--color-ink)}
 .agent-questions textarea:focus{border-color:var(--brand-blue)}
-.question-write{display:flex;align-items:flex-end;gap:8px}
-.question-write textarea{flex:1;min-width:0}
-.question-send{width:36px;height:39px;border:0;border-radius:6px;background:transparent;color:var(--brand-blue);font-size:16px;cursor:pointer}
-.question-send:hover{background:var(--color-accent-tint)}
-.agent-questions :is(input,textarea,button):focus-visible{outline:2px solid var(--brand-blue);outline-offset:2px}
-.question-status{font-size:12px;color:var(--color-danger-ink);margin-top:10px}
+.agent-questions :is(input,textarea,button,summary):focus-visible{outline:2px solid var(--brand-blue);outline-offset:3px}
+.agent-questions fieldset[aria-invalid="true"] legend,.question-status{color:var(--color-danger-ink)}
+.question-status{font-size:13px;margin:10px 0}
 .question-status:empty{display:none}
-.question-actions{display:flex;align-items:center;flex-wrap:wrap;gap:20px}
-.question-skip,.question-done,#question-retry{border:0;background:transparent;color:var(--color-muted);font:inherit;font-size:13px;cursor:pointer;padding:8px 0}
-.question-done{color:var(--brand-blue)}
-.question-skip:hover,#question-retry:hover{color:var(--brand-blue)}
+.question-actions{display:flex;align-items:center;flex-wrap:wrap;gap:12px}
+.question-submit{min-height:44px;gap:8px}
+.question-skip,#interaction-retry{border:0;background:transparent;color:var(--color-muted);font:inherit;font-size:13px;cursor:pointer;padding:10px 8px;min-height:44px}
+.question-skip:hover,#interaction-retry:hover{color:var(--brand-blue)}
+.question-skip-confirmation{border-left:2px solid var(--color-border);padding:10px 0 0 12px;margin-top:12px;font-size:13px}
+.question-skip-confirmation[hidden]{display:none}
+.question-skip-confirmation p{margin:0}
+.question-chat-help{margin:12px 0 0}
+.question-completed{display:flex;align-items:center;gap:6px;color:var(--color-muted);font-size:12px;margin-bottom:14px}
 .question-summary+.question-summary{margin-top:18px}
 .question-summary-prompt{font-weight:500;white-space:pre-wrap}
 .question-summary-answer{color:var(--color-ink-soft);margin-top:4px;white-space:pre-wrap}
 .question-message{width:fit-content;margin:12px 0 0 auto}
-.question-skipped{color:var(--color-muted);font-size:13px;margin-top:8px}
-#question-load-error{font-size:12px;color:var(--color-danger-ink)}
+.question-skipped{color:var(--color-muted);font-size:13px;margin-bottom:12px}
+#interaction-load-error{font-size:12px;color:var(--color-danger-ink)}
 .thinking{align-self:flex-start;display:inline-flex;align-items:center;gap:6px;color:var(--color-muted);font-size:12.5px;font-style:italic}
 /* No prefers-reduced-motion override, on purpose (av-90ej): a stopped spinner
  * reads as a frozen turn. A 13px icon turning in place is not the sweeping

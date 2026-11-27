@@ -47,3 +47,6 @@ application.register('artifact-stars', ArtifactStarsController);
 
 import CopyFieldController from './copy-field-controller.js';
 application.register('copy-field', CopyFieldController);
+
+import AgentQuestionsController from './agent-questions-controller.js';
+application.register('agent-questions', AgentQuestionsController);

@@ -18,7 +18,7 @@ func askMockQuestions(t *testing.T, h *piHarness) (session, artifact, requestID 
 	events, unsubscribe = h.router.cfg.Agent.Get(defaultOwnerID, session).Subscribe()
 	w := doJSON(t, h.router, http.MethodPost, "/api/agent/sessions/"+session+"/prompt", map[string]string{"message": "mock-ask-questions"})
 	require.Equal(t, http.StatusAccepted, w.Code, w.Body.String())
-	seen := awaitEvent(t, events, func(line string) bool { return strings.Contains(line, `"exhibit_questions"`) }, "the agent to ask questions")
+	seen := awaitEvent(t, events, func(line string) bool { return strings.Contains(line, `"exhibit_interaction"`) }, "the agent to ask questions")
 	var event struct {
 		RequestID string `json:"requestId"`
 	}
@@ -92,7 +92,7 @@ func TestAgentQuestionsSkipAndStopReleaseTheTool(t *testing.T) {
 			}
 			awaitEvent(t, events, func(line string) bool { return strings.Contains(line, `"agent_settled"`) }, "the unanswered tool to settle")
 			w := doJSON(t, h.router, http.MethodGet, path, nil)
-			assert.Contains(t, w.Body.String(), "Skipped")
+			assert.Contains(t, w.Body.String(), "No answers were sent.")
 			assert.NotContains(t, w.Body.String(), "data-question-form")
 		})
 	}
@@ -172,7 +172,7 @@ func TestRefusedReplyDoesNotReplaceAnEarlierQuestionAnswer(t *testing.T) {
 	w = doJSON(t, h.router, http.MethodPost, "/api/agent/sessions/"+session+"/prompt", map[string]string{"message": "mock-ask-questions"})
 	require.Equal(t, http.StatusAccepted, w.Code, w.Body.String())
 	seen := awaitEvent(t, events, func(line string) bool {
-		return strings.Contains(line, `"exhibit_questions"`) && strings.Contains(line, `"pending":true`)
+		return strings.Contains(line, `"exhibit_interaction"`) && strings.Contains(line, `"pending":true`)
 	}, "the second question request")
 	var next struct {
 		RequestID string `json:"requestId"`
@@ -264,10 +264,10 @@ func TestAgentQuestionsArePrivateToSessionOwner(t *testing.T) {
 
 func TestAgentQuestionTemplateEscapesPromptsAndSupportsMultipleSelections(t *testing.T) {
 	request := agent.QuestionRequest{ID: "r", Pending: true, Questions: []agent.Question{{ID: "q", Question: `What about <img src=x onerror=alert(1)>?`, MultiSelect: true, Options: []agent.QuestionOption{{Label: `A "quote"`, Description: `<b>detail</b>`}}}}}
-	fragment, err := renderPage("agentQuestions", agentQuestionsData{QuestionRequest: request, SessionID: "s"})
+	fragment, err := renderPage("agentInteraction", agentInteractionData{Interaction: agent.Interaction{ID: request.ID, Kind: agent.InteractionQuestions, State: agent.InteractionPending, Revision: 1, Blocking: true, Questions: &request}, SessionID: "s"})
 	require.NoError(t, err)
 	assert.Contains(t, fragment, `data-multi-select="true"`)
-	assert.Contains(t, fragment, ">Done</button>")
+	assert.Contains(t, fragment, "Send answers")
 	assert.Contains(t, fragment, "&lt;img")
 	assert.Contains(t, fragment, "&lt;b&gt;detail&lt;/b&gt;")
 	assert.NotContains(t, fragment, "<img")
