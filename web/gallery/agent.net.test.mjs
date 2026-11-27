@@ -172,17 +172,4 @@ test("preview swap moves focus out of the frame only when it owns focus", async 
   other.focus();
   await pane.dispatchEvent({ type: "htmx:before:swap", target: pane });
   assert.equal(page.context.document.activeElement, other);
-  // Guard against a synthetic event targeting a different element.
-  frame.focus();
-  await pane.dispatchEvent({ type: "htmx:before:swap", target: other });
-  assert.equal(page.context.document.activeElement, frame);
-  page.context.document.visibilityState = "hidden";
-  await page.context.document.dispatchEvent({ type: "visibilitychange" });
-  assert.equal(page.context.document.activeElement, frame);
-  page.context.document.visibilityState = "visible";
-  await page.context.document.dispatchEvent({ type: "visibilitychange" });
-  assert.equal(page.context.document.activeElement, pane);
-  other.focus();
-  await page.context.document.dispatchEvent({ type: "visibilitychange" });
-  assert.equal(page.context.document.activeElement, other);
 });

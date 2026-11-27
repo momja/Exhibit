@@ -1079,12 +1079,10 @@ function releasePreviewFocus() {
   if (frame && document.activeElement === frame) document.getElementById('pane-preview').focus({preventScroll: true});
 }
 
-// This also covers history viewer swaps targeting the preview pane.
+// Handle the pane’s artifact-saved re-render. History viewer swaps start
+// from a chat-pane button, so focus is already outside the frame.
 document.getElementById('pane-preview').addEventListener('htmx:before:swap', event => {
   if (event.target === document.getElementById('pane-preview')) releasePreviewFocus();
-});
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') releasePreviewFocus();
 });
 
 // A swap replaces the iframe, so the artifact reloads from scratch: any
