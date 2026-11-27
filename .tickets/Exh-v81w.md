@@ -41,7 +41,7 @@ A tool can call complete() with a user message holding text and image parts and 
 
 **2026-11-27T16:43:19Z**
 
-Done: complete() accepts text+image parts (PNG/JPEG/WebP/GIF, 4 images, 2 MB each, 4 MB total, sniffed); available().images from Pi catalog input modalities; text-only model and guardrail-screened instances refuse images as unavailable; schema repair omits images; worker envelope 8 MB; consent/posture/settings copy; agent guidance teaches createImageBitmap + canvas downscale. Live pass on deepseek-v4.1-flash recorded in docs/inference.md. Open decisions for review: guardrail disables images; EXIF not stripped server-side.
+Done: complete() accepts text+image parts (PNG/JPEG/WebP; GIF refused after review, see below; 4 images, 2 MB each, 4 MB total, sniffed); available().images from Pi catalog input modalities; text-only model and guardrail-screened instances refuse images as unavailable; schema repair omits images; worker envelope 8 MB; consent/posture/settings copy; agent guidance teaches createImageBitmap + canvas downscale. Live pass on deepseek-v4.1-flash recorded in docs/inference.md. Open decisions for review: guardrail disables images; EXIF not stripped server-side.
 
 **2026-11-27T17:10:19Z**
 

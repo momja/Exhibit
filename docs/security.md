@@ -1341,7 +1341,17 @@ authenticated `POST /api/artifacts/:id/inference`. The frame gets no endpoint,
 credential or `connect-src` source; the CSP and allowlist are untouched.
 
 What is new is that a call spends money and sends the artifact's chosen text,
-possibly including saved data, to a third party. So:
+possibly including saved data, and any images the person gives the tool
+(Exh-v81w), to a third party. So:
+
+- **Images leave the device as given.** `complete()` takes PNG, JPEG or WebP
+  parts, bounded and sniffed before any provider call; Exhibit does not strip
+  their metadata, so a photo straight from a camera can carry its location.
+  The consent prompt says so, and the agent guidance teaches re-encoding
+  through a canvas, which drops it. The frame gains no new source of images:
+  it can send only a file the person picks or pixels it drew itself (a
+  cross-origin image taints the canvas). The usage-policy screen reads text
+  only, so platform-paid calls on a screened instance carry no images at all.
 
 - **Two consents, both enforced server-side.** The owner's
   `inference_approved` (one `ApprovalColumns` entry, revocable) and, for each

@@ -197,9 +197,11 @@ User-paid calls are outside the operator's caps. With `GUARDRAIL_*` set,
 Exhibit screens the full input before each platform-paid call, including
 schema repairs. Each screen makes one provider request. A refusal, invalid
 verdict, or failed usage write prevents the next paid step in that request.
-The screen reads text only, so an instance with `GUARDRAIL_*` set does not offer
-images (`available().images` is false and an image call is `unavailable`)
-rather than send them unscreened.
+The screen reads text only, so platform-paid calls on an instance with
+`GUARDRAIL_*` set carry no images (`available().images` is false and an image
+call is `unavailable`) rather than send them unscreened. BYOK calls are never
+screened, so there images follow the viewer's own model whatever
+`GUARDRAIL_*` says.
 
 An image call's request body is up to about 6 MB, inside the default
 `MAX_REQUEST_BODY_BYTES` (32 MiB). An instance that lowers it below that refuses
