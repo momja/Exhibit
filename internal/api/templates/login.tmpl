@@ -71,7 +71,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Sign in — Exhibit</title>
 <link rel="icon" type="image/svg+xml" href="{{.Favicon}}">
 {{template "pwaHead"}}
@@ -104,7 +104,7 @@
     <input type="hidden" name="next" value="{{.Next}}">
     <label class="login-label" for="username">Username</label>
     <input class="field" type="text" id="username" name="username" value="{{.Username}}"
-           autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required autofocus>
+           autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required>
     <label class="login-label" for="password">Password</label>
     <input class="field" type="password" id="password" name="password"
            autocomplete="current-password" required>
@@ -126,7 +126,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Sign-in failed — Exhibit</title>
 <link rel="icon" type="image/svg+xml" href="{{.Favicon}}">
 {{template "pwaHead"}}
