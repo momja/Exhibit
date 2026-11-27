@@ -1016,7 +1016,7 @@ card is flattened inside it (`clerkAuthAppearance`, plus `.cl-*` rules). On
 phones the painting owns a band at the bottom of the page. Local sign-in
 reserves that band below the form. Hosted sign-in keeps the page within the
 viewport, tightens card spacing on short screens, and fits the content if a
-Clerk step still needs more room. The OAuth consent page keeps the plain card
+Clerk step still needs more room. On narrow iOS WebKit, an estimated toolbar bleed extends the scene below the viewport so scrolling paint can appear behind the floating toolbar; the body stays 100dvh for unchanged fitting. The OAuth consent page keeps the plain card
 (`.login-painted` scopes the art).
 
 The last word of the headline rotates in a fixed CSS slot. The first change
