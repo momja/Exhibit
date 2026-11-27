@@ -59,7 +59,7 @@
              hx-trigger="load, exhibit:artifact-saved from:body, exhibit:connection-requested from:body"
              hx-vals='js:{artifact: previewArtifactId()}' hx-swap="innerHTML" hx-sync="this:replace"></div>
       </div>
-      <div id="question-load-error" role="status" hidden>Could not load the questions. <button type="button" id="question-retry">Try again</button></div>
+      <div id="interaction-load-error" role="status" hidden>Could not load an agent request. <button type="button" id="interaction-retry">Try again</button></div>
       <button type="button" class="pv-nudge" id="pv-nudge" hidden onclick="showPane('preview')"><i class="ph ph-check-circle"></i> View updated preview</button>
       <div id="snippet-chips"></div>
       <div class="compose-row">
@@ -173,7 +173,7 @@ let artifact = {{.ArtifactJSON}};   // {id,title} when editing, else null
 <div class="ai-notices">{{template "inferenceBanner"}}</div>
 <script type="module" src="{{asset "gallery/direct-open.js"}}"></script>
 <script type="module" src="{{asset "gallery/agent-resize.js"}}"></script>
-<script type="module" src="{{asset "gallery/agent-questions.js"}}"></script>
+<script type="module" src="{{asset "gallery/agent-interactions.js"}}"></script>
 <script type="module" src="{{asset "gallery/message-actions.js"}}"></script>
 </body>
 </html>{{end}}

@@ -48,7 +48,7 @@ func TestQuestionAnswersReachTheWaitingToolOnce(t *testing.T) {
 	request, ok := s.Questions("request-1")
 	require.True(t, ok)
 	assert.True(t, request.Pending)
-	assert.Contains(t, string(s.backlog[0]), "exhibit_questions")
+	assert.Contains(t, string(s.backlog[0]), "exhibit_interaction")
 	answers := []QuestionAnswer{{ID: "view", Selected: []string{"Weekly"}}, {ID: "goal", Text: "Plan meals"}}
 	require.NoError(t, s.AnswerQuestions(request.ID, QuestionResponse{Answers: answers}))
 	var response struct {
@@ -212,9 +212,11 @@ func TestToolCompletionCancelsAnUnansweredQuestion(t *testing.T) {
 
 func TestQuestionAllowsMultipleSelectionsAndCustomDetails(t *testing.T) {
 	s, _ := newQuestionSession(t)
-	request := s.questions["request-1"]
+	interaction := s.interactions["request-1"]
+	request := *interaction.Questions
 	request.Questions[0].MultiSelect = true
-	s.questions[request.ID] = request
+	interaction.Questions = &request
+	s.interactions[request.ID] = interaction
 	answers := []QuestionAnswer{{ID: "view", Selected: []string{"Weekly", "List"}, Text: "Show both together"}, {ID: "goal", Text: "Planning meals"}}
 	require.NoError(t, s.AnswerQuestions(request.ID, QuestionResponse{Answers: answers}))
 	request, _ = s.Questions(request.ID)
@@ -225,7 +227,7 @@ func TestQuestionWaitDoesNotSpendTheRunawayTurnAllowance(t *testing.T) {
 	s, _ := newQuestionSession(t)
 	s.paidBy = store.PaidByPlatform
 	s.mgr.cfg.Caps.TurnSeconds = 3600
-	s.questions = nil
+	s.interactions = nil
 	s.armTurnClock()
 	s.mu.Lock()
 	require.NotNil(t, s.turnTimer)
@@ -244,9 +246,9 @@ func TestQuestionClockWaitsForEveryReplyAndCannotRearmAfterSettle(t *testing.T) 
 	s, _ := newQuestionSession(t)
 	s.paidBy = store.PaidByPlatform
 	s.mgr.cfg.Caps.TurnSeconds = 3600
-	second := s.questions["request-1"]
+	second := s.interactions["request-1"]
 	second.ID = "request-2"
-	s.questions[second.ID] = second
+	s.interactions[second.ID] = second
 	require.NoError(t, s.AnswerQuestions("request-1", QuestionResponse{Cancelled: true}))
 	assert.Nil(t, s.turnTimer, "another question is still waiting on the person")
 	s.streaming = false
@@ -259,7 +261,7 @@ func TestAbandonedQuestionSessionStillExpires(t *testing.T) {
 	s := createSession(t, m, 7)
 	s.mu.Lock()
 	s.streaming = true
-	s.questions = map[string]QuestionRequest{"r": {ID: "r", Pending: true}}
+	s.interactions = map[string]Interaction{"r": {ID: "r", State: InteractionPending, Blocking: true}}
 	s.mu.Unlock()
 	m.reapIdle(time.Now().Add(-time.Minute))
 	require.NotNil(t, m.Get(7, s.ID), "a fresh question stays available")

@@ -384,7 +384,7 @@ func (s *Session) armTurnClock() {
 		return
 	}
 	s.mu.Lock()
-	if s.closed || s.stopping || !s.streaming || s.hasPendingQuestions() {
+	if s.closed || s.stopping || !s.streaming || s.hasPendingInteractions() {
 		s.mu.Unlock()
 		return
 	}

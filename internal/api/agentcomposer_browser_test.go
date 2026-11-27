@@ -119,7 +119,7 @@ func TestAgentComposerBrowser(t *testing.T) {
 		run(chromedp.KeyEvent(kb.End), chromedp.KeyEvent(kb.Shift+kb.Enter))
 		check(`document.querySelector('#input').value.endsWith('\n')`)
 		run(chromedp.Evaluate[chromedp.Void](`document.querySelector('#input').value=''; document.querySelector('#input').dispatchEvent(new Event('input',{bubbles:true}))`))
-		events <- []byte(`{"type":"exhibit_questions","requestId":"composer-question","pending":true}`)
+		events <- []byte(`{"type":"exhibit_interaction","requestId":"composer-question","kind":"questions","revision":1,"pending":true}`)
 		run(chromedp.Poll[chromedp.Void](`document.querySelector('#hint').hidden`))
 		check(`document.querySelector('#input').placeholder === 'Describe what you want to build or change…'`)
 		events <- []byte(`{"type":"agent_settled"}`)

@@ -17,7 +17,7 @@ export function registerQuestions(pi: ExtensionAPI) {
 		description: "Ask the user one to four related questions and wait for their answers. " +
 			"Use everyday, non-technical language. Be eager to clarify vague details and confirm your interpretation of what the person wants before making consequential choices. " +
 			"Offer useful suggestions as options when that makes answering easier; omit options for an open question. " +
-			"A single choice sends immediately; the user can choose Something else to write an answer or send a chat message to redirect you. Do not add a general comments question. Use short labels, and add descriptions only when needed to distinguish the choices. Put your recommended option first; no option is selected automatically. " +
+			"The user can edit all answers before choosing Send answers, write a different answer, or send a chat message to redirect you. Do not add a general comments question. Use short labels, and add descriptions only when needed to distinguish the choices. Put your recommended option first; no option is selected automatically. " +
 			"Batch related questions in one call. A skipped question is not agreement or permission.",
 		parameters: Type.Object({
 			questions: Type.Array(Type.Object({
@@ -62,7 +62,7 @@ export function registerQuestions(pi: ExtensionAPI) {
 			}
 			return {
 				content,
-				details: { exhibit: "questions_answered", requestId: response.requestId, questions: params.questions, answers, message, cancelled, blocked },
+				details: { exhibit: "questions_answered", expired: cancelled && !blocked && signal?.aborted === true, requestId: response.requestId, questions: params.questions, answers, message, cancelled, blocked },
 			};
 		},
 	});

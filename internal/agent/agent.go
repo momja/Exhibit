@@ -670,7 +670,7 @@ func (m *Manager) reapIdle(cutoff time.Time) {
 		// A model waiting on a person is not doing work. If the browser
 		// disappears without delivering pagehide, this session must still
 		// expire instead of holding a subprocess and an owner slot forever.
-		idle := !s.closed && !s.stopping && s.lastActive.Before(cutoff) && (!s.streaming || s.hasPendingQuestions())
+		idle := !s.closed && !s.stopping && s.lastActive.Before(cutoff) && (!s.streaming || s.hasPendingInteractions())
 		if idle {
 			s.stopping = true
 		}
@@ -782,7 +782,7 @@ type Session struct {
 	backlog            [][]byte
 	backlogBytes       int
 	pending            map[string]chan rpcResponse
-	questions          map[string]QuestionRequest
+	interactions       map[string]Interaction
 	streaming          bool
 	closed             bool
 	stopping           bool // unavailable to callers, but still draining its final writes
@@ -884,7 +884,7 @@ func (s *Session) Prompt(ctx context.Context, message string, images []ImageCont
 	s.promptMu.Lock()
 	defer s.promptMu.Unlock()
 	s.mu.Lock()
-	waiting := s.hasPendingQuestions()
+	waiting := s.hasPendingInteractions()
 	s.mu.Unlock()
 	if waiting {
 		return ErrQuestionPending
@@ -1009,7 +1009,7 @@ func (s *Session) writeSelection(selection []string) error {
 // Abort asks pi to stop the current run.
 func (s *Session) Abort(ctx context.Context) error {
 	_, err := s.roundTrip(ctx, map[string]any{"type": "abort"})
-	s.cancelQuestions("")
+	s.expireInteractions("")
 	return err
 }
 
@@ -1180,7 +1180,7 @@ func (s *Session) handleLine(line []byte) {
 	case "turn_end":
 		s.clearTurnClock()
 	case "agent_settled":
-		s.cancelQuestions("")
+		s.expireInteractions("")
 		s.mu.Lock()
 		s.streaming = false
 		s.lastActive = time.Now()
@@ -1202,7 +1202,7 @@ func (s *Session) handleLine(line []byte) {
 		}
 	case "tool_execution_end":
 		if probe.ToolCallID != "" {
-			s.cancelQuestions(probe.ToolCallID)
+			s.expireInteractions(probe.ToolCallID)
 		}
 		var res struct {
 			Details map[string]any `json:"details"`
@@ -1442,7 +1442,7 @@ func (s *Session) finish() {
 	s.closed = true
 	s.streaming = false
 	s.mu.Unlock()
-	s.cancelQuestions("")
+	s.expireInteractions("")
 	// The credential dies with the process that held it.
 	s.mgr.cfg.Credentials.Revoke(s.grant)
 	ev, _ := json.Marshal(map[string]string{"type": "exhibit_session_closed"})

@@ -164,7 +164,7 @@ func project(msgs []piMessage) []TranscriptMessage {
 							Questions []Question `json:"questions"`
 						}
 						_ = json.Unmarshal(args, &prompts)
-						request := QuestionRequest{Questions: prompts.Questions, Cancelled: true}
+						request := QuestionRequest{Questions: prompts.Questions, Cancelled: true, Expired: true}
 						if validQuestions(request.Questions) {
 							questionRows[b.ID] = len(out)
 							out = append(out, TranscriptMessage{Role: "questions", Questions: &request})
