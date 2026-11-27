@@ -130,7 +130,14 @@ func TestConnectionOriginOverlapIsAtomicAndPersonal(t *testing.T) {
 		c.Kind = "native"
 		c.RecipeJSON = `{"origins":["https://api.example.test"]}`
 		c.EncryptedSecret = "sealed"
-		require.NoError(t, s.CreateConnection(ctx, c, -1))
+		if c.ID == "b" {
+			// Legacy databases may already contain same-destination accounts. New
+			// creation refuses these; attachment must still defend against old rows.
+			_, err := s.db.ExecContext(ctx, `INSERT INTO connections(id,owner_id,name,provider,kind,recipe_json,encrypted_secret,status) VALUES(?,?,?,?,?,?,?,'active')`, c.ID, c.OwnerID, c.Name, c.Provider, c.Kind, c.RecipeJSON, c.EncryptedSecret)
+			require.NoError(t, err)
+		} else {
+			require.NoError(t, s.CreateConnection(ctx, c, -1))
+		}
 	}
 	var wg sync.WaitGroup
 	var mu sync.Mutex

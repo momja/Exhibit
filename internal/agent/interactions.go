@@ -17,16 +17,18 @@ type Interaction struct {
 	State      string           `json:"state"`
 	Revision   uint64           `json:"revision"`
 	Blocking   bool             `json:"blocking"`
+	ProposalID string           `json:"proposalId,omitempty"`
 	Questions  *QuestionRequest `json:"questions,omitempty"`
 }
 
 const (
-	InteractionQuestions = "questions"
-	InteractionPending   = "pending"
-	InteractionCompleted = "completed"
-	InteractionCancelled = "cancelled"
-	InteractionExpired   = "expired"
-	InteractionBlocked   = "blocked"
+	InteractionQuestions    = "questions"
+	InteractionAPIConnector = "api-connector"
+	InteractionPending      = "pending"
+	InteractionCompleted    = "completed"
+	InteractionCancelled    = "cancelled"
+	InteractionExpired      = "expired"
+	InteractionBlocked      = "blocked"
 )
 
 var (
@@ -77,7 +79,7 @@ func (s *Session) addInteraction(interaction Interaction) bool {
 		s.interactions = map[string]Interaction{}
 	}
 	_, duplicate := s.interactions[interaction.ID]
-	if s.closed || s.stopping || duplicate || len(s.interactions) >= 128 {
+	if s.closed || s.stopping || s.aborting || duplicate || len(s.interactions) >= 128 {
 		s.mu.Unlock()
 		return false
 	}
@@ -108,7 +110,7 @@ func (s *Session) respondInteraction(id string, action InteractionAction) error 
 	s.writeMu.Lock()
 	s.mu.Lock()
 	interaction, ok := s.interactions[id]
-	if !ok || !interaction.Pending() || s.closed || s.stopping || (action.Revision != 0 && action.Revision != interaction.Revision) {
+	if !ok || !interaction.Pending() || s.closed || s.stopping || s.aborting || (action.Revision != 0 && action.Revision != interaction.Revision) {
 		s.mu.Unlock()
 		s.writeMu.Unlock()
 		return ErrInteractionExpired

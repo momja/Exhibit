@@ -50,3 +50,6 @@ application.register('copy-field', CopyFieldController);
 
 import AgentQuestionsController from './agent-questions-controller.js';
 application.register('agent-questions', AgentQuestionsController);
+
+import AgentAPIConnectorController from './agent-api-connector-controller.js';
+application.register('agent-api-connector', AgentAPIConnectorController);

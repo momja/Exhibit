@@ -285,7 +285,8 @@ var agentSubResources = map[string][]string{
 	"assets": {http.MethodGet},
 	// Metadata and a pending UI request only. Actual credential acquisition,
 	// recipes, grants and dismissal remain outside an agent's authority.
-	"agent-connections": {http.MethodGet, http.MethodPost},
+	"agent-connections":   {http.MethodGet, http.MethodPost},
+	"agent-api-proposals": {http.MethodPost},
 }
 
 // libraryAgentSubResources narrow agentSubResources for an owner-issued

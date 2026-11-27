@@ -59,6 +59,7 @@ const (
 )
 
 var accountTables = map[string]accountTable{
+	"connector_proposals":  {reachCascade, "public API setup proposals and decisions cascade from the owner's artifacts", "SELECT COUNT(*) FROM connector_proposals WHERE artifact_id = '" + deletedArtifact + "' OR owner_id = ?1"},
 	"artifact_preferences": {reachTrigger, "the user-delete trigger erases viewer preferences, including on received files; preferences for a deleted artifact also cascade from artifacts(id)", "SELECT COUNT(*) FROM artifact_preferences WHERE viewer_id = ?1 OR artifact_id = '" + deletedArtifact + "'"},
 	"pending_vendor_connections": {reachRetained,
 		"durable remote revocation work survives unexpected erasure; API deletion drains it first, and maintenance retries without retaining library payloads", ""},
@@ -308,6 +309,8 @@ func seedEverything(t *testing.T, s *SQLiteStore) accountFixture {
 	require.NoError(t, s.PutConnectionGrant(ctx, ConnectionGrantRecord{ArtifactID: deletedArtifact, ConnectionID: "member-connection", ViewerID: member.ID}))
 	require.NoError(t, s.ReserveConnectionRequest(ctx, "member-connection", 24, time.Now()))
 	require.NoError(t, s.PutConnectionCache(ctx, "member-connection", "hash", "sealed", time.Now(), time.Now().Add(time.Hour)))
+	_, err = s.CreateConnectorProposal(ctx, &ConnectorProposalRecord{ID: "member-proposal", OwnerID: member.ID, ArtifactID: deletedArtifact, Name: "Weather", Origin: "https://api.weather.com", Auth: "api-key", Header: "X-Api-Key", Reason: "Show weather"})
+	require.NoError(t, err)
 	_, err = s.RequestArtifactConnection(ctx, member.ID, deletedArtifact, "basic", "Read my accounts")
 	require.NoError(t, err)
 	require.NoError(t, s.SaveTranscript(ctx, member.ID, Transcript{ArtifactID: deletedArtifact, SessionID: "sess-1", SessionFile: "{}\n"}))

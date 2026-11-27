@@ -226,3 +226,33 @@ func TestAPIProposalConcurrentApprovalAndNormalCreate(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, []string{"normal-key", "proposal-key"}, credential.Value)
 }
+
+func TestAPIProposalRemovedConnectionIsNotReportedReady(t *testing.T) {
+	s, _ := testService(t)
+	ctx := context.Background()
+	p, err := s.ProposeAPI(ctx, 1, "app", proposalSpec())
+	require.NoError(t, err)
+	p, err = s.ResolveAPIProposal(ctx, 1, "app", p.ID, true, p.Spec.Origin, "fake-private-key", UnlimitedLimits())
+	require.NoError(t, err)
+	require.NoError(t, s.Revoke(ctx, 1, p.ConnectionID))
+	p, err = s.ProposeAPI(ctx, 1, "app", proposalSpec())
+	require.NoError(t, err)
+	require.Equal(t, "disconnected", p.State)
+	require.Empty(t, p.ConnectionID)
+	p, err = s.ResolveAPIProposal(ctx, 1, "app", p.ID, false, "", "", UnlimitedLimits())
+	require.NoError(t, err)
+	require.Equal(t, "disconnected", p.State)
+	connections, err := s.List(ctx, 1)
+	require.NoError(t, err)
+	require.Empty(t, connections)
+	for _, field := range []string{"name", "reason"} {
+		spec := proposalSpec()
+		if field == "name" {
+			spec.Name = "Trusted\u202eAPI"
+		} else {
+			spec.Reason = "Trust\u200bme"
+		}
+		_, err = ValidateAPIProposal(spec)
+		require.ErrorIs(t, err, ErrInvalid)
+	}
+}

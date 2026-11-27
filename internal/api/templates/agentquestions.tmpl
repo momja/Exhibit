@@ -1,5 +1,5 @@
-{{define "agentInteraction"}}<section class="agent-interaction agent-questions" id="agent-interaction-{{.ID}}" data-interaction-id="{{.ID}}" data-interaction-kind="{{.Kind}}" data-interaction-state="{{.State}}" data-revision="{{.Revision}}" data-pending="{{.Pending}}" data-session-id="{{.SessionID}}" aria-label="Questions from the agent" tabindex="-1">
-  {{if eq .Kind "questions"}}{{template "agentQuestionsBody" .Questions}}{{end}}
+{{define "agentInteraction"}}<section class="agent-interaction agent-questions" id="agent-interaction-{{.ID}}" data-interaction-id="{{.ID}}" data-interaction-kind="{{.Kind}}" data-interaction-state="{{.State}}" data-revision="{{.Revision}}" data-pending="{{.Pending}}" data-session-id="{{.SessionID}}" aria-label="{{if eq .Kind "api-connector"}}API connection approval{{else}}Questions from the agent{{end}}" tabindex="-1">
+  {{if eq .Kind "questions"}}{{template "agentQuestionsBody" .Questions}}{{else if eq .Kind "api-connector"}}{{template "agentAPIConnectorBody" .}}{{end}}
 </section>{{end}}
 
 {{define "agentQuestionsBody"}}{{if .Pending}}

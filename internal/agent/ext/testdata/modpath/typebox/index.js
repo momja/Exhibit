@@ -7,6 +7,8 @@ function desc(kind, props) {
 }
 
 export const Type = {
+ Literal(value) { return desc("literal", { const: value }); },
+ Union(schemas) { return desc("union", { anyOf: schemas }); },
 	Object(props, opts) {
 		return desc("object", { properties: props || {}, ...(opts || {}) });
 	},

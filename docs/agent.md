@@ -1208,3 +1208,5 @@ render-surface capability any embedding host can drive, not agent code).
   degrades to descriptor-only on failure).
 - No runtime allowlist-approval prompt in the chat (the artifact page's
   editor remains the approval surface; `exhibit-fr7` tracks the prompt).
+
+Advanced private connector approvals use the typed `api-connector` interaction. See [agent-api-connectors.md](agent-api-connectors.md) for the credential boundary, domain trust and duplicate/denial semantics.

@@ -41,6 +41,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { applyEdits } from "./edit.ts";
 import { installSourceContext, type ArtifactSourceSnapshot } from "./source-context.ts";
+import { registerAPIConnectors } from "./api-connectors.ts";
 import { registerQuestions } from "./questions.ts";
 
 const API = process.env.EXHIBIT_API_URL || "http://127.0.0.1:8080";
@@ -249,6 +250,7 @@ export default function (pi: ExtensionAPI) {
 	// The one-shot widget action has no chat surface to answer a dialog.
 	if (process.env.EXHIBIT_WIDGET_ONLY !== "1") registerQuestions(pi);
 	if (process.env.EXHIBIT_CONNECTIONS_ENABLED === "1" && process.env.EXHIBIT_WIDGET_ONLY !== "1") {
+		registerAPIConnectors(pi, api, requireBoundArtifact);
 		pi.registerTool({
 			name: "list_connections",
 			label: "List connections",

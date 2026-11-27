@@ -40,10 +40,10 @@ type APIProposal struct {
 func ValidateAPIProposal(spec APIProposalSpec) (APIProposalSpec, error) {
 	spec.Name = strings.TrimSpace(spec.Name)
 	spec.Reason = strings.TrimSpace(spec.Reason)
-	if spec.Name == "" || len(spec.Name) > 100 || !utf8.ValidString(spec.Name) || strings.ContainsFunc(spec.Name, unicode.IsControl) {
+	if spec.Name == "" || len(spec.Name) > 100 || !utf8.ValidString(spec.Name) || strings.ContainsFunc(spec.Name, unsafeProposalText) {
 		return APIProposalSpec{}, fmt.Errorf("%w: give the connection a name of at most 100 characters", ErrInvalid)
 	}
-	if spec.Reason == "" || utf8.RuneCountInString(spec.Reason) > 1000 || !utf8.ValidString(spec.Reason) || strings.ContainsFunc(spec.Reason, unicode.IsControl) {
+	if spec.Reason == "" || utf8.RuneCountInString(spec.Reason) > 1000 || !utf8.ValidString(spec.Reason) || strings.ContainsFunc(spec.Reason, unsafeProposalText) {
 		return APIProposalSpec{}, fmt.Errorf("%w: explain why the connection is needed in at most 1000 characters", ErrInvalid)
 	}
 	o, err := normalizeHTTPSOrigin(spec.Origin)
@@ -78,6 +78,8 @@ func ValidateAPIProposal(spec APIProposalSpec) (APIProposalSpec, error) {
 	}
 	return spec, nil
 }
+
+func unsafeProposalText(r rune) bool { return unicode.IsControl(r) || unicode.Is(unicode.Cf, r) }
 
 func publicProposalHostname(host string) bool {
 	if net.ParseIP(host) != nil || len(host) > 253 || !strings.Contains(host, ".") {
@@ -116,7 +118,11 @@ func publicProposalHostname(host string) bool {
 }
 
 func apiProposal(p *store.ConnectorProposalRecord) *APIProposal {
-	return &APIProposal{ID: p.ID, ArtifactID: p.ArtifactID, State: p.State, ConnectionID: p.ConnectionID,
+	state := p.State
+	if state == "approved" && p.ConnectionID == "" {
+		state = "disconnected"
+	}
+	return &APIProposal{ID: p.ID, ArtifactID: p.ArtifactID, State: state, ConnectionID: p.ConnectionID,
 		Spec: APIProposalSpec{Name: p.Name, Origin: p.Origin, Header: p.Header, Auth: p.Auth, Reason: p.Reason}}
 }
 

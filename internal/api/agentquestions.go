@@ -7,11 +7,13 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/momja/Exhibit/internal/agent"
+	"github.com/momja/Exhibit/internal/connectors"
 )
 
 type agentInteractionData struct {
 	agent.Interaction
 	SessionID string
+	Proposal  *connectors.APIProposal
 }
 
 // Both routes use the owner-scoped session lookup. In particular, the
@@ -26,7 +28,19 @@ func (ro *Router) agentInteraction(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "interaction not found")
 		return
 	}
-	fragment, err := renderPage("agentInteraction", agentInteractionData{Interaction: interaction, SessionID: s.ID})
+	data := agentInteractionData{Interaction: interaction, SessionID: s.ID}
+	if interaction.Kind == agent.InteractionAPIConnector {
+		if ro.connectionRequestStore(w) == nil {
+			return
+		}
+		proposal, err := ro.cfg.Connections.GetAPIProposal(r.Context(), s.OwnerID, s.ArtifactID(), interaction.ProposalID)
+		if err != nil {
+			connectionError(w, err)
+			return
+		}
+		data.Proposal = proposal
+	}
+	fragment, err := renderPage("agentInteraction", data)
 	if err != nil {
 		fragmentServerError(w, r, "agent interaction render", err)
 		return
@@ -80,12 +94,62 @@ func (ro *Router) agentInteractionAction(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	var req struct {
-		Revision uint64 `json:"revision"`
-		Action   string `json:"action"`
+		Revision      uint64 `json:"revision"`
+		Action        string `json:"action"`
+		Secret        string `json:"secret"`
+		TrustedOrigin string `json:"trusted_origin"`
 		agent.QuestionResponse
 		Images []agentPromptImage `json:"images"`
 	}
-	if !decodeJSON(w, r, &req) {
+	if !decodeStrictJSON(w, r, &req) {
+		return
+	}
+	interaction, ok := s.Interaction(chi.URLParam(r, "requestID"))
+	if !ok {
+		writeError(w, http.StatusNotFound, "interaction not found")
+		return
+	}
+	if interaction.Kind == agent.InteractionAPIConnector {
+		if ro.connectionRequestStore(w) == nil {
+			return
+		}
+		if (req.Action != "approve" && req.Action != "deny") || req.Message != "" || len(req.Answers) != 0 || req.Cancelled || len(req.Images) != 0 || len(req.Snippets) != 0 ||
+			(req.Action == "deny" && (req.Secret != "" || req.TrustedOrigin != "")) {
+			writeError(w, http.StatusBadRequest, "choose Approve connection or Decline in the private card")
+			return
+		}
+		allowance, err := ro.resolveAllowance(r.Context(), s.OwnerID)
+		if err != nil {
+			writeError(w, http.StatusServiceUnavailable, "connection allowance could not be resolved")
+			return
+		}
+		err = s.ResolveAPIConnector(interaction.ID, req.Revision, func(proposalID string) (string, error) {
+			result, err := ro.cfg.Connections.ResolveAPIProposal(r.Context(), s.OwnerID, s.ArtifactID(), proposalID, req.Action == "approve", req.TrustedOrigin, req.Secret, allowance.Connections)
+			if err != nil {
+				return "", err
+			}
+			return result.State, nil
+		})
+		req.Secret = ""
+		switch {
+		case err == nil:
+			w.WriteHeader(http.StatusNoContent)
+		case errors.Is(err, agent.ErrInteractionExpired):
+			writeError(w, http.StatusConflict, err.Error())
+		case errors.Is(err, agent.ErrInvalidInteractionAction):
+			writeError(w, http.StatusBadRequest, err.Error())
+		default:
+			var mismatch *connectors.CredentialOriginError
+			if errors.As(err, &mismatch) {
+				writeError(w, http.StatusBadRequest, mismatch.Error())
+				return
+			}
+			connectionError(w, err)
+		}
+		return
+	}
+	if req.Secret != "" || req.TrustedOrigin != "" {
+		writeError(w, http.StatusBadRequest, "private connector fields require a connector approval")
 		return
 	}
 	images, err := promptImages(req.Images)

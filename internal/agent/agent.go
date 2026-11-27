@@ -41,7 +41,7 @@ import (
 	"github.com/momja/Exhibit/internal/store"
 )
 
-//go:embed ext/exhibit.ts ext/edit.ts ext/guard.ts ext/source-context.ts ext/questions.ts ext/prompts/*.tmpl
+//go:embed ext/exhibit.ts ext/edit.ts ext/guard.ts ext/source-context.ts ext/questions.ts ext/api-connectors.ts ext/prompts/*.tmpl
 var extFS embed.FS
 
 // Config for the Manager.
@@ -153,7 +153,7 @@ func New(cfg Config, st store.Store) (*Manager, error) {
 		return nil, fmt.Errorf("materialize exhibit extension: %w", err)
 	}
 	// Relative imports must sit beside the extension for Pi's loader.
-	for _, name := range []string{"edit.ts", "questions.ts"} {
+	for _, name := range []string{"edit.ts", "questions.ts", "api-connectors.ts"} {
 		source, err := extFS.ReadFile("ext/" + name)
 		if err != nil {
 			return nil, err
@@ -722,8 +722,10 @@ func (s *Session) finishPromptAdmission() {
 
 // Session is one live pi subprocess plus its event fanout.
 type Session struct {
-	ID      string
-	OwnerID int64
+	abortMu  sync.Mutex // serialize concurrent Stop requests without closing the session
+	aborting bool       // protected by mu; refuses dialogs and approvals while abort RPC is pending
+	ID       string
+	OwnerID  int64
 
 	// provider and model are the configured credential's, kept for the usage
 	// ledger (av-2yws) — rows record what spent the money even though
@@ -885,8 +887,21 @@ func (s *Session) Prompt(ctx context.Context, message string, images []ImageCont
 	defer s.promptMu.Unlock()
 	s.mu.Lock()
 	waiting := s.hasPendingInteractions()
+	if s.aborting {
+		s.mu.Unlock()
+		return ErrInteractionStopping
+	}
+	connectorPending := false
+	for _, interaction := range s.interactions {
+		if interaction.Kind == InteractionAPIConnector && interaction.Pending() {
+			connectorPending = true
+		}
+	}
 	s.mu.Unlock()
 	if waiting {
+		if connectorPending {
+			return fmt.Errorf("%w: approve or decline the connection in the private card, or stop this request; never send a key in chat", ErrConnectorPending)
+		}
 		return ErrQuestionPending
 	}
 
@@ -1008,8 +1023,18 @@ func (s *Session) writeSelection(selection []string) error {
 
 // Abort asks pi to stop the current run.
 func (s *Session) Abort(ctx context.Context) error {
-	_, err := s.roundTrip(ctx, map[string]any{"type": "abort"})
+	s.abortMu.Lock()
+	defer s.abortMu.Unlock()
+	// Retire human actions before Pi sees Stop. Its acknowledgement may be
+	// delayed; an approval cannot acquire authority during that wait.
+	s.writeMu.Lock()
+	s.mu.Lock()
+	s.aborting = true
+	s.mu.Unlock()
 	s.expireInteractions("")
+	s.writeMu.Unlock()
+	defer func() { s.mu.Lock(); s.aborting = false; s.mu.Unlock() }()
+	_, err := s.roundTrip(ctx, map[string]any{"type": "abort"})
 	return err
 }
 
@@ -1116,7 +1141,7 @@ func (s *Session) handleLine(line []byte) {
 		s.handleGuardSignal(verb, detail)
 		return
 	}
-	if probe.Type == "extension_ui_request" && s.receiveQuestions(line) {
+	if probe.Type == "extension_ui_request" && (s.receiveQuestions(line) || s.receiveAPIConnector(line)) {
 		return
 	}
 
