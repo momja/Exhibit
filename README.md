@@ -1,6 +1,6 @@
 # Exhibit
 
-![Logo](./design_files/exhibit_logo.svg)
+<img src="internal/api/logo.svg" width="88" alt="Exhibit logo">
 
 > [!WARNING]
 > This is in very early development and there will be future breaking changes.
@@ -10,7 +10,15 @@ Exhibit is a personal gallery for your self-contained web tools. The little HTML
 
 Save, organize, search, and re-run single-file HTML+JS tools. Each artifact runs in a sandboxed iframe on an isolated origin with a per-artifact Content Security Policy. State written to `localStorage` syncs through the server, so simple 'serverless' tools share one data state across all your devices (`sessionStorage` stays ephemeral, as it should be).
 
-![Screenshot](./docs/screenshots/exhibit_screenshot.png)
+<p>
+  <img src="docs/screenshots/readme/gallery-light.webp" width="49%" alt="The Starred gallery in light mode: three artifacts on a shelf, each with a live widget or tile">
+  <img src="docs/screenshots/readme/gallery-dark.webp" width="49%" alt="The Starred gallery in dark mode">
+</p>
+
+<p>
+  <img src="docs/screenshots/readme/artifact-detail.webp" width="49%" alt="An artifact running in its sandboxed frame, with the artifact toolbar below it">
+  <img src="docs/screenshots/readme/public-share.webp" width="49%" alt="A public share of an artifact, with the made with exhibit bar above it">
+</p>
 
 ## Quick start
 
