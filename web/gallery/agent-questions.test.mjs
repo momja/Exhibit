@@ -227,7 +227,7 @@ test('a failed send keeps the draft and can be retried using Send answers', asyn
   await p.submit();
   assert.equal(p.fields.every(field => !field.disabled), true);
   assert.equal(p.questions[0].choices[0].pressed, 'true');
-  
+
   assert.equal(p.status.textContent, 'Could not send. Please try again.');
   await p.submit();
   assert.equal(p.calls.filter(call => call.method === 'POST').length, 2);

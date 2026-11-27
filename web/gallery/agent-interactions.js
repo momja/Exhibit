@@ -175,4 +175,3 @@ export async function respondToInteraction(sessionId, requestId, responseBody) {
 function resolved(sessionId, requestId) {
   document.dispatchEvent(new CustomEvent('exhibit:interaction-resolved', { detail: { sessionId, requestId } }));
 }
-
