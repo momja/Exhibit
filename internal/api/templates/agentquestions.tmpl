@@ -1,4 +1,4 @@
-{{define "agentInteraction"}}<section class="agent-interaction agent-questions" id="agent-interaction-{{.ID}}" data-interaction-id="{{.ID}}" data-interaction-kind="{{.Kind}}" data-interaction-state="{{.State}}" data-revision="{{.Revision}}" data-pending="{{.Pending}}" data-session-id="{{.SessionID}}" aria-label="Questions from the agent">
+{{define "agentInteraction"}}<section class="agent-interaction agent-questions" id="agent-interaction-{{.ID}}" data-interaction-id="{{.ID}}" data-interaction-kind="{{.Kind}}" data-interaction-state="{{.State}}" data-revision="{{.Revision}}" data-pending="{{.Pending}}" data-session-id="{{.SessionID}}" aria-label="Questions from the agent" tabindex="-1">
   {{if eq .Kind "questions"}}{{template "agentQuestionsBody" .Questions}}{{end}}
 </section>{{end}}
 
@@ -9,7 +9,7 @@
     {{range .Questions}}
     <fieldset data-question-id="{{.ID}}" data-multi-select="{{.MultiSelect}}">
       <legend>{{.Question}}</legend>
-      {{if .MultiSelect}}<p class="question-instruction">Choose any that apply.</p>{{end}}
+      {{if .Options}}<p class="question-instruction">{{if .MultiSelect}}Choose one or more.{{else}}Choose one.{{end}}</p>{{end}}
       {{if .Options}}<div class="question-options">{{range .Options}}
         <button type="button" class="question-option" data-question-choice data-action="agent-questions#choose" value="{{.Label}}" aria-pressed="false"><i class="ph ph-check" aria-hidden="true"></i><span><span class="question-option-label">{{.Label}}</span>{{if .Description}}<span class="question-option-description">{{.Description}}</span>{{end}}</span></button>
       {{end}}</div>
@@ -31,6 +31,6 @@
 
 {{define "agentQuestionInput"}}<textarea aria-label="{{.Question}}" rows="2" maxlength="8000" placeholder="Your answer…" data-action="input->agent-questions#edit"></textarea>{{end}}
 
-{{define "agentQuestionSummary"}}{{if .Blocked}}<p class="question-skipped">Reply not sent.</p>{{else if .Expired}}<p class="question-skipped">Questions closed. No answers were sent.</p>{{else if .Cancelled}}<p class="question-skipped">Questions skipped. No answers were sent.</p>{{else}}<p class="question-completed"><i class="ph ph-check-circle" aria-hidden="true"></i> {{if .Message}}Replied in chat{{else}}Answers sent{{end}}</p>{{end}}{{range $index, $question := .Questions}}<div class="question-summary"><p class="question-summary-prompt">{{.Question}}</p>{{if and (not $.Cancelled) (not $.Message)}}{{with index $.Answers $index}}{{range .Selected}}<p class="question-summary-answer">{{.}}</p>{{end}}{{if .Text}}<p class="question-summary-answer">{{.Text}}</p>{{end}}{{end}}{{end}}</div>{{end}}{{if .Message}}<div class="msg user question-message">{{.Message}}</div>{{end}}{{end}}
+{{define "agentQuestionSummary"}}{{if .Blocked}}<p class="question-skipped" role="status">Reply not sent.</p>{{else if .Expired}}<p class="question-skipped" role="status">Questions closed. No answers were sent.</p>{{else if .Cancelled}}<p class="question-skipped" role="status">Questions skipped. No answers were sent.</p>{{else}}<p class="question-completed" role="status"><i class="ph ph-check-circle" aria-hidden="true"></i> {{if .Message}}Replied in chat{{else}}Answers sent{{end}}</p>{{end}}{{range $index, $question := .Questions}}<div class="question-summary"><p class="question-summary-prompt">{{.Question}}</p>{{if and (not $.Cancelled) (not $.Message)}}{{with index $.Answers $index}}{{range .Selected}}<p class="question-summary-answer">{{.}}</p>{{end}}{{if .Text}}<p class="question-summary-answer">{{.Text}}</p>{{end}}{{end}}{{end}}</div>{{end}}{{if .Message}}<div class="msg user question-message">{{.Message}}</div>{{end}}{{end}}
 
 {{define "agentQuestionHistory"}}<section class="agent-questions" aria-label="Questions from the agent">{{template "agentQuestionSummary" .}}</section>{{end}}

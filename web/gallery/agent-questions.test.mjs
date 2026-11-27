@@ -8,23 +8,24 @@ const json = (status, body = {}) => ({ ok: status < 400, status, json: async () 
 
 async function fixture({ responses = [json(204)], count = 1, multiSelect = false, getResponse = () => json(200), beforeSwap = async () => {} } = {}) {
   const calls = [], swaps = [], cards = new Map(), fields = [];
+  let activeElement = null;
   const status = { textContent: '' }, retry = { hidden: true }, progress = { textContent: '' };
-  const skipTrigger = { hidden: false, focus() { this.focused = true; } };
+  const skipTrigger = { hidden: false, focus() { this.focused = true; activeElement = this; } };
   const confirmation = { hidden: true, querySelector: () => skipTrigger };
   const card = { dataset: { sessionId: 'session-1', interactionId: 'request-1', interactionKind: 'questions', pending: 'true', revision: '1' },
-    setAttribute() {}, removeAttribute() {}, scrollIntoView() {},
+    setAttribute() {}, removeAttribute() {}, scrollIntoView() {}, contains: element => element === card || fields.includes(element), focus() { this.focused = true; activeElement = this; },
     querySelector: selector => selector === '.interaction-status' ? status : retry,
     querySelectorAll: () => fields };
   const form = { dataset: {}, setAttribute() {}, closest: selector => selector === '[data-question-form]' ? form : card,
     querySelector: () => status, querySelectorAll: selector => selector === 'input, textarea, button' ? fields : questions };
   const questions = Array.from({ length: count }, (_, index) => {
     const question = { dataset: { questionId: 'q' + index, multiSelect: String(multiSelect) }, closest: () => form };
-    const text = { value: '', tagName: 'TEXTAREA', focus() { this.focused = true; },
+    const text = { value: '', tagName: 'TEXTAREA', focus() { this.focused = true; activeElement = this; },
       closest: selector => selector === '[data-question-form]' ? form : question };
     const details = { open: false };
     const choices = ['Weekly', 'List'].map(value => ({ value, pressed: 'false',
       setAttribute(name, value) { this.pressed = value; }, getAttribute() { return this.pressed; },
-      focus() { this.focused = true; },
+      focus() { this.focused = true; activeElement = this; },
       closest: selector => selector === '[data-question-choice]' ? choices.find(c => c.value === value) : selector === '[data-question-id]' ? question : null }));
     const send = { closest: selector => selector === '[data-question-answer]' ? send : selector === '[data-question-id]' ? question : null };
     question.setAttribute = (name, value) => { question[name] = value; };
@@ -55,6 +56,7 @@ async function fixture({ responses = [json(204)], count = 1, multiSelect = false
     } }
   });
   cards.set('agent-interaction-request-1', card);
+  Object.defineProperty(page.context.document, 'activeElement', { get: () => activeElement });
   const byId = page.context.document.getElementById;
   page.context.document.getElementById = id => id.startsWith('agent-interaction-') ? cards.get(id) || null : byId(id);
   page.byId('messages').querySelectorAll = () => [card];
@@ -80,7 +82,7 @@ async function fixture({ responses = [json(204)], count = 1, multiSelect = false
     return detail.response;
   };
   const skip = () => controller.skip();
-  return { ...page, calls, swaps, cards, fields, status, retry, questions, form, event, click, choose, enter, type, reply, skip, submit, controller, progress, confirmation };
+  return { ...page, calls, swaps, cards, fields, status, retry, questions, form, event, click, choose, enter, type, reply, skip, submit, controller, progress, confirmation, card, setFocus: element => { activeElement = element; } };
 }
 
 test('choices stay editable and only explicit Send answers submits the batch', async () => {
@@ -279,4 +281,22 @@ test('a failed send cannot re-enable a form after the session ends', async () =>
   reject(new Error('connection closed'));
   await sending;
   assert.equal(p.fields.every(field => field.disabled), true);
+});
+
+
+test('terminal replacement retains focus for a reply submitted from the form', async () => {
+  const p = await fixture();
+  await p.type('A monthly calendar');
+  p.questions[0].text.focus();
+  await p.submit();
+  assert.equal(p.card.focused, true);
+});
+
+test('a terminal response does not steal focus when the person moves to chat', async () => {
+  let p;
+  p = await fixture({ beforeSwap: async () => { p.setFocus(p.byId('input')); } });
+  await p.type('A monthly calendar');
+  p.questions[0].text.focus();
+  await p.submit();
+  assert.notEqual(p.card.focused, true);
 });

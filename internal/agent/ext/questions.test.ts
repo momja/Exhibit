@@ -53,6 +53,7 @@ test("skipping or aborting never invents an answer", async () => {
 		if (aborted) controller.abort();
 		const response = await tool.execute("call-1", { questions }, controller.signal, null, { ui: { input: async () => undefined } });
 		assert.equal(response.details.cancelled, true);
+		assert.equal(response.details.expired, aborted);
 		assert.deepEqual(response.details.answers, []);
 		assert.match(response.content[0].text, /not treat this as agreement or permission/);
 	}

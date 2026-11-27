@@ -7,6 +7,7 @@ const loadError = document.getElementById('interaction-load-error');
 const loads = new Map();
 const failedLoads = new Map();
 const submissions = new Set();
+const focusAfterResponse = new Set();
 const controllers = new Set();
 let activeSessionId;
 let sessionGeneration = 0;
@@ -28,6 +29,7 @@ function changeSession(sessionId) {
   controllers.clear();
   loads.clear();
   failedLoads.clear();
+  focusAfterResponse.clear();
   if (loadError) loadError.hidden = true;
   if (previous) messages.querySelectorAll('[data-interaction-id]').forEach(card => {
     if (card.dataset.sessionId !== previous || card.dataset.pending !== 'true') return;
@@ -57,6 +59,7 @@ export function refreshInteraction(sessionId, requestId, revision = 0) {
     // A replay must not replace a draft or revive a resolved form. Revision 0
     // forces reconciliation after POST, including when its SSE event is lost.
     if (revision && existing && Number(existing.dataset.revision) >= revision) return;
+    const restoreFocus = existing?.contains(document.activeElement) || focusAfterResponse.has(key);
     const controller = new AbortController();
     controllers.add(controller);
     try {
@@ -75,7 +78,14 @@ export function refreshInteraction(sessionId, requestId, revision = 0) {
       if (!isCurrent(sessionId, generation)) return;
       failedLoads.delete(key);
       if (loadError) loadError.hidden = failedLoads.size === 0;
-      if (!existing) interactionCard(requestId)?.scrollIntoView({ block: 'start' });
+      const updated = interactionCard(requestId);
+      if (!existing) updated?.scrollIntoView({ block: 'start' });
+      if (updated?.dataset.pending !== 'true') {
+        if (restoreFocus && (!document.activeElement || document.activeElement === document.body || existing?.contains(document.activeElement))) {
+          updated?.focus({ preventScroll: true });
+        }
+        focusAfterResponse.delete(key);
+      }
     } finally {
       controllers.delete(controller);
     }
@@ -112,6 +122,8 @@ export async function respondToInteraction(sessionId, requestId, responseBody) {
   const card = interactionCard(requestId);
   if (!card || card.dataset.pending !== 'true' || submissions.has(key)) return false;
   submissions.add(key);
+  const focusedField = document.activeElement;
+  if (card.contains(focusedField)) focusAfterResponse.add(key);
   const status = card.querySelector('.interaction-status');
   const fields = [...card.querySelectorAll('input, textarea, button')];
   const enabledFields = fields.filter(field => !field.disabled);
@@ -145,7 +157,11 @@ export async function respondToInteraction(sessionId, requestId, responseBody) {
   } catch (error) {
     if (!isCurrent(sessionId, generation)) return false;
     status.textContent = failureMessage;
-    if (card.dataset.pending === 'true') enabledFields.forEach(field => { field.disabled = false; });
+    focusAfterResponse.delete(key);
+    if (card.dataset.pending === 'true') {
+      enabledFields.forEach(field => { field.disabled = false; });
+      if (focusedField?.isConnected && card.contains(focusedField)) focusedField.focus();
+    }
     return false;
   } finally {
     submissions.delete(key);

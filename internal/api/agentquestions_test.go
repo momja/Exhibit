@@ -80,7 +80,7 @@ func TestAgentQuestionsSkipAndStopReleaseTheTool(t *testing.T) {
 	for _, stop := range []bool{false, true} {
 		t.Run(map[bool]string{false: "skip", true: "stop"}[stop], func(t *testing.T) {
 			h := newPiHarness(t)
-			session, _, requestID, events, unsubscribe := askMockQuestions(t, h)
+			session, artifact, requestID, events, unsubscribe := askMockQuestions(t, h)
 			defer unsubscribe()
 			path := "/api/agent/sessions/" + session + "/questions/" + requestID
 			if stop {
@@ -94,6 +94,20 @@ func TestAgentQuestionsSkipAndStopReleaseTheTool(t *testing.T) {
 			w := doJSON(t, h.router, http.MethodGet, path, nil)
 			assert.Contains(t, w.Body.String(), "No answers were sent.")
 			assert.NotContains(t, w.Body.String(), "data-question-form")
+			var projected *agent.QuestionRequest
+			for _, message := range agent.Messages(keptConversation(t, h.router, artifact, session, 1)) {
+				if message.Questions != nil {
+					projected = message.Questions
+				}
+			}
+			require.NotNil(t, projected)
+			assert.Equal(t, stop, projected.Expired, "saved history distinguishes Stop from an explicit skip")
+			history := getPage(t, h.router, "/partials/agent-transcript?artifact="+artifact+"&session="+session)
+			if stop {
+				assert.Contains(t, history, "Questions closed. No answers were sent.")
+			} else {
+				assert.Contains(t, history, "Questions skipped. No answers were sent.")
+			}
 		})
 	}
 }

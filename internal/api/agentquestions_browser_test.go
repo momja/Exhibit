@@ -52,6 +52,7 @@ func TestAgentQuestionsBrowser(t *testing.T) {
 			chromedp.Poll[chromedp.Void](`!document.querySelector('[data-question-form]') && document.querySelector('.question-completed')?.textContent.includes('Answers sent')`),
 			chromedp.Poll[chromedp.Void](`getComputedStyle(document.querySelector('#stop-btn')).display === 'none'`))
 		check(`document.querySelector('.question-summary-answer').textContent === 'Weekly calendar'`)
+		check(`document.activeElement.matches('[data-interaction-id]') && document.querySelector('.question-completed').getAttribute('role') === 'status'`)
 
 		run(chromedp.SendKeys(chromedp.CSS(`#input`), "mock-ask-questions"), chromedp.Click(chromedp.CSS(`#send-btn`)),
 			chromedp.Poll[chromedp.Void](`!!document.querySelector('[data-question-form]')`),
@@ -64,5 +65,6 @@ func TestAgentQuestionsBrowser(t *testing.T) {
 		run(chromedp.Click(chromedp.CSS(`[data-agent-questions-target="skipTrigger"]`)),
 			chromedp.Click(chromedp.CSS(`[data-action="agent-questions#confirmSkip"]`)),
 			chromedp.Poll[chromedp.Void](`!document.querySelector('[data-question-form]') && document.querySelector('.question-skipped')?.textContent.includes('Questions skipped')`))
+		check(`document.activeElement.matches('[data-interaction-id]') && document.querySelector('.question-skipped').getAttribute('role') === 'status'`)
 	}
 }

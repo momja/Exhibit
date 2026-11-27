@@ -106,7 +106,7 @@ body{background:var(--color-ground);color:var(--color-ink);display:flex;flex-dir
 .question-other{margin-top:4px}
 .question-other summary:hover,.question-other summary:focus-visible{text-decoration:underline}
 .question-other summary{width:fit-content;min-height:44px;display:flex;align-items:center;color:var(--brand-blue);font-size:13px;cursor:pointer;padding-block:8px}
-.agent-questions textarea{display:block;width:100%;resize:vertical;min-height:64px;max-height:180px;border:1px solid var(--color-border);border-radius:8px;padding:10px;font:inherit;font-size:var(--field-font-size);background:var(--color-ground);color:var(--color-ink)}
+.agent-questions textarea{display:block;width:100%;resize:vertical;min-height:64px;max-height:180px;border:1px solid var(--color-field-border);border-radius:8px;padding:10px;font:inherit;font-size:var(--field-font-size);background:var(--color-field);color:var(--color-ink)}
 .agent-questions textarea:focus{border-color:var(--brand-blue)}
 .agent-questions :is(input,textarea,button,summary):focus-visible{outline:2px solid var(--brand-blue);outline-offset:3px}
 .agent-questions fieldset[aria-invalid="true"] legend,.question-status{color:var(--color-danger-ink)}

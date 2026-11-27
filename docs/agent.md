@@ -305,7 +305,9 @@ kind-specific `action`. Missing revisions and incompatible actions are rejected;
 stale or duplicate replies return `409`. The owner-scoped routes never let an
 agent credential reply for the person. A successful HTTP response is followed
 by a canonical fragment refresh even if its SSE event was lost. Failed writes
-leave the revision and form pending for retry.
+leave the revision and form pending for retry. Terminal summaries have status
+semantics. If a form owned keyboard focus, its replacement receives focus;
+responses never pull focus away from someone who has moved to chat.
 
 To add a kind, define its typed payload, validate its creation, add its explicit
 action handler and template, then project a safe read-only history summary.
