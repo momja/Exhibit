@@ -1072,6 +1072,19 @@ document.getElementById('pane-preview').addEventListener('click', (e) => {
   if (e.target.closest('[data-action="close-version-viewer"]')) refreshPreview();
 });
 
+// Focus the preview pane instead of the composer so artifact keystrokes cannot
+// accidentally send a message, including when chat is hidden or inert.
+function releasePreviewFocus() {
+  const frame = previewFrame();
+  if (frame && document.activeElement === frame) document.getElementById('pane-preview').focus({preventScroll: true});
+}
+
+// Handle the pane’s artifact-saved re-render. History viewer swaps start
+// from a chat-pane button, so focus is already outside the frame.
+document.getElementById('pane-preview').addEventListener('htmx:before:swap', event => {
+  if (event.target === document.getElementById('pane-preview')) releasePreviewFocus();
+});
+
 // A swap replaces the iframe, so the artifact reloads from scratch: any
 // snippet pick in flight is against a document that no longer exists. Drop the
 // mode rather than leave the button lit over a dead selection.

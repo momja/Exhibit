@@ -160,3 +160,16 @@ test("a guardrail block renders the server's reply without starting a turn", asy
   // setStreaming(true) is what shows the stop button; a block must not.
   assert.notEqual(byId("stop-btn").style.display, "", "a block must not leave the chat looking busy");
 });
+
+test("preview swap moves focus out of the frame only when it owns focus", async () => {
+  const page = await loadAgent();
+  const pane = page.byId("pane-preview");
+  const frame = page.byId("pv-frame");
+  const other = page.byId("other");
+  frame.focus();
+  await pane.dispatchEvent({ type: "htmx:before:swap", target: pane });
+  assert.equal(page.context.document.activeElement, pane);
+  other.focus();
+  await pane.dispatchEvent({ type: "htmx:before:swap", target: pane });
+  assert.equal(page.context.document.activeElement, other);
+});
