@@ -278,8 +278,8 @@ not change tool parameters, prompt wording, or owner/artifact scope.
 
 ## Agent panel interactions
 
-The panel delivers server-owned, typed interactions. Questions are the first
-implemented kind. `internal/agent/interactions.go` owns identity, tool-call
+The panel delivers server-owned, typed interactions for questions and private
+API connector proposals. `internal/agent/interactions.go` owns identity, tool-call
 correlation, lifecycle, revision checks, cancellation and SSE change events;
 `questions.go` owns question validation and the Pi input/reply adapter. The
 session stores one interaction map, not a second question lifecycle.
@@ -315,15 +315,17 @@ Reuse the shared lifecycle and delivery module. Keep domain authorization and
 writes in the existing domain handler; agent text or markup must never grant
 access. Approvals must bind the reviewed proposal revision; connection setup
 must complete only after the server verifies the required connection and grant.
-Status displays should not block the agent. No additional kinds or permission
-grants are implemented here.
+Status displays should not block the agent. Connector approval creates an account
+connection, with no artifact grants or network approval.
 
 Interactions remain scoped to a live session. Completed question summaries are
 projected into the existing persisted conversation transcript. A server restart
-does not restore a waiting Pi RPC or automatically resume an agent. A future
-connection/approval kind that must outlive a session should reference its durable
-domain request and reconcile from that record rather than reuse the live RPC as
-its source of truth.
+does not restore a waiting Pi RPC or automatically resume an agent. API connector interactions reference a durable, immutable proposal and reconcile
+from its saved decision. A server restart does not recreate an approved connector
+or revive a waiting action. The Pi tool retains only a safe terminal status;
+question summaries retain their existing transcript projection. See
+[agent-api-connectors.md](agent-api-connectors.md) for exact-domain trust, private
+key custody and duplicate/denial behavior.
 
 ## Questions in the chat
 
@@ -1208,5 +1210,3 @@ render-surface capability any embedding host can drive, not agent code).
   degrades to descriptor-only on failure).
 - No runtime allowlist-approval prompt in the chat (the artifact page's
   editor remains the approval surface; `exhibit-fr7` tracks the prompt).
-
-Advanced private connector approvals use the typed `api-connector` interaction. See [agent-api-connectors.md](agent-api-connectors.md) for the credential boundary, domain trust and duplicate/denial semantics.

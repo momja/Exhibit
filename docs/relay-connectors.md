@@ -297,6 +297,13 @@ person completes them. Each request provides a setup action that keeps the
 originating tool in view. The person still reviews and allows the connection
 for that tool; merely asking or finishing sign-in grants no tool access.
 Agents cannot acquire credentials, submit recipes, edit grants or retrieve secrets.
+For advanced public APIs, `propose_api_connector` may propose a validated origin,
+authentication type and header. The private typed card requires the person to
+explicitly trust the exact destination and privately enter a key before creating
+a connection. Agent proposals never grant artifact access. See
+[agent-api-connectors.md](agent-api-connectors.md). Native duplicate prevention
+also applies to manual setup: one active connection per owner/origin/header;
+proposals reuse existing credentials rather than overwrite them.
 
 Setup begun from a tool keeps that context through native credential setup,
 GitHub consent and managed-provider consent. GitHub cancellation or a bound-flow

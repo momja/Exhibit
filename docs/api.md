@@ -827,6 +827,7 @@ DELETE /api/artifacts/:id/relay-schedules/:id    Remove a refresh
 GET    /api/artifacts/:id/relay-bundle           Download an owner-scoped runnable ZIP
 GET    /api/artifacts/:id/agent-connections     Agent-safe connection metadata
 POST   /api/artifacts/:id/agent-connections     Ask the person to connect a provider
+POST   /api/artifacts/:id/agent-api-proposals   Propose public advanced API setup metadata
 ```
 
 A relay request is `{url, method, headers, body_base64}`; headers map strings to
@@ -931,6 +932,18 @@ remain configured. Failure to retire the previous remote account leaves the
 repair flow retryable; failure to save a replacement queues its cleanup.
 
 Configured managed services appear by name in the trusted connection UI.
+Advanced API setup uses `POST /api/artifacts/:id/agent-api-proposals` with
+`{name, origin, auth, header?, reason}` and no secret fields. It requires custom
+connections and relay support and is allowed to the artifact-scoped agent.
+Strict validation returns an immutable proposal, deduplicated per destination.
+`propose_api_connector` waits on a typed interaction referencing that proposal.
+Only the owner may POST `approve` with the reviewed revision, exact
+`trusted_origin` and private `secret`, or `deny` without credential fields, to
+`/api/agent/sessions/:sessionID/interactions/:requestID`. Approval and encrypted
+connection creation commit together. Only a safe decision returns to the agent;
+artifact access remains separate. See [agent-api-connectors.md](agent-api-connectors.md).
+
+
 Agent connection requests use a provider ID returned by `list_connections`;
 there is no generic `vendor` request destination. Operator-reviewed provider
 settings select Nango (`inject`) or
