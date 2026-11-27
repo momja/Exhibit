@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 	"unicode/utf8"
 )
 
@@ -14,7 +13,7 @@ import (
 const questionDialogTitle = "exhibit:questions:v1"
 
 var (
-	ErrQuestionExpired = errors.New("these questions are no longer waiting for an answer")
+	ErrQuestionExpired = ErrInteractionExpired
 	ErrInvalidAnswer   = errors.New("please answer every question by choosing an option or writing a response")
 	ErrQuestionPending = errors.New("please answer the questions above or reply in chat")
 )
@@ -58,6 +57,7 @@ type QuestionRequest struct {
 	Pending    bool             `json:"pending"`
 	Cancelled  bool             `json:"cancelled"`
 	Blocked    bool             `json:"blocked,omitempty"`
+	Expired    bool             `json:"expired,omitempty"`
 }
 
 func validQuestions(questions []Question) bool {
@@ -95,41 +95,21 @@ func (s *Session) receiveQuestions(line []byte) bool {
 		s.sendQuestionCancellation(dialog.ID)
 		return true
 	}
-	request.ID, request.Pending, request.Cancelled, request.Answers = dialog.ID, true, false, nil
-	request.Message, request.Blocked = "", false
-	s.mu.Lock()
-	if s.questions == nil {
-		s.questions = map[string]QuestionRequest{}
-	}
-	if s.closed || s.stopping || len(s.questions) >= 128 {
-		s.mu.Unlock()
+	request = QuestionRequest{ID: dialog.ID, ToolCallID: request.ToolCallID, Questions: request.Questions}
+	if !s.addInteraction(Interaction{ID: dialog.ID, ToolCallID: request.ToolCallID, Kind: InteractionQuestions, Blocking: true, Questions: &request}) {
 		s.sendQuestionCancellation(dialog.ID)
-		return true
 	}
-	s.questions[request.ID] = request
-	s.lastActive = time.Now()
-	s.mu.Unlock()
-	// Time spent waiting for a person is not a runaway model turn.
-	s.clearTurnClock()
-	s.questionsChanged(request.ID)
 	return true
 }
 
+// Questions is the compatibility projection used by stored transcripts and
+// legacy clients. Live state lives exclusively in the interaction envelope.
 func (s *Session) Questions(id string) (QuestionRequest, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	request, ok := s.questions[id]
-	return request, ok
-}
-
-// Caller holds mu.
-func (s *Session) hasPendingQuestions() bool {
-	for _, request := range s.questions {
-		if request.Pending {
-			return true
-		}
+	interaction, ok := s.Interaction(id)
+	if !ok || interaction.Kind != InteractionQuestions || interaction.Questions == nil {
+		return QuestionRequest{}, false
 	}
-	return false
+	return *interaction.Questions, true
 }
 
 func validateAnswers(questions []Question, answers []QuestionAnswer) error {
@@ -172,63 +152,80 @@ func validateQuestionResponse(questions []Question, response QuestionResponse) e
 	return validateAnswers(questions, response.Answers)
 }
 
-// AnswerQuestions claims a request while holding the same lock used for
-// cancellation. Two tabs cannot answer it twice, and a failed write leaves it
-// pending so the person can retry. UI replies have no normal RPC response.
+// AnswerQuestions preserves the old question-only interface. New panel actions
+// use RespondInteraction and supply the revision from the server-rendered form.
 func (s *Session) AnswerQuestions(id string, response QuestionResponse) error {
-	s.writeMu.Lock()
-	s.mu.Lock()
-	request, ok := s.questions[id]
-	if !ok || !request.Pending || s.closed || s.stopping {
-		s.mu.Unlock()
-		s.writeMu.Unlock()
-		return ErrQuestionExpired
-	}
-	if err := validateQuestionResponse(request.Questions, response); err != nil {
-		s.mu.Unlock()
-		s.writeMu.Unlock()
-		return err
-	}
+	action := "answer"
 	if response.Cancelled {
-		response.Answers = nil
+		action = "skip"
+	} else if response.Message != "" {
+		action = "message"
+	}
+	err := s.respondInteraction(id, InteractionAction{Action: action, Questions: response})
+	if errors.Is(err, ErrInvalidInteractionAction) {
+		return ErrInvalidAnswer
+	}
+	return err
+}
+
+// Caller holds writeMu and mu. Every kind validates and executes its own
+// actions; the common layer commits the lifecycle only after a successful write.
+func (s *Session) respondQuestions(interaction Interaction, action InteractionAction) (Interaction, error) {
+	response := action.Questions
+	switch action.Action {
+	case "answer":
+		if response.Cancelled || response.Message != "" {
+			return interaction, ErrInvalidInteractionAction
+		}
+	case "skip":
+		if len(response.Answers) != 0 || response.Message != "" || len(response.Images) != 0 || len(response.Snippets) != 0 {
+			return interaction, ErrInvalidInteractionAction
+		}
+		response.Cancelled = true
+	case "message":
+		if response.Message == "" || response.Cancelled || len(response.Answers) != 0 {
+			return interaction, ErrInvalidInteractionAction
+		}
+	default:
+		return interaction, ErrInvalidInteractionAction
+	}
+	if err := validateQuestionResponse(interaction.Questions.Questions, response); err != nil {
+		return interaction, err
 	}
 	if len(response.Snippets) != 0 {
 		if err := s.writeSelection(response.Snippets); err != nil {
-			s.mu.Unlock()
-			s.writeMu.Unlock()
-			return err
+			return interaction, err
 		}
 	}
-	err := s.writeQuestionResponse(id, response)
-	if err == nil {
-		request.Pending, request.Cancelled, request.Answers, request.Message = false, response.Cancelled, response.Answers, response.Message
-		s.questions[id] = request
-		s.lastActive = time.Now()
+	if err := s.writeQuestionResponse(interaction.ID, response); err != nil {
+		return interaction, err
 	}
-	s.mu.Unlock()
-	s.writeMu.Unlock()
-	if err != nil {
-		return err
+	request := *interaction.Questions
+	request.Answers, request.Message = response.Answers, response.Message
+	interaction.Questions = &request
+	interaction.State = InteractionCompleted
+	if response.Cancelled {
+		interaction.State = InteractionCancelled
 	}
-	s.armTurnClock()
-	s.questionsChanged(id)
-	return nil
+	return interaction, nil
 }
 
 // A refusal is reported after the dialog reply has been screened. Retire the
 // browser's accepted reply without retaining refused text in its summary.
 func (s *Session) blockQuestionReply(id, toolCallID string) {
 	s.mu.Lock()
-	request, ok := s.questions[id]
-	if !ok || request.ToolCallID != toolCallID {
+	interaction, ok := s.interactions[id]
+	if !ok || interaction.Kind != InteractionQuestions || interaction.ToolCallID != toolCallID {
 		s.mu.Unlock()
 		return
 	}
-	request.Pending, request.Cancelled, request.Blocked = false, true, true
+	request := *interaction.Questions
 	request.Answers, request.Message = nil, ""
-	s.questions[id] = request
+	interaction.Questions, interaction.State = &request, InteractionBlocked
+	interaction.Revision++
+	s.interactions[id] = interaction
 	s.mu.Unlock()
-	s.questionsChanged(id)
+	s.interactionChanged(id)
 }
 
 // Caller serializes writes with writeMu.
@@ -248,28 +245,4 @@ func (s *Session) sendQuestionCancellation(id string) {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 	_ = s.writeQuestionResponse(id, QuestionResponse{Cancelled: true})
-}
-
-// cancelQuestions also retires requests when a tool is aborted by Pi or the
-// process exits, so reconnecting cannot revive an obsolete answer form.
-func (s *Session) cancelQuestions(toolCallID string) {
-	s.mu.Lock()
-	var changed []string
-	for id, request := range s.questions {
-		if request.Pending && (toolCallID == "" || request.ToolCallID == toolCallID) {
-			request.Pending, request.Cancelled = false, true
-			s.questions[id] = request
-			changed = append(changed, id)
-		}
-	}
-	s.mu.Unlock()
-	for _, id := range changed {
-		s.questionsChanged(id)
-	}
-}
-
-func (s *Session) questionsChanged(id string) {
-	request, _ := s.Questions(id)
-	ev, _ := json.Marshal(map[string]any{"type": "exhibit_questions", "requestId": id, "pending": request.Pending})
-	s.broadcast(ev)
 }

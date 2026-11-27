@@ -468,7 +468,8 @@ function handleAgentEvent(ev) {
         if (text) addMsg('user', text);
       }
       break;
-    case 'exhibit_questions':
+    case 'exhibit_interaction':
+      if (ev.kind !== 'questions') break;
       if (ev.pending) pendingQuestions.add(ev.requestId);
       else pendingQuestions.delete(ev.requestId);
       updateComposer();
@@ -786,7 +787,7 @@ function updateComposer() {
   inputEl.style.height = Math.min(inputEl.scrollHeight, 140) + 'px';
 }
 inputEl.addEventListener('input', () => { updateComposer(); typingPreparation.update(inputEl.value); });
-document.addEventListener('exhibit:question-resolved', event => {
+document.addEventListener('exhibit:interaction-resolved', event => {
   if (event.detail.sessionId !== sessionId) return;
   pendingQuestions.delete(event.detail.requestId);
   updateComposer();

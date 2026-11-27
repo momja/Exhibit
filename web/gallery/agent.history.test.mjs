@@ -113,7 +113,7 @@ test('the chat composer stays usable while questions wait and sends its message 
   const page = await boot([STARTED]);
   await page.context.ensureSession();
   page.context.handleAgentEvent({ type: 'agent_start' });
-  page.context.handleAgentEvent({ type: 'exhibit_questions', requestId: 'q1', pending: true });
+  page.context.handleAgentEvent({ type: 'exhibit_interaction', kind: 'questions', requestId: 'q1', pending: true });
   assert.equal(page.byId('input').disabled, false);
   let reply;
   page.context.document.addEventListener('exhibit:question-message', event => {
@@ -132,7 +132,7 @@ test('the chat composer stays usable while questions wait and sends its message 
 test('a rejected chat reply preserves the draft for retry', async () => {
   const page = await boot([STARTED]);
   await page.context.ensureSession();
-  page.context.handleAgentEvent({ type: 'exhibit_questions', requestId: 'q1', pending: true });
+  page.context.handleAgentEvent({ type: 'exhibit_interaction', kind: 'questions', requestId: 'q1', pending: true });
   page.context.document.addEventListener('exhibit:question-message', event => {
     event.detail.response = Promise.resolve(false);
   });
@@ -145,7 +145,7 @@ test('a rejected chat reply preserves the draft for retry', async () => {
 test('question replies keep attachments on failure and consume them only after acceptance', async () => {
   const page = await boot([STARTED, json(202, {})]);
   await page.context.ensureSession();
-  page.context.handleAgentEvent({ type: 'exhibit_questions', requestId: 'q1', pending: true });
+  page.context.handleAgentEvent({ type: 'exhibit_interaction', kind: 'questions', requestId: 'q1', pending: true });
   const frame = page.byId('pv-frame');
   frame.contentWindow = {};
   await page.postFromFrame({ __exSnippet: 'captured', descriptor: { selector: '#counter', tag: 'BUTTON', outerHTML: '<button>Count</button>' }, image: { data: 'base64', mimeType: 'image/png' } }, frame.contentWindow);
@@ -164,7 +164,7 @@ test('question replies keep attachments on failure and consume them only after a
     assert.equal(reply.images[0].mime_type, 'image/png');
     assert.ok(reply.snippets[0].includes('<button>Count</button>'));
   }
-  page.context.handleAgentEvent({ type: 'exhibit_questions', requestId: 'q1', pending: false });
+  page.context.handleAgentEvent({ type: 'exhibit_interaction', kind: 'questions', requestId: 'q1', pending: false });
   page.byId('input').value = 'And make the heading bold';
   await page.context.send();
   const next = JSON.parse(posts(page.api, '/prompt')[0].body);
@@ -175,7 +175,7 @@ test('question replies keep attachments on failure and consume them only after a
 test('an attachment added while a reply is sending remains available for the next message', async () => {
   const page = await boot([STARTED, json(202, {})]);
   await page.context.ensureSession();
-  page.context.handleAgentEvent({ type: 'exhibit_questions', requestId: 'q1', pending: true });
+  page.context.handleAgentEvent({ type: 'exhibit_interaction', kind: 'questions', requestId: 'q1', pending: true });
   const frame = page.byId('pv-frame');
   frame.contentWindow = {};
   const capture = selector => page.postFromFrame({ __exSnippet: 'captured', descriptor: { selector, tag: 'BUTTON' } }, frame.contentWindow);
@@ -189,7 +189,7 @@ test('an attachment added while a reply is sending remains available for the nex
   await capture('#second');
   finish(true);
   await sending;
-  page.context.handleAgentEvent({ type: 'exhibit_questions', requestId: 'q1', pending: false });
+  page.context.handleAgentEvent({ type: 'exhibit_interaction', kind: 'questions', requestId: 'q1', pending: false });
   page.byId('input').value = 'Now make the second one green';
   await page.context.send();
   const next = JSON.parse(posts(page.api, '/prompt')[0].body);
@@ -200,7 +200,7 @@ test('an attachment added while a reply is sending remains available for the nex
 test('Enter cannot resend a chat reply while its successful response is still being displayed', async () => {
   const page = await boot([STARTED]);
   await page.context.ensureSession();
-  page.context.handleAgentEvent({ type: 'exhibit_questions', requestId: 'q1', pending: true });
+  page.context.handleAgentEvent({ type: 'exhibit_interaction', kind: 'questions', requestId: 'q1', pending: true });
   let finish, replies = 0;
   page.context.document.addEventListener('exhibit:question-message', event => {
     replies++;
@@ -209,7 +209,7 @@ test('Enter cannot resend a chat reply while its successful response is still be
   page.byId('input').value = 'A different direction';
   const sending = page.context.send();
   await page.context.document.dispatchEvent({
-    type: 'exhibit:question-resolved', detail: { sessionId: 'conv-1', requestId: 'q1' }
+    type: 'exhibit:interaction-resolved', detail: { sessionId: 'conv-1', requestId: 'q1' }
   });
   await page.context.send();
   assert.equal(replies, 1);
