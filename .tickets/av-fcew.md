@@ -1,6 +1,6 @@
 ---
 id: av-fcew
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-10-18T16:49:32Z
@@ -35,3 +35,9 @@ The session had several real agent saves (preview swaps) before the bug appeared
 ## Next step
 Find a repro first. Candidate mitigations once one exists: on htmx:before:swap of #pv-frame, or on returning to the tab, move focus to the composer if the frame holds it.
 
+
+## Notes
+
+**2026-11-27T08:00:44Z**
+
+Headless Chromium: a sandboxed srcdoc iframe was focused, replaced via innerHTML, then the textarea was focused and sent real keys; typing succeeded, so the reported failure was not reproduced. An initial autofocus attempt timed out before focusing the frame. Tab reactivation and swaps while hidden were not reproduced or tested. Before a preview-pane htmx swap, move focus from the current preview iframe to the composer, preserving other focus.
