@@ -760,7 +760,12 @@ default. The agent mode is a form of named fields. The brief crosses to `/agent`
   names the Streamable HTTP endpoint; `EXHIBIT_URL` is its core API address.
   Public protected-resource metadata names `EXHIBIT_PUBLIC_URL` as the
   authorization server; 401 challenges point clients to that metadata. Discovery
-  does not decide validity: the core is asked on every request. The core never serves `/mcp` or carries MCP transport.
+  does not decide validity: the core is asked on every request. The core does
+  not implement MCP transport. Fly optionally proxies exact app-host MCP and
+  resource-discovery paths to the loopback satellite, after render-host dispatch.
+  The satellite accepts the app origin as its browser Origin while still requiring
+  a verified bearer. Both processes share a machine and OS identity on Fly;
+  trimming the satellite environment does not isolate it from the core's volume.
   Core `MCP_URL` enables issuance, OAuth and the connection panel (§3.7); without
   it no new connections are offered. Proxy routing and configuration:
   [deployment.md](deployment.md).

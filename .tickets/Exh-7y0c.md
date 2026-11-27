@@ -1,6 +1,6 @@
 ---
 id: Exh-7y0c
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-11-16T06:04:05Z
@@ -62,3 +62,17 @@ Pick one, write down why, and pin it in the deployment config so it cannot drift
 7. `docs/deployment.md` §5.1/§5.3 state how the chosen shape is wired on Fly
    (cert, DNS, process or dispatch), not only on Compose.
 
+
+## Notes
+
+**2026-11-16T07:10:19Z**
+
+Decision: use https://exhibit.dizzard.net/mcp for both MCP_URL and MCP_PUBLIC_URL; keep EXHIBIT_PUBLIC_URL equal to APP_ORIGIN (https://exhibit.dizzard.net). Existing app-host path reuses product DNS/certificate and preserves OAuth issuer/client registrations, avoiding another hostname/cert. Repository implementation only; no deployment, DNS or certificate mutation authorized. Live TLS/redirect and clean-client OAuth/tool-call verification remain pending.
+
+**2026-11-16T20:58:37Z**
+
+Repository design confirmed: reuse https://exhibit.dizzard.net/mcp for MCP_URL and MCP_PUBLIC_URL while EXHIBIT_PUBLIC_URL remains APP_ORIGIN. Exact app-host MCP/discovery paths forward to a loopback-only separate satellite; render host wins and browser cookies are stripped. Fly app=fly supplies the image ENTRYPOINT argument, supervising both processes on the same volume-backed machine; a separate process group would create another machine and break loopback routing. No deployment or cloud/DNS mutation performed. Closing is repository implementation only: live DNS/certificate/HTTP redirect checks, old-client re-add, existing hosted grant listing/revocation and clean-machine Claude OAuth/tool-call acceptance remain pending an explicitly authorized operator rollout. Independent final-head reviews and merge gates are owned by the parent; implementer must not merge.
+
+**2026-11-16T23:02:03Z**
+
+Independent review: Claude Code/claude-sonnet-5-5 returned HUMAN DECISION REQUIRED on 9b704e6804cc8b75067b73e6783c676ba8e70560 for shared Fly template domain pinning and app-origin MCP security/public compatibility. Main conflict resolved; Go/Node and migration CI passed on 5a0e74a9fd17f1ea769e2f980b4977fe131a8e38. No merge or deployment. Remaining hosted TLS/redirect, clean-client OAuth/tool-call and preexisting grant acceptance are tracked in Exh-ucwz (open), rather than implied complete by repository-scope closure.
