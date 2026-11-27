@@ -1,6 +1,6 @@
 ---
 id: av-fcew
-status: closed
+status: open
 deps: []
 links: []
 created: 2026-10-18T16:49:32Z
@@ -41,3 +41,7 @@ Find a repro first. Candidate mitigations once one exists: on htmx:before:swap o
 **2026-11-27T08:00:44Z**
 
 Headless Chromium: a sandboxed srcdoc iframe was focused, replaced via innerHTML, then the textarea was focused and sent real keys; typing succeeded, so the reported failure was not reproduced. An initial autofocus attempt timed out before focusing the frame. Tab reactivation and swaps while hidden were not reproduced or tested. Before a preview-pane htmx swap, move focus from the current preview iframe to the composer, preserving other focus.
+
+**2026-11-27T08:14:33Z**
+
+A focus mitigation is implemented for preview pane swaps and tab reactivation, but the production symptom remains unexplained and unreproduced; a reproduction is still needed.

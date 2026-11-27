@@ -161,20 +161,28 @@ test("a guardrail block renders the server's reply without starting a turn", asy
   assert.notEqual(byId("stop-btn").style.display, "", "a block must not leave the chat looking busy");
 });
 
-
 test("preview swap moves focus out of the frame only when it owns focus", async () => {
   const page = await loadAgent();
   const pane = page.byId("pane-preview");
   const frame = page.byId("pv-frame");
-  const input = page.byId("input");
   const other = page.byId("other");
   frame.focus();
   await pane.dispatchEvent({ type: "htmx:before:swap", target: pane });
-  assert.equal(page.context.document.activeElement, input);
+  assert.equal(page.context.document.activeElement, pane);
   other.focus();
   await pane.dispatchEvent({ type: "htmx:before:swap", target: pane });
   assert.equal(page.context.document.activeElement, other);
+  // Guard against a synthetic event targeting a different element.
   frame.focus();
   await pane.dispatchEvent({ type: "htmx:before:swap", target: other });
   assert.equal(page.context.document.activeElement, frame);
+  page.context.document.visibilityState = "hidden";
+  await page.context.document.dispatchEvent({ type: "visibilitychange" });
+  assert.equal(page.context.document.activeElement, frame);
+  page.context.document.visibilityState = "visible";
+  await page.context.document.dispatchEvent({ type: "visibilitychange" });
+  assert.equal(page.context.document.activeElement, pane);
+  other.focus();
+  await page.context.document.dispatchEvent({ type: "visibilitychange" });
+  assert.equal(page.context.document.activeElement, other);
 });

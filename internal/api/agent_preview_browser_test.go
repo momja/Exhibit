@@ -107,8 +107,11 @@ func testAgentPreviewSaves(t *testing.T, bound bool) {
 		remember()
 	}
 	for _, kind := range []string{"exhibit_artifact_saved", "exhibit_state_changed"} {
+		run(chromedp.Evaluate[chromedp.Void](`oldFrame.focus()`))
+		check(`document.activeElement === oldFrame`)
 		emit(kind)
 		run(chromedp.Poll[chromedp.Void](`document.getElementById('pv-frame') && document.getElementById('pv-frame') !== oldFrame && document.getElementById('pv-frame').src !== oldFrameSrc`))
+		check(`document.activeElement === document.getElementById('pane-preview')`)
 		check(`new URL(document.getElementById('pv-frame').src).searchParams.get('r') !== new URL(oldFrameSrc).searchParams.get('r')`)
 		remember()
 	}

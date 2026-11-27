@@ -1072,17 +1072,24 @@ document.getElementById('pane-preview').addEventListener('click', (e) => {
   if (e.target.closest('[data-action="close-version-viewer"]')) refreshPreview();
 });
 
+// Focus the preview pane instead of the composer so artifact keystrokes cannot
+// accidentally send a message, including when chat is hidden or inert.
+function releasePreviewFocus() {
+  const frame = previewFrame();
+  if (frame && document.activeElement === frame) document.getElementById('pane-preview').focus({preventScroll: true});
+}
+
+// This also covers history viewer swaps targeting the preview pane.
+document.getElementById('pane-preview').addEventListener('htmx:before:swap', event => {
+  if (event.target === document.getElementById('pane-preview')) releasePreviewFocus();
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') releasePreviewFocus();
+});
+
 // A swap replaces the iframe, so the artifact reloads from scratch: any
 // snippet pick in flight is against a document that no longer exists. Drop the
 // mode rather than leave the button lit over a dead selection.
-// Move keyboard focus out before htmx destroys a focused preview browsing
-// context. Resolve the frame each time because every preview swap replaces it.
-document.getElementById('pane-preview').addEventListener('htmx:before:swap', event => {
-  if (event.target !== document.getElementById('pane-preview')) return;
-  const frame = previewFrame();
-  if (frame && document.activeElement === frame) inputEl.focus({preventScroll: true});
-});
-
 document.getElementById('pane-preview').addEventListener('htmx:after:swap', () => {
   if (snippetMode) endSnippetMode();
 });
