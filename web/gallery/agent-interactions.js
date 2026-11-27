@@ -34,6 +34,7 @@ function changeSession(sessionId) {
   if (previous) messages.querySelectorAll('[data-interaction-id]').forEach(card => {
     if (card.dataset.sessionId !== previous || card.dataset.pending !== 'true') return;
     card.dataset.pending = 'false';
+    card.querySelectorAll('input[type="password"]').forEach(field => { field.value = ''; });
     card.querySelectorAll('input, textarea, button').forEach(field => { field.disabled = true; });
     card.querySelector('.interaction-status').textContent = 'This conversation has ended.';
   });

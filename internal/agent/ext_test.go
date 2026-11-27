@@ -36,6 +36,7 @@ func TestExtensionSuite(t *testing.T) {
 		"source-context.test.ts",
 		"guard.test.ts",
 		"questions.test.ts",
+		"api-connectors.test.ts",
 	}
 	args := append([]string{"--test", "--import", "./testdata/register-hooks.mjs"}, suites...)
 	cmd := exec.Command(node, args...)

@@ -262,3 +262,14 @@ body.mobile-panes.show-preview .preview{visibility:visible}
 .message-action-status{font-size:12px;color:var(--color-muted);padding:0 4px}
 .message-action-status[data-error]{color:var(--color-danger-ink)}
 @media (pointer:coarse){.message-action{min-width:44px;min-height:44px}}
+
+/* Private API approval: keep the full destination readable at phone widths. */
+.connector-destination { display: grid; gap: .4rem; padding: 1rem; border: 2px solid var(--color-field-border); border-radius: 8px; margin-block: 1rem; }
+.connector-destination strong, .connector-trust strong { overflow-wrap: anywhere; word-break: break-word; }
+.connector-destination strong { font-size: 1.1rem; }
+.connector-key { display: grid; gap: .5rem; font-weight: 600; margin-block: 1rem .5rem; }
+.connector-key input { width: 100%; min-width: 0; box-sizing: border-box; min-height: 44px; padding: .65rem; color: var(--color-ink); background: var(--color-field); border: 1px solid var(--color-field-border); border-radius: 6px; font: inherit; }
+.connector-trust { display: flex; align-items: flex-start; gap: .65rem; padding-block: .75rem; cursor: pointer; }
+.connector-trust input { flex: 0 0 auto; width: 20px; height: 20px; margin-top: .15rem; }
+.connector-trust-warning { font-weight: 600; }
+.connector-reason { margin-block: 1rem; }

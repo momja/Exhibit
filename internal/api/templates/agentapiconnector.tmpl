@@ -1,0 +1,32 @@
+{{define "agentAPIConnectorBody"}}
+  <h3 class="question-heading">Review API connection</h3>
+  <p>The agent proposed this advanced API connection. Check the destination yourself before sharing a key.</p>
+  <div class="connector-destination">
+    <span>Your key will be sent to</span>
+    <strong>{{.Proposal.Spec.Origin}}</strong>
+    <span>{{if eq .Proposal.Spec.Auth "bearer"}}Bearer token in Authorization{{else}}API key in {{.Proposal.Spec.Header}}{{end}}</span>
+  </div>
+  <details class="connector-reason"><summary>Agent proposal: {{.Proposal.Spec.Name}}</summary><p>{{.Proposal.Spec.Reason}}</p></details>
+  {{if and .Pending (eq .Proposal.State "pending")}}
+  <p class="connector-trust-warning">An agent can be misled into suggesting a malicious domain. A familiar name is not proof that this destination is safe.</p>
+  <form data-controller="agent-api-connector" data-action="submit->agent-api-connector#approve" autocomplete="off">
+    <label class="connector-key">API key or token
+      <input type="password" data-agent-api-connector-target="key" required maxlength="16384" autocomplete="off" data-1p-ignore data-lpignore="true" spellcheck="false" autocapitalize="none" aria-describedby="connector-key-note-{{.ID}}">
+    </label>
+    <p id="connector-key-note-{{.ID}}">Entered here, your key stays private from the agent and chat history.</p>
+    <label class="connector-trust">
+      <input type="checkbox" data-agent-api-connector-target="trust" data-origin="{{.Proposal.Spec.Origin}}" required>
+      <span>I trust <strong>{{.Proposal.Spec.Origin}}</strong> with my key.</span>
+    </label>
+    <p>This creates a connection in your account. Allowing this artifact to use it is a separate step in <a href="/connections?artifact={{.Proposal.ArtifactID}}">Connections</a>. Requests may read or change data according to your key’s permissions.</p>
+    <div class="question-actions">
+      <button type="submit" class="btn btn-primary">Approve connection</button>
+      <button type="button" class="btn" data-action="agent-api-connector#deny">Decline</button>
+    </div>
+    <p class="interaction-status" role="status" aria-live="polite"></p>
+  </form>
+  {{else}}
+  <p class="interaction-status" role="status">{{if eq .Proposal.State "approved"}}Connection ready. <a href="/connections?artifact={{.Proposal.ArtifactID}}">Review artifact access in Connections</a>.{{else if eq .Proposal.State "disconnected"}}This connection was removed. <a href="/connections?artifact={{.Proposal.ArtifactID}}">Review Connections to reconnect</a>.{{else if eq .Proposal.State "denied"}}Connection declined. No key was shared.{{else}}This request has ended. No connection was approved.{{end}}</p>
+  {{if .Pending}}<form data-controller="agent-api-connector" data-action="submit->agent-api-connector#resume"><p>Your decision was saved. Send it to the agent to continue.</p><button type="submit" class="btn">Continue</button></form>{{end}}
+  {{end}}
+{{end}}

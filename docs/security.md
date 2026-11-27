@@ -1697,6 +1697,34 @@ and revocable. Taking the endpoint offline also requires stopping the satellite.
 The core never serves `/mcp`. See `deployment.md` for the optional service and
 proxy routing.
 
+### 5.6 Agent-proposed advanced API connections (Exh-5kzm)
+
+`propose_api_connector` submits public, validated metadata only. A durable,
+immutable proposal is bound to the artifact owner. An owner-only typed
+interaction renders the canonical HTTPS origin, warns that an agent can suggest
+a malicious domain, and requires the person to explicitly trust that exact
+origin before privately entering a key. The agent credential cannot call the
+approval route. The server rejects untrusted origins, malformed keys and known
+key/destination mismatches; the private flow has no mismatch override.
+
+The key exists in the app's HTTP request and credential encryption path only.
+It is absent from Pi RPC, events, interaction state, tool replies, transcripts,
+logs and browser drafts. The server sends only a terminal decision to the agent.
+A transaction creates the connection and decision together, preventing duplicate
+inserts, changed destinations and competing approve/decline outcomes. Failed
+RPC replies reuse the saved result. Stop expires the interaction and blocks stale
+creation. Denial never creates an account or grants access. Artifact attachment
+and origin approval remain separate human actions enforced by the relay.
+
+Discovery directories such as integrations.sh are untrusted hints for locating
+provider documentation and schemas. They never authorize credential destinations.
+ASCII lookalike domains still require human judgment; for unrecognized key
+formats Exhibit cannot infer the issuer. Ordinary chat and question answers are
+not private key inputs: guidance forbids requesting credentials there, but a
+user who pastes one into chat sends it to their agent. Password managers may
+still offer to save a key despite autocomplete suppression. See
+[agent-api-connectors.md](agent-api-connectors.md) for lifecycle details.
+
 ## 6. Residual risk
 
 Accepted, with eyes open (see the PRD §6.4): the model controls what an artifact

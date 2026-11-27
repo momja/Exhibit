@@ -340,11 +340,11 @@ func ErrorStatus(err error) int {
 		return 404
 	case errors.Is(err, store.ErrNotFound):
 		return 404
-	case errors.Is(err, store.ErrConnectionLimit), errors.Is(err, store.ErrConnectionQuota):
+	case errors.Is(err, store.ErrConnectionLimit), errors.Is(err, store.ErrConnectionQuota), errors.Is(err, store.ErrConnectorProposalLimit):
 		return 429
 	case errors.Is(err, ErrEgress), errors.Is(err, ErrStandin):
 		return 403
-	case errors.Is(err, store.ErrConnectionSharing), errors.Is(err, store.ErrConnectionOverlap):
+	case errors.Is(err, store.ErrConnectionSharing), errors.Is(err, store.ErrConnectionOverlap), errors.Is(err, store.ErrConnectionDuplicate):
 		return 409
 	case errors.As(err, new(*CredentialOriginError)):
 		// The save is refused, but the refusal is answerable: the same request

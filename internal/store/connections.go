@@ -260,18 +260,44 @@ func (s *SQLiteStore) CreateConnection(ctx context.Context, c *ConnectionRecord,
 		return err
 	}
 	defer tx.Rollback()
+	// Acquire the writer lock before reading quotas or destinations. This also
+	// serializes normal creates with atomic proposal approvals.
+	if _, err := tx.ExecContext(ctx, `UPDATE connections SET id=id WHERE 0`); err != nil {
+		return err
+	}
+	if err := createConnectionTx(ctx, tx, c, limit); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func createConnectionTx(ctx context.Context, tx *sql.Tx, c *ConnectionRecord, limit int) error {
+	if limit < -1 {
+		return ErrConnectionLimit
+	}
 	var count int
-	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM connections WHERE owner_id=? AND kind=? AND (status='active' OR (kind='vendor' AND status='reconnect'))`, c.OwnerID, c.Kind).Scan(&count); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM connections WHERE owner_id=? AND kind=? AND (status='active' OR (kind='vendor' AND status='reconnect'))`, c.OwnerID, c.Kind).Scan(&count); err != nil {
 		return err
 	}
 	if limit >= 0 && count >= limit {
 		return ErrConnectionLimit
 	}
+	origins, header, err := nativeCredentialDestination(c)
+	if err != nil {
+		return err
+	}
+	id, err := findNativeCredentialDestination(ctx, tx, c.OwnerID, origins, header)
+	if err != nil {
+		return err
+	}
+	if id != "" {
+		return ErrConnectionDuplicate
+	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO connections(id,owner_id,name,provider,kind,engine,external_ref,recipe_json,encrypted_secret,status) VALUES(?,?,?,?,?,?,?,?,?,'active')`, c.ID, c.OwnerID, c.Name, c.Provider, c.Kind, c.Engine, c.ExternalRef, c.RecipeJSON, c.EncryptedSecret)
 	if err != nil {
 		return err
 	}
-	return tx.Commit()
+	return nil
 }
 
 func (s *SQLiteStore) ListConnections(ctx context.Context, ownerID int64) ([]*ConnectionRecord, error) {

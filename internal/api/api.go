@@ -656,6 +656,7 @@ func (ro *Router) setupRoutes() {
 				r.Post("/connections/{connectionID}/standin", ro.connectionStandin)
 				r.Get("/agent-connections", ro.agentConnections)
 				r.Post("/agent-connections", ro.agentRequestConnection)
+				r.Post("/agent-api-proposals", ro.agentProposeAPIConnector)
 				r.Delete("/connection-requests/{requestID}", ro.dismissConnectionRequest)
 				r.Get("/assets", ro.listAssets)
 				r.Get("/assets/export", ro.exportAssets)

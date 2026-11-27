@@ -198,6 +198,8 @@ func decide(messages []chatMessage) turnPlan {
 		name := toolNameFor(messages, last.ToolCallID)
 		result, _ := textOf(last.Content)
 		switch name {
+		case "propose_api_connector":
+			return turnPlan{kind: "text", text: "Connection decision received. The app stays disconnected until artifact access is approved."}
 		case "ask_user":
 			if strings.Contains(result, "refused by the instance's usage-policy screen") {
 				return turnPlan{kind: "text", text: "Please send a different reply."}
@@ -278,6 +280,10 @@ func decide(messages []chatMessage) turnPlan {
 // Explicit triggers keep question demos and integration tests deterministic,
 // whether source preparation precedes the first model request or not.
 func questionPlan(userText string) (turnPlan, bool) {
+	if strings.Contains(userText, "mock-propose-api-connector") {
+		return turnPlan{kind: "tool", toolName: "propose_api_connector", toolArgs: map[string]any{"name": "Weather API", "origin": "https://api.weather.example.com", "auth": "api-key", "header": "X-API-Key", "reason": "Show the weather for your chosen city."}}, true
+	}
+
 	if !strings.Contains(userText, "mock-ask-questions") && !strings.Contains(userText, "Help me plan meals for my family.") {
 		return turnPlan{}, false
 	}

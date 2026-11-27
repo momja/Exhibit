@@ -733,16 +733,17 @@ func TestLegacyAmbiguousBindingsRefuseBeforeNetwork(t *testing.T) {
 	defer provider.Close()
 	first, err := s.Create(ctx, 1, CreateRequest{Name: "First", Recipe: "bearer", Origin: provider.URL, Secret: "first-secret"}, UnlimitedLimits())
 	require.NoError(t, err)
-	second, err := s.Create(ctx, 1, CreateRequest{Name: "Second", Recipe: "bearer", Origin: provider.URL, Secret: "second-secret"}, UnlimitedLimits())
-	require.NoError(t, err)
 	_, err = s.Grant(ctx, 1, "app", GrantRequest{ConnectionID: first.ID})
 	require.NoError(t, err)
-	// Simulate a previously deployed or externally edited ambiguous row. The
-	// store's current attachment path rejects this in its own transaction.
+	// Simulate previously deployed or externally edited duplicate accounts and
+	// ambiguous grants. Current creation and attachment both reject duplicates.
 	db, err := sql.Open("sqlite", path)
 	require.NoError(t, err)
 	defer db.Close()
-	_, err = db.Exec(`INSERT INTO artifact_connection_grants(artifact_id,connection_id,viewer_id) VALUES('app',?,1)`, second.ID)
+	_, err = db.Exec(`INSERT INTO connections(id,owner_id,name,provider,kind,recipe_json,encrypted_secret)
+	 SELECT 'legacy-second',owner_id,'Second',provider,kind,recipe_json,encrypted_secret FROM connections WHERE id=?`, first.ID)
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO artifact_connection_grants(artifact_id,connection_id,viewer_id) VALUES('app','legacy-second',1)`)
 	require.NoError(t, err)
 	_, err = doRequest(t, s, 1, testGate(t, provider.URL), provider.URL+"/data")
 	assert.ErrorIs(t, err, store.ErrConnectionOverlap)
