@@ -644,8 +644,8 @@ requests and the first-use approval PATCH. A channel that belongs to a
 different viewer or artifact is refused with 403. Browser requests to the
 inference and consent endpoints also require the channel.
 
-- `GET /api/artifacts/:id/inference` → `{enabled, complete, decide, payer, reason, owner, approved, consented}`. Never names a provider or model.
-- `POST /api/artifacts/:id/inference` `{kind: "complete"|"decide", payload}` → `200 {value}` or `{error: {code, message, needs?, reset_at?, retry_after_ms?, limit?}}` with 503 unavailable, 403 not_approved (`needs`: `owner_approval` | `consent`) / no_key, 429 limit_reached / rate_limited, 400 invalid_request, 502 provider_error / invalid_output.
+- `GET /api/artifacts/:id/inference` → `{enabled, complete, decide, images, payer, reason, owner, approved, consented}`. `images` says whether `complete` accepts image parts for this viewer (Exh-v81w). Never names a provider or model.
+- `POST /api/artifacts/:id/inference` `{kind: "complete"|"decide", payload}`. A `complete` message's `content` is a string or a list of `{type: "text", text}` and (user messages only) `{type: "image", mimeType, data}` parts, `data` being base64 or a base64 `data:` URL; limits and refusals are in [inference.md](inference.md). Responds → `200 {value}` or `{error: {code, message, needs?, reset_at?, retry_after_ms?, limit?}}` with 503 unavailable, 403 not_approved (`needs`: `owner_approval` | `consent`) / no_key, 429 limit_reached / rate_limited, 400 invalid_request, 502 provider_error / invalid_output.
 - `PUT` / `DELETE /api/artifacts/:id/inference/consent` → 204. A named recipient agrees to (or stops) spending their own allowance on this artifact. The owner uses `PATCH inference_approved` instead (PUT answers 400 for the owner).
 - `inference_approved` is a strict-boolean `PATCH /api/artifacts/:id` field like the other approvals.
 

@@ -128,7 +128,11 @@ export function connectInferenceHost({ artifactId, title }) {
       // A tool that checks first never calls, so this is where a recipient
       // learns why its AI controls are off — in Exhibit's chrome, once.
       if (notAllowed && (st.complete || st.decide || st.reason === 'no_key')) showBanner('owner', OWNER_NOTE);
-      reply({ ok: true, value: { complete: Boolean(usable && st.complete), decide: Boolean(usable && st.decide) } });
+      reply({ ok: true, value: {
+        complete: Boolean(usable && st.complete),
+        decide: Boolean(usable && st.decide),
+        images: Boolean(usable && st.complete && st.images),
+      } });
       return;
     }
     const fail = (code, message) => reply({ ok: false, error: { code, message: message || REFUSED[code] || 'The AI request failed.' } });

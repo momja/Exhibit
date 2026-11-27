@@ -21,6 +21,8 @@ func TestInstructionsMatchGoldens(t *testing.T) {
 		"instructions-ai-complete.golden": {Complete: true},
 		"instructions-ai-decide.golden":   {Decide: true},
 		"instructions-ai-both.golden":     {Complete: true, Decide: true},
+		// Exh-v81w: images extend complete() and change nothing else.
+		"instructions-ai-complete-images.golden": {Complete: true, Images: true},
 	}
 	for name, ai := range cases {
 		got := InstructionsFor(ai)
@@ -54,8 +56,15 @@ func TestInstructionsDescribeOnlyOfferedKinds(t *testing.T) {
 	if decide := InstructionsFor(agentguidance.AI{Decide: true}); strings.Contains(decide, "complete({") || !strings.Contains(decide, "decide({") {
 		t.Error("decide-only instructions must teach decide() and not complete()")
 	}
-	if complete := InstructionsFor(agentguidance.AI{Complete: true}); strings.Contains(complete, "decide({") || !strings.Contains(complete, "complete({") {
+	complete := InstructionsFor(agentguidance.AI{Complete: true})
+	if strings.Contains(complete, "decide({") || !strings.Contains(complete, "complete({") {
 		t.Error("complete-only instructions must teach complete() and not decide()")
+	}
+	if strings.Contains(complete, "type: 'image'") {
+		t.Error("instructions teach images on an instance that does not offer them")
+	}
+	if images := InstructionsFor(agentguidance.AI{Complete: true, Images: true}); !strings.Contains(images, "type: 'image'") || !strings.Contains(images, "canvas") {
+		t.Error("image instructions must teach image parts and canvas downscaling")
 	}
 }
 

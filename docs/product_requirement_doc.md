@@ -474,8 +474,9 @@ reads your location in its own tab too, and an unapproved one reads it nowhere.
 spends money. An artifact may call an AI model through `window.exhibit.ai`
 without any key of its own, and the person *viewing* it pays. So it takes two
 consents rather than one. The owner allows the tool to use AI at all — the
-prompt names the tool, says that what it sends can include saved data, and
-says who pays — and that is also their consent to spend their own allowance.
+prompt names the tool, says that what it sends can include saved data and
+images, which leave the device, and says who pays — and that is also their
+consent to spend their own allowance.
 Each person the tool is shared with agrees, once, to spend *theirs*; nobody's
 use is ever charged to the owner. A recipient of a tool its owner never
 allowed is told so and offered nothing. Public links, anonymous visitors,

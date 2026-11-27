@@ -120,8 +120,16 @@ func TestWorkerResolvesCatalogModels(t *testing.T) {
 		{KindComplete, "no/such-model", false},
 	} {
 		got, err := w.Resolve(deadline(t, 10*time.Second), "openrouter", tc.kind, tc.model)
-		if err != nil || got != tc.want {
+		if err != nil || got.Found != tc.want {
 			t.Errorf("Resolve(%s, %s) = %v, %v; want %v", tc.kind, tc.model, got, err, tc.want)
+		}
+	}
+	// The catalog's input modalities say whether a chat model reads images
+	// (Exh-v81w).
+	for model, want := range map[string]bool{testChatModel: true, "deepseek/deepseek-chat": false} {
+		got, err := w.Resolve(deadline(t, 10*time.Second), "openrouter", KindComplete, model)
+		if err != nil || !got.Found || got.Images != want {
+			t.Errorf("Resolve(%s) = %+v, %v; want images %v", model, got, err, want)
 		}
 	}
 	if m.count() != 0 {
@@ -129,9 +137,41 @@ func TestWorkerResolvesCatalogModels(t *testing.T) {
 	}
 }
 
+// The largest complete() payload the parser accepts, four images at the
+// total bound, crosses the worker's envelope and Pi's RPC line intact and
+// reaches the provider as image parts (Exh-v81w).
+func TestWorkerCarriesTheLargestImagePayload(t *testing.T) {
+	m := newMockProvider(t)
+	w := startTestWorker(t, m.URL)
+	image := sized(MaxImageTotalBytes / MaxCompleteImages)
+	parts := []map[string]any{textPart("What do these show?")}
+	for range MaxCompleteImages {
+		parts = append(parts, imgPart("image/png", image))
+	}
+	payload, _ := json.Marshal(imageMessage(parts...))
+	p, err := prepareComplete(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	job := Job{Kind: KindComplete, Provider: "openrouter", Model: testChatModel, APIKey: "key-A", Context: p.complete.context(true), MaxTokens: 64}
+	res, out, err := w.Run(deadline(t, 30*time.Second), job)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if !strings.HasPrefix(res.Text, "Saw 4 image(s) (image/png, image/png, image/png, image/png)") {
+		t.Fatalf("result = %q", res.Text)
+	}
+	if out.Usage == nil || out.Usage.Input != 100+4*85 {
+		t.Fatalf("usage = %+v; the provider's image tokens must reach the meter", out.Usage)
+	}
+	if body := m.bodies[0]; strings.Count(body, "data:image/png;base64,"+image) != 4 {
+		t.Fatal("the provider did not receive the four images intact")
+	}
+}
+
 func completeJob(key, text string) Job {
-	req := &completeRequest{Messages: []completeMessage{{Role: "user", Content: text}}, MaxTokens: 64}
-	return Job{Kind: KindComplete, Provider: "openrouter", Model: testChatModel, APIKey: key, Context: req.context(), MaxTokens: 64}
+	req := &completeRequest{Messages: []completeMessage{textMessage("user", text)}, MaxTokens: 64}
+	return Job{Kind: KindComplete, Provider: "openrouter", Model: testChatModel, APIKey: key, Context: req.context(true), MaxTokens: 64}
 }
 
 func TestWorkerCompleteRoundTripReportsUsage(t *testing.T) {

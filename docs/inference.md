@@ -3,7 +3,8 @@
 Experimental, off by default. Epic [Exh-zue3](../.tickets/Exh-zue3.md).
 
 An artifact can ask an AI model for prose or for a typed judgment from ordinary
-JavaScript. The person using it needs no key, provider account or API
+JavaScript, and can show `complete()` images to read
+([Exh-v81w](../.tickets/Exh-v81w.md)). The person using it needs no key, provider account or API
 knowledge. Exhibit makes the call on the server and charges it to **the person
 viewing the artifact**.
 
@@ -16,7 +17,7 @@ single write path. The artifact's CSP and origin allowlist are untouched.
 
 ```js
 const ai = window.exhibit.ai;            // always defined
-const { complete, decide } = await ai.available();
+const { complete, decide, images } = await ai.available();
 
 // Prose, or JSON validated against a schema.
 const text = await ai.complete({ prompt: 'Summarize: ' + notes });
@@ -25,6 +26,24 @@ const plan = await ai.complete({
   messages: [{ role: 'user', content: goal }],
   schema: { type: 'object', properties: { days: { type: 'array', items: { type: 'string' } } }, required: ['days'] },
   maxTokens: 400,
+});
+
+// Images: a user message's content becomes a list of parts. data is base64,
+// or the data: URL a canvas returns. Downscale first (below). Load a picked
+// File with createImageBitmap: the render CSP's img-src has no blob:, so an
+// <img> cannot show URL.createObjectURL(file).
+const photo = await createImageBitmap(input.files[0]);
+const canvas = document.createElement('canvas');
+const scale = Math.min(1, 1568 / Math.max(photo.width, photo.height));
+canvas.width = Math.round(photo.width * scale);
+canvas.height = Math.round(photo.height * scale);
+canvas.getContext('2d').drawImage(photo, 0, 0, canvas.width, canvas.height);
+const total = await ai.complete({
+  messages: [{ role: 'user', content: [
+    { type: 'text', text: 'What is the total on this receipt?' },
+    { type: 'image', mimeType: 'image/jpeg', data: canvas.toDataURL('image/jpeg', 0.85) },
+  ] }],
+  schema: { type: 'object', properties: { total: { type: 'number' } }, required: ['total'] },
 });
 
 // A typed judgment with a confidence; never text.
@@ -41,7 +60,7 @@ const a = await ai.decide({
 
 | Method | Resolves to |
 |---|---|
-| `available()` | `{ complete: boolean, decide: boolean }` for this viewer, here |
+| `available()` | `{ complete: boolean, decide: boolean, images: boolean }` for this viewer, here; `images` is whether `complete` accepts image parts |
 | `complete({ prompt } \| { messages, system?, schema?, maxTokens? })` | a string; with `schema`, the parsed JSON value, validated |
 | `decide({ state, questions })` | answers keyed by question name: `bool` → `probability`; `choice` → `choice`, `probabilities`, `confidence`; `score` → `score` (0 … levels−1), `confidence` |
 
@@ -49,12 +68,19 @@ const a = await ai.decide({
 for Claude's runtime run unchanged.
 
 **Limits.** complete: 1–40 messages, 48 KB of text, `maxTokens` default 1024,
-at most 4096. Schemas use `type`, `properties`, `required`, `items`, `enum`,
+at most 4096.
+Images have bounds of their own and do not count against the text: PNG, JPEG,
+WebP or GIF only, at most 4 per call, 2 MB each and 4 MB in total, decoded;
+only user messages carry them; a message holds at most 16 parts. `mimeType`
+must name what the bytes really are (they are sniffed), and a `data:` URL's
+type must agree with it. A string `content` works exactly as before. Schemas use `type`, `properties`, `required`, `items`, `enum`,
 `const`, `additionalProperties` (boolean), `minItems`/`maxItems`,
 `minimum`/`maximum`, `minLength`/`maxLength`, `description`, `title`; anything
 else is refused before a call. An answer that does not match the schema gets
 one repair attempt, then `invalid_output`; unvalidated output never reaches the
-artifact. `maxTokens` caps everything the model generates, hidden reasoning
+artifact. The repair does not send images again: it fixes the format of an
+answer already written, so each image is billed once, and the model is told an
+image was left out of the retry. `maxTokens` caps everything the model generates, hidden reasoning
 included, so a small budget can leave no room for an answer: an empty reply is
 `invalid_output`, never `""` (and is not repaired), so give a reasoning model
 room. decide: at most 8 questions, 2–16 choices, 2–11 score levels, state
@@ -66,7 +92,7 @@ the message is safe to show.
 
 | Code | Meaning |
 |---|---|
-| `unavailable` | AI is off here, or this is an export, public link, widget or directly opened tab, or the kind has no model |
+| `unavailable` | AI is off here, or this is an export, public link, widget or directly opened tab, or the kind has no model, or the call carries an image and `available().images` is false |
 | `not_approved` | The tool has not been allowed to use AI (or the person said Not now) |
 | `no_key` | Bring-your-own-key instance and this person has no key |
 | `limit_reached` | The monthly allowance (the person's, or the instance's) is spent |
@@ -74,6 +100,13 @@ the message is safe to show.
 | `invalid_request` | The request broke a rule above |
 | `provider_error` | The provider failed or answered something unusable |
 | `invalid_output` | complete: the model wrote no answer (it ran out of `maxTokens`), or with a schema, the answer did not fit, after one repair |
+
+**Images leave the device.** An image is sent to the provider as it was given
+to `complete()`. Exhibit does not strip metadata from it, so a photo straight
+from a camera can carry where and when it was taken. Drawing it onto a canvas
+and sending `canvas.toDataURL()` re-encodes the pixels only, which drops that
+metadata, and also cuts bytes and cost; the agent guidance teaches tools to do
+this, and the consent prompt says images leave the device.
 
 **Write tools that degrade.** Check `available()` first. AI is unavailable on a
 public link, in a widget, in a tab opened directly, and in every export — HTML
@@ -131,8 +164,8 @@ is refused without the dialog returning; reloading asks again.
 - **Edit → Permissions**: an AI row beside Downloads … Location, shown when
   the instance offers AI.
 - **Posture receipt and gallery card**: a sparkle glyph and "AI — Can send
-  text, including saved data, to an AI service; each person pays for their own
-  use".
+  text and images, including saved data, to an AI service; each person pays for
+  their own use".
 - **Settings → AI in artifacts**: whether AI is available and who pays; in
   platform mode this month's allowance as a share used (shared with the agent),
   with the tools' share of it and the reset date — never money, provider or
@@ -163,6 +196,15 @@ User-paid calls are outside the operator's caps. With `GUARDRAIL_*` set,
 Exhibit screens the full input before each platform-paid call, including
 schema repairs. Each screen makes one provider request. A refusal, invalid
 verdict, or failed usage write prevents the next paid step in that request.
+The screen reads text only, so an instance with `GUARDRAIL_*` set does not offer
+images (`available().images` is false and an image call is `unavailable`)
+rather than send them unscreened.
+
+**Which models read images.** Pi's catalog lists each model's input types, and
+`available().images` follows it: in platform mode for `INFERENCE_MODEL`, in
+BYOK mode for the model each viewer's provider resolves to. A text-only model
+refuses an image call before any provider request. There is no setting to
+override the catalog.
 
 Per-call belts, whoever pays: 30 calls a minute per viewer and 60 per artifact
 (bursts of 10), 4 in flight per viewer, 60 s for complete and 20 s for decide.
@@ -181,9 +223,17 @@ admission (16 in flight), a per-call cancel that kills the generation if
 ignored, and **no replay** of a call whose outcome is unknown, because it may
 already have been billed.
 
+An image call's envelope can reach about 6 MB; the worker's envelope bound is
+8 MB. Image bytes are never logged: not in the worker, the job, an error
+message or the ledger, which records tokens and cost only.
+
 Metering runs before error mapping: one `agent_usage` row per provider call
 (`source = artifact_inference`, with `artifact_id`, `kind` and `cost_source`),
-including failed calls that reported usage. A call that reported nothing is
+including failed calls that reported usage. Image input is billed by the
+provider as tokens and arrives in that usage, so an image call is metered and
+counts against the spend caps like any other: the caps are checked against
+what has been spent, before each call, never estimated from the request's size,
+and the rate belts count calls, not bytes. A call that reported nothing is
 recorded with `cost_source = none` — unknown spend, not zero. `owner_id` on an
 inference row is the paying viewer.
 
@@ -217,6 +267,26 @@ artifact could see. It found that a reasoning model could spend all of
 `maxTokens` thinking and return `""` as a success; that is now `invalid_output`.
 Not run live: a connected-agent credential (it needs `MCP_URL`), and the
 per-minute token bucket.
+
+**Images, verified live once** ([Exh-v81w](../.tickets/Exh-v81w.md)). On
+2026-11-27 a platform-mode dev instance on OpenCode Go with the pinned Pi Bolt
+1.3.1 / Pi 1.6.0, `INFERENCE_MODEL=deepseek-v4.1-flash` (image input in Pi's
+catalog): `available()` reported `images: true`; a JPEG with a red circle left
+of a blue square was described correctly as plain text, and as schema output
+(`[{shape: circle, color: red}, {shape: square, color: blue}]`) when sent as a
+`data:` URL; a string `prompt` on the same instance answered as before. Image
+calls were metered as ordinary `complete` rows (`cost_source = catalog`, about
+290–360 input tokens against 79 for the text call). In a browser, a tool that
+loaded a picked file with `createImageBitmap`, downscaled it in a canvas and
+sent it raised the owner's prompt with the new image line, then showed the
+model's answer. That pass found that `URL.createObjectURL(file)` cannot be shown
+in an `<img>` under the render CSP, so the guidance teaches `createImageBitmap`.
+Restarted with `INFERENCE_MODEL=glm-5.3` (text only), `images` was false and an
+image call was `unavailable` with no usage row. The server log held no image
+data. Not run live: a schema repair of an image call (the model answered
+validly first time; the repair is covered against a fake runtime), a recipient's
+consent on an image tool, BYOK, a guardrail-screened instance (covered by
+tests), and OpenRouter vision models.
 
 **Not verified: `decide`, and OpenRouter.** No classifier model was available
 on the provider tried, so `decide` has not run against any real provider. In

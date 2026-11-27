@@ -1,8 +1,9 @@
 // Command exhibit-mcp runs the optional Streamable HTTP MCP service.
 // Configure it with EXHIBIT_URL, MCP_PUBLIC_URL, MCP_ADDR and
 // MAX_REQUEST_BODY_BYTES, plus EXHIBIT_AI_KINDS ("complete,decide", or a
-// subset) naming the window.exhibit.ai kinds the core offers, so the agent
-// instructions teach them. Each request supplies its own library grant;
+// subset, and "images" when complete() accepts images) naming the
+// window.exhibit.ai kinds the core offers, so the agent instructions teach
+// them. Each request supplies its own library grant;
 // the service holds no authority, database or secrets of its own.
 package main
 

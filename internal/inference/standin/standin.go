@@ -25,7 +25,7 @@ const Script = `
       return Promise.reject(e);
     }
     exhibit.ai = {
-      available: function() { return Promise.resolve({ complete: false, decide: false }); },
+      available: function() { return Promise.resolve({ complete: false, decide: false, images: false }); },
       complete: unavailable,
       decide: unavailable
     };

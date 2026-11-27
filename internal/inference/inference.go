@@ -161,6 +161,9 @@ type Call struct {
 type Availability struct {
 	Complete bool `json:"complete"`
 	Decide   bool `json:"decide"`
+	// Images is whether complete() accepts image parts for this viewer: the
+	// chat model reads images, and no text-only guardrail screens the call.
+	Images bool `json:"images"`
 	// Payer is "platform" (the viewer's Exhibit allowance), "own_key" (their
 	// stored agent key) or "" when nothing is available.
 	Payer string `json:"payer,omitempty"`
@@ -187,7 +190,7 @@ type Service struct {
 	rates *rateLimiter
 
 	mu       sync.Mutex
-	resolved map[resolveKey]bool
+	resolved map[resolveKey]ModelInfo
 }
 
 type resolveKey struct {
@@ -209,7 +212,7 @@ func New(cfg Config) (*Service, error) {
 			return nil, errors.New("inference: BYOK mode needs a key resolver")
 		}
 	}
-	return &Service{cfg: cfg, rates: newRateLimiter(cfg.Rates, cfg.Now), resolved: map[resolveKey]bool{}}, nil
+	return &Service{cfg: cfg, rates: newRateLimiter(cfg.Rates, cfg.Now), resolved: map[resolveKey]ModelInfo{}}, nil
 }
 
 // Enabled reports INFERENCE_ENABLED.
@@ -230,15 +233,15 @@ func (s *Service) CheckStartup(ctx context.Context) error {
 	if s.cfg.ChatModel == "" {
 		return errors.New("INFERENCE_ENABLED is set in platform mode but INFERENCE_MODEL is not")
 	}
-	if ok, err := s.cfg.Runtime.Resolve(ctx, s.cfg.Platform.Provider, KindComplete, s.cfg.ChatModel); err != nil {
+	if info, err := s.resolve(ctx, s.cfg.Platform.Provider, KindComplete, s.cfg.ChatModel); err != nil {
 		return fmt.Errorf("check INFERENCE_MODEL: %w", err)
-	} else if !ok {
+	} else if !info.Found {
 		return errors.New("INFERENCE_MODEL does not name a chat model for AGENT_PROVIDER")
 	}
 	if s.cfg.DecisionModel != "" {
-		if ok, err := s.cfg.Runtime.Resolve(ctx, s.cfg.Platform.Provider, KindDecide, s.cfg.DecisionModel); err != nil {
+		if info, err := s.resolve(ctx, s.cfg.Platform.Provider, KindDecide, s.cfg.DecisionModel); err != nil {
 			return fmt.Errorf("check INFERENCE_DECISION_MODEL: %w", err)
-		} else if !ok {
+		} else if !info.Found {
 			return errors.New("INFERENCE_DECISION_MODEL does not name a classifier model for AGENT_PROVIDER")
 		}
 	}
@@ -250,6 +253,8 @@ type payer struct {
 	cred   Credential
 	paidBy string
 	models map[Kind]string
+	// images is whether complete() may carry images for this payer.
+	images bool
 }
 
 // resolvePayer answers "who pays, and with which models" for a viewer. Errors
@@ -268,6 +273,7 @@ func (s *Service) resolvePayer(ctx context.Context, viewerID int64) (*payer, err
 		if s.cfg.DecisionModel != "" {
 			p.models[KindDecide] = s.cfg.DecisionModel
 		}
+		p.images = s.platformImages(ctx)
 		return p, nil
 	}
 	cred, ok, err := s.cfg.Keys(ctx, viewerID)
@@ -286,13 +292,18 @@ func (s *Service) resolvePayer(ctx context.Context, viewerID int64) (*payer, err
 			if candidate == "" {
 				continue
 			}
-			ok, err := s.resolve(ctx, cred.Provider, kind, candidate)
+			info, err := s.resolve(ctx, cred.Provider, kind, candidate)
 			if err != nil {
 				slog.WarnContext(ctx, "inference model resolution failed", slog.String("err", err.Error()))
 				return nil, mapRuntimeError(ctx, err)
 			}
-			if ok {
+			if info.Found {
 				p.models[kind] = candidate
+				if kind == KindComplete {
+					// User-paid calls are never screened, so the model
+					// alone decides.
+					p.images = info.Images
+				}
 				break
 			}
 		}
@@ -307,25 +318,42 @@ func (s *Service) configuredModel(kind Kind) string {
 	return s.cfg.ChatModel
 }
 
-// resolve asks the runtime's catalog whether a model exists for a provider
-// and kind, caching the answer: the catalog is offline and pinned, so an
-// answer cannot change while the process runs.
-func (s *Service) resolve(ctx context.Context, provider string, kind Kind, model string) (bool, error) {
+// resolve asks the runtime's catalog about a model for a provider and kind,
+// caching the answer: the catalog is offline and pinned, so an answer cannot
+// change while the process runs.
+func (s *Service) resolve(ctx context.Context, provider string, kind Kind, model string) (ModelInfo, error) {
 	key := resolveKey{provider, kind, model}
 	s.mu.Lock()
-	ok, cached := s.resolved[key]
+	info, cached := s.resolved[key]
 	s.mu.Unlock()
 	if cached {
-		return ok, nil
+		return info, nil
 	}
-	ok, err := s.cfg.Runtime.Resolve(ctx, provider, kind, model)
+	info, err := s.cfg.Runtime.Resolve(ctx, provider, kind, model)
 	if err != nil {
-		return false, err
+		return ModelInfo{}, err
 	}
 	s.mu.Lock()
-	s.resolved[key] = ok
+	s.resolved[key] = info
 	s.mu.Unlock()
-	return ok, nil
+	return info, nil
+}
+
+// platformImages reports whether platform-paid complete() calls may carry
+// images. The guardrail screens text only, so an instance that screens
+// platform-paid input refuses images rather than let them pass unscreened.
+// A catalog that cannot be asked right now answers no; the answer is cached
+// once it is known.
+func (s *Service) platformImages(ctx context.Context) bool {
+	if s.cfg.Platform == nil || s.cfg.Guardrail != nil {
+		return false
+	}
+	info, err := s.resolve(ctx, s.cfg.Platform.Provider, KindComplete, s.cfg.ChatModel)
+	if err != nil {
+		slog.WarnContext(ctx, "inference image capability unknown", slog.String("err", err.Error()))
+		return false
+	}
+	return info.Images
 }
 
 // Availability reports what a viewer may use. A store or runtime failure is
@@ -346,6 +374,7 @@ func (s *Service) Availability(ctx context.Context, viewerID int64) Availability
 		return Availability{Reason: "unavailable"}
 	}
 	a := Availability{Complete: p.models[KindComplete] != "", Decide: p.models[KindDecide] != ""}
+	a.Images = a.Complete && p.images
 	if !a.Complete && !a.Decide {
 		a.Reason = "unavailable"
 		return a
@@ -382,6 +411,9 @@ func (s *Service) Run(ctx context.Context, call Call) (json.RawMessage, error) {
 	model := p.models[call.Kind]
 	if model == "" {
 		return nil, refuse(CodeUnavailable, "This kind of AI call is not available here.")
+	}
+	if req.complete != nil && req.complete.images > 0 && !p.images {
+		return nil, refuse(CodeUnavailable, "The AI here cannot read images. Check available().images before sending one.")
 	}
 	release, err := s.rates.admit(call.ViewerID, call.ArtifactID, call.Kind)
 	if err != nil {
@@ -556,6 +588,19 @@ func (s *Service) AllowanceFor(ctx context.Context, viewerID int64, inferenceMic
 func (s *Service) MonthStart() time.Time {
 	now := s.cfg.Now().UTC()
 	return time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+}
+
+// InstanceImages reports whether complete() on this instance can take images,
+// for teaching agents (Exh-v81w). In BYOK mode it depends on each viewer's
+// provider, so the answer is yes and artifacts check available().images.
+func (s *Service) InstanceImages(ctx context.Context) bool {
+	if !s.Enabled() {
+		return false
+	}
+	if s.cfg.Platform == nil {
+		return true
+	}
+	return s.cfg.ChatModel != "" && s.platformImages(ctx)
 }
 
 // InstanceKinds is what this instance can offer anybody, for teaching agents

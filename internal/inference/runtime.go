@@ -11,16 +11,23 @@ import (
 // warm, pinned Pi process whose model registry serves every call through its
 // own provider adapters (Exh-urrg). Tests substitute a fake.
 type Runtime interface {
-	// Resolve reports whether model names a model of this kind for provider
-	// in the runtime's catalog: a chat model for complete, a classifier for
-	// decide.
-	Resolve(ctx context.Context, provider string, kind Kind, model string) (bool, error)
+	// Resolve looks model up in the runtime's catalog as a model of this
+	// kind for provider: a chat model for complete, a classifier for decide.
+	Resolve(ctx context.Context, provider string, kind Kind, model string) (ModelInfo, error)
 	// Run performs one provider call. The Outcome is meaningful whatever the
 	// error: it says whether the call may have reached the provider and what
 	// it reported spending, so the caller meters before it maps the error.
 	Run(ctx context.Context, job Job) (Result, Outcome, error)
 	// Screen runs the usage-policy guardrail over the full provider context.
 	Screen(ctx context.Context, job ScreenJob) (ScreenVerdict, error)
+}
+
+// ModelInfo is what the catalog says about a model.
+type ModelInfo struct {
+	// Found is false when the catalog has no such model of the kind.
+	Found bool
+	// Images is true when the catalog lists image input for the model.
+	Images bool
 }
 
 // Job is one provider call with its credential. The key travels with the job

@@ -18,11 +18,12 @@
     <span data-ai-copy="recipient">Use your AI allowance for this tool?</span>
   </h2>
   <p><strong data-ai-artifact-title>{{.}}</strong>
-    <span data-ai-copy="owner">wants to send text to an AI service and use the answer.</span>
+    <span data-ai-copy="owner">wants to send text, and images if it asks for them, to an AI service and use the answer.</span>
     <span data-ai-copy="recipient">was shared with you and uses AI. Its owner has allowed that.</span>
   </p>
   <ul class="ai-facts">
     <li><i class="ph ph-database" aria-hidden="true"></i><span>What it sends is up to the tool, and can include data you have saved in it.</span></li>
+    <li><i class="ph ph-image" aria-hidden="true"></i><span>Images you give it leave your device. A photo can carry where and when it was taken.</span></li>
     <li><i class="ph ph-sparkle" aria-hidden="true"></i><span data-ai-payer>Requests use your Exhibit AI allowance.</span></li>
   </ul>
   <p class="ai-revoke-hint">
@@ -60,6 +61,7 @@
   <dl class="settings-facts">
     <dt>Text answers</dt><dd>{{if .Complete}}Available{{else}}Not available{{end}}</dd>
     <dt>Quick judgments</dt><dd>{{if .Decide}}Available{{else}}Not available{{end}}</dd>
+    <dt>Reading images</dt><dd>{{if .Images}}Available{{else}}Not available{{end}}</dd>
   </dl>
   {{else}}
   <p class="settings-copy">AI is not available right now. Tools that use it will say so and keep working without it.</p>

@@ -162,7 +162,7 @@ window.exhibit.ai.available().then(function (a) {
 		chromedp.Navigate(app.URL+"/artifacts/"+id),
 		chromedp.Poll[chromedp.Void](`document.getElementById('ai-modal')?.open && document.getElementById('ai-modal').dataset.aiMode === 'owner'`),
 	))
-	assert.Equal(t, `{"complete":true,"decide":true}`, getState(t, ro, id)["available"],
+	assert.Equal(t, `{"complete":true,"decide":true,"images":true}`, getState(t, ro, id)["available"],
 		"a call made before the host listened still settles, with the real answer")
 	assert.Zero(t, rt.calls(), "nothing runs before the owner allows it")
 
@@ -217,4 +217,47 @@ ask().then(function (first) {
 	require.NoError(t, err)
 	assert.False(t, open, "the second call does not raise the dialog again")
 	assert.Zero(t, rt.calls())
+}
+
+// An image from a canvas crosses the real bridge (Exh-v81w): the frame's
+// structured clone, the host's request and the endpoint, at a size well past
+// what complete() took before images, and arrives as an image part.
+func TestInferenceBridgeCarriesACanvasImageBrowser(t *testing.T) {
+	browser, err := chromium.New(chromiumtest.Start(t))
+	require.NoError(t, err)
+	ctx, cancel, err := browser.Tab(context.Background())
+	require.NoError(t, err)
+	defer cancel()
+	ctx, timeout := context.WithTimeout(ctx, 60*time.Second)
+	defer timeout()
+
+	ro := newTestRouter(t)
+	rt := withPlatformInference(t, ro)
+	body := `<!doctype html><html><head><script>
+var canvas = document.createElement('canvas');
+canvas.width = 900; canvas.height = 900;
+var g = canvas.getContext('2d'), px = g.createImageData(900, 900);
+for (var i = 0; i < px.data.length; i++) px.data[i] = (i * 2654435761) % 256; // noise compresses badly
+g.putImageData(px, 0, 0);
+var dataURL = canvas.toDataURL('image/jpeg', 0.9);
+window.exhibit.ai.available().then(function (a) {
+  if (!a.images) throw Object.assign(new Error('no images'), { code: 'no_images' });
+  return window.exhibit.ai.complete({ messages: [{ role: 'user', content: [
+    { type: 'text', text: 'Describe this.' },
+    { type: 'image', mimeType: 'image/jpeg', data: dataURL },
+  ] }] });
+}).then(function (text) { localStorage.setItem('answer', text); },
+  function (e) { localStorage.setItem('answer', 'error:' + e.code); });
+</script></head><body><h1>Image tool</h1></body></html>`
+	id := createArtifact(t, ro, map[string]any{"title": "Image tool", "body": body})
+	require.NoError(t, ro.cfg.Store.UpdateArtifact(t.Context(), 1, id, map[string]any{"inference_approved": true}))
+
+	app := serveInferenceBrowser(t, ro, 0)
+	require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(app.URL+"/artifacts/"+id)))
+	require.Eventually(t, func() bool { return getState(t, ro, id)["answer"] != "" }, 20*time.Second, 50*time.Millisecond)
+	assert.Equal(t, "a summary", getState(t, ro, id)["answer"])
+	require.Equal(t, 1, rt.calls())
+	job := string(rt.jobs[0].Context)
+	assert.Contains(t, job, `"mimeType":"image/jpeg"`)
+	assert.Greater(t, len(job), 256<<10, "the canvas image should exceed the old 256 KB envelope")
 }

@@ -3,10 +3,12 @@ package inference
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
+	"net/http"
 	"regexp"
 	"sort"
 	"strings"
@@ -62,26 +64,71 @@ func invalid(message string) error { return refuse(CodeInvalidRequest, message) 
 
 // --- complete -------------------------------------------------------------
 
+// completeMessage is one turn of a complete() conversation. Its parts keep
+// the order the artifact gave them.
 type completeMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role  string
+	Parts []contentPart
+}
+
+// contentPart is a run of text or one image; Image is nil for text.
+type contentPart struct {
+	Text  string
+	Image *imagePart
+}
+
+// imagePart is a validated image (Exh-v81w): an allowed type whose bytes
+// were decoded and sniffed, carried on as canonical base64.
+type imagePart struct {
+	MimeType string
+	Data     string
+	// size is the decoded length, what the image bounds count.
+	size int
+}
+
+func textMessage(role, text string) completeMessage {
+	return completeMessage{Role: role, Parts: []contentPart{{Text: text}}}
 }
 
 type completeRequest struct {
-	System    string
-	Messages  []completeMessage
+	System   string
+	Messages []completeMessage
+	// images counts the image parts across all messages.
+	images    int
 	Schema    map[string]any
 	SchemaRaw string
 	MaxTokens int
 }
 
+// Image bounds (Exh-v81w), separate from the text cap. MaxImageTotalBytes,
+// as base64, is what sizes the worker's envelope (maxEnvelope).
+const (
+	MaxCompleteImages  = 4
+	MaxImageBytes      = 2 << 20
+	MaxImageTotalBytes = 4 << 20
+	MaxContentParts    = 16
+)
+
+// imageTypes are the image types complete() accepts: the ones every
+// provider Pi reaches reads, and the ones http.DetectContentType sniffs.
+var imageTypes = map[string]bool{"image/png": true, "image/jpeg": true, "image/webp": true, "image/gif": true}
+
+// repairImageNote replaces an image in a schema repair's context: the repair
+// fixes the format of an answer already written, and re-sending the image
+// would bill a second read of it.
+const repairImageNote = "[An image was attached here. It is not sent again with this retry.]"
+
 func prepareComplete(payload json.RawMessage) (*prepared, error) {
+	type wireMessage struct {
+		Role    string          `json:"role"`
+		Content json.RawMessage `json:"content"`
+	}
 	var in struct {
-		Messages  []completeMessage `json:"messages"`
-		Prompt    *string           `json:"prompt"`
-		System    string            `json:"system"`
-		Schema    json.RawMessage   `json:"schema"`
-		MaxTokens *int              `json:"maxTokens"`
+		Messages  []wireMessage   `json:"messages"`
+		Prompt    *string         `json:"prompt"`
+		System    string          `json:"system"`
+		Schema    json.RawMessage `json:"schema"`
+		MaxTokens *int            `json:"maxTokens"`
 	}
 	dec := json.NewDecoder(bytes.NewReader(payload))
 	dec.DisallowUnknownFields()
@@ -92,28 +139,44 @@ func prepareComplete(payload json.RawMessage) (*prepared, error) {
 		if len(in.Messages) > 0 {
 			return nil, invalid("Pass either prompt or messages, not both.")
 		}
-		in.Messages = []completeMessage{{Role: "user", Content: *in.Prompt}}
+		content, _ := json.Marshal(*in.Prompt)
+		in.Messages = []wireMessage{{Role: "user", Content: content}}
 	}
 	if len(in.Messages) == 0 || len(in.Messages) > MaxCompleteMessages {
 		return nil, invalid(fmt.Sprintf("complete() needs between 1 and %d messages.", MaxCompleteMessages))
 	}
-	size := len(in.System)
+	req := &completeRequest{System: in.System, MaxTokens: DefaultMaxTokens}
+	size, imageBytes := len(in.System), 0
 	for i, m := range in.Messages {
 		if m.Role != "user" && m.Role != "assistant" {
 			return nil, invalid("Each message's role must be \"user\" or \"assistant\".")
 		}
-		if strings.TrimSpace(m.Content) == "" {
-			return nil, invalid("A message's content must be non-empty text.")
-		}
 		if i == len(in.Messages)-1 && m.Role != "user" {
 			return nil, invalid("The last message must be from the user.")
 		}
-		size += len(m.Content)
+		parts, err := parseContent(m.Role, m.Content)
+		if err != nil {
+			return nil, err
+		}
+		for _, part := range parts {
+			if part.Image == nil {
+				size += len(part.Text)
+				continue
+			}
+			req.images++
+			imageBytes += part.Image.size
+			if req.images > MaxCompleteImages {
+				return nil, invalid(fmt.Sprintf("complete() takes at most %d images.", MaxCompleteImages))
+			}
+			if imageBytes > MaxImageTotalBytes {
+				return nil, invalid(fmt.Sprintf("complete() images are limited to %d MB in total. Downscale them in a canvas before sending.", MaxImageTotalBytes>>20))
+			}
+		}
+		req.Messages = append(req.Messages, completeMessage{Role: m.Role, Parts: parts})
 	}
 	if size > MaxCompleteTextBytes {
 		return nil, invalid(fmt.Sprintf("complete() input is limited to %d KB of text.", MaxCompleteTextBytes>>10))
 	}
-	req := &completeRequest{System: in.System, Messages: in.Messages, MaxTokens: DefaultMaxTokens}
 	if in.MaxTokens != nil {
 		if *in.MaxTokens < 1 {
 			return nil, invalid("maxTokens must be a positive integer.")
@@ -137,7 +200,100 @@ func prepareComplete(payload json.RawMessage) (*prepared, error) {
 	return &prepared{complete: req}, nil
 }
 
-func (r *completeRequest) context(extra ...completeMessage) json.RawMessage {
+// parseContent reads one message's content: a string, as before images, or
+// a list of text and image parts. Only a user message may carry an image.
+func parseContent(role string, raw json.RawMessage) ([]contentPart, error) {
+	var text string
+	if json.Unmarshal(raw, &text) == nil {
+		if strings.TrimSpace(text) == "" {
+			return nil, invalid("A message's content must be non-empty text.")
+		}
+		return []contentPart{{Text: text}}, nil
+	}
+	type wirePart struct {
+		Type     string  `json:"type"`
+		Text     *string `json:"text"`
+		MimeType string  `json:"mimeType"`
+		Data     *string `json:"data"`
+	}
+	var wire []wirePart
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	if len(bytes.TrimSpace(raw)) == 0 || raw[0] != '[' || dec.Decode(&wire) != nil {
+		return nil, invalid("A message's content must be text, or a list of { type: 'text', text } and { type: 'image', mimeType, data } parts.")
+	}
+	if len(wire) == 0 || len(wire) > MaxContentParts {
+		return nil, invalid(fmt.Sprintf("A message's content list needs between 1 and %d parts.", MaxContentParts))
+	}
+	parts := make([]contentPart, 0, len(wire))
+	for _, w := range wire {
+		switch w.Type {
+		case "text":
+			if w.Text == nil || strings.TrimSpace(*w.Text) == "" || w.Data != nil || w.MimeType != "" {
+				return nil, invalid("A text part is { type: 'text', text } with non-empty text.")
+			}
+			parts = append(parts, contentPart{Text: *w.Text})
+		case "image":
+			if role != "user" {
+				return nil, invalid("Only user messages may carry images.")
+			}
+			if w.Text != nil || w.Data == nil {
+				return nil, invalid("An image part is { type: 'image', mimeType, data } with base64 data.")
+			}
+			img, err := parseImage(w.MimeType, *w.Data)
+			if err != nil {
+				return nil, err
+			}
+			parts = append(parts, contentPart{Image: img})
+		default:
+			return nil, invalid("A content part's type must be \"text\" or \"image\".")
+		}
+	}
+	return parts, nil
+}
+
+// parseImage checks one image: an allowed type, base64 that decodes, within
+// the per-image bound, and bytes that really are that type. data may also be
+// a base64 data: URL, as canvas.toDataURL() returns, of the same type.
+// Messages never quote the data.
+func parseImage(mimeType, data string) (*imagePart, error) {
+	mimeType = strings.ToLower(strings.TrimSpace(mimeType))
+	if rest, ok := strings.CutPrefix(data, "data:"); ok {
+		header, encoded, ok := strings.Cut(rest, ",")
+		urlType, isBase64 := strings.CutSuffix(strings.ToLower(header), ";base64")
+		if !ok || !isBase64 {
+			return nil, invalid("An image's data must be base64, or a base64 data: URL.")
+		}
+		if mimeType == "" {
+			mimeType = urlType
+		} else if urlType != mimeType {
+			return nil, invalid("An image's mimeType does not match its data: URL.")
+		}
+		data = encoded
+	}
+	if !imageTypes[mimeType] {
+		return nil, invalid("Images must be PNG, JPEG, WebP or GIF (mimeType image/png, image/jpeg, image/webp or image/gif).")
+	}
+	limit := fmt.Sprintf("Each image is limited to %d MB. Downscale it in a canvas before sending.", MaxImageBytes>>20)
+	if base64.StdEncoding.DecodedLen(len(data)) > MaxImageBytes+2 {
+		return nil, invalid(limit)
+	}
+	raw, err := base64.StdEncoding.DecodeString(data)
+	if err != nil || len(raw) == 0 {
+		return nil, invalid("An image's data must be non-empty base64.")
+	}
+	if len(raw) > MaxImageBytes {
+		return nil, invalid(limit)
+	}
+	if http.DetectContentType(raw) != mimeType {
+		return nil, invalid("An image's data is not the " + mimeType + " its mimeType says.")
+	}
+	return &imagePart{MimeType: mimeType, Data: base64.StdEncoding.EncodeToString(raw), size: len(raw)}, nil
+}
+
+// context is the Pi request context for the conversation plus extra turns.
+// withImages false replaces each image with repairImageNote.
+func (r *completeRequest) context(withImages bool, extra ...completeMessage) json.RawMessage {
 	system := systemPreamble
 	if r.System != "" {
 		system += "\n\n" + r.System
@@ -153,11 +309,24 @@ func (r *completeRequest) context(extra ...completeMessage) json.RawMessage {
 	msgs := make([]piMessage, 0, len(r.Messages)+len(extra))
 	now := time.Now().UnixMilli()
 	for _, m := range append(append([]completeMessage{}, r.Messages...), extra...) {
-		if m.Role == "assistant" {
-			msgs = append(msgs, piMessage{Role: "assistant", Content: []map[string]string{{"type": "text", "text": m.Content}}, Timestamp: now})
-		} else {
-			msgs = append(msgs, piMessage{Role: "user", Content: m.Content, Timestamp: now})
+		// A user message of one text part stays a plain string, the shape
+		// every call had before images.
+		if m.Role == "user" && len(m.Parts) == 1 && m.Parts[0].Image == nil {
+			msgs = append(msgs, piMessage{Role: "user", Content: m.Parts[0].Text, Timestamp: now})
+			continue
 		}
+		blocks := make([]map[string]string, 0, len(m.Parts))
+		for _, part := range m.Parts {
+			switch {
+			case part.Image == nil:
+				blocks = append(blocks, map[string]string{"type": "text", "text": part.Text})
+			case withImages:
+				blocks = append(blocks, map[string]string{"type": "image", "data": part.Image.Data, "mimeType": part.Image.MimeType})
+			default:
+				blocks = append(blocks, map[string]string{"type": "text", "text": repairImageNote})
+			}
+		}
+		msgs = append(msgs, piMessage{Role: m.Role, Content: blocks, Timestamp: now})
 	}
 	out, _ := json.Marshal(map[string]any{"systemPrompt": system, "messages": msgs})
 	return out
@@ -166,7 +335,7 @@ func (r *completeRequest) context(extra ...completeMessage) json.RawMessage {
 func runComplete(ctx context.Context, rt Runtime, job Job, p *prepared, meter func(Outcome), gate func(Job) error) (json.RawMessage, error) {
 	req := p.complete
 	job.MaxTokens = req.MaxTokens
-	job.Context = req.context()
+	job.Context = req.context(true)
 	res, err := callOnce(ctx, rt, job, meter, gate)
 	if err != nil {
 		return nil, err
@@ -190,9 +359,10 @@ func runComplete(ctx context.Context, rt Runtime, job Job, p *prepared, meter fu
 	}
 	// One repair attempt: the model sees its own answer and what was wrong,
 	// in server-authored words. The repair is a second call, metered as one.
-	job.Context = req.context(
-		completeMessage{Role: "assistant", Content: res.Text},
-		completeMessage{Role: "user", Content: fmt.Sprintf(repairInstructionText, verr.Error())},
+	// It carries no images: they were read once, for the answer being fixed.
+	job.Context = req.context(false,
+		textMessage("assistant", res.Text),
+		textMessage("user", fmt.Sprintf(repairInstructionText, verr.Error())),
 	)
 	res, err = callOnce(ctx, rt, job, meter, gate)
 	if err != nil {

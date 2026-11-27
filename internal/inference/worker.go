@@ -46,8 +46,11 @@ var extensionSource []byte
 const (
 	// MaxActive bounds concurrent calls per worker; it matches MAX_ACTIVE in
 	// ext/inference.ts.
-	MaxActive              = 16
-	maxEnvelope            = 262_144
+	MaxActive = 16
+	// maxEnvelope fits complete()'s largest payload, MaxImageTotalBytes of
+	// images as base64 plus the text, schema and framing; it matches
+	// MAX_ENVELOPE in ext/inference.ts.
+	maxEnvelope            = 8 << 20
 	maxReplyLine           = 4 << 20
 	cancelGrace            = 2 * time.Second
 	readyTimeout           = 30 * time.Second
@@ -272,7 +275,7 @@ func (w *Worker) admit() (func(), error) {
 }
 
 // Resolve implements Runtime.
-func (w *Worker) Resolve(ctx context.Context, provider string, kind Kind, model string) (bool, error) {
+func (w *Worker) Resolve(ctx context.Context, provider string, kind Kind, model string) (ModelInfo, error) {
 	if _, ok := ctx.Deadline(); !ok {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, 10*time.Second)
@@ -280,19 +283,20 @@ func (w *Worker) Resolve(ctx context.Context, provider string, kind Kind, model 
 	}
 	g, err := w.current(ctx)
 	if err != nil {
-		return false, err
+		return ModelInfo{}, err
 	}
 	r, err := g.call(ctx, envelope{ID: w.nextID(), Op: "resolve", Provider: provider, Kind: string(kind), Model: model})
 	if err != nil {
-		return false, err
+		return ModelInfo{}, err
 	}
 	var res struct {
-		OK bool `json:"ok"`
+		OK     bool `json:"ok"`
+		Images bool `json:"images"`
 	}
 	if json.Unmarshal(r.Result, &res) != nil {
-		return false, ErrProvider
+		return ModelInfo{}, ErrProvider
 	}
-	return res.OK, nil
+	return ModelInfo{Found: res.OK, Images: res.OK && res.Images}, nil
 }
 
 // Run implements Runtime.

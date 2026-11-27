@@ -15,6 +15,7 @@ func TestParseAIKinds(t *testing.T) {
 		"complete":            {Complete: true},
 		"decide":              {Decide: true},
 		" complete , decide ": {Complete: true, Decide: true},
+		"complete,images":     {Complete: true, Images: true},
 	} {
 		kinds, err := ParseAIKinds(csv)
 		if err != nil {
@@ -25,7 +26,8 @@ func TestParseAIKinds(t *testing.T) {
 			t.Errorf("%q: got %+v, %v; want %+v", csv, got, err, want)
 		}
 	}
-	for _, csv := range []string{"embed", "complete,Decide", "complete;decide"} {
+	// images is a capability of complete and means nothing without it.
+	for _, csv := range []string{"embed", "complete,Decide", "complete;decide", "images", "decide,images"} {
 		if _, err := ParseAIKinds(csv); err == nil {
 			t.Errorf("%q: accepted", csv)
 		}

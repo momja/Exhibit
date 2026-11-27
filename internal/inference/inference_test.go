@@ -19,16 +19,18 @@ type fakeRuntime struct {
 	jobs        []Job
 	screens     []ScreenJob
 	models      map[string]bool // provider|kind|model
+	vision      map[string]bool // provider|kind|model with image input
 	reply       func(Job) (Result, Outcome, error)
 	screenReply func(ScreenJob) (ScreenVerdict, error)
 	resolveErr  error
 }
 
-func (f *fakeRuntime) Resolve(_ context.Context, provider string, kind Kind, model string) (bool, error) {
+func (f *fakeRuntime) Resolve(_ context.Context, provider string, kind Kind, model string) (ModelInfo, error) {
 	if f.resolveErr != nil {
-		return false, f.resolveErr
+		return ModelInfo{}, f.resolveErr
 	}
-	return f.models[provider+"|"+string(kind)+"|"+model], nil
+	key := provider + "|" + string(kind) + "|" + model
+	return ModelInfo{Found: f.models[key], Images: f.models[key] && f.vision[key]}, nil
 }
 
 func (f *fakeRuntime) Run(_ context.Context, job Job) (Result, Outcome, error) {
@@ -102,6 +104,10 @@ func newTestService(t *testing.T, mutate func(*Config)) (*Service, *fakeRuntime,
 	rt := &fakeRuntime{models: map[string]bool{
 		"openrouter|complete|chat-1":          true,
 		"openrouter|decide|judge-1":           true,
+		"anthropic|complete|claude-haiku-4-5": true,
+		"openrouter|complete|text-only-1":     true,
+	}, vision: map[string]bool{
+		"openrouter|complete|chat-1":          true,
 		"anthropic|complete|claude-haiku-4-5": true,
 	}}
 	led := &fakeLedger{}

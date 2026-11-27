@@ -6,11 +6,13 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/momja/Exhibit/internal/agent"
+	"github.com/momja/Exhibit/internal/agentguidance"
 	"github.com/momja/Exhibit/internal/api"
 	"github.com/momja/Exhibit/internal/inference"
 	"github.com/momja/Exhibit/internal/secrets"
@@ -108,6 +110,16 @@ func boolEnv(name string) (bool, error) {
 }
 
 // inferenceKindNames spells kinds the way agent guidance takes them.
+// inferenceGuidanceNames is what the agent's prompt teaches: the offered
+// kinds, plus "images" when complete() can take them (Exh-v81w).
+func inferenceGuidanceNames(ctx context.Context, svc *inference.Service) []string {
+	names := inferenceKindNames(svc.InstanceKinds())
+	if slices.Contains(names, agentguidance.KindComplete) && svc.InstanceImages(ctx) {
+		names = append(names, agentguidance.Images)
+	}
+	return names
+}
+
 func inferenceKindNames(kinds []inference.Kind) []string {
 	names := make([]string, 0, len(kinds))
 	for _, k := range kinds {

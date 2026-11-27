@@ -1,6 +1,6 @@
 ---
 id: Exh-v81w
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-25T15:35:37Z
@@ -36,3 +36,9 @@ Not verified yet: that Pi's message format carries image content blocks through 
 
 A tool can call complete() with a user message holding text and image parts and get an answer about the image from a vision-capable model. String content behaves exactly as before. Every limit and refusal above is covered by a test and returns a stable code before any provider call. A text-only model is refused with a clear code, and available() reports whether images work. No image bytes appear in logs, the ledger or error messages. A schema repair cannot silently double the image cost. The usage row for an image call is correct and counts against the same caps as any other call. Consent copy and docs say that images leave the viewer's device. decide() is unchanged. One live pass with a real vision model is recorded, and anything not run live is listed as not run.
 
+
+## Notes
+
+**2026-11-27T16:43:19Z**
+
+Done: complete() accepts text+image parts (PNG/JPEG/WebP/GIF, 4 images, 2 MB each, 4 MB total, sniffed); available().images from Pi catalog input modalities; text-only model and guardrail-screened instances refuse images as unavailable; schema repair omits images; worker envelope 8 MB; consent/posture/settings copy; agent guidance teaches createImageBitmap + canvas downscale. Live pass on deepseek-v4.1-flash recorded in docs/inference.md. Open decisions for review: guardrail disables images; EXIF not stripped server-side.

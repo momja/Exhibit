@@ -90,6 +90,7 @@ ph-plus-circle
 ph-star
 
 # Saved-data sharing note
+ph-image
 ph-info
 
 # Incomplete tag color
