@@ -110,8 +110,9 @@ const (
 )
 
 // imageTypes are the image types complete() accepts: the ones every
-// provider Pi reaches reads, and the ones http.DetectContentType sniffs.
-var imageTypes = map[string]bool{"image/png": true, "image/jpeg": true, "image/webp": true, "image/gif": true}
+// provider Pi reaches reads (Gemini takes no GIF, so GIF is refused here
+// rather than at the provider), and that http.DetectContentType sniffs.
+var imageTypes = map[string]bool{"image/png": true, "image/jpeg": true, "image/webp": true}
 
 // repairImageNote replaces an image in a schema repair's context: the repair
 // fixes the format of an answer already written, and re-sending the image
@@ -146,7 +147,8 @@ func prepareComplete(payload json.RawMessage) (*prepared, error) {
 		return nil, invalid(fmt.Sprintf("complete() needs between 1 and %d messages.", MaxCompleteMessages))
 	}
 	req := &completeRequest{System: in.System, MaxTokens: DefaultMaxTokens}
-	size, imageBytes := len(in.System), 0
+	size := len(in.System)
+	budget := &imageBudget{}
 	for i, m := range in.Messages {
 		if m.Role != "user" && m.Role != "assistant" {
 			return nil, invalid("Each message's role must be \"user\" or \"assistant\".")
@@ -154,22 +156,13 @@ func prepareComplete(payload json.RawMessage) (*prepared, error) {
 		if i == len(in.Messages)-1 && m.Role != "user" {
 			return nil, invalid("The last message must be from the user.")
 		}
-		parts, err := parseContent(m.Role, m.Content)
+		parts, err := parseContent(m.Role, m.Content, budget)
 		if err != nil {
 			return nil, err
 		}
 		for _, part := range parts {
 			if part.Image == nil {
 				size += len(part.Text)
-				continue
-			}
-			req.images++
-			imageBytes += part.Image.size
-			if req.images > MaxCompleteImages {
-				return nil, invalid(fmt.Sprintf("complete() takes at most %d images.", MaxCompleteImages))
-			}
-			if imageBytes > MaxImageTotalBytes {
-				return nil, invalid(fmt.Sprintf("complete() images are limited to %d MB in total. Downscale them in a canvas before sending.", MaxImageTotalBytes>>20))
 			}
 		}
 		req.Messages = append(req.Messages, completeMessage{Role: m.Role, Parts: parts})
@@ -177,6 +170,7 @@ func prepareComplete(payload json.RawMessage) (*prepared, error) {
 	if size > MaxCompleteTextBytes {
 		return nil, invalid(fmt.Sprintf("complete() input is limited to %d KB of text.", MaxCompleteTextBytes>>10))
 	}
+	req.images = budget.count
 	if in.MaxTokens != nil {
 		if *in.MaxTokens < 1 {
 			return nil, invalid("maxTokens must be a positive integer.")
@@ -200,9 +194,27 @@ func prepareComplete(payload json.RawMessage) (*prepared, error) {
 	return &prepared{complete: req}, nil
 }
 
+// imageBudget is the request's image bounds, spent as parts are read, so an
+// image over the count is refused before its bytes are decoded.
+type imageBudget struct{ count, bytes int }
+
+func (b *imageBudget) admit() error {
+	if b.count++; b.count > MaxCompleteImages {
+		return invalid(fmt.Sprintf("complete() takes at most %d images.", MaxCompleteImages))
+	}
+	return nil
+}
+
+func (b *imageBudget) spend(size int) error {
+	if b.bytes += size; b.bytes > MaxImageTotalBytes {
+		return invalid(fmt.Sprintf("complete() images are limited to %d MB in total. Downscale them in a canvas before sending.", MaxImageTotalBytes>>20))
+	}
+	return nil
+}
+
 // parseContent reads one message's content: a string, as before images, or
 // a list of text and image parts. Only a user message may carry an image.
-func parseContent(role string, raw json.RawMessage) ([]contentPart, error) {
+func parseContent(role string, raw json.RawMessage, budget *imageBudget) ([]contentPart, error) {
 	var text string
 	if json.Unmarshal(raw, &text) == nil {
 		if strings.TrimSpace(text) == "" {
@@ -240,8 +252,14 @@ func parseContent(role string, raw json.RawMessage) ([]contentPart, error) {
 			if w.Text != nil || w.Data == nil {
 				return nil, invalid("An image part is { type: 'image', mimeType, data } with base64 data.")
 			}
+			if err := budget.admit(); err != nil {
+				return nil, err
+			}
 			img, err := parseImage(w.MimeType, *w.Data)
 			if err != nil {
+				return nil, err
+			}
+			if err := budget.spend(img.size); err != nil {
 				return nil, err
 			}
 			parts = append(parts, contentPart{Image: img})
@@ -272,9 +290,11 @@ func parseImage(mimeType, data string) (*imagePart, error) {
 		data = encoded
 	}
 	if !imageTypes[mimeType] {
-		return nil, invalid("Images must be PNG, JPEG, WebP or GIF (mimeType image/png, image/jpeg, image/webp or image/gif).")
+		return nil, invalid("Images must be PNG, JPEG or WebP (mimeType image/png, image/jpeg or image/webp).")
 	}
 	limit := fmt.Sprintf("Each image is limited to %d MB. Downscale it in a canvas before sending.", MaxImageBytes>>20)
+	// The decoder skips line breaks, so they do not count toward the size.
+	data = strings.NewReplacer("\r", "", "\n", "").Replace(data)
 	if base64.StdEncoding.DecodedLen(len(data)) > MaxImageBytes+2 {
 		return nil, invalid(limit)
 	}

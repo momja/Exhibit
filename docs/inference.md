@@ -69,8 +69,9 @@ for Claude's runtime run unchanged.
 
 **Limits.** complete: 1–40 messages, 48 KB of text, `maxTokens` default 1024,
 at most 4096.
-Images have bounds of their own and do not count against the text: PNG, JPEG,
-WebP or GIF only, at most 4 per call, 2 MB each and 4 MB in total, decoded;
+Images have bounds of their own and do not count against the text: PNG, JPEG
+or WebP only (GIF is refused, because Gemini cannot read it; draw other formats
+onto a canvas first), at most 4 per call, 2 MB each and 4 MB in total, decoded;
 only user messages carry them; a message holds at most 16 parts. `mimeType`
 must name what the bytes really are (they are sniffed), and a `data:` URL's
 type must agree with it. A string `content` works exactly as before. Schemas use `type`, `properties`, `required`, `items`, `enum`,
@@ -199,6 +200,16 @@ verdict, or failed usage write prevents the next paid step in that request.
 The screen reads text only, so an instance with `GUARDRAIL_*` set does not offer
 images (`available().images` is false and an image call is `unavailable`)
 rather than send them unscreened.
+
+An image call's request body is up to about 6 MB, inside the default
+`MAX_REQUEST_BODY_BYTES` (32 MiB). An instance that lowers it below that refuses
+larger image calls before the inference handler; the artifact then sees
+`invalid_request` saying the request is too large.
+
+The optional MCP service learns what to teach connected agents from
+`EXHIBIT_AI_KINDS`. Add `images` beside `complete` (`complete,images`) when the
+core offers images; `images` without `complete` is refused at startup. The
+built-in agent needs no setting: the core works this out from the catalog.
 
 **Which models read images.** Pi's catalog lists each model's input types, and
 `available().images` follows it: in platform mode for `INFERENCE_MODEL`, in

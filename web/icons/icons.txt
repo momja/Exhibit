@@ -90,8 +90,10 @@ ph-plus-circle
 ph-star
 
 # Saved-data sharing note
-ph-image
 ph-info
+
+# AI consent: images leave the device (Exh-v81w)
+ph-image
 
 # Incomplete tag color
 ph-minus

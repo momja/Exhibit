@@ -157,6 +157,13 @@ export function connectInferenceHost({ artifactId, title }) {
       method: 'POST', headers, body: JSON.stringify({ kind: d.op, payload: d.payload ?? null }),
     }).catch(() => null);
     if (!res) { fail('provider_error', 'The AI request could not be sent.'); return; }
+    // The body limit answers before the inference handler, in its own shape.
+    // Over it, the request was too large to send at all: the artifact can fix
+    // that, for instance by sending smaller images (Exh-v81w).
+    if (res.status === 413) {
+      fail('invalid_request', 'This AI request is too large for this Exhibit. Send fewer or smaller images.');
+      return;
+    }
     const body = await res.json().catch(() => ({}));
     if (res.ok) { reply({ ok: true, value: body.value }); return; }
     const err = body.error && typeof body.error === 'object' ? body.error : { code: 'provider_error' };

@@ -127,7 +127,7 @@ func TestImagePartsReachTheProviderInOrder(t *testing.T) {
 
 func TestEveryImageTypeIsAccepted(t *testing.T) {
 	s, _, _ := newTestService(t, nil)
-	for _, mimeType := range []string{"image/png", "image/jpeg", "image/webp", "image/gif"} {
+	for _, mimeType := range []string{"image/png", "image/jpeg", "image/webp"} {
 		if _, err := s.Run(context.Background(), imageCall(t, owner, imageMessage(imgPart(mimeType, encodedImage(t, mimeType))))); err != nil {
 			t.Errorf("%s: %v", mimeType, err)
 		}
@@ -151,8 +151,10 @@ func TestImageLimitsAreRefusedBeforeAnyCall(t *testing.T) {
 		payload any
 		want    string // a phrase the message must contain
 	}{
-		{"svg", imageMessage(imgPart("image/svg+xml", png1)), "PNG, JPEG, WebP or GIF"},
-		{"no type", imageMessage(imgPart("", png1)), "PNG, JPEG, WebP or GIF"},
+		{"svg", imageMessage(imgPart("image/svg+xml", png1)), "PNG, JPEG or WebP"},
+		{"no type", imageMessage(imgPart("", png1)), "PNG, JPEG or WebP"},
+		// Gemini reads no GIF, so it is refused here, not at the provider.
+		{"gif", imageMessage(imgPart("image/gif", encodedImage(t, "image/gif"))), "PNG, JPEG or WebP"},
 		{"mislabelled", imageMessage(imgPart("image/jpeg", png1)), "not the image/jpeg"},
 		{"not base64", imageMessage(imgPart("image/png", "!!not base64!!")), "base64"},
 		{"empty", imageMessage(imgPart("image/png", "")), "base64"},
@@ -325,5 +327,20 @@ func TestImageCallsAreRefusedOnceTheAllowanceIsSpent(t *testing.T) {
 	_, err := s.Run(context.Background(), imageCall(t, owner, imageMessage(imgPart("image/png", encodedImage(t, "image/png")))))
 	if code(err) != CodeLimitReached || rt.calls() != 0 {
 		t.Fatalf("err = %v, calls = %d", err, rt.calls())
+	}
+}
+
+// MIME-style base64, wrapped every 76 characters, is the same image: the
+// decoder skips line breaks, and so does the size check.
+func TestLineWrappedBase64CountsOnlyItsBytes(t *testing.T) {
+	s, _, _ := newTestService(t, nil)
+	flat := sized(MaxImageBytes)
+	var wrapped strings.Builder
+	for i := 0; i < len(flat); i += 76 {
+		wrapped.WriteString(flat[i:min(i+76, len(flat))])
+		wrapped.WriteString("\r\n")
+	}
+	if _, err := s.Run(context.Background(), imageCall(t, owner, imageMessage(imgPart("image/png", wrapped.String())))); err != nil {
+		t.Fatalf("a wrapped image at the limit = %v", err)
 	}
 }

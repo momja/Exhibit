@@ -261,3 +261,52 @@ window.exhibit.ai.available().then(function (a) {
 	assert.Contains(t, job, `"mimeType":"image/jpeg"`)
 	assert.Greater(t, len(job), 256<<10, "the canvas image should exceed the old 256 KB envelope")
 }
+
+// A request over the instance's body limit is refused by the body-limit
+// middleware before the inference handler, in that middleware's own shape.
+// The artifact gets invalid_request with a sentence it can act on, not a
+// provider_error (Exh-v81w review).
+func TestInferenceBridgeReportsAnOversizedRequestBrowser(t *testing.T) {
+	browser, err := chromium.New(chromiumtest.Start(t))
+	require.NoError(t, err)
+	ctx, cancel, err := browser.Tab(context.Background())
+	require.NoError(t, err)
+	defer cancel()
+	ctx, timeout := context.WithTimeout(ctx, 60*time.Second)
+	defer timeout()
+
+	ro := newTestRouter(t)
+	rt := withPlatformInference(t, ro)
+	body := `<!doctype html><html><head><script>
+var canvas = document.createElement('canvas');
+canvas.width = 900; canvas.height = 900;
+var g = canvas.getContext('2d'), px = g.createImageData(900, 900);
+for (var i = 0; i < px.data.length; i++) px.data[i] = (i * 2654435761) % 256;
+g.putImageData(px, 0, 0);
+window.exhibit.ai.complete({ messages: [{ role: 'user', content: [
+  { type: 'text', text: 'Describe this.' },
+  { type: 'image', mimeType: 'image/jpeg', data: canvas.toDataURL('image/jpeg', 0.9) },
+] }] }).then(function () { localStorage.setItem('answer', 'ok'); },
+  function (e) { localStorage.setItem('answer', e.code + ': ' + e.message); });
+</script></head><body><h1>Image tool</h1></body></html>`
+	id := createArtifact(t, ro, map[string]any{"title": "Image tool", "body": body})
+	require.NoError(t, ro.cfg.Store.UpdateArtifact(t.Context(), 1, id, map[string]any{"inference_approved": true}))
+
+	// The real middleware, with a limit the image overruns.
+	limited := limitRequestBody(256 << 10)(ro)
+	appMux, renderMux := http.NewServeMux(), http.NewServeMux()
+	app, frame := httptest.NewServer(appMux), httptest.NewServer(renderMux)
+	t.Cleanup(app.Close)
+	t.Cleanup(frame.Close)
+	ro.cfg.AppOrigin, ro.cfg.RenderOrigin = app.URL, frame.URL
+	renderMux.Handle("/", ro.RenderHandler())
+	appMux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Header.Set("Authorization", authHeader())
+		limited.ServeHTTP(w, r)
+	}))
+
+	require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(app.URL+"/artifacts/"+id)))
+	require.Eventually(t, func() bool { return getState(t, ro, id)["answer"] != "" }, 20*time.Second, 50*time.Millisecond)
+	assert.Equal(t, "invalid_request: This AI request is too large for this Exhibit. Send fewer or smaller images.", getState(t, ro, id)["answer"])
+	assert.Zero(t, rt.calls())
+}
