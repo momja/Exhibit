@@ -59,6 +59,12 @@ func TestAPIConnectorApprovalBrowser(t *testing.T) {
 			require.NoError(t, os.WriteFile(filepath.Join(dir, fmt.Sprintf("connector-%d.png", width)), shot, 0644))
 		}
 		if width == 1280 {
+			run(chromedp.Evaluate[chromedp.Void](`document.querySelector('.connector-key input').value = 'sk-proj-fake-wrong-domain'`),
+				chromedp.Click(chromedp.CSS(`.connector-trust input`)),
+				chromedp.Click(chromedp.CSS(`[data-controller="agent-api-connector"] [type="submit"]`)),
+				chromedp.Poll[chromedp.Void](`document.querySelector('.interaction-status')?.textContent.includes('normally goes to') && document.querySelector('.connector-key input')?.value === '' && !document.querySelector('.connector-trust input')?.checked`))
+			check(`document.querySelector('[data-interaction-id]').dataset.pending === 'true' && !document.querySelector('.connector-trust input').checked`)
+			run(chromedp.SendKeys(chromedp.CSS(`.connector-key input`), "browser-private-key"))
 			run(chromedp.Click(chromedp.CSS(`.connector-trust input`)), chromedp.Click(chromedp.CSS(`[data-controller="agent-api-connector"] [type="submit"]`)), chromedp.Poll[chromedp.Void](`!document.querySelector('.connector-key') && document.querySelector('.interaction-status')?.textContent.includes('Connection ready')`))
 		} else {
 			run(chromedp.Click(chromedp.CSS(`[data-action="agent-api-connector#deny"]`)), chromedp.Poll[chromedp.Void](`!document.querySelector('.connector-key') && document.querySelector('.interaction-status')?.textContent.includes('Connection declined')`))

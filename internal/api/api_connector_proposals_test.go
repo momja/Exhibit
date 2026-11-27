@@ -82,6 +82,7 @@ func TestAPIConnectorPrivateApprovalRoundTrip(t *testing.T) {
 					{"revision": 1, "action": "approve", "secret": secret},
 					{"revision": 1, "action": "approve", "trusted_origin": "https://evil.example", "secret": secret},
 					{"revision": 1, "action": "approve", "trusted_origin": "https://api.weather.example.com"},
+					{"revision": 1, "action": "approve", "trusted_origin": "https://api.weather.example.com", "secret": "sk-proj-fake-key-for-the-wrong-domain"},
 					{"revision": 0, "action": "approve", "trusted_origin": "https://api.weather.example.com", "secret": secret},
 				} {
 					w = doJSON(t, h.router, http.MethodPost, path, bad)
