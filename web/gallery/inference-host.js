@@ -161,7 +161,7 @@ export function connectInferenceHost({ artifactId, title }) {
     // Over it, the request was too large to send at all: the artifact can fix
     // that, for instance by sending smaller images (Exh-v81w).
     if (res.status === 413) {
-      fail('invalid_request', 'This AI request is too large for this Exhibit. Send fewer or smaller images.');
+      fail('invalid_request', 'This AI request is too large for this Exhibit. Send less with it, such as fewer or smaller images.');
       return;
     }
     const body = await res.json().catch(() => ({}));

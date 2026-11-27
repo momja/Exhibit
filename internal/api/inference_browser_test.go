@@ -307,6 +307,6 @@ window.exhibit.ai.complete({ messages: [{ role: 'user', content: [
 
 	require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(app.URL+"/artifacts/"+id)))
 	require.Eventually(t, func() bool { return getState(t, ro, id)["answer"] != "" }, 20*time.Second, 50*time.Millisecond)
-	assert.Equal(t, "invalid_request: This AI request is too large for this Exhibit. Send fewer or smaller images.", getState(t, ro, id)["answer"])
+	assert.Equal(t, "invalid_request: This AI request is too large for this Exhibit. Send less with it, such as fewer or smaller images.", getState(t, ro, id)["answer"])
 	assert.Zero(t, rt.calls())
 }

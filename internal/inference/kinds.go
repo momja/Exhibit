@@ -228,14 +228,31 @@ func parseContent(role string, raw json.RawMessage, budget *imageBudget) ([]cont
 		MimeType string  `json:"mimeType"`
 		Data     *string `json:"data"`
 	}
-	var wire []wirePart
+	shape := invalid("A message's content must be text, or a list of { type: 'text', text } and { type: 'image', mimeType, data } parts.")
+	count := invalid(fmt.Sprintf("A message's content list needs between 1 and %d parts.", MaxContentParts))
+	// Parts are read one at a time, so a list far over the bound is refused
+	// at its first extra part, never decoded whole.
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
-	if len(bytes.TrimSpace(raw)) == 0 || raw[0] != '[' || dec.Decode(&wire) != nil {
-		return nil, invalid("A message's content must be text, or a list of { type: 'text', text } and { type: 'image', mimeType, data } parts.")
+	if tok, err := dec.Token(); err != nil || tok != json.Delim('[') {
+		return nil, shape
 	}
-	if len(wire) == 0 || len(wire) > MaxContentParts {
-		return nil, invalid(fmt.Sprintf("A message's content list needs between 1 and %d parts.", MaxContentParts))
+	var wire []wirePart
+	for dec.More() {
+		if len(wire) == MaxContentParts {
+			return nil, count
+		}
+		var w wirePart
+		if dec.Decode(&w) != nil {
+			return nil, shape
+		}
+		wire = append(wire, w)
+	}
+	if _, err := dec.Token(); err != nil {
+		return nil, shape
+	}
+	if len(wire) == 0 {
+		return nil, count
 	}
 	parts := make([]contentPart, 0, len(wire))
 	for _, w := range wire {

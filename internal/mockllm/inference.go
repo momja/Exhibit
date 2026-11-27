@@ -100,7 +100,8 @@ func handleInferenceChat(w http.ResponseWriter, r *http.Request, messages []chat
 	} else {
 		answer = "Summary: " + clip(strings.Join(strings.Fields(lastUser), " "), 160)
 	}
-	if len(images) > 0 && !strings.HasPrefix(answer, "{") && !strings.HasPrefix(answer, "[") {
+	// Structured answers stay exactly the generated value.
+	if len(images) > 0 && !strings.Contains(system, "JSON Schema:") {
 		answer = fmt.Sprintf("Saw %d image(s) (%s): %s", len(images), strings.Join(images, ", "), answer)
 	}
 	prompt := 100 + 85*len(images)
