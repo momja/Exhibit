@@ -46,3 +46,7 @@ Done: complete() accepts text+image parts (PNG/JPEG/WebP; GIF refused after revi
 **2026-11-27T17:10:19Z**
 
 Correction after review round 1 (d028a5f6): GIF is refused, not accepted. complete() takes PNG, JPEG or WebP only, because Gemini cannot read GIF. A body over MAX_REQUEST_BODY_BYTES reaches the artifact as invalid_request.
+
+**2026-11-28T01:12:24Z**
+
+Metadata stripping (owner decision: strip all, accept losing orientation). The host page strips every PNG/JPEG/WebP in a complete() call before it leaves the browser (web/gallery/image-metadata.js, lossless container walk); the server strips again in parseImage (internal/inference/imagemeta.go) with the same rules. JPEG keeps APP0, APP2 ICC_PROFILE, APP14 and non-APP segments, drops other APPn and COM, and ends at EOI (trailers dropped). PNG keeps IHDR/PLTE/IDAT/IEND/tRNS/gAMA/cHRM/sRGB/iCCP/sBIT/pHYs/bKGD/acTL/fcTL/fdAT, ends at IEND. WebP keeps VP8/VP8L/VP8X/ALPH/ANIM/ANMF/ICCP, clears VP8X EXIF/XMP flags, rewrites the RIFF size. A malformed file of an accepted type is invalid_request on both sides, never forwarded. Size bounds count bytes as received. Consent copy and docs updated.
