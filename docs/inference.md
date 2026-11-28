@@ -237,7 +237,9 @@ ignored, and **no replay** of a call whose outcome is unknown, because it may
 already have been billed.
 
 An image call's envelope can reach about 6 MB; the worker's envelope bound is
-8 MB. Image bytes are never logged: not in the worker, the job, an error
+8 MB. With 16 calls in flight that is on the order of a few hundred MB held
+briefly at the worst, which per-viewer concurrency (4) and the rate belts keep
+rare; size a small instance's memory with it in mind. Image bytes are never logged: not in the worker, the job, an error
 message or the ledger, which records tokens and cost only.
 
 Metering runs before error mapping: one `agent_usage` row per provider call

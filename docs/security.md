@@ -1348,10 +1348,14 @@ possibly including saved data, and any images the person gives the tool
   parts, bounded and sniffed before any provider call; Exhibit does not strip
   their metadata, so a photo straight from a camera can carry its location.
   The consent prompt says so, and the agent guidance teaches re-encoding
-  through a canvas, which drops it. The frame gains no new source of images:
-  it can send only a file the person picks or pixels it drew itself (a
-  cross-origin image taints the canvas). The usage-policy screen reads text
-  only, so platform-paid calls on a screened instance carry no images at all.
+  through a canvas, which drops it. The bridge gains no new authority, only
+  bandwidth: what a tool sends is still what it can already read, and a frame
+  could already send base64 as text. Image bytes come from a file the person
+  picks, pixels the tool drew, or (on a tool whose network origins were
+  approved) something it fetched; only the leading bytes are sniffed, so the
+  type check is a format rule, not a content guarantee. Each call is bounded
+  and metered. The usage-policy screen reads text only, so platform-paid
+  calls on a screened instance carry no images at all.
 
 - **Two consents, both enforced server-side.** The owner's
   `inference_approved` (one `ApprovalColumns` entry, revocable) and, for each
