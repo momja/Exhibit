@@ -389,3 +389,71 @@ func TestInteractionAdmissionHonorsCanceledContext(t *testing.T) {
 	assert.ErrorIs(t, err, context.Canceled)
 	assert.False(t, called)
 }
+
+func TestCommittedDeliveryCompetingVisibleRevisionIsBusy(t *testing.T) {
+	s, _ := decisionSession(t)
+	input := newBlockedInteractionStdin()
+	s.stdin = input
+	result := make(chan error, 1)
+	go func() {
+		result <- s.ResolveInteraction(context.Background(), "decision-1", 1, testDecisionKind,
+			func(context.Context, Interaction) (InteractionCompletion, error) {
+				return testDecisionCompletion("approved"), nil
+			})
+	}()
+	<-input.entered
+	pending, _ := s.Interaction("decision-1")
+	require.EqualValues(t, 2, pending.Revision, "the browser's still-visible revision remains 1")
+	err := s.ResolveInteraction(context.Background(), "decision-1", 1, testDecisionKind,
+		func(context.Context, Interaction) (InteractionCompletion, error) {
+			t.Fatal("a duplicate during delivery must not repeat the decision")
+			return InteractionCompletion{}, nil
+		})
+	assert.ErrorIs(t, err, ErrInteractionBusy)
+	assert.NotErrorIs(t, err, ErrInteractionStale)
+	require.NoError(t, input.Close())
+	assert.ErrorIs(t, receiveResult(t, result), ErrInteractionDeliveryPending)
+	// Once the active attempt has ended, that old revision is genuinely stale.
+	assert.ErrorIs(t, s.ResolveInteraction(context.Background(), "decision-1", 1, testDecisionKind,
+		func(context.Context, Interaction) (InteractionCompletion, error) {
+			t.Fatal("stale decision")
+			return InteractionCompletion{}, nil
+		}), ErrInteractionStale)
+}
+
+func TestCancellationAfterPreparationDistinguishesEffectFreeAndCommitted(t *testing.T) {
+	t.Run("question remains editable", func(t *testing.T) {
+		s, input := newQuestionSession(t)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		err := s.ResolveInteraction(ctx, "request-1", 1, InteractionQuestions,
+			func(_ context.Context, snapshot Interaction) (InteractionCompletion, error) {
+				completion, err := s.questionCompletion(snapshot, QuestionAction{Revision: 1, Action: "message", Response: QuestionResponse{Message: "Canceled draft"}})
+				cancel() // Deterministically exercises the sole post-decision check.
+				return completion, err
+			})
+		assert.ErrorIs(t, err, context.Canceled)
+		assert.NotErrorIs(t, err, ErrInteractionDeliveryPending)
+		pending, _ := s.Interaction("request-1")
+		assert.True(t, pending.Pending())
+		assert.False(t, pending.DeliveryPending)
+		assert.EqualValues(t, 1, pending.Revision)
+		assert.Empty(t, pending.Questions.Message)
+		assert.Empty(t, input.String())
+	})
+	t.Run("committed decision awaits reconciliation", func(t *testing.T) {
+		s, input := decisionSession(t)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		err := s.ResolveInteraction(ctx, "decision-1", 1, testDecisionKind,
+			func(context.Context, Interaction) (InteractionCompletion, error) {
+				cancel()
+				return testDecisionCompletion("approved"), nil
+			})
+		assert.ErrorIs(t, err, ErrInteractionDeliveryPending)
+		pending, _ := s.Interaction("decision-1")
+		assert.True(t, pending.DeliveryPending)
+		assert.EqualValues(t, 2, pending.Revision)
+		assert.Empty(t, input.String())
+	})
+}

@@ -153,7 +153,7 @@ func (s *Session) resolveInteraction(ctx context.Context, id string, revision ui
 	}()
 	s.mu.Lock()
 	interaction, err := s.currentInteractionLocked(id, revision, expectedKind)
-	if err == nil && interaction.resolving {
+	if interaction.resolving && (err == nil || errors.Is(err, ErrInteractionStale)) {
 		err = ErrInteractionBusy
 	}
 	if err == nil && interaction.DeliveryPending != redeliver {
@@ -190,10 +190,6 @@ func (s *Session) resolveInteraction(ctx context.Context, id string, revision ui
 	if completion.kind != expectedKind || (completion.state != InteractionCompleted && completion.state != InteractionCancelled) || completion.value == "" || (redeliver && !completion.committed) {
 		return ErrInvalidInteractionAction
 	}
-	if !completion.committed && ctx.Err() != nil {
-		return ctx.Err()
-	}
-
 	if completion.committed && !redeliver {
 		s.mu.Lock()
 		interaction, err = s.currentInteractionLocked(id, revision, expectedKind)
@@ -212,7 +208,10 @@ func (s *Session) resolveInteraction(ctx context.Context, id string, revision ui
 	// claim; Stop never waits on the decision gate for a blocked pipe.
 	release()
 	release = nil
-	if ctx.Err() != nil {
+	if contextErr := ctx.Err(); contextErr != nil {
+		if !completion.committed {
+			return contextErr
+		}
 		s.interactionChanged(id)
 		return ErrInteractionDeliveryPending
 	}
@@ -281,7 +280,9 @@ func (s *Session) currentInteractionLocked(id string, revision uint64, expectedK
 		return Interaction{}, ErrInvalidInteractionAction
 	}
 	if interaction.Revision != revision {
-		return Interaction{}, ErrInteractionStale
+		// Admission still needs the active claim to distinguish a duplicate
+		// carrying the browser's pre-decision revision from a stale draft.
+		return interaction, ErrInteractionStale
 	}
 	return interaction, nil
 }
