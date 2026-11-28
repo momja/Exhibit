@@ -21,7 +21,8 @@ const file = name => readFileSync(path.join(corpus, name));
 const cases = JSON.parse(readFileSync(path.join(corpus, 'payloads.json'), 'utf8'));
 
 // The placeholders, expanded as the Go test does: $b64(file) is a corpus file
-// in base64, $png(n) a well-formed PNG of exactly n bytes with zero CRCs.
+// in base64, $png(n) a well-formed PNG of exactly n bytes with zero CRCs, and
+// $bang(n) n "!" characters.
 function corpusPNG(n) {
   const out = Buffer.alloc(n);
   out.write('\x89PNG\r\n\x1a\n', 0, 'latin1');
@@ -32,8 +33,9 @@ function corpusPNG(n) {
   chunk(at, 'IEND', 0);
   return out;
 }
-const expand = text => text.replace(/\$(b64|png)\(([^)]*)\)/g, (_, kind, arg) =>
-  (kind === 'b64' ? file(arg) : corpusPNG(Number(arg))).toString('base64'));
+const expand = text => text.replace(/\$(b64|png|bang)\(([^)]*)\)/g, (_, kind, arg) =>
+  kind === 'bang' ? '!'.repeat(Number(arg))
+    : (kind === 'b64' ? file(arg) : corpusPNG(Number(arg))).toString('base64'));
 const expandValue = value => JSON.parse(expand(JSON.stringify(value)));
 
 const imageParts = payload => (payload.messages ?? []).flatMap(m => (Array.isArray(m.content) ? m.content : []))

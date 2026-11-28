@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"runtime"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -180,10 +181,11 @@ func TestImageMetaPayloadCorpus(t *testing.T) {
 }
 
 // The placeholders a payload uses for image data, expanded alike by the
-// Node test: $b64(file) is a corpus file in base64, and $png(n) a
+// Node test: $b64(file) is a corpus file in base64, $png(n) a
 // well-formed PNG of exactly n bytes (IHDR, one IDAT of zeros, IEND; CRCs
-// zero, which nothing checks).
-var corpusPlaceholder = regexp.MustCompile(`\$(b64|png)\(([^)]*)\)`)
+// zero, which nothing checks), and $bang(n) n "!" characters, data that is
+// over a size bound before it is ever decoded.
+var corpusPlaceholder = regexp.MustCompile(`\$(b64|png|bang)\(([^)]*)\)`)
 
 func expandCorpusPlaceholders(t *testing.T, s string) string {
 	t.Helper()
@@ -195,6 +197,9 @@ func expandCorpusPlaceholders(t *testing.T, s string) string {
 		n, err := strconv.Atoi(parts[2])
 		if err != nil {
 			t.Fatal(err)
+		}
+		if parts[1] == "bang" {
+			return strings.Repeat("!", n)
 		}
 		return base64.StdEncoding.EncodeToString(corpusPNG(n))
 	})
