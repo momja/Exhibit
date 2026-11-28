@@ -74,7 +74,9 @@ or WebP only (GIF is refused, because Gemini cannot read it; draw other formats
 onto a canvas first), at most 4 per call, 2 MB each and 4 MB in total, decoded;
 only user messages carry them; a message holds at most 16 parts. `mimeType`
 must name what the bytes really are (they are sniffed), and a `data:` URL's
-type must agree with it. A string `content` works exactly as before. Schemas use `type`, `properties`, `required`, `items`, `enum`,
+type must agree with it. The size bounds count the bytes as given, before
+metadata is stripped; a file whose structure is broken (truncated, a length
+past its end, no end marker) is `invalid_request`. A string `content` works exactly as before. Schemas use `type`, `properties`, `required`, `items`, `enum`,
 `const`, `additionalProperties` (boolean), `minItems`/`maxItems`,
 `minimum`/`maximum`, `minLength`/`maxLength`, `description`, `title`; anything
 else is refused before a call. An answer that does not match the schema gets
@@ -102,12 +104,20 @@ the message is safe to show.
 | `provider_error` | The provider failed or answered something unusable |
 | `invalid_output` | complete: the model wrote no answer (it ran out of `maxTokens`), or with a schema, the answer did not fit, after one repair |
 
-**Images leave the device.** An image is sent to the provider as it was given
-to `complete()`. Exhibit does not strip metadata from it, so a photo straight
-from a camera can carry where and when it was taken. Drawing it onto a canvas
-and sending `canvas.toDataURL()` re-encodes the pixels only, which drops that
-metadata, and also cuts bytes and cost; the agent guidance teaches tools to do
-this, and the consent prompt says images leave the device.
+**Images leave the device, without their metadata.** Before a `complete()`
+call leaves the browser, the host page (`web/gallery/image-metadata.js`)
+rewrites every PNG, JPEG and WebP without its metadata: EXIF (location,
+camera, time), XMP, comments, text chunks and anything after the image's end
+marker. Only what is needed to draw the pixels stays, ICC colour profiles
+included; pixels are never decoded or re-encoded. The server strips again
+(`internal/inference/imagemeta.go`, the same rules) for clients that bypass the
+page, and refuses an image of an accepted type it cannot walk cleanly with
+`invalid_request` rather than forward it as given. EXIF orientation goes with
+the rest, so a phone photo sent as it came may reach the model rotated; one
+drawn onto a canvas is already upright. Drawing onto a canvas and sending
+`canvas.toDataURL()` also cuts bytes and cost, which is why the agent guidance
+still teaches it. The consent prompt says images leave the device and that
+Exhibit removes location and camera details first.
 
 **Write tools that degrade.** Check `available()` first. AI is unavailable on a
 public link, in a widget, in a tab opened directly, and in every export — HTML

@@ -1344,16 +1344,21 @@ What is new is that a call spends money and sends the artifact's chosen text,
 possibly including saved data, and any images the person gives the tool
 (Exh-v81w), to a third party. So:
 
-- **Images leave the device as given.** `complete()` takes PNG, JPEG or WebP
-  parts, bounded and sniffed before any provider call; Exhibit does not strip
-  their metadata, so a photo straight from a camera can carry its location.
-  The consent prompt says so, and the agent guidance teaches re-encoding
-  through a canvas, which drops it. The bridge gains no new authority, only
-  bandwidth: what a tool sends is still what it can already read, and a frame
-  could already send base64 as text. Image bytes come from a file the person
-  picks, pixels the tool drew, or (on a tool whose network origins were
-  approved) something it fetched; only the leading bytes are sniffed, so the
-  type check is a format rule, not a content guarantee. Each call is bounded
+- **Images leave the device, without their metadata.** `complete()` takes
+  PNG, JPEG or WebP parts, bounded and sniffed before any provider call. The
+  host page strips every image's metadata (EXIF, including location, XMP,
+  comments, text chunks, trailing data) losslessly before the request leaves
+  the browser, and the server strips again with the same rules, so a client
+  that bypasses the page gets no exception; a file of an accepted type that
+  cannot be walked cleanly is refused, never forwarded as given. Orientation
+  is dropped too, so a raw phone photo may reach the model rotated. The
+  bridge gains no new authority, only bandwidth: what a tool sends is still
+  what it can already read, and a frame could already send base64 as text.
+  Image bytes come from a file the person picks, pixels the tool drew, or (on
+  a tool whose network origins were approved) something it fetched. The type
+  check sniffs the leading bytes and the strip walks the container, never the
+  pixels, so both are format rules, not a content guarantee: pixels can still
+  show where a photo was taken. Each call is bounded
   and metered. The usage-policy screen reads text only, so platform-paid
   calls on a screened instance carry no images at all.
 

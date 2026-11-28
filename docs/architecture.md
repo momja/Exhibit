@@ -288,7 +288,9 @@ mapping. Providers are reached through one warm Pi worker
 `artifact_inference`). Exports keep the stand-in only. `complete()` also
 takes image parts (Exh-v81w), bounded and sniffed in `internal/inference`,
 offered per viewer from the Pi catalog's input types, never on a
-guardrail-screened instance, and not re-sent by a schema repair. Full design:
+guardrail-screened instance, and not re-sent by a schema repair. The host
+strips image metadata (orientation included) before sending, and the server
+strips again as a backstop. Full design:
 [inference.md](inference.md).
 
 ### 3.3 Store interface
