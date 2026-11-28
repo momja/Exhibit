@@ -1,5 +1,6 @@
 import { modalFor } from './modal.js';
 import { viewerFetch, apiFetch } from './api-module.js';
+import { prepareCompletePayload } from './complete-payload.js';
 
 /* Host half of window.exhibit.ai (Exh-zue3).
  *
@@ -14,6 +15,11 @@ import { viewerFetch, apiFetch } from './api-module.js';
  * A recipient of a tool its owner never allowed is not asked anything: the
  * banner says only the owner can turn AI on. Every refusal settles the
  * artifact's promise with a stable code, so a tool can always degrade.
+ *
+ * A complete() call is checked here by the server's rules for its messages
+ * and images, and its images are stripped of their metadata, before anything
+ * leaves the device (complete-payload.js, Exh-v81w). A call the server would
+ * refuse is refused here, in the server's words, and never sent.
  *
  * It listens to every iframe marked data-ai-frame: the artifact page's frame,
  * the agent preview and a version preview. The host checks both the frame's
@@ -128,7 +134,11 @@ export function connectInferenceHost({ artifactId, title }) {
       // A tool that checks first never calls, so this is where a recipient
       // learns why its AI controls are off — in Exhibit's chrome, once.
       if (notAllowed && (st.complete || st.decide || st.reason === 'no_key')) showBanner('owner', OWNER_NOTE);
-      reply({ ok: true, value: { complete: Boolean(usable && st.complete), decide: Boolean(usable && st.decide) } });
+      reply({ ok: true, value: {
+        complete: Boolean(usable && st.complete),
+        decide: Boolean(usable && st.decide),
+        images: Boolean(usable && st.complete && st.images),
+      } });
       return;
     }
     const fail = (code, message) => reply({ ok: false, error: { code, message: message || REFUSED[code] || 'The AI request failed.' } });
@@ -149,10 +159,30 @@ export function connectInferenceHost({ artifactId, title }) {
       if (declined.has(channel)) { fail('not_approved', 'AI use was not allowed.'); return; }
       if (!(await ask(id, channel, headers, st, frame))) { fail('not_approved', 'AI use was not allowed.'); return; }
     }
+    let payload = d.payload ?? null;
+    if (d.op === 'complete') {
+      const checked = prepareCompletePayload(payload);
+      if (!checked.ok) { fail('invalid_request', checked.message); return; }
+      payload = checked.payload;
+    }
+    let requestBody;
+    try {
+      requestBody = JSON.stringify({ kind: d.op, payload });
+    } catch {
+      fail('invalid_request', 'This AI request could not be read.');
+      return;
+    }
     const res = await viewerFetch('/api/artifacts/' + encodeURIComponent(id) + '/inference', {
-      method: 'POST', headers, body: JSON.stringify({ kind: d.op, payload: d.payload ?? null }),
+      method: 'POST', headers, body: requestBody,
     }).catch(() => null);
     if (!res) { fail('provider_error', 'The AI request could not be sent.'); return; }
+    // The body limit answers before the inference handler, in its own shape.
+    // Over it, the request was too large to send at all: the artifact can fix
+    // that, for instance by sending smaller images (Exh-v81w).
+    if (res.status === 413) {
+      fail('invalid_request', 'This AI request is too large for this Exhibit. Send less with it, such as fewer or smaller images.');
+      return;
+    }
     const body = await res.json().catch(() => ({}));
     if (res.ok) { reply({ ok: true, value: body.value }); return; }
     const err = body.error && typeof body.error === 'object' ? body.error : { code: 'provider_error' };

@@ -40,7 +40,7 @@ const files = [
   // detail viewer and the agent chat's preview pane. Listed before both, since
   // each installs it at load.
   "network-prompt.js",
-  "inference-host.js", "ai-settings.js",
+  "inference-host.js", "complete-payload.js", "image-metadata.js", "ai-settings.js",
   "edit.css", "edit.js", "state.js", "state-operations.js", "state-export.js", "assets.js", "assets-export.js", "storage-import.js", "download.js", "versions.js",
   "tags.js", "color-picker-controller.js", "capability-popover-controller.js",
   "notfound.css", "notfound.js",

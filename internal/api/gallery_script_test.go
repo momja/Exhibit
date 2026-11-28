@@ -67,6 +67,8 @@ func TestGalleryPageScriptSuite(t *testing.T) {
 		"components.widgethealth.test.mjs",
 		"gallery-widgets.test.mjs",
 		"pip-placement.test.mjs",
+		"image-metadata.test.mjs",
+		"complete-payload.test.mjs",
 		"pip.test.mjs",
 		"index.search.test.mjs",
 		"duplicate.test.mjs",

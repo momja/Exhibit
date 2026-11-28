@@ -285,7 +285,14 @@ agent spend caps → guardrail → provider → metering, metering before error
 mapping. Providers are reached through one warm Pi worker
 (`internal/inference/worker.go`), separate from `agent.Manager`. Usage lands in
 `agent_usage` (migration 056: `artifact_id`, `kind`, `cost_source`, source
-`artifact_inference`). Exports keep the stand-in only. Full design:
+`artifact_inference`). Exports keep the stand-in only. `complete()` also
+takes image parts (Exh-v81w), bounded and sniffed in `internal/inference`,
+offered per viewer from the Pi catalog's input types, never on a
+guardrail-screened instance, and not re-sent by a schema repair. The host
+checks the call by the server's rules and strips image metadata (orientation
+and colour profiles included) before sending, refusing on the page what the
+server would refuse; the server strips again as a backstop and reads keys
+exactly as spelled. Full design:
 [inference.md](inference.md).
 
 ### 3.3 Store interface

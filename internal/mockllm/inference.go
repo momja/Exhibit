@@ -22,7 +22,9 @@ import (
 // Answers are deterministic functions of the request so tests and demos can
 // rely on them:
 //   - prose: "Summary: " and the start of the last user message, or "OK" plus
-//     any tenant-A / tenant-B identity for credential-pairing tests;
+//     any tenant-A / tenant-B identity for credential-pairing tests; either
+//     is prefixed "Saw N image(s) (types): " when the request carried images
+//     (Exh-v81w), which also add 85 prompt tokens each to the usage;
 //   - structured output: when the system prompt carries "JSON Schema:", a
 //     value generated from that schema;
 //   - classification: an option chosen by word overlap between its criterion
@@ -59,7 +61,9 @@ func handleInferenceChat(w http.ResponseWriter, r *http.Request, messages []chat
 	var all strings.Builder
 	system, lastUser := "", ""
 	users := 0
+	var images []string
 	for _, m := range messages {
+		images = append(images, imageTypesOf(m.Content)...)
 		t, _ := textOf(m.Content)
 		all.WriteString(t)
 		all.WriteString("\n")
@@ -96,10 +100,38 @@ func handleInferenceChat(w http.ResponseWriter, r *http.Request, messages []chat
 	} else {
 		answer = "Summary: " + clip(strings.Join(strings.Fields(lastUser), " "), 160)
 	}
+	// Structured answers stay exactly the generated value.
+	if len(images) > 0 && !strings.Contains(system, "JSON Schema:") {
+		answer = fmt.Sprintf("Saw %d image(s) (%s): %s", len(images), strings.Join(images, ", "), answer)
+	}
+	prompt := 100 + 85*len(images)
 	streamPlan(w, turnPlan{kind: "text", text: answer, usage: map[string]any{
-		"prompt_tokens": 100, "completion_tokens": 12, "total_tokens": 112,
+		"prompt_tokens": prompt, "completion_tokens": 12, "total_tokens": prompt + 12,
 		"cost": 0.0000104, "is_byok": false,
 	}})
+}
+
+// imageTypesOf lists the media type of each image in an OpenAI-style
+// content list (image_url parts holding data: URLs), in order.
+func imageTypesOf(raw json.RawMessage) []string {
+	var parts []struct {
+		Type     string `json:"type"`
+		ImageURL struct {
+			URL string `json:"url"`
+		} `json:"image_url"`
+	}
+	if json.Unmarshal(raw, &parts) != nil {
+		return nil
+	}
+	var types []string
+	for _, p := range parts {
+		if p.Type != "image_url" {
+			continue
+		}
+		mediaType, _, _ := strings.Cut(strings.TrimPrefix(p.ImageURL.URL, "data:"), ";")
+		types = append(types, mediaType)
+	}
+	return types
 }
 
 // valueForSchema produces a value that satisfies the subset of JSON Schema

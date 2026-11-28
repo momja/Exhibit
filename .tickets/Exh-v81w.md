@@ -1,6 +1,6 @@
 ---
 id: Exh-v81w
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-11-25T15:35:37Z
@@ -36,3 +36,21 @@ Not verified yet: that Pi's message format carries image content blocks through 
 
 A tool can call complete() with a user message holding text and image parts and get an answer about the image from a vision-capable model. String content behaves exactly as before. Every limit and refusal above is covered by a test and returns a stable code before any provider call. A text-only model is refused with a clear code, and available() reports whether images work. No image bytes appear in logs, the ledger or error messages. A schema repair cannot silently double the image cost. The usage row for an image call is correct and counts against the same caps as any other call. Consent copy and docs say that images leave the viewer's device. decide() is unchanged. One live pass with a real vision model is recorded, and anything not run live is listed as not run.
 
+
+## Notes
+
+**2026-11-27T16:43:19Z**
+
+Done: complete() accepts text+image parts (PNG/JPEG/WebP; GIF refused after review, see below; 4 images, 2 MB each, 4 MB total, sniffed); available().images from Pi catalog input modalities; text-only model and guardrail-screened instances refuse images as unavailable; schema repair omits images; worker envelope 8 MB; consent/posture/settings copy; agent guidance teaches createImageBitmap + canvas downscale. Live pass on deepseek-v4.1-flash recorded in docs/inference.md. Open decisions for review: guardrail disables images; EXIF not stripped server-side.
+
+**2026-11-27T17:10:19Z**
+
+Correction after review round 1 (d028a5f6): GIF is refused, not accepted. complete() takes PNG, JPEG or WebP only, because Gemini cannot read GIF. A body over MAX_REQUEST_BODY_BYTES reaches the artifact as invalid_request.
+
+**2026-11-28T01:12:24Z**
+
+Metadata stripping (owner decision: strip all, accept losing orientation). The host page strips every PNG/JPEG/WebP in a complete() call before it leaves the browser (web/gallery/image-metadata.js, lossless container walk); the server strips again in parseImage (internal/inference/imagemeta.go) with the same rules. JPEG keeps APP0, APP2 ICC_PROFILE, APP14 and non-APP segments, drops other APPn and COM, and ends at EOI (trailers dropped). PNG keeps IHDR/PLTE/IDAT/IEND/tRNS/gAMA/cHRM/sRGB/iCCP/sBIT/pHYs/bKGD/acTL/fcTL/fdAT, ends at IEND. WebP keeps VP8/VP8L/VP8X/ALPH/ANIM/ANMF/ICCP, clears VP8X EXIF/XMP flags, rewrites the RIFF size. A malformed file of an accepted type is invalid_request on both sides, never forwarded. Size bounds count bytes as received. Consent copy and docs updated.
+
+**2026-11-28T03:43:04Z**
+
+Round 6 hardening: host and server agree exactly. The server reads payload/message/part keys exactly as spelled (Messages, DATA, a second spelling or any unknown key is invalid_request), so the host's exact walk cannot miss an image. The host (web/gallery/complete-payload.js) checks a complete() payload by the server's message and image rules, including count and total on the bytes as given, and refuses locally in the server's words, never sending bytes the server would refuse. Strip now drops ICC everywhere (APP2, iCCP, ICCP + VP8X 0x20) and JPEG APP0; keeps PNG cICP/mDCV/cLLI; refuses APNG and animated WebP; refuses a JPEG without SOF before SOS or without a scan, a PNG whose IHDR is not first/13 bytes, without IDAT or with a non-empty IEND, a WebP without VP8/VP8L. Both sides read the shared corpus internal/inference/testdata/imagemeta (cases.json + files, payloads.json). Differential: 180k stripper cases and 19k mutated payloads, zero diffs.

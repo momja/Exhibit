@@ -16,9 +16,10 @@ func TestShareAttributionOwnerChoiceAndLegacyBytes(t *testing.T) {
 	link, err := st.CreateAnonymousLink(context.Background(), 1, "attribution")
 	require.NoError(t, err)
 	baseline := serveShare(t, rd, link.ID)
-	// The legacy body hash includes the artifact favicon in the refreshed palette.
+	// The legacy body hash includes the artifact favicon in the refreshed palette
+	// and the stand-in's images: false (Exh-v81w).
 	baselineBody := strings.ReplaceAll(baseline.Body.String(), link.ID, "public")
-	require.Equal(t, "d995788cb2991570b4f650da03497efeea0c18bf3a7e650a1e17a750238398c4", fmt.Sprintf("%x", sha256.Sum256([]byte(baselineBody))))
+	require.Equal(t, "8d26626a36229cd5a18a88732255ea0712ace45b939f9892c20f01e7b3ec6799", fmt.Sprintf("%x", sha256.Sum256([]byte(baselineBody))))
 	require.Equal(t, "31b51fb4673416e2c321dae18b3e0f5e9a456a4df42f02d0ada2e094dc5198f9", fmt.Sprintf("%x", sha256.Sum256([]byte(fmt.Sprint(baseline.Header())))))
 	private := serve(t, rd, "attribution")
 	for _, instance := range []bool{false, true} {

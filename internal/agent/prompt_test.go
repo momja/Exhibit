@@ -300,6 +300,12 @@ func TestSystemPromptDescribesOnlyOfferedInferenceKinds(t *testing.T) {
 		assert.Contains(t, prompt, "show in the UI exactly what will be sent", name)
 	}
 
+	// Images are taught only where offered (Exh-v81w).
+	assert.NotContains(t, completeOnly, "type: 'image'")
+	withImages := buildSystemPrompt("", []string{"complete", "images"}, CreateOpts{ArtifactID: "a"})
+	assert.Contains(t, withImages, "type: 'image'")
+	assert.Contains(t, withImages, "canvas.toDataURL('image/jpeg', 0.85)")
+
 	// A widget never calls AI, so a widget-only session's prompt is unchanged.
 	assert.Equal(t, buildSystemPrompt("", nil, CreateOpts{ArtifactID: "a", WidgetOnly: true}),
 		buildSystemPrompt("", []string{"complete", "decide"}, CreateOpts{ArtifactID: "a", WidgetOnly: true}))

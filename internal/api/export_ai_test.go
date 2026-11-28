@@ -179,7 +179,7 @@ func exportAIResults(t *testing.T, url string) map[string]any {
 
 func assertUnavailableResults(t *testing.T, results map[string]any) {
 	t.Helper()
-	assert.Equal(t, map[string]any{"complete": false, "decide": false}, results["kinds"])
+	assert.Equal(t, map[string]any{"complete": false, "decide": false, "images": false}, results["kinds"])
 	assert.Equal(t, map[string]any{"complete": "unavailable", "decide": "unavailable"}, results["codes"])
 }
 

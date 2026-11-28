@@ -2,7 +2,11 @@ package api
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
+	"hash/crc32"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -20,10 +24,12 @@ import (
 type fakeInferenceRuntime struct {
 	mu   sync.Mutex
 	jobs []inference.Job
+	// textOnly makes every model one that cannot read images.
+	textOnly bool
 }
 
-func (f *fakeInferenceRuntime) Resolve(context.Context, string, inference.Kind, string) (bool, error) {
-	return true, nil
+func (f *fakeInferenceRuntime) Resolve(context.Context, string, inference.Kind, string) (inference.ModelInfo, error) {
+	return inference.ModelInfo{Found: true, Images: !f.textOnly}, nil
 }
 
 func (f *fakeInferenceRuntime) Run(_ context.Context, job inference.Job) (inference.Result, inference.Outcome, error) {
@@ -176,8 +182,58 @@ func TestInferenceStateNeverNamesProviderOrModel(t *testing.T) {
 	}
 	var st inferencePageState
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &st))
-	assert.True(t, st.Enabled && st.Complete && st.Decide && st.Owner)
+	assert.True(t, st.Enabled && st.Complete && st.Decide && st.Owner && st.Images)
 	assert.Equal(t, "platform", st.Payer)
+}
+
+// An image call (Exh-v81w) through the endpoint: a body far over complete()'s
+// text cap is accepted, because image bytes have bounds of their own, and a
+// model that cannot read images refuses before any provider call.
+func TestInferenceCarriesImagesAndRefusesThemOnATextOnlyModel(t *testing.T) {
+	in := newGrantedInstance(t)
+	rt := withPlatformInference(t, in.ro)
+	require.NoError(t, in.ro.cfg.Store.UpdateArtifact(context.Background(), in.ownerOne, in.granted, map[string]any{"inference_approved": true}))
+	data := base64.StdEncoding.EncodeToString(paddedPNG(1 << 20))
+	body := `{"kind":"complete","payload":{"messages":[{"role":"user","content":[{"type":"text","text":"What is this?"},{"type":"image","mimeType":"image/png","data":"` + data + `"}]}]}}`
+	post := func() *httptest.ResponseRecorder {
+		return postInference(in.ro, in.granted, in.cookieOne, func(r *http.Request) {
+			r.Body = io.NopCloser(strings.NewReader(body))
+			r.ContentLength = int64(len(body))
+		})
+	}
+	w := post()
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	require.Equal(t, 1, rt.calls())
+	assert.Contains(t, string(rt.jobs[0].Context), `"type":"image"`)
+
+	rt.textOnly = true
+	svc, err := inference.New(inference.Config{
+		Enabled: true, Platform: &inference.Credential{Provider: "openrouter", APIKey: "platform-secret"},
+		ChatModel: "chat-model-x", Ledger: in.ro.cfg.Store, Runtime: rt,
+	})
+	require.NoError(t, err)
+	in.ro.cfg.Inference = svc
+	w = post()
+	require.Equal(t, http.StatusServiceUnavailable, w.Code, w.Body.String())
+	assert.Equal(t, "unavailable/", inferenceCode(t, w))
+	assert.NotContains(t, w.Body.String(), data[:40], "a refusal never echoes image data")
+	assert.Equal(t, 1, rt.calls(), "an image reached a text-only model")
+}
+
+// paddedPNG is a well-formed PNG of about n bytes: IHDR, one IDAT of zeros,
+// IEND. complete() walks an image's chunks to strip its metadata, so the
+// fixture has to be a real chunk structure, though not decodable pixels.
+func paddedPNG(n int) []byte {
+	chunk := func(out []byte, kind string, data []byte) []byte {
+		out = binary.BigEndian.AppendUint32(out, uint32(len(data)))
+		start := len(out)
+		out = append(append(out, kind...), data...)
+		return binary.BigEndian.AppendUint32(out, crc32.ChecksumIEEE(out[start:]))
+	}
+	out := []byte("\x89PNG\r\n\x1a\n")
+	out = chunk(out, "IHDR", []byte{0, 0, 0, 1, 0, 0, 0, 1, 8, 0, 0, 0, 0})
+	out = chunk(out, "IDAT", make([]byte, n))
+	return chunk(out, "IEND", nil)
 }
 
 func TestSettingsListsAndRevokesAIPermissions(t *testing.T) {

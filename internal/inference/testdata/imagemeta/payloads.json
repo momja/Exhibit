@@ -1,0 +1,1701 @@
+[
+ {
+  "name": "every image is stripped, however it is given",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": "Earlier question"
+    },
+    {
+     "role": "assistant",
+     "content": "Earlier answer"
+    },
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "text",
+       "text": "What is this?"
+      },
+      {
+       "type": "image",
+       "data": "$b64(jpeg-all-metadata.in.jpg)",
+       "mimeType": "image/jpeg"
+      },
+      {
+       "type": "image",
+       "data": "data:image/png;base64,$b64(png-all-metadata.in.png)"
+      },
+      {
+       "type": "image",
+       "data": "data:Image/WebP;BASE64,$b64(webp-extended-metadata.in.webp)",
+       "mimeType": " IMAGE/WEBP "
+      }
+     ]
+    }
+   ],
+   "system": "Read receipts.",
+   "maxTokens": 200
+  },
+  "images": [
+   {
+    "mimeType": "image/jpeg",
+    "data": "$b64(jpeg-all-metadata.out.jpg)"
+   },
+   {
+    "mimeType": "image/png",
+    "data": "$b64(png-all-metadata.out.png)"
+   },
+   {
+    "mimeType": "image/webp",
+    "data": "$b64(webp-extended-metadata.out.webp)"
+   }
+  ]
+ },
+ {
+  "name": "four images of exactly 4 MB in total",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "data": "$png(1048576)",
+       "mimeType": "image/png"
+      },
+      {
+       "type": "image",
+       "data": "$png(1048576)",
+       "mimeType": "image/png"
+      },
+      {
+       "type": "image",
+       "data": "$png(1048576)",
+       "mimeType": "image/png"
+      },
+      {
+       "type": "image",
+       "data": "$png(1048576)",
+       "mimeType": "image/png"
+      }
+     ]
+    }
+   ]
+  },
+  "images": [
+   {
+    "mimeType": "image/png",
+    "data": "$png(1048576)"
+   },
+   {
+    "mimeType": "image/png",
+    "data": "$png(1048576)"
+   },
+   {
+    "mimeType": "image/png",
+    "data": "$png(1048576)"
+   },
+   {
+    "mimeType": "image/png",
+    "data": "$png(1048576)"
+   }
+  ]
+ },
+ {
+  "name": "an image of exactly 2 MB",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "data": "$png(2097152)",
+       "mimeType": "image/png"
+      }
+     ]
+    }
+   ]
+  },
+  "images": [
+   {
+    "mimeType": "image/png",
+    "data": "$png(2097152)"
+   }
+  ]
+ },
+ {
+  "name": "the prompt form",
+  "payload": {
+   "prompt": "Hi"
+  },
+  "images": []
+ },
+ {
+  "name": "null where a field may be absent",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "text",
+       "text": "Hi",
+       "data": null,
+       "mimeType": null
+      }
+     ]
+    }
+   ],
+   "system": null,
+   "schema": null,
+   "maxTokens": null,
+   "prompt": null
+  },
+  "images": []
+ },
+ {
+  "name": "an image part's null text reads as absent",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "mimeType": "image/png",
+       "data": "$b64(png-all-metadata.in.png)",
+       "text": null
+      }
+     ]
+    }
+   ]
+  },
+  "images": [
+   {
+    "mimeType": "image/png",
+    "data": "$b64(png-all-metadata.out.png)"
+   }
+  ]
+ },
+ {
+  "name": "Go's whitespace is trimmed from a mimeType",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "data": "$b64(png-all-metadata.in.png)",
+       "mimeType": "\u0085\timage/png\u00a0\u3000"
+      }
+     ]
+    }
+   ]
+  },
+  "images": [
+   {
+    "mimeType": "image/png",
+    "data": "$b64(png-all-metadata.out.png)"
+   }
+  ]
+ },
+ {
+  "name": "U+FEFF is not whitespace in text",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": "\ufeff"
+    }
+   ]
+  },
+  "images": []
+ },
+ {
+  "name": "payload not an object",
+  "payload": [],
+  "error": "complete() takes { messages, system?, schema?, maxTokens? }."
+ },
+ {
+  "name": "payload null",
+  "payload": null,
+  "error": "complete() takes { messages, system?, schema?, maxTokens? }."
+ },
+ {
+  "name": "payload key in another case",
+  "payload": {
+   "Messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "data": "$b64(jpeg-all-metadata.in.jpg)",
+       "mimeType": "image/jpeg"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "complete() takes { messages, system?, schema?, maxTokens? }."
+ },
+ {
+  "name": "payload key duplicated in another case",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": "Hi"
+    }
+   ],
+   "MESSAGES": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "data": "$b64(jpeg-all-metadata.in.jpg)",
+       "mimeType": "image/jpeg"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "complete() takes { messages, system?, schema?, maxTokens? }."
+ },
+ {
+  "name": "payload key folded by Go",
+  "payload": {
+   "me\u017f\u017fages": [
+    {
+     "role": "user",
+     "content": "Hi"
+    }
+   ]
+  },
+  "error": "complete() takes { messages, system?, schema?, maxTokens? }."
+ },
+ {
+  "name": "payload unknown key",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": "Hi"
+    }
+   ],
+   "images": [
+    "$b64(jpeg-all-metadata.in.jpg)"
+   ]
+  },
+  "error": "complete() takes { messages, system?, schema?, maxTokens? }."
+ },
+ {
+  "name": "messages not a list",
+  "payload": {
+   "messages": {
+    "0": {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "data": "$b64(jpeg-all-metadata.in.jpg)",
+       "mimeType": "image/jpeg"
+      }
+     ]
+    }
+   }
+  },
+  "error": "complete() takes { messages, system?, schema?, maxTokens? }."
+ },
+ {
+  "name": "maxTokens not an integer",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": "Hi"
+    }
+   ],
+   "maxTokens": 1.5
+  },
+  "error": "complete() takes { messages, system?, schema?, maxTokens? }."
+ },
+ {
+  "name": "maxTokens past 64 bits",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": "Hi"
+    }
+   ],
+   "maxTokens": 1e+19
+  },
+  "error": "complete() takes { messages, system?, schema?, maxTokens? }."
+ },
+ {
+  "name": "system not text",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": "Hi"
+    }
+   ],
+   "system": 5
+  },
+  "error": "complete() takes { messages, system?, schema?, maxTokens? }."
+ },
+ {
+  "name": "prompt not text",
+  "payload": {
+   "prompt": [
+    "Hi"
+   ]
+  },
+  "error": "complete() takes { messages, system?, schema?, maxTokens? }."
+ },
+ {
+  "name": "message key in another case",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "Content": [
+      {
+       "type": "image",
+       "data": "$b64(jpeg-all-metadata.in.jpg)",
+       "mimeType": "image/jpeg"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "Each message is { role, content }."
+ },
+ {
+  "name": "message unknown key",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": "Hi",
+     "images": [
+      "$b64(jpeg-all-metadata.in.jpg)"
+     ]
+    }
+   ]
+  },
+  "error": "Each message is { role, content }."
+ },
+ {
+  "name": "message null",
+  "payload": {
+   "messages": [
+    null,
+    {
+     "role": "user",
+     "content": "Hi"
+    }
+   ]
+  },
+  "error": "Each message is { role, content }."
+ },
+ {
+  "name": "message role not text",
+  "payload": {
+   "messages": [
+    {
+     "role": 1,
+     "content": "Hi"
+    }
+   ]
+  },
+  "error": "Each message is { role, content }."
+ },
+ {
+  "name": "prompt and messages",
+  "payload": {
+   "prompt": "Hi",
+   "messages": [
+    {
+     "role": "user",
+     "content": "Hi"
+    }
+   ]
+  },
+  "error": "Pass either prompt or messages, not both."
+ },
+ {
+  "name": "no messages",
+  "payload": {
+   "messages": []
+  },
+  "error": "complete() needs between 1 and 40 messages."
+ },
+ {
+  "name": "too many messages",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    }
+   ]
+  },
+  "error": "complete() needs between 1 and 40 messages."
+ },
+ {
+  "name": "a role that is neither",
+  "payload": {
+   "messages": [
+    {
+     "role": "system",
+     "content": "Hi"
+    }
+   ]
+  },
+  "error": "Each message's role must be \"user\" or \"assistant\"."
+ },
+ {
+  "name": "a missing role",
+  "payload": {
+   "messages": [
+    {
+     "content": "Hi"
+    }
+   ]
+  },
+  "error": "Each message's role must be \"user\" or \"assistant\"."
+ },
+ {
+  "name": "the last message from the assistant",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "data": "$b64(png-all-metadata.in.png)",
+       "mimeType": "image/png"
+      }
+     ]
+    },
+    {
+     "role": "assistant",
+     "content": "Hi"
+    }
+   ]
+  },
+  "error": "The last message must be from the user."
+ },
+ {
+  "name": "blank text",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": " \n\u0085"
+    }
+   ]
+  },
+  "error": "A message's content must be non-empty text."
+ },
+ {
+  "name": "null content",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": null
+    }
+   ]
+  },
+  "error": "A message's content must be non-empty text."
+ },
+ {
+  "name": "blank prompt",
+  "payload": {
+   "prompt": "\u3000"
+  },
+  "error": "A message's content must be non-empty text."
+ },
+ {
+  "name": "missing content",
+  "payload": {
+   "messages": [
+    {
+     "role": "user"
+    }
+   ]
+  },
+  "error": "A message's content must be text, or a list of { type: 'text', text } and { type: 'image', mimeType, data } parts."
+ },
+ {
+  "name": "content a number",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": 5
+    }
+   ]
+  },
+  "error": "A message's content must be text, or a list of { type: 'text', text } and { type: 'image', mimeType, data } parts."
+ },
+ {
+  "name": "content an object",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": {
+      "type": "image",
+      "data": "$b64(jpeg-all-metadata.in.jpg)",
+      "mimeType": "image/jpeg"
+     }
+    }
+   ]
+  },
+  "error": "A message's content must be text, or a list of { type: 'text', text } and { type: 'image', mimeType, data } parts."
+ },
+ {
+  "name": "a part that is not an object",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      "Hi"
+     ]
+    }
+   ]
+  },
+  "error": "A message's content must be text, or a list of { type: 'text', text } and { type: 'image', mimeType, data } parts."
+ },
+ {
+  "name": "a part key in another case",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "mimeType": "image/jpeg",
+       "Data": "$b64(jpeg-all-metadata.in.jpg)"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "A message's content must be text, or a list of { type: 'text', text } and { type: 'image', mimeType, data } parts."
+ },
+ {
+  "name": "a part key duplicated in another case",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "text",
+       "text": "Hi",
+       "DATA": "$b64(jpeg-all-metadata.in.jpg)"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "A message's content must be text, or a list of { type: 'text', text } and { type: 'image', mimeType, data } parts."
+ },
+ {
+  "name": "a part key lowercased",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "mimetype": "image/jpeg",
+       "data": "$b64(jpeg-all-metadata.in.jpg)"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "A message's content must be text, or a list of { type: 'text', text } and { type: 'image', mimeType, data } parts."
+ },
+ {
+  "name": "a part unknown key",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "mimeType": "image/jpeg",
+       "data": "$b64(jpeg-all-metadata.in.jpg)",
+       "url": "x"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "A message's content must be text, or a list of { type: 'text', text } and { type: 'image', mimeType, data } parts."
+ },
+ {
+  "name": "a part type not text",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": 1,
+       "data": "$b64(jpeg-all-metadata.in.jpg)"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "A message's content must be text, or a list of { type: 'text', text } and { type: 'image', mimeType, data } parts."
+ },
+ {
+  "name": "a part data not text",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "mimeType": "image/png",
+       "data": [
+        "$b64(png-all-metadata.in.png)"
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "error": "A message's content must be text, or a list of { type: 'text', text } and { type: 'image', mimeType, data } parts."
+ },
+ {
+  "name": "a later part's shape before an earlier part's rule",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "audio"
+      },
+      {
+       "type": "image",
+       "Data": "$b64(jpeg-all-metadata.in.jpg)"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "A message's content must be text, or a list of { type: 'text', text } and { type: 'image', mimeType, data } parts."
+ },
+ {
+  "name": "no parts",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": []
+    }
+   ]
+  },
+  "error": "A message's content list needs between 1 and 16 parts."
+ },
+ {
+  "name": "too many parts",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "text",
+       "text": "Hi"
+      },
+      {
+       "type": "text",
+       "text": "Hi"
+      },
+      {
+       "type": "text",
+       "text": "Hi"
+      },
+      {
+       "type": "text",
+       "text": "Hi"
+      },
+      {
+       "type": "text",
+       "text": "Hi"
+      },
+      {
+       "type": "text",
+       "text": "Hi"
+      },
+      {
+       "type": "text",
+       "text": "Hi"
+      },
+      {
+       "type": "text",
+       "text": "Hi"
+      },
+      {
+       "type": "text",
+       "text": "Hi"
+      },
+      {
+       "type": "text",
+       "text": "Hi"
+      },
+      {
+       "type": "text",
+       "text": "Hi"
+      },
+      {
+       "type": "text",
+       "text": "Hi"
+      },
+      {
+       "type": "text",
+       "text": "Hi"
+      },
+      {
+       "type": "text",
+       "text": "Hi"
+      },
+      {
+       "type": "text",
+       "text": "Hi"
+      },
+      {
+       "type": "text",
+       "text": "Hi"
+      },
+      {
+       "type": "image",
+       "data": "$b64(png-all-metadata.in.png)",
+       "mimeType": "image/png"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "A message's content list needs between 1 and 16 parts."
+ },
+ {
+  "name": "a text part carrying data",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "text",
+       "text": "Hi",
+       "data": "$b64(jpeg-all-metadata.in.jpg)"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "A text part is { type: 'text', text } with non-empty text."
+ },
+ {
+  "name": "a text part carrying a mimeType",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "text",
+       "text": "Hi",
+       "mimeType": "image/jpeg"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "A text part is { type: 'text', text } with non-empty text."
+ },
+ {
+  "name": "a blank text part",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "text",
+       "text": "\t"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "A text part is { type: 'text', text } with non-empty text."
+ },
+ {
+  "name": "an assistant image",
+  "payload": {
+   "messages": [
+    {
+     "role": "assistant",
+     "content": [
+      {
+       "type": "image",
+       "data": "$b64(png-all-metadata.in.png)",
+       "mimeType": "image/png"
+      }
+     ]
+    },
+    {
+     "role": "user",
+     "content": "Hi"
+    }
+   ]
+  },
+  "error": "Only user messages may carry images."
+ },
+ {
+  "name": "an image with text",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "mimeType": "image/png",
+       "data": "$b64(png-all-metadata.in.png)",
+       "text": "Hi"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "An image part is { type: 'image', mimeType, data } with base64 data."
+ },
+ {
+  "name": "an image without data",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "mimeType": "image/png"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "An image part is { type: 'image', mimeType, data } with base64 data."
+ },
+ {
+  "name": "a part of another type",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "audio",
+       "mimeType": "image/jpeg",
+       "data": "$b64(jpeg-all-metadata.in.jpg)"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "A content part's type must be \"text\" or \"image\"."
+ },
+ {
+  "name": "a part with no type",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "data": "$b64(jpeg-all-metadata.in.jpg)"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "A content part's type must be \"text\" or \"image\"."
+ },
+ {
+  "name": "five images",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "data": "$png(100)",
+       "mimeType": "image/png"
+      },
+      {
+       "type": "image",
+       "data": "$png(100)",
+       "mimeType": "image/png"
+      },
+      {
+       "type": "image",
+       "data": "$png(100)",
+       "mimeType": "image/png"
+      },
+      {
+       "type": "image",
+       "data": "$png(100)",
+       "mimeType": "image/png"
+      },
+      {
+       "type": "image",
+       "data": "R0lGODlhAQABAAAAACw=",
+       "mimeType": "image/gif"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "complete() takes at most 4 images."
+ },
+ {
+  "name": "over 4 MB in total, counted as given",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "data": "$png(1500000)",
+       "mimeType": "image/png"
+      },
+      {
+       "type": "image",
+       "data": "$png(1500000)",
+       "mimeType": "image/png"
+      },
+      {
+       "type": "image",
+       "data": "$png(1500000)",
+       "mimeType": "image/png"
+      },
+      {
+       "type": "image",
+       "data": "$b64(jpeg-truncated-scan.in.jpg)",
+       "mimeType": "image/jpeg"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "complete() images are limited to 4 MB in total. Downscale them in a canvas before sending."
+ },
+ {
+  "name": "total counted before stripping",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "data": "$png(2097152)",
+       "mimeType": "image/png"
+      },
+      {
+       "type": "image",
+       "data": "$png(2096152)",
+       "mimeType": "image/png"
+      },
+      {
+       "type": "image",
+       "data": "$b64(jpeg-all-metadata.in.jpg)",
+       "mimeType": "image/jpeg"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "complete() images are limited to 4 MB in total. Downscale them in a canvas before sending."
+ },
+ {
+  "name": "the same total with the JPEG already stripped",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "data": "$png(2097152)",
+       "mimeType": "image/png"
+      },
+      {
+       "type": "image",
+       "data": "$png(2096152)",
+       "mimeType": "image/png"
+      },
+      {
+       "type": "image",
+       "data": "$b64(jpeg-all-metadata.out.jpg)",
+       "mimeType": "image/jpeg"
+      }
+     ]
+    }
+   ]
+  },
+  "images": [
+   {
+    "mimeType": "image/png",
+    "data": "$png(2097152)"
+   },
+   {
+    "mimeType": "image/png",
+    "data": "$png(2096152)"
+   },
+   {
+    "mimeType": "image/jpeg",
+    "data": "$b64(jpeg-all-metadata.out.jpg)"
+   }
+  ]
+ },
+ {
+  "name": "a data: URL that is not base64",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "data": "data:image/png,$b64(png-all-metadata.in.png)",
+       "mimeType": "image/png"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "An image's data must be base64, or a base64 data: URL."
+ },
+ {
+  "name": "a data: URL with no comma",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "data": "data:image/png;base64",
+       "mimeType": "image/png"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "An image's data must be base64, or a base64 data: URL."
+ },
+ {
+  "name": "a data: URL of another type",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "data": "data:image/png;base64,$b64(png-all-metadata.in.png)",
+       "mimeType": "image/jpeg"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "An image's mimeType does not match its data: URL."
+ },
+ {
+  "name": "GIF",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "data": "R0lGODlhAQABAAAAACw=",
+       "mimeType": "image/gif"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "Images must be PNG, JPEG or WebP (mimeType image/png, image/jpeg or image/webp)."
+ },
+ {
+  "name": "no type at all",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "data": "$b64(png-all-metadata.in.png)"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "Images must be PNG, JPEG or WebP (mimeType image/png, image/jpeg or image/webp)."
+ },
+ {
+  "name": "a type Go does not fold",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "data": "$b64(png-all-metadata.in.png)",
+       "mimeType": "\u0130MAGE/PNG"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "Images must be PNG, JPEG or WebP (mimeType image/png, image/jpeg or image/webp)."
+ },
+ {
+  "name": "U+FEFF is not trimmed from a mimeType",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "data": "$b64(png-all-metadata.in.png)",
+       "mimeType": "\ufeffimage/png"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "Images must be PNG, JPEG or WebP (mimeType image/png, image/jpeg or image/webp)."
+ },
+ {
+  "name": "a data: URL type that is not accepted",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "data": "data:image/gif;base64,R0lGODlhAQABAAAAACw="
+      }
+     ]
+    }
+   ]
+  },
+  "error": "Images must be PNG, JPEG or WebP (mimeType image/png, image/jpeg or image/webp)."
+ },
+ {
+  "name": "over 2 MB",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "data": "$png(2097153)",
+       "mimeType": "image/png"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "Each image is limited to 2 MB. Downscale it in a canvas before sending."
+ },
+ {
+  "name": "over 2 MB by its length alone",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "data": "$bang(2796210)",
+       "mimeType": "image/png"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "Each image is limited to 2 MB. Downscale it in a canvas before sending."
+ },
+ {
+  "name": "not base64",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "data": "!!not base64!!",
+       "mimeType": "image/png"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "An image's data must be non-empty base64."
+ },
+ {
+  "name": "unpadded base64",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "data": "iVBORw0KGgo",
+       "mimeType": "image/png"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "An image's data must be non-empty base64."
+ },
+ {
+  "name": "empty data",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "data": "",
+       "mimeType": "image/png"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "An image's data must be non-empty base64."
+ },
+ {
+  "name": "an empty data: URL",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "data": "data:image/png;base64,",
+       "mimeType": "image/png"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "An image's data must be non-empty base64."
+ },
+ {
+  "name": "non-ASCII data",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "data": "iVBORw0KGgo\u00e9",
+       "mimeType": "image/png"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "An image's data must be non-empty base64."
+ },
+ {
+  "name": "mislabelled",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "data": "$b64(png-all-metadata.in.png)",
+       "mimeType": "image/jpeg"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "An image's data is not the image/jpeg its mimeType says."
+ },
+ {
+  "name": "a WebP label on a JPEG",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "data": "$b64(jpeg-all-metadata.in.jpg)",
+       "mimeType": "image/webp"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "An image's data is not the image/webp its mimeType says."
+ },
+ {
+  "name": "an APNG",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "data": "$b64(png-apng.in.png)",
+       "mimeType": "image/png"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "Animated images are not supported. Send a still image."
+ },
+ {
+  "name": "an animated WebP",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "data": "$b64(webp-anim.in.webp)",
+       "mimeType": "image/webp"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "Animated images are not supported. Send a still image."
+ },
+ {
+  "name": "a truncated JPEG",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "data": "$b64(jpeg-truncated-scan.in.jpg)",
+       "mimeType": "image/jpeg"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "An image's data is not a well-formed image/jpeg file."
+ },
+ {
+  "name": "a PNG without IDAT",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "data": "$b64(png-no-idat.in.png)",
+       "mimeType": "image/png"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "An image's data is not a well-formed image/png file."
+ },
+ {
+  "name": "a WebP without an image",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "data": "$b64(webp-no-image.in.webp)",
+       "mimeType": "image/webp"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "An image's data is not a well-formed image/webp file."
+ },
+ {
+  "name": "the first refusal wins: a role before an image",
+  "payload": {
+   "messages": [
+    {
+     "role": "robot",
+     "content": [
+      {
+       "type": "image",
+       "data": "x",
+       "mimeType": "image/gif"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "Each message's role must be \"user\" or \"assistant\"."
+ },
+ {
+  "name": "the first refusal wins: the count before the bytes",
+  "payload": {
+   "messages": [
+    {
+     "role": "user",
+     "content": [
+      {
+       "type": "image",
+       "data": "$png(100)",
+       "mimeType": "image/png"
+      },
+      {
+       "type": "image",
+       "data": "$png(100)",
+       "mimeType": "image/png"
+      },
+      {
+       "type": "image",
+       "data": "$png(100)",
+       "mimeType": "image/png"
+      },
+      {
+       "type": "image",
+       "data": "$png(100)",
+       "mimeType": "image/png"
+      },
+      {
+       "type": "image",
+       "data": "!!",
+       "mimeType": "image/png"
+      }
+     ]
+    }
+   ]
+  },
+  "error": "complete() takes at most 4 images."
+ }
+]

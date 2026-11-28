@@ -256,7 +256,7 @@ func main() {
 			MaxRequestBodyBytes: maxBodyBytes,
 			// The prompt teaches window.exhibit.ai only when the instance
 			// offers it, and only the kinds it offers (Exh-15tf).
-			InferenceKinds: inferenceKindNames(inferenceService.InstanceKinds()),
+			InferenceKinds: inferenceGuidanceNames(context.Background(), inferenceService),
 		}, st)
 		if err != nil {
 			fatal("init agent manager", err)

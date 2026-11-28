@@ -252,9 +252,11 @@ func (ro *Router) setInferenceConsent(w http.ResponseWriter, r *http.Request) {
 // available() and to choose a prompt. It never names a provider or model.
 type inferencePageState struct {
 	Enabled bool `json:"enabled"`
-	// Complete and Decide are the kinds this viewer could use.
+	// Complete and Decide are the kinds this viewer could use; Images is
+	// whether complete() would accept image parts (Exh-v81w).
 	Complete bool `json:"complete"`
 	Decide   bool `json:"decide"`
+	Images   bool `json:"images"`
 	// Payer is "platform" or "own_key"; Reason explains no kinds.
 	Payer  string `json:"payer,omitempty"`
 	Reason string `json:"reason,omitempty"`
@@ -273,7 +275,7 @@ func (ro *Router) inferenceStateFor(ctx context.Context, a *store.Artifact, view
 		return inferencePageState{}
 	}
 	av := ro.cfg.Inference.Availability(ctx, viewer)
-	st := inferencePageState{Enabled: true, Complete: av.Complete, Decide: av.Decide, Payer: av.Payer, Reason: av.Reason,
+	st := inferencePageState{Enabled: true, Complete: av.Complete, Decide: av.Decide, Images: av.Images, Payer: av.Payer, Reason: av.Reason,
 		Owner: a.OwnerID == viewer, Approved: a.InferenceApproved}
 	if st.Owner {
 		st.Consented = a.InferenceApproved

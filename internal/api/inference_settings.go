@@ -26,6 +26,7 @@ type aiSettingsView struct {
 	Reason   string
 	Complete bool
 	Decide   bool
+	Images   bool
 	// Allowance is set in platform mode.
 	Allowance *aiAllowanceView
 	Usage     []aiUsageRow
@@ -131,7 +132,7 @@ func (ro *Router) aiSettings(r *http.Request) (*aiSettingsView, error) {
 	}
 	since := ro.cfg.Inference.MonthStart()
 	view := &aiSettingsView{Payer: av.Payer, Reason: av.Reason, Complete: av.Complete, Decide: av.Decide,
-		MonthName: since.Format("January"), Permissions: perms}
+		Images: av.Images, MonthName: since.Format("January"), Permissions: perms}
 	usage, err := ro.cfg.Store.InferenceUsageByArtifact(ctx, viewer, since)
 	if err != nil {
 		return nil, err

@@ -1,12 +1,17 @@
 package api
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -162,7 +167,7 @@ window.exhibit.ai.available().then(function (a) {
 		chromedp.Navigate(app.URL+"/artifacts/"+id),
 		chromedp.Poll[chromedp.Void](`document.getElementById('ai-modal')?.open && document.getElementById('ai-modal').dataset.aiMode === 'owner'`),
 	))
-	assert.Equal(t, `{"complete":true,"decide":true}`, getState(t, ro, id)["available"],
+	assert.Equal(t, `{"complete":true,"decide":true,"images":true}`, getState(t, ro, id)["available"],
 		"a call made before the host listened still settles, with the real answer")
 	assert.Zero(t, rt.calls(), "nothing runs before the owner allows it")
 
@@ -216,5 +221,223 @@ ask().then(function (first) {
 	open, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`document.getElementById('ai-modal').open`))
 	require.NoError(t, err)
 	assert.False(t, open, "the second call does not raise the dialog again")
+	assert.Zero(t, rt.calls())
+}
+
+// An image from a canvas crosses the real bridge (Exh-v81w): the frame's
+// structured clone, the host's request and the endpoint, at a size well past
+// what complete() took before images, and arrives as an image part.
+func TestInferenceBridgeCarriesACanvasImageBrowser(t *testing.T) {
+	browser, err := chromium.New(chromiumtest.Start(t))
+	require.NoError(t, err)
+	ctx, cancel, err := browser.Tab(context.Background())
+	require.NoError(t, err)
+	defer cancel()
+	ctx, timeout := context.WithTimeout(ctx, 60*time.Second)
+	defer timeout()
+
+	ro := newTestRouter(t)
+	rt := withPlatformInference(t, ro)
+	body := `<!doctype html><html><head><script>
+var canvas = document.createElement('canvas');
+canvas.width = 900; canvas.height = 900;
+var g = canvas.getContext('2d'), px = g.createImageData(900, 900);
+for (var i = 0; i < px.data.length; i++) px.data[i] = (i * 2654435761) % 256; // noise compresses badly
+g.putImageData(px, 0, 0);
+var dataURL = canvas.toDataURL('image/jpeg', 0.9);
+window.exhibit.ai.available().then(function (a) {
+  if (!a.images) throw Object.assign(new Error('no images'), { code: 'no_images' });
+  return window.exhibit.ai.complete({ messages: [{ role: 'user', content: [
+    { type: 'text', text: 'Describe this.' },
+    { type: 'image', mimeType: 'image/jpeg', data: dataURL },
+  ] }] });
+}).then(function (text) { localStorage.setItem('answer', text); },
+  function (e) { localStorage.setItem('answer', 'error:' + e.code); });
+</script></head><body><h1>Image tool</h1></body></html>`
+	id := createArtifact(t, ro, map[string]any{"title": "Image tool", "body": body})
+	require.NoError(t, ro.cfg.Store.UpdateArtifact(t.Context(), 1, id, map[string]any{"inference_approved": true}))
+
+	app := serveInferenceBrowser(t, ro, 0)
+	require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(app.URL+"/artifacts/"+id)))
+	require.Eventually(t, func() bool { return getState(t, ro, id)["answer"] != "" }, 20*time.Second, 50*time.Millisecond)
+	assert.Equal(t, "a summary", getState(t, ro, id)["answer"])
+	require.Equal(t, 1, rt.calls())
+	job := string(rt.jobs[0].Context)
+	assert.Contains(t, job, `"mimeType":"image/jpeg"`)
+	assert.Greater(t, len(job), 256<<10, "the canvas image should exceed the old 256 KB envelope")
+}
+
+// The host page strips an image's metadata before the request leaves the
+// browser (Exh-v81w): a canvas JPEG with an EXIF segment spliced in arrives at
+// the endpoint, and at the runtime, without it. Every call the server would
+// refuse for its images or their keys (a JPEG cut short, a GIF, a mislabelled
+// file, a key in another case, too many bytes in total as given) is settled
+// by the host as invalid_request in the server's words, and never sent.
+func TestInferenceHostStripsImageMetadataBrowser(t *testing.T) {
+	browser, err := chromium.New(chromiumtest.Start(t))
+	require.NoError(t, err)
+	ctx, cancel, err := browser.Tab(context.Background())
+	require.NoError(t, err)
+	defer cancel()
+	ctx, timeout := context.WithTimeout(ctx, 60*time.Second)
+	defer timeout()
+
+	const marker = "GPS-MARKER-v81w"
+	ro := newTestRouter(t)
+	rt := withPlatformInference(t, ro)
+	body := `<!doctype html><html><head><script>
+var canvas = document.createElement('canvas');
+canvas.width = 64; canvas.height = 64;
+canvas.getContext('2d').fillRect(8, 8, 32, 32);
+var jpeg = atob(canvas.toDataURL('image/jpeg', 0.9).split(',')[1]);
+var exif = 'Exif\0\0MM\0*GPSLatitude ` + marker + `';
+var app1 = '\xff\xe1' + String.fromCharCode((exif.length + 2) >> 8, (exif.length + 2) & 255) + exif;
+var tagged = btoa(jpeg.slice(0, 2) + app1 + jpeg.slice(2));
+function send(data) {
+  return window.exhibit.ai.complete({ messages: [{ role: 'user', content: [
+    { type: 'text', text: 'Describe this.' },
+    { type: 'image', mimeType: 'image/jpeg', data: data },
+  ] }] }).then(function (text) { return text; }, function (e) { return e.code + ': ' + e.message; });
+}
+function settle(payload) {
+  return window.exhibit.ai.complete(payload).then(function () { return 'sent'; }, function (e) { return e.code + ': ' + e.message; });
+}
+// A well-formed PNG of n bytes: IHDR, one IDAT of zeros, IEND.
+function png(n) {
+  var u32 = function (v) { return String.fromCharCode(v >>> 24, (v >>> 16) & 255, (v >>> 8) & 255, v & 255); };
+  return btoa('\x89PNG\r\n\x1a\n' + u32(13) + 'IHDR' + '\0\0\0\x01\0\0\0\x01\x08\0\0\0\0' + u32(0) +
+    u32(n - 57) + 'IDAT' + '\0'.repeat(n - 57) + u32(0) + u32(0) + 'IEND' + u32(0));
+}
+var image = function (mimeType, data) { return { type: 'image', mimeType: mimeType, data: data }; };
+var user = function (parts) { return { messages: [{ role: 'user', content: parts }] }; };
+send(tagged).then(function (answer) {
+  localStorage.setItem('answer', answer);
+  return send(btoa(jpeg.slice(0, 2) + app1 + jpeg.slice(2, 40)));
+}).then(function (broken) {
+  localStorage.setItem('broken', broken);
+  return Promise.all([
+    settle(user([image('image/gif', 'R0lGODlhAQABAAAAACw=')])),
+    settle(user([image('image/png', tagged)])),
+    settle({ Messages: [{ role: 'user', content: [image('image/jpeg', tagged)] }] }),
+    settle(user([{ type: 'image', mimeType: 'image/jpeg', Data: tagged }])),
+    settle(user([image('image/png', png(1500000)), image('image/png', png(1500000)), image('image/png', png(1500000))])),
+  ]);
+}).then(function (refused) { localStorage.setItem('refused', JSON.stringify(refused)); });
+</script></head><body><h1>Photo tool</h1></body></html>`
+	id := createArtifact(t, ro, map[string]any{"title": "Photo tool", "body": body})
+	require.NoError(t, ro.cfg.Store.UpdateArtifact(t.Context(), 1, id, map[string]any{"inference_approved": true}))
+
+	// What the host page actually sends, before the server's own strip.
+	var mu sync.Mutex
+	var sent []string
+	appMux, renderMux := http.NewServeMux(), http.NewServeMux()
+	app, frame := httptest.NewServer(appMux), httptest.NewServer(renderMux)
+	t.Cleanup(app.Close)
+	t.Cleanup(frame.Close)
+	ro.cfg.AppOrigin, ro.cfg.RenderOrigin = app.URL, frame.URL
+	renderMux.Handle("/", ro.RenderHandler())
+	appMux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/inference") {
+			raw, _ := io.ReadAll(r.Body)
+			mu.Lock()
+			sent = append(sent, string(raw))
+			mu.Unlock()
+			r.Body = io.NopCloser(bytes.NewReader(raw))
+		}
+		r.Header.Set("Authorization", authHeader())
+		ro.ServeHTTP(w, r)
+	}))
+
+	require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(app.URL+"/artifacts/"+id)))
+	require.Eventually(t, func() bool { return getState(t, ro, id)["refused"] != "" }, 20*time.Second, 50*time.Millisecond)
+	assert.Equal(t, "a summary", getState(t, ro, id)["answer"])
+	assert.Equal(t, "invalid_request: An image's data is not a well-formed image/jpeg file.", getState(t, ro, id)["broken"])
+	var refused []string
+	require.NoError(t, json.Unmarshal([]byte(getState(t, ro, id)["refused"]), &refused))
+	assert.Equal(t, []string{
+		"invalid_request: Images must be PNG, JPEG or WebP (mimeType image/png, image/jpeg or image/webp).",
+		"invalid_request: An image's data is not the image/png its mimeType says.",
+		"invalid_request: complete() takes { messages, system?, schema?, maxTokens? }.",
+		"invalid_request: A message's content must be text, or a list of { type: 'text', text } and { type: 'image', mimeType, data } parts.",
+		"invalid_request: complete() images are limited to 4 MB in total. Downscale them in a canvas before sending.",
+	}, refused)
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.Len(t, sent, 1, "only the well-formed call left the browser")
+	// The image bytes in a JSON document, wherever the parts list sits.
+	imageBytes := func(doc string) []byte {
+		var parts []struct{ Type, Data string }
+		var sentBody struct {
+			Payload struct {
+				Messages []struct{ Content json.RawMessage } `json:"messages"`
+			} `json:"payload"`
+			Messages []struct{ Content json.RawMessage } `json:"messages"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(doc), &sentBody))
+		msgs := append(sentBody.Payload.Messages, sentBody.Messages...)
+		require.Len(t, msgs, 1)
+		require.NoError(t, json.Unmarshal(msgs[0].Content, &parts))
+		require.Len(t, parts, 2)
+		require.Equal(t, "image", parts[1].Type)
+		raw, err := base64.StdEncoding.DecodeString(parts[1].Data)
+		require.NoError(t, err, "the host sends plain base64")
+		return raw
+	}
+	fromHost := imageBytes(sent[0])
+	assert.True(t, bytes.HasPrefix(fromHost, []byte{0xFF, 0xD8, 0xFF}))
+	assert.NotContains(t, string(fromHost), marker, "the host sent the EXIF segment")
+	assert.NotContains(t, string(fromHost), "Exif\x00\x00")
+	require.Equal(t, 1, rt.calls())
+	assert.Equal(t, fromHost, imageBytes(string(rt.jobs[0].Context)), "the server's strip finds nothing left to remove")
+	assert.Contains(t, string(rt.jobs[0].Context), `"mimeType":"image/jpeg"`)
+}
+
+// A request over the instance's body limit is refused by the body-limit
+// middleware before the inference handler, in that middleware's own shape.
+// The artifact gets invalid_request with a sentence it can act on, not a
+// provider_error (Exh-v81w review).
+func TestInferenceBridgeReportsAnOversizedRequestBrowser(t *testing.T) {
+	browser, err := chromium.New(chromiumtest.Start(t))
+	require.NoError(t, err)
+	ctx, cancel, err := browser.Tab(context.Background())
+	require.NoError(t, err)
+	defer cancel()
+	ctx, timeout := context.WithTimeout(ctx, 60*time.Second)
+	defer timeout()
+
+	ro := newTestRouter(t)
+	rt := withPlatformInference(t, ro)
+	body := `<!doctype html><html><head><script>
+var canvas = document.createElement('canvas');
+canvas.width = 900; canvas.height = 900;
+var g = canvas.getContext('2d'), px = g.createImageData(900, 900);
+for (var i = 0; i < px.data.length; i++) px.data[i] = (i * 2654435761) % 256;
+g.putImageData(px, 0, 0);
+window.exhibit.ai.complete({ messages: [{ role: 'user', content: [
+  { type: 'text', text: 'Describe this.' },
+  { type: 'image', mimeType: 'image/jpeg', data: canvas.toDataURL('image/jpeg', 0.9) },
+] }] }).then(function () { localStorage.setItem('answer', 'ok'); },
+  function (e) { localStorage.setItem('answer', e.code + ': ' + e.message); });
+</script></head><body><h1>Image tool</h1></body></html>`
+	id := createArtifact(t, ro, map[string]any{"title": "Image tool", "body": body})
+	require.NoError(t, ro.cfg.Store.UpdateArtifact(t.Context(), 1, id, map[string]any{"inference_approved": true}))
+
+	// The real middleware, with a limit the image overruns.
+	limited := limitRequestBody(256 << 10)(ro)
+	appMux, renderMux := http.NewServeMux(), http.NewServeMux()
+	app, frame := httptest.NewServer(appMux), httptest.NewServer(renderMux)
+	t.Cleanup(app.Close)
+	t.Cleanup(frame.Close)
+	ro.cfg.AppOrigin, ro.cfg.RenderOrigin = app.URL, frame.URL
+	renderMux.Handle("/", ro.RenderHandler())
+	appMux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Header.Set("Authorization", authHeader())
+		limited.ServeHTTP(w, r)
+	}))
+
+	require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(app.URL+"/artifacts/"+id)))
+	require.Eventually(t, func() bool { return getState(t, ro, id)["answer"] != "" }, 20*time.Second, 50*time.Millisecond)
+	assert.Equal(t, "invalid_request: This AI request is too large for this Exhibit. Send less with it, such as fewer or smaller images.", getState(t, ro, id)["answer"])
 	assert.Zero(t, rt.calls())
 }

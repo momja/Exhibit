@@ -1,0 +1,242 @@
+[
+  {
+    "name": "jpeg-plain",
+    "mimeType": "image/jpeg",
+    "input": "jpeg-plain.in.jpg",
+    "output": "jpeg-plain.out.jpg"
+  },
+  {
+    "name": "jpeg-all-metadata",
+    "mimeType": "image/jpeg",
+    "input": "jpeg-all-metadata.in.jpg",
+    "output": "jpeg-all-metadata.out.jpg"
+  },
+  {
+    "name": "jpeg-fill-before-marker",
+    "mimeType": "image/jpeg",
+    "input": "jpeg-fill-before-marker.in.jpg",
+    "output": "jpeg-fill-before-marker.out.jpg"
+  },
+  {
+    "name": "jpeg-progressive",
+    "mimeType": "image/jpeg",
+    "input": "jpeg-progressive.in.jpg",
+    "output": "jpeg-progressive.out.jpg"
+  },
+  {
+    "name": "jpeg-restart-markers",
+    "mimeType": "image/jpeg",
+    "input": "jpeg-restart-markers.in.jpg",
+    "output": "jpeg-restart-markers.out.jpg"
+  },
+  {
+    "name": "jpeg-adobe-cmyk",
+    "mimeType": "image/jpeg",
+    "input": "jpeg-adobe-cmyk.in.jpg",
+    "output": "jpeg-adobe-cmyk.out.jpg"
+  },
+  {
+    "name": "jpeg-trailer",
+    "mimeType": "image/jpeg",
+    "input": "jpeg-trailer.in.jpg",
+    "output": "jpeg-trailer.out.jpg"
+  },
+  {
+    "name": "jpeg-truncated-segment",
+    "mimeType": "image/jpeg",
+    "input": "jpeg-truncated-segment.in.jpg",
+    "refused": "malformed"
+  },
+  {
+    "name": "jpeg-truncated-scan",
+    "mimeType": "image/jpeg",
+    "input": "jpeg-truncated-scan.in.jpg",
+    "refused": "malformed"
+  },
+  {
+    "name": "jpeg-no-eoi",
+    "mimeType": "image/jpeg",
+    "input": "jpeg-no-eoi.in.jpg",
+    "refused": "malformed"
+  },
+  {
+    "name": "jpeg-no-frame",
+    "mimeType": "image/jpeg",
+    "input": "jpeg-no-frame.in.jpg",
+    "refused": "malformed"
+  },
+  {
+    "name": "jpeg-no-scan",
+    "mimeType": "image/jpeg",
+    "input": "jpeg-no-scan.in.jpg",
+    "refused": "malformed"
+  },
+  {
+    "name": "jpeg-length-past-end",
+    "mimeType": "image/jpeg",
+    "input": "jpeg-length-past-end.in.jpg",
+    "refused": "malformed"
+  },
+  {
+    "name": "jpeg-junk-between-segments",
+    "mimeType": "image/jpeg",
+    "input": "jpeg-junk-between-segments.in.jpg",
+    "refused": "malformed"
+  },
+  {
+    "name": "png-plain",
+    "mimeType": "image/png",
+    "input": "png-plain.in.png",
+    "output": "png-plain.out.png"
+  },
+  {
+    "name": "png-all-metadata",
+    "mimeType": "image/png",
+    "input": "png-all-metadata.in.png",
+    "output": "png-all-metadata.out.png"
+  },
+  {
+    "name": "png-colour-chunks-kept",
+    "mimeType": "image/png",
+    "input": "png-colour-chunks-kept.in.png",
+    "output": "png-colour-chunks-kept.out.png"
+  },
+  {
+    "name": "png-apng",
+    "mimeType": "image/png",
+    "input": "png-apng.in.png",
+    "refused": "animated"
+  },
+  {
+    "name": "png-apng-fdat-only",
+    "mimeType": "image/png",
+    "input": "png-apng-fdat-only.in.png",
+    "refused": "animated"
+  },
+  {
+    "name": "png-iend-not-empty",
+    "mimeType": "image/png",
+    "input": "png-iend-not-empty.in.png",
+    "refused": "malformed"
+  },
+  {
+    "name": "png-no-idat",
+    "mimeType": "image/png",
+    "input": "png-no-idat.in.png",
+    "refused": "malformed"
+  },
+  {
+    "name": "png-ihdr-wrong-length",
+    "mimeType": "image/png",
+    "input": "png-ihdr-wrong-length.in.png",
+    "refused": "malformed"
+  },
+  {
+    "name": "png-ihdr-not-first",
+    "mimeType": "image/png",
+    "input": "png-ihdr-not-first.in.png",
+    "refused": "malformed"
+  },
+  {
+    "name": "png-no-iend",
+    "mimeType": "image/png",
+    "input": "png-no-iend.in.png",
+    "refused": "malformed"
+  },
+  {
+    "name": "png-truncated",
+    "mimeType": "image/png",
+    "input": "png-truncated.in.png",
+    "refused": "malformed"
+  },
+  {
+    "name": "png-length-past-end",
+    "mimeType": "image/png",
+    "input": "png-length-past-end.in.png",
+    "refused": "malformed"
+  },
+  {
+    "name": "webp-simple-lossy",
+    "mimeType": "image/webp",
+    "input": "webp-simple-lossy.in.webp",
+    "output": "webp-simple-lossy.out.webp"
+  },
+  {
+    "name": "webp-simple-lossless",
+    "mimeType": "image/webp",
+    "input": "webp-simple-lossless.in.webp",
+    "output": "webp-simple-lossless.out.webp"
+  },
+  {
+    "name": "webp-simple-trailer",
+    "mimeType": "image/webp",
+    "input": "webp-simple-trailer.in.webp",
+    "output": "webp-simple-trailer.out.webp"
+  },
+  {
+    "name": "webp-extended-metadata",
+    "mimeType": "image/webp",
+    "input": "webp-extended-metadata.in.webp",
+    "output": "webp-extended-metadata.out.webp"
+  },
+  {
+    "name": "webp-odd-chunk-padded",
+    "mimeType": "image/webp",
+    "input": "webp-odd-chunk-padded.in.webp",
+    "output": "webp-odd-chunk-padded.out.webp"
+  },
+  {
+    "name": "webp-odd-chunk-unpadded",
+    "mimeType": "image/webp",
+    "input": "webp-odd-chunk-unpadded.in.webp",
+    "refused": "malformed"
+  },
+  {
+    "name": "webp-anim",
+    "mimeType": "image/webp",
+    "input": "webp-anim.in.webp",
+    "refused": "animated"
+  },
+  {
+    "name": "webp-anim-flag-only",
+    "mimeType": "image/webp",
+    "input": "webp-anim-flag-only.in.webp",
+    "refused": "animated"
+  },
+  {
+    "name": "webp-anmf-without-flag",
+    "mimeType": "image/webp",
+    "input": "webp-anmf-without-flag.in.webp",
+    "refused": "animated"
+  },
+  {
+    "name": "webp-no-image",
+    "mimeType": "image/webp",
+    "input": "webp-no-image.in.webp",
+    "refused": "malformed"
+  },
+  {
+    "name": "webp-short-vp8x",
+    "mimeType": "image/webp",
+    "input": "webp-short-vp8x.in.webp",
+    "refused": "malformed"
+  },
+  {
+    "name": "webp-riff-size-past-end",
+    "mimeType": "image/webp",
+    "input": "webp-riff-size-past-end.in.webp",
+    "refused": "malformed"
+  },
+  {
+    "name": "webp-chunk-past-end",
+    "mimeType": "image/webp",
+    "input": "webp-chunk-past-end.in.webp",
+    "refused": "malformed"
+  },
+  {
+    "name": "webp-truncated",
+    "mimeType": "image/webp",
+    "input": "webp-truncated.in.webp",
+    "refused": "malformed"
+  }
+]

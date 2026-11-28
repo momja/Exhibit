@@ -11,6 +11,8 @@
  * Envelope (one line, ≤ MAX_ENVELOPE bytes):
  *   { id, op: "ping" }
  *   { id, op: "resolve", provider, kind: "complete"|"decide", model }
+ *                       → { ok, images }: images says the catalog lists
+ *                         image input for the model
  *   { id, op: "complete", provider, model, apiKey, context, maxTokens }
  *   { id, op: "classify", provider, model, apiKey, context }
  *   { id, op: "screen", provider, model, apiKey, context }
@@ -31,7 +33,8 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { DEFAULT_POLICY, screen } from "./guard.ts";
 
 const SIGNAL = "exhibit_inference:";
-const MAX_ENVELOPE = 262_144;
+// Matches maxEnvelope in worker.go: room for complete()'s images as base64.
+const MAX_ENVELOPE = 8 * 1024 * 1024;
 const MAX_ACTIVE = 16;
 
 type Reply = { id: string; result?: unknown; error?: string; usage?: unknown };
@@ -59,7 +62,7 @@ export default function (pi: ExtensionAPI) {
 			apiKey: "$EXHIBIT_MOCK_API_KEY",
 			api: "openai-completions",
 			models: [{
-				id: "exhibit-mock-1", name: "Exhibit Mock 1", reasoning: false, input: ["text"],
+				id: "exhibit-mock-1", name: "Exhibit Mock 1", reasoning: false, input: ["text", "image"],
 				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 8192,
 			}],
 		} as any);
@@ -93,7 +96,8 @@ export default function (pi: ExtensionAPI) {
 			const model = request.kind === "decide"
 				? registry.getModelOfType("classifier", request.provider, request.model)
 				: registry.find(request.provider, request.model);
-			send({ id, result: { ok: Boolean(model) } });
+			const images = Boolean(model) && Array.isArray(model.input) && model.input.includes("image");
+			send({ id, result: { ok: Boolean(model), images } });
 			return { action: "handled" };
 		}
 		if (!["complete", "classify", "screen"].includes(op) || typeof request.apiKey !== "string" || !request.apiKey.trim()) {

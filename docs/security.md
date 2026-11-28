@@ -1341,7 +1341,34 @@ authenticated `POST /api/artifacts/:id/inference`. The frame gets no endpoint,
 credential or `connect-src` source; the CSP and allowlist are untouched.
 
 What is new is that a call spends money and sends the artifact's chosen text,
-possibly including saved data, to a third party. So:
+possibly including saved data, and any images the person gives the tool
+(Exh-v81w), to a third party. So:
+
+- **Images leave the device, without their metadata.** `complete()` takes
+  PNG, JPEG or WebP parts, bounded and sniffed before any provider call. The
+  host page keeps only what draws each image's pixels (EXIF and its location,
+  XMP, ICC profiles, which name a device, thumbnails, comments, text chunks
+  and trailing data all go) losslessly before the request leaves the
+  browser, and the server strips again with the same rules, so a client that
+  bypasses the page gets no exception. The page also refuses, in the server's
+  words, every call the server would refuse for its images: so image bytes
+  the server would not take never leave the device either. The server reads
+  keys exactly as spelled, because `encoding/json` alone would read
+  `Messages` or `DATA`, which the page's exact walk would have passed over
+  unstripped. A file of an accepted type that cannot be walked cleanly, or
+  is animated, is refused, never forwarded as given. One corpus of files and
+  payloads holds both implementations to the same output and the same
+  refusals. Orientation is dropped too, so a raw phone photo may reach the
+  model rotated, and colours fall back to sRGB. The
+  bridge gains no new authority, only bandwidth: what a tool sends is still
+  what it can already read, and a frame could already send base64 as text.
+  Image bytes come from a file the person picks, pixels the tool drew, or (on
+  a tool whose network origins were approved) something it fetched. The type
+  check sniffs the leading bytes and the strip walks the container, never the
+  pixels, so both are format rules, not a content guarantee: pixels can still
+  show where a photo was taken. Each call is bounded
+  and metered. The usage-policy screen reads text only, so platform-paid
+  calls on a screened instance carry no images at all.
 
 - **Two consents, both enforced server-side.** The owner's
   `inference_approved` (one `ApprovalColumns` entry, revocable) and, for each

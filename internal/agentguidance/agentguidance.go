@@ -32,6 +32,10 @@ var FS embed.FS
 const (
 	KindComplete = "complete"
 	KindDecide   = "decide"
+	// Images is not a kind but a capability of complete() (Exh-v81w): the
+	// instance can send it images. It travels in the same list so the MCP
+	// process takes it from the same variable ("complete,images").
+	Images = "images"
 )
 
 // AI is the data inference.tmpl takes: which window.exhibit.ai kinds this
@@ -40,6 +44,8 @@ const (
 type AI struct {
 	Complete bool
 	Decide   bool
+	// Images is whether complete() can read images; it implies Complete.
+	Images bool
 }
 
 // Any reports whether the instance offers any kind.
@@ -57,9 +63,14 @@ func AIFor[K ~string](kinds []K) (AI, error) {
 			ai.Complete = true
 		case KindDecide:
 			ai.Decide = true
+		case Images:
+			ai.Images = true
 		default:
-			return AI{}, fmt.Errorf("unknown AI kind %q (want %q or %q)", string(k), KindComplete, KindDecide)
+			return AI{}, fmt.Errorf("unknown AI kind %q (want %q, %q or %q)", string(k), KindComplete, KindDecide, Images)
 		}
+	}
+	if ai.Images && !ai.Complete {
+		return AI{}, fmt.Errorf("%q is a capability of %q, which is not offered", Images, KindComplete)
 	}
 	return ai, nil
 }
