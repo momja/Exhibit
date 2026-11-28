@@ -281,7 +281,9 @@ not change tool parameters, prompt wording, or owner/artifact scope.
 The panel delivers server-owned, typed interactions. Questions are the first
 implemented kind. `internal/agent/interactions.go` owns identity, tool-call
 correlation, lifecycle, revision checks, cancellation and SSE change events;
-`questions.go` owns question validation and the Pi input/reply adapter. The
+`questions.go` owns question validation and the Pi input/reply adapter.
+The [decision/completion contract](agent-interactions.md) documents adapter
+construction, committed delivery recovery, errors and Stop/Close ordering. The
 session stores one interaction map, not a second question lifecycle.
 
 Each interaction has `id`, `kind`, `state`, `revision`, `blocking`, `toolCallId`

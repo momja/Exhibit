@@ -197,7 +197,10 @@ func TestConcurrentQuestionResponsesHaveOneWinner(t *testing.T) {
 	}
 	wg.Wait()
 	first, second := <-results, <-results
-	assert.True(t, (first == nil && errors.Is(second, ErrQuestionExpired)) || (second == nil && errors.Is(first, ErrQuestionExpired)))
+	loser := func(err error) bool {
+		return errors.Is(err, ErrQuestionExpired) || errors.Is(err, ErrInteractionBusy) || errors.Is(err, ErrInteractionStale)
+	}
+	assert.True(t, (first == nil && loser(second)) || (second == nil && loser(first)))
 	assert.Equal(t, 1, bytes.Count(input.Bytes(), []byte("\n")))
 }
 

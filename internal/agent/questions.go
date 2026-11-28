@@ -1,10 +1,12 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
+	"slices"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -152,62 +154,101 @@ func validateQuestionResponse(questions []Question, response QuestionResponse) e
 	return validateAnswers(questions, response.Answers)
 }
 
-// AnswerQuestions preserves the old question-only interface. New panel actions
-// use RespondInteraction and supply the revision from the server-rendered form.
+// QuestionAction is deliberately question-specific. Private connector inputs
+// must never be added here or to the shared resolution interface.
+type QuestionAction struct {
+	Revision uint64
+	Action   string
+	Response QuestionResponse
+}
+
+// AnswerQuestions is the compatibility-only unversioned question interface.
+// It still claims the revision it observed; it cannot bypass common admission.
 func (s *Session) AnswerQuestions(id string, response QuestionResponse) error {
+	interaction, ok := s.Interaction(id)
+	if !ok || interaction.Kind != InteractionQuestions {
+		return ErrQuestionExpired
+	}
 	action := "answer"
 	if response.Cancelled {
 		action = "skip"
 	} else if response.Message != "" {
 		action = "message"
 	}
-	err := s.respondInteraction(id, InteractionAction{Action: action, Questions: response})
+	err := s.RespondQuestions(context.Background(), id, QuestionAction{Revision: interaction.Revision, Action: action, Response: response})
 	if errors.Is(err, ErrInvalidInteractionAction) {
 		return ErrInvalidAnswer
 	}
 	return err
 }
 
-// Caller holds writeMu and mu. Every kind validates and executes its own
-// actions; the common layer commits the lifecycle only after a successful write.
-func (s *Session) respondQuestions(interaction Interaction, action InteractionAction) (Interaction, error) {
-	response := action.Questions
+// RespondQuestions uses the common lifecycle, but commits no answer until its
+// safe reply is written successfully. Failed writes keep this revision editable;
+// a later submission is freshly validated and sends that submission's answers.
+func (s *Session) RespondQuestions(ctx context.Context, id string, action QuestionAction) error {
+	return s.ResolveInteraction(ctx, id, action.Revision, InteractionQuestions,
+		func(ctx context.Context, interaction Interaction) (InteractionCompletion, error) {
+			return s.questionCompletion(interaction, action)
+		})
+}
+
+func (s *Session) questionCompletion(interaction Interaction, action QuestionAction) (InteractionCompletion, error) {
+	response := action.Response
 	switch action.Action {
 	case "answer":
 		if response.Cancelled || response.Message != "" {
-			return interaction, ErrInvalidInteractionAction
+			return InteractionCompletion{}, ErrInvalidInteractionAction
 		}
 	case "skip":
 		if len(response.Answers) != 0 || response.Message != "" || len(response.Images) != 0 || len(response.Snippets) != 0 {
-			return interaction, ErrInvalidInteractionAction
+			return InteractionCompletion{}, ErrInvalidInteractionAction
 		}
 		response.Cancelled = true
 	case "message":
 		if response.Message == "" || response.Cancelled || len(response.Answers) != 0 {
-			return interaction, ErrInvalidInteractionAction
+			return InteractionCompletion{}, ErrInvalidInteractionAction
 		}
 	default:
-		return interaction, ErrInvalidInteractionAction
+		return InteractionCompletion{}, ErrInvalidInteractionAction
 	}
 	if err := validateQuestionResponse(interaction.Questions.Questions, response); err != nil {
-		return interaction, err
+		return InteractionCompletion{}, err
 	}
 	if len(response.Snippets) != 0 {
 		if err := s.writeSelection(response.Snippets); err != nil {
-			return interaction, err
+			return InteractionCompletion{}, err
 		}
 	}
-	if err := s.writeQuestionResponse(interaction.ID, response); err != nil {
-		return interaction, err
+	value, err := json.Marshal(struct {
+		QuestionResponse
+		RequestID string `json:"requestId"`
+	}{response, interaction.ID})
+	if err != nil {
+		return InteractionCompletion{}, ErrInvalidAnswer
 	}
-	request := *interaction.Questions
+	request := cloneQuestionRequest(interaction.Questions)
 	request.Answers, request.Message = response.Answers, response.Message
-	interaction.Questions = &request
-	interaction.State = InteractionCompleted
+	state := InteractionCompleted
 	if response.Cancelled {
-		interaction.State = InteractionCancelled
+		state = InteractionCancelled
 	}
-	return interaction, nil
+	return InteractionCompletion{kind: InteractionQuestions, state: state, value: string(value), cancelled: response.Cancelled, questions: request}, nil
+}
+
+func cloneQuestionRequest(request *QuestionRequest) *QuestionRequest {
+	if request == nil {
+		return nil
+	}
+	copy := *request
+	copy.Questions = slices.Clone(request.Questions)
+	for i := range copy.Questions {
+		copy.Questions[i].Options = slices.Clone(request.Questions[i].Options)
+	}
+	copy.Answers = slices.Clone(request.Answers)
+	for i := range copy.Answers {
+		copy.Answers[i].Selected = slices.Clone(request.Answers[i].Selected)
+	}
+	return &copy
 }
 
 // A refusal is reported after the dialog reply has been screened. Retire the
@@ -228,21 +269,20 @@ func (s *Session) blockQuestionReply(id, toolCallID string) {
 	s.interactionChanged(id)
 }
 
-// Caller serializes writes with writeMu.
-func (s *Session) writeQuestionResponse(id string, response QuestionResponse) error {
-	value, _ := json.Marshal(struct {
-		QuestionResponse
-		RequestID string `json:"requestId"`
-	}{response, id})
-	line, _ := json.Marshal(map[string]any{"type": "extension_ui_response", "id": id, "value": string(value), "cancelled": response.Cancelled})
-	if _, err := s.stdin.Write(append(line, '\n')); err != nil {
-		return fmt.Errorf("send answer to agent: %w", err)
-	}
-	return nil
-}
-
+// Rejected dialogs also use the bounded writer; a late dialog must not block
+// the stdout reader forever while Stop is trying to recover an unresponsive Pi.
 func (s *Session) sendQuestionCancellation(id string) {
-	s.writeMu.Lock()
-	defer s.writeMu.Unlock()
-	_ = s.writeQuestionResponse(id, QuestionResponse{Cancelled: true})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	value, _ := json.Marshal(struct {
+		Cancelled bool   `json:"cancelled"`
+		RequestID string `json:"requestId"`
+	}{true, id})
+	line, _ := json.Marshal(struct {
+		Type      string `json:"type"`
+		ID        string `json:"id"`
+		Value     string `json:"value"`
+		Cancelled bool   `json:"cancelled"`
+	}{"extension_ui_response", id, string(value), true})
+	_ = s.writePi(ctx, append(line, '\n'), nil)
 }

@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -18,14 +19,14 @@ func TestInteractionOwnsQuestionLifecycleAndRevision(t *testing.T) {
 	assert.EqualValues(t, 1, interaction.Revision)
 	assert.True(t, interaction.Blocking)
 	assert.True(t, interaction.Questions.Pending)
-	require.NoError(t, s.RespondInteraction(interaction.ID, InteractionAction{Revision: 1, Action: "skip"}))
+	require.NoError(t, s.RespondQuestions(context.Background(), interaction.ID, QuestionAction{Revision: 1, Action: "skip"}))
 	completed, _ := s.Interaction(interaction.ID)
 	assert.Equal(t, InteractionCancelled, completed.State)
 	assert.EqualValues(t, 2, completed.Revision)
 	assert.False(t, completed.Pending())
 	assert.True(t, completed.Questions.Cancelled)
 	assert.False(t, completed.Questions.Expired)
-	assert.ErrorIs(t, s.RespondInteraction(interaction.ID, InteractionAction{Revision: 1, Action: "skip"}), ErrInteractionExpired)
+	assert.ErrorIs(t, s.RespondQuestions(context.Background(), interaction.ID, QuestionAction{Revision: 1, Action: "skip"}), ErrInteractionExpired)
 	assert.Equal(t, 1, strings.Count(input.String(), "\n"))
 	var event map[string]any
 	require.NoError(t, json.Unmarshal(s.backlog[len(s.backlog)-1], &event))
@@ -35,17 +36,17 @@ func TestInteractionOwnsQuestionLifecycleAndRevision(t *testing.T) {
 }
 
 func TestInteractionRejectsStaleMissingOrIncompatibleActions(t *testing.T) {
-	for name, action := range map[string]InteractionAction{
+	for name, action := range map[string]QuestionAction{
 		"stale revision":    {Revision: 8, Action: "skip"},
 		"missing revision":  {Action: "skip"},
 		"unknown action":    {Revision: 1, Action: "approve"},
-		"answer as skip":    {Revision: 1, Action: "skip", Questions: QuestionResponse{Answers: []QuestionAnswer{{ID: "view", Text: "Weekly"}}}},
-		"message as answer": {Revision: 1, Action: "answer", Questions: QuestionResponse{Message: "Change direction"}},
+		"answer as skip":    {Revision: 1, Action: "skip", Response: QuestionResponse{Answers: []QuestionAnswer{{ID: "view", Text: "Weekly"}}}},
+		"message as answer": {Revision: 1, Action: "answer", Response: QuestionResponse{Message: "Change direction"}},
 		"empty message":     {Revision: 1, Action: "message"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			s, input := newQuestionSession(t)
-			require.Error(t, s.RespondInteraction("request-1", action))
+			require.Error(t, s.RespondQuestions(context.Background(), "request-1", action))
 			interaction, _ := s.Interaction("request-1")
 			assert.True(t, interaction.Pending())
 			assert.EqualValues(t, 1, interaction.Revision)
@@ -72,13 +73,13 @@ func TestInteractionExpiresWithoutBeingRecordedAsAnExplicitSkip(t *testing.T) {
 func TestInteractionWriteFailurePreservesRevisionAndCanBeRetried(t *testing.T) {
 	s, input := newQuestionSession(t)
 	input.fail = true
-	action := InteractionAction{Revision: 1, Action: "message", Questions: QuestionResponse{Message: "A shopping list instead"}}
-	require.Error(t, s.RespondInteraction("request-1", action))
+	action := QuestionAction{Revision: 1, Action: "message", Response: QuestionResponse{Message: "A shopping list instead"}}
+	require.Error(t, s.RespondQuestions(context.Background(), "request-1", action))
 	interaction, _ := s.Interaction("request-1")
 	assert.EqualValues(t, 1, interaction.Revision)
 	assert.True(t, interaction.Pending())
 	input.fail = false
-	require.NoError(t, s.RespondInteraction("request-1", action))
+	require.NoError(t, s.RespondQuestions(context.Background(), "request-1", action))
 	interaction, _ = s.Interaction("request-1")
 	assert.Equal(t, InteractionCompleted, interaction.State)
 	assert.Equal(t, "A shopping list instead", interaction.Questions.Message)

@@ -94,13 +94,13 @@ func (ro *Router) agentInteractionAction(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	req.QuestionResponse.Images = images
-	err = s.RespondInteraction(chi.URLParam(r, "requestID"), agent.InteractionAction{
-		Revision: req.Revision, Action: req.Action, Questions: req.QuestionResponse,
+	err = s.RespondQuestions(r.Context(), chi.URLParam(r, "requestID"), agent.QuestionAction{
+		Revision: req.Revision, Action: req.Action, Response: req.QuestionResponse,
 	})
 	switch {
 	case err == nil:
 		w.WriteHeader(http.StatusNoContent)
-	case errors.Is(err, agent.ErrInteractionExpired):
+	case errors.Is(err, agent.ErrInteractionClosed), errors.Is(err, agent.ErrInteractionStale), errors.Is(err, agent.ErrInteractionStopping):
 		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, agent.ErrInvalidInteractionAction), errors.Is(err, agent.ErrInvalidAnswer):
 		writeError(w, http.StatusBadRequest, err.Error())

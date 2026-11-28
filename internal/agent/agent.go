@@ -765,7 +765,8 @@ type Session struct {
 	cmd   *exec.Cmd
 	stdin io.WriteCloser
 
-	writeMu sync.Mutex // serializes stdin writes
+	writeMu sync.Mutex // serializes stdin writes; never held by kill/Close
+	abortMu sync.Mutex // serializes Stop requests, not decision work or delivery
 	// promptMu keeps one prompt in flight at a time, from send to response.
 	// Pi runs a prompt's input hook (the guardrail screen) before answering
 	// it, and the guard's signal names no prompt, so serializing is what ties
@@ -777,20 +778,24 @@ type Session struct {
 	title string     // the conversation's first prompt, shortened
 	// resumeNotice is the sentence the first prompt of a resumed conversation
 	// carries (prompt.go); it is held until a prompt has actually landed.
-	resumeNotice       string
-	subs               map[*eventSubscriber]struct{}
-	backlog            [][]byte
-	backlogBytes       int
-	pending            map[string]chan rpcResponse
-	interactions       map[string]Interaction
-	streaming          bool
-	closed             bool
-	stopping           bool // unavailable to callers, but still draining its final writes
-	lastActive         time.Time
-	prepared           bool
-	promptInFlight     bool
-	preparationExpired bool
-	preparationTimer   *time.Timer
+	resumeNotice        string
+	subs                map[*eventSubscriber]struct{}
+	backlog             [][]byte
+	backlogBytes        int
+	pending             map[string]chan rpcResponse
+	interactions        map[string]Interaction
+	decisionGate        chan struct{} // admission/commit gate; acquired with context
+	aborting            bool
+	interactionsStopped bool   // remains fenced after Stop until an explicit prompt
+	interactionEpoch    uint64 // fences prompts prepared before a concurrent Stop
+	streaming           bool
+	closed              bool
+	stopping            bool // unavailable to callers, but still draining its final writes
+	lastActive          time.Time
+	prepared            bool
+	promptInFlight      bool
+	preparationExpired  bool
+	preparationTimer    *time.Timer
 	// guardBlocked records that the guard extension handled the prompt in
 	// flight instead of running it (av-gust): the model never saw it. Pi emits
 	// that signal before the prompt's response, so Prompt can read it once the
@@ -885,6 +890,11 @@ func (s *Session) Prompt(ctx context.Context, message string, images []ImageCont
 	defer s.promptMu.Unlock()
 	s.mu.Lock()
 	waiting := s.hasPendingInteractions()
+	if s.aborting {
+		s.mu.Unlock()
+		return ErrInteractionStopping
+	}
+	epoch := s.interactionEpoch
 	s.mu.Unlock()
 	if waiting {
 		return ErrQuestionPending
@@ -936,7 +946,16 @@ func (s *Session) Prompt(ctx context.Context, message string, images []ImageCont
 		cmd["streamingBehavior"] = "steer"
 	}
 
-	resp, err := s.roundTrip(ctx, cmd)
+	response, err := s.callWithAdmission(ctx, cmd, func() error {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if s.closed || s.stopping || s.aborting || s.interactionEpoch != epoch {
+			return ErrInteractionStopping
+		}
+		s.interactionsStopped = false
+		return nil
+	})
+	resp := response.line
 	if err != nil {
 		return err
 	}
@@ -1008,8 +1027,28 @@ func (s *Session) writeSelection(selection []string) error {
 
 // Abort asks pi to stop the current run.
 func (s *Session) Abort(ctx context.Context) error {
-	_, err := s.roundTrip(ctx, map[string]any{"type": "abort"})
+	// A blocked pipe or unresponsive Pi must not strand Stop. kill does not
+	// acquire the decision gate or writer lock, so the deadline can interrupt it.
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	stopKill := context.AfterFunc(ctx, s.kill)
+	defer stopKill()
+	s.abortMu.Lock()
+	defer s.abortMu.Unlock()
+	release, err := s.acquireDecision(ctx)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	s.aborting = true
+	s.interactionsStopped = true
+	s.interactionEpoch++
+	s.mu.Unlock()
+	// Retire actions before sending Stop, never after its acknowledgement.
 	s.expireInteractions("")
+	release()
+	defer func() { s.mu.Lock(); s.aborting = false; s.mu.Unlock() }()
+	_, err = s.roundTrip(ctx, map[string]any{"type": "abort"})
 	return err
 }
 
@@ -1021,6 +1060,12 @@ func (s *Session) roundTrip(ctx context.Context, cmd map[string]any) (json.RawMe
 
 // call is roundTrip keeping the recorded-usage snapshot beside the response.
 func (s *Session) call(ctx context.Context, cmd map[string]any) (rpcResponse, error) {
+	return s.callWithAdmission(ctx, cmd, nil)
+}
+
+// The optional admission check runs under the writer lock, immediately before
+// a prompt reaches Pi. A prompt prepared before Stop cannot reopen its epoch.
+func (s *Session) callWithAdmission(ctx context.Context, cmd map[string]any, admit func() error) (rpcResponse, error) {
 	id := uuid.New().String()
 	cmd["id"] = id
 	ch := make(chan rpcResponse, 1)
@@ -1042,9 +1087,7 @@ func (s *Session) call(ctx context.Context, cmd map[string]any) (rpcResponse, er
 	if err != nil {
 		return rpcResponse{}, err
 	}
-	s.writeMu.Lock()
-	_, err = s.stdin.Write(append(line, '\n'))
-	s.writeMu.Unlock()
+	err = s.writePi(ctx, append(line, '\n'), admit)
 	if err != nil {
 		return rpcResponse{}, fmt.Errorf("write to pi: %w", err)
 	}
@@ -1479,9 +1522,10 @@ func (s *Session) kill() {
 	}
 	s.mu.Unlock()
 	s.markStopping()
+	s.expireInteractions("")
 	s.mgr.cfg.Credentials.Revoke(s.grant)
 	_ = s.stdin.Close()
-	if s.cmd.Process != nil {
+	if s.cmd != nil && s.cmd.Process != nil {
 		_ = s.cmd.Process.Kill()
 	}
 }
@@ -1489,6 +1533,8 @@ func (s *Session) kill() {
 func (s *Session) markStopping() {
 	s.mu.Lock()
 	s.stopping = true
+	s.interactionsStopped = true
+	s.interactionEpoch++
 	s.mu.Unlock()
 }
 

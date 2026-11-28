@@ -374,7 +374,7 @@ func (ro *Router) agentPrompt(w http.ResponseWriter, r *http.Request) {
 		descriptors = append(descriptors, descriptor)
 	}
 	if err := s.Prompt(r.Context(), req.Message, images, descriptors); err != nil {
-		if errors.Is(err, agent.ErrQuestionPending) {
+		if errors.Is(err, agent.ErrQuestionPending) || errors.Is(err, agent.ErrInteractionStopping) {
 			writeError(w, http.StatusConflict, err.Error())
 			return
 		}
