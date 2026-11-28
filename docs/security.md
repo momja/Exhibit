@@ -1346,12 +1346,20 @@ possibly including saved data, and any images the person gives the tool
 
 - **Images leave the device, without their metadata.** `complete()` takes
   PNG, JPEG or WebP parts, bounded and sniffed before any provider call. The
-  host page strips every image's metadata (EXIF, including location, XMP,
-  comments, text chunks, trailing data) losslessly before the request leaves
-  the browser, and the server strips again with the same rules, so a client
-  that bypasses the page gets no exception; a file of an accepted type that
-  cannot be walked cleanly is refused, never forwarded as given. Orientation
-  is dropped too, so a raw phone photo may reach the model rotated. The
+  host page keeps only what draws each image's pixels (EXIF and its location,
+  XMP, ICC profiles, which name a device, thumbnails, comments, text chunks
+  and trailing data all go) losslessly before the request leaves the
+  browser, and the server strips again with the same rules, so a client that
+  bypasses the page gets no exception. The page also refuses, in the server's
+  words, every call the server would refuse for its images: so image bytes
+  the server would not take never leave the device either. The server reads
+  keys exactly as spelled, because `encoding/json` alone would read
+  `Messages` or `DATA`, which the page's exact walk would have passed over
+  unstripped. A file of an accepted type that cannot be walked cleanly, or
+  is animated, is refused, never forwarded as given. One corpus of files and
+  payloads holds both implementations to the same output and the same
+  refusals. Orientation is dropped too, so a raw phone photo may reach the
+  model rotated, and colours fall back to sRGB. The
   bridge gains no new authority, only bandwidth: what a tool sends is still
   what it can already read, and a frame could already send base64 as text.
   Image bytes come from a file the person picks, pixels the tool drew, or (on

@@ -75,8 +75,12 @@ onto a canvas first), at most 4 per call, 2 MB each and 4 MB in total, decoded;
 only user messages carry them; a message holds at most 16 parts. `mimeType`
 must name what the bytes really are (they are sniffed), and a `data:` URL's
 type must agree with it. The size bounds count the bytes as given, before
-metadata is stripped; a file whose structure is broken (truncated, a length
-past its end, no end marker) is `invalid_request`. A string `content` works exactly as before. Schemas use `type`, `properties`, `required`, `items`, `enum`,
+metadata is stripped. An animated PNG or WebP is refused, and so is a file
+that cannot be walked cleanly to its end (truncated, a length past its end, a
+missing frame header, scan, `IDAT` or image chunk). Keys are read exactly as
+spelled at the payload, message and part level: `Messages`, a second
+`data` or any key not named here is `invalid_request`. A string `content`
+works exactly as before. Schemas use `type`, `properties`, `required`, `items`, `enum`,
 `const`, `additionalProperties` (boolean), `minItems`/`maxItems`,
 `minimum`/`maximum`, `minLength`/`maxLength`, `description`, `title`; anything
 else is refused before a call. An answer that does not match the schema gets
@@ -105,16 +109,28 @@ the message is safe to show.
 | `invalid_output` | complete: the model wrote no answer (it ran out of `maxTokens`), or with a schema, the answer did not fit, after one repair |
 
 **Images leave the device, without their metadata.** Before a `complete()`
-call leaves the browser, the host page (`web/gallery/image-metadata.js`)
-rewrites every PNG, JPEG and WebP without its metadata: EXIF (location,
-camera, time), XMP, comments, text chunks and anything after the image's end
-marker. Only what is needed to draw the pixels stays, ICC colour profiles
-included; pixels are never decoded or re-encoded. The server strips again
+call leaves the browser, the host page checks it by the server's rules for
+its messages and images (`web/gallery/complete-payload.js`) and rewrites every
+PNG, JPEG and WebP keeping only what is needed to draw the pixels
+(`web/gallery/image-metadata.js`); pixels are never decoded or re-encoded.
+
+| Format | Kept | Dropped | Refused |
+|---|---|---|---|
+| JPEG | APP14 (Adobe), tables, frame and scan headers, scan data, restarts | APP0–APP13 and APP15 (JFIF and JFXX thumbnails, EXIF, XMP, ICC, MPF, Photoshop), COM, anything after EOI | no frame header before a scan, no scan before EOI |
+| PNG | IHDR, PLTE, IDAT, IEND, tRNS, gAMA, cHRM, sRGB, sBIT, pHYs, bKGD, cICP, mDCV, cLLI | eXIf, tEXt, zTXt, iTXt, tIME, iCCP, any other chunk, anything after IEND | APNG (acTL, fcTL, fdAT); IHDR not first or not 13 bytes; no IDAT; a non-empty IEND |
+| WebP | VP8, VP8L, VP8X (ICC, EXIF and XMP flags cleared), ALPH | EXIF, XMP, ICCP, any other chunk, anything after the RIFF | ANIM, ANMF or the VP8X animation flag; no VP8 or VP8L chunk |
+
+Colour profiles go, because an ICC profile names the device and software that
+made it, so colours fall back to sRGB. EXIF orientation goes too, so a phone
+photo sent as it came may reach the model rotated; one drawn onto a canvas is
+already upright. A call the server would refuse for its images or keys (a
+type it does not take, bad base64, too many or too large images, counted as
+given, a mislabelled, broken or animated file) is refused on the page with
+the server's own words and never sent. The server strips again
 (`internal/inference/imagemeta.go`, the same rules) for clients that bypass the
-page, and refuses an image of an accepted type it cannot walk cleanly with
-`invalid_request` rather than forward it as given. EXIF orientation goes with
-the rest, so a phone photo sent as it came may reach the model rotated; one
-drawn onto a canvas is already upright. Drawing onto a canvas and sending
+page, and refuses what it cannot walk cleanly rather than forward it as given.
+Both implementations are held to one corpus of files and payloads
+(`internal/inference/testdata/imagemeta`). Drawing onto a canvas and sending
 `canvas.toDataURL()` also cuts bytes and cost, which is why the agent guidance
 still teaches it. The consent prompt says images leave the device and that
 Exhibit removes location and camera details first.
