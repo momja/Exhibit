@@ -1,12 +1,17 @@
 package api
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -260,6 +265,101 @@ window.exhibit.ai.available().then(function (a) {
 	job := string(rt.jobs[0].Context)
 	assert.Contains(t, job, `"mimeType":"image/jpeg"`)
 	assert.Greater(t, len(job), 256<<10, "the canvas image should exceed the old 256 KB envelope")
+}
+
+// The host page strips an image's metadata before the request leaves the
+// browser (Exh-v81w): a canvas JPEG with an EXIF segment spliced in arrives at
+// the endpoint, and at the runtime, without it. A JPEG cut short is settled
+// as invalid_request by the host and never sent.
+func TestInferenceHostStripsImageMetadataBrowser(t *testing.T) {
+	browser, err := chromium.New(chromiumtest.Start(t))
+	require.NoError(t, err)
+	ctx, cancel, err := browser.Tab(context.Background())
+	require.NoError(t, err)
+	defer cancel()
+	ctx, timeout := context.WithTimeout(ctx, 60*time.Second)
+	defer timeout()
+
+	const marker = "GPS-MARKER-v81w"
+	ro := newTestRouter(t)
+	rt := withPlatformInference(t, ro)
+	body := `<!doctype html><html><head><script>
+var canvas = document.createElement('canvas');
+canvas.width = 64; canvas.height = 64;
+canvas.getContext('2d').fillRect(8, 8, 32, 32);
+var jpeg = atob(canvas.toDataURL('image/jpeg', 0.9).split(',')[1]);
+var exif = 'Exif\0\0MM\0*GPSLatitude ` + marker + `';
+var app1 = '\xff\xe1' + String.fromCharCode((exif.length + 2) >> 8, (exif.length + 2) & 255) + exif;
+var tagged = btoa(jpeg.slice(0, 2) + app1 + jpeg.slice(2));
+function send(data) {
+  return window.exhibit.ai.complete({ messages: [{ role: 'user', content: [
+    { type: 'text', text: 'Describe this.' },
+    { type: 'image', mimeType: 'image/jpeg', data: data },
+  ] }] }).then(function (text) { return text; }, function (e) { return e.code + ': ' + e.message; });
+}
+send(tagged).then(function (answer) {
+  localStorage.setItem('answer', answer);
+  return send(btoa(jpeg.slice(0, 2) + app1 + jpeg.slice(2, 40)));
+}).then(function (broken) { localStorage.setItem('broken', broken); });
+</script></head><body><h1>Photo tool</h1></body></html>`
+	id := createArtifact(t, ro, map[string]any{"title": "Photo tool", "body": body})
+	require.NoError(t, ro.cfg.Store.UpdateArtifact(t.Context(), 1, id, map[string]any{"inference_approved": true}))
+
+	// What the host page actually sends, before the server's own strip.
+	var mu sync.Mutex
+	var sent []string
+	appMux, renderMux := http.NewServeMux(), http.NewServeMux()
+	app, frame := httptest.NewServer(appMux), httptest.NewServer(renderMux)
+	t.Cleanup(app.Close)
+	t.Cleanup(frame.Close)
+	ro.cfg.AppOrigin, ro.cfg.RenderOrigin = app.URL, frame.URL
+	renderMux.Handle("/", ro.RenderHandler())
+	appMux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/inference") {
+			raw, _ := io.ReadAll(r.Body)
+			mu.Lock()
+			sent = append(sent, string(raw))
+			mu.Unlock()
+			r.Body = io.NopCloser(bytes.NewReader(raw))
+		}
+		r.Header.Set("Authorization", authHeader())
+		ro.ServeHTTP(w, r)
+	}))
+
+	require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(app.URL+"/artifacts/"+id)))
+	require.Eventually(t, func() bool { return getState(t, ro, id)["broken"] != "" }, 20*time.Second, 50*time.Millisecond)
+	assert.Equal(t, "a summary", getState(t, ro, id)["answer"])
+	assert.Equal(t, "invalid_request: An image's data is not a well-formed image/jpeg file.", getState(t, ro, id)["broken"])
+
+	mu.Lock()
+	defer mu.Unlock()
+	require.Len(t, sent, 1, "the broken JPEG never left the browser")
+	// The image bytes in a JSON document, wherever the parts list sits.
+	imageBytes := func(doc string) []byte {
+		var parts []struct{ Type, Data string }
+		var sentBody struct {
+			Payload struct {
+				Messages []struct{ Content json.RawMessage } `json:"messages"`
+			} `json:"payload"`
+			Messages []struct{ Content json.RawMessage } `json:"messages"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(doc), &sentBody))
+		msgs := append(sentBody.Payload.Messages, sentBody.Messages...)
+		require.Len(t, msgs, 1)
+		require.NoError(t, json.Unmarshal(msgs[0].Content, &parts))
+		require.Len(t, parts, 2)
+		require.Equal(t, "image", parts[1].Type)
+		raw, err := base64.StdEncoding.DecodeString(parts[1].Data)
+		require.NoError(t, err, "the host sends plain base64")
+		return raw
+	}
+	fromHost := imageBytes(sent[0])
+	assert.True(t, bytes.HasPrefix(fromHost, []byte{0xFF, 0xD8, 0xFF}))
+	assert.NotContains(t, string(fromHost), marker, "the host sent the EXIF segment")
+	assert.NotContains(t, string(fromHost), "Exif\x00\x00")
+	require.Equal(t, 1, rt.calls())
+	assert.Equal(t, fromHost, imageBytes(string(rt.jobs[0].Context)), "the server's strip finds nothing left to remove")
+	assert.Contains(t, string(rt.jobs[0].Context), `"mimeType":"image/jpeg"`)
 }
 
 // A request over the instance's body limit is refused by the body-limit

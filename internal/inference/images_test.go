@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
+	"hash/crc32"
 	"image"
 	"image/color"
 	"image/gif"
@@ -44,12 +46,31 @@ func encodedImage(t *testing.T, mimeType string) string {
 	return base64.StdEncoding.EncodeToString(buf.Bytes())
 }
 
-// sized is a PNG signature padded to n bytes: DetectContentType reads only
-// the prefix, which is all the size limits need.
+// sized is a well-formed PNG of exactly n bytes (at least 57): IHDR, one
+// IDAT of zeros, IEND. The size limits need only its length, and since every
+// chunk is one the metadata strip keeps, the bytes reach the provider as they
+// were given.
 func sized(n int) string {
-	raw := make([]byte, n)
-	copy(raw, "\x89PNG\r\n\x1a\n")
-	return base64.StdEncoding.EncodeToString(raw)
+	return base64.StdEncoding.EncodeToString(paddedPNG(n))
+}
+
+func paddedPNG(n int) []byte {
+	const overhead = 8 + 25 + 12 + 12
+	if n < overhead {
+		panic("paddedPNG: too small")
+	}
+	out := []byte(pngSignature)
+	out = appendPNGChunk(out, "IHDR", []byte{0, 0, 0, 1, 0, 0, 0, 1, 8, 0, 0, 0, 0})
+	out = appendPNGChunk(out, "IDAT", make([]byte, n-overhead))
+	return appendPNGChunk(out, "IEND", nil)
+}
+
+func appendPNGChunk(out []byte, kind string, data []byte) []byte {
+	out = binary.BigEndian.AppendUint32(out, uint32(len(data)))
+	start := len(out)
+	out = append(out, kind...)
+	out = append(out, data...)
+	return binary.BigEndian.AppendUint32(out, crc32.ChecksumIEEE(out[start:]))
 }
 
 func imageCall(t *testing.T, viewer int64, payload any) Call {

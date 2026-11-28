@@ -1,5 +1,6 @@
 import { modalFor } from './modal.js';
 import { viewerFetch, apiFetch } from './api-module.js';
+import { stripPayloadImages, MalformedImageError } from './image-metadata.js';
 
 /* Host half of window.exhibit.ai (Exh-zue3).
  *
@@ -14,6 +15,9 @@ import { viewerFetch, apiFetch } from './api-module.js';
  * A recipient of a tool its owner never allowed is not asked anything: the
  * banner says only the owner can turn AI on. Every refusal settles the
  * artifact's promise with a stable code, so a tool can always degrade.
+ *
+ * Images in a complete() call are stripped of their metadata here, before
+ * they leave the device (image-metadata.js, Exh-v81w).
  *
  * It listens to every iframe marked data-ai-frame: the artifact page's frame,
  * the agent preview and a version preview. The host checks both the frame's
@@ -153,8 +157,17 @@ export function connectInferenceHost({ artifactId, title }) {
       if (declined.has(channel)) { fail('not_approved', 'AI use was not allowed.'); return; }
       if (!(await ask(id, channel, headers, st, frame))) { fail('not_approved', 'AI use was not allowed.'); return; }
     }
+    let payload = d.payload ?? null;
+    if (d.op === 'complete') {
+      try {
+        payload = stripPayloadImages(payload);
+      } catch (e) {
+        fail('invalid_request', e instanceof MalformedImageError ? e.message : 'An image could not be read.');
+        return;
+      }
+    }
     const res = await viewerFetch('/api/artifacts/' + encodeURIComponent(id) + '/inference', {
-      method: 'POST', headers, body: JSON.stringify({ kind: d.op, payload: d.payload ?? null }),
+      method: 'POST', headers, body: JSON.stringify({ kind: d.op, payload }),
     }).catch(() => null);
     if (!res) { fail('provider_error', 'The AI request could not be sent.'); return; }
     // The body limit answers before the inference handler, in its own shape.

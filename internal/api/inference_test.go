@@ -3,7 +3,9 @@ package api
 import (
 	"context"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
+	"hash/crc32"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -191,9 +193,7 @@ func TestInferenceCarriesImagesAndRefusesThemOnATextOnlyModel(t *testing.T) {
 	in := newGrantedInstance(t)
 	rt := withPlatformInference(t, in.ro)
 	require.NoError(t, in.ro.cfg.Store.UpdateArtifact(context.Background(), in.ownerOne, in.granted, map[string]any{"inference_approved": true}))
-	raw := make([]byte, 1<<20)
-	copy(raw, "\x89PNG\r\n\x1a\n")
-	data := base64.StdEncoding.EncodeToString(raw)
+	data := base64.StdEncoding.EncodeToString(paddedPNG(1 << 20))
 	body := `{"kind":"complete","payload":{"messages":[{"role":"user","content":[{"type":"text","text":"What is this?"},{"type":"image","mimeType":"image/png","data":"` + data + `"}]}]}}`
 	post := func() *httptest.ResponseRecorder {
 		return postInference(in.ro, in.granted, in.cookieOne, func(r *http.Request) {
@@ -218,6 +218,22 @@ func TestInferenceCarriesImagesAndRefusesThemOnATextOnlyModel(t *testing.T) {
 	assert.Equal(t, "unavailable/", inferenceCode(t, w))
 	assert.NotContains(t, w.Body.String(), data[:40], "a refusal never echoes image data")
 	assert.Equal(t, 1, rt.calls(), "an image reached a text-only model")
+}
+
+// paddedPNG is a well-formed PNG of about n bytes: IHDR, one IDAT of zeros,
+// IEND. complete() walks an image's chunks to strip its metadata, so the
+// fixture has to be a real chunk structure, though not decodable pixels.
+func paddedPNG(n int) []byte {
+	chunk := func(out []byte, kind string, data []byte) []byte {
+		out = binary.BigEndian.AppendUint32(out, uint32(len(data)))
+		start := len(out)
+		out = append(append(out, kind...), data...)
+		return binary.BigEndian.AppendUint32(out, crc32.ChecksumIEEE(out[start:]))
+	}
+	out := []byte("\x89PNG\r\n\x1a\n")
+	out = chunk(out, "IHDR", []byte{0, 0, 0, 1, 0, 0, 0, 1, 8, 0, 0, 0, 0})
+	out = chunk(out, "IDAT", make([]byte, n))
+	return chunk(out, "IEND", nil)
 }
 
 func TestSettingsListsAndRevokesAIPermissions(t *testing.T) {

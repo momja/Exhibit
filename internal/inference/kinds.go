@@ -78,11 +78,12 @@ type contentPart struct {
 }
 
 // imagePart is a validated image (Exh-v81w): an allowed type whose bytes
-// were decoded and sniffed, carried on as canonical base64.
+// were decoded, sniffed and stripped of metadata (imagemeta.go), carried on
+// as canonical base64.
 type imagePart struct {
 	MimeType string
 	Data     string
-	// size is the decoded length, what the image bounds count.
+	// size is the decoded length as received, what the image bounds count.
 	size int
 }
 
@@ -288,9 +289,10 @@ func parseContent(role string, raw json.RawMessage, budget *imageBudget) ([]cont
 }
 
 // parseImage checks one image: an allowed type, base64 that decodes, within
-// the per-image bound, and bytes that really are that type. data may also be
-// a base64 data: URL, as canvas.toDataURL() returns, of the same type.
-// Messages never quote the data.
+// the per-image bound, and bytes that really are that type, which are then
+// stripped of their metadata. data may also be a base64 data: URL, as
+// canvas.toDataURL() returns, of the same type. Messages never quote the
+// data.
 func parseImage(mimeType, data string) (*imagePart, error) {
 	mimeType = strings.ToLower(strings.TrimSpace(mimeType))
 	if rest, ok := strings.CutPrefix(data, "data:"); ok {
@@ -325,7 +327,13 @@ func parseImage(mimeType, data string) (*imagePart, error) {
 	if http.DetectContentType(raw) != mimeType {
 		return nil, invalid("An image's data is not the " + mimeType + " its mimeType says.")
 	}
-	return &imagePart{MimeType: mimeType, Data: base64.StdEncoding.EncodeToString(raw), size: len(raw)}, nil
+	// The bounds above count the bytes as received, and so does size:
+	// stripping only ever makes an image smaller.
+	stripped, err := stripImageMetadata(mimeType, raw)
+	if err != nil {
+		return nil, invalid("An image's data is not a well-formed " + mimeType + " file.")
+	}
+	return &imagePart{MimeType: mimeType, Data: base64.StdEncoding.EncodeToString(stripped), size: len(raw)}, nil
 }
 
 // context is the Pi request context for the conversation plus extra turns.
