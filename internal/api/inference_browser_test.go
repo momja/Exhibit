@@ -269,8 +269,10 @@ window.exhibit.ai.available().then(function (a) {
 
 // The host page strips an image's metadata before the request leaves the
 // browser (Exh-v81w): a canvas JPEG with an EXIF segment spliced in arrives at
-// the endpoint, and at the runtime, without it. A JPEG cut short is settled
-// as invalid_request by the host and never sent.
+// the endpoint, and at the runtime, without it. Every call the server would
+// refuse for its images or their keys (a JPEG cut short, a GIF, a mislabelled
+// file, a key in another case, too many bytes in total as given) is settled
+// by the host as invalid_request in the server's words, and never sent.
 func TestInferenceHostStripsImageMetadataBrowser(t *testing.T) {
 	browser, err := chromium.New(chromiumtest.Start(t))
 	require.NoError(t, err)
@@ -297,10 +299,30 @@ function send(data) {
     { type: 'image', mimeType: 'image/jpeg', data: data },
   ] }] }).then(function (text) { return text; }, function (e) { return e.code + ': ' + e.message; });
 }
+function settle(payload) {
+  return window.exhibit.ai.complete(payload).then(function () { return 'sent'; }, function (e) { return e.code + ': ' + e.message; });
+}
+// A well-formed PNG of n bytes: IHDR, one IDAT of zeros, IEND.
+function png(n) {
+  var u32 = function (v) { return String.fromCharCode(v >>> 24, (v >>> 16) & 255, (v >>> 8) & 255, v & 255); };
+  return btoa('\x89PNG\r\n\x1a\n' + u32(13) + 'IHDR' + '\0\0\0\x01\0\0\0\x01\x08\0\0\0\0' + u32(0) +
+    u32(n - 57) + 'IDAT' + '\0'.repeat(n - 57) + u32(0) + u32(0) + 'IEND' + u32(0));
+}
+var image = function (mimeType, data) { return { type: 'image', mimeType: mimeType, data: data }; };
+var user = function (parts) { return { messages: [{ role: 'user', content: parts }] }; };
 send(tagged).then(function (answer) {
   localStorage.setItem('answer', answer);
   return send(btoa(jpeg.slice(0, 2) + app1 + jpeg.slice(2, 40)));
-}).then(function (broken) { localStorage.setItem('broken', broken); });
+}).then(function (broken) {
+  localStorage.setItem('broken', broken);
+  return Promise.all([
+    settle(user([image('image/gif', 'R0lGODlhAQABAAAAACw=')])),
+    settle(user([image('image/png', tagged)])),
+    settle({ Messages: [{ role: 'user', content: [image('image/jpeg', tagged)] }] }),
+    settle(user([{ type: 'image', mimeType: 'image/jpeg', Data: tagged }])),
+    settle(user([image('image/png', png(1500000)), image('image/png', png(1500000)), image('image/png', png(1500000))])),
+  ]);
+}).then(function (refused) { localStorage.setItem('refused', JSON.stringify(refused)); });
 </script></head><body><h1>Photo tool</h1></body></html>`
 	id := createArtifact(t, ro, map[string]any{"title": "Photo tool", "body": body})
 	require.NoError(t, ro.cfg.Store.UpdateArtifact(t.Context(), 1, id, map[string]any{"inference_approved": true}))
@@ -327,13 +349,22 @@ send(tagged).then(function (answer) {
 	}))
 
 	require.NoError(t, chromedp.Do(ctx, chromedp.Navigate(app.URL+"/artifacts/"+id)))
-	require.Eventually(t, func() bool { return getState(t, ro, id)["broken"] != "" }, 20*time.Second, 50*time.Millisecond)
+	require.Eventually(t, func() bool { return getState(t, ro, id)["refused"] != "" }, 20*time.Second, 50*time.Millisecond)
 	assert.Equal(t, "a summary", getState(t, ro, id)["answer"])
 	assert.Equal(t, "invalid_request: An image's data is not a well-formed image/jpeg file.", getState(t, ro, id)["broken"])
+	var refused []string
+	require.NoError(t, json.Unmarshal([]byte(getState(t, ro, id)["refused"]), &refused))
+	assert.Equal(t, []string{
+		"invalid_request: Images must be PNG, JPEG or WebP (mimeType image/png, image/jpeg or image/webp).",
+		"invalid_request: An image's data is not the image/png its mimeType says.",
+		"invalid_request: complete() takes { messages, system?, schema?, maxTokens? }.",
+		"invalid_request: A message's content must be text, or a list of { type: 'text', text } and { type: 'image', mimeType, data } parts.",
+		"invalid_request: complete() images are limited to 4 MB in total. Downscale them in a canvas before sending.",
+	}, refused)
 
 	mu.Lock()
 	defer mu.Unlock()
-	require.Len(t, sent, 1, "the broken JPEG never left the browser")
+	require.Len(t, sent, 1, "only the well-formed call left the browser")
 	// The image bytes in a JSON document, wherever the parts list sits.
 	imageBytes := func(doc string) []byte {
 		var parts []struct{ Type, Data string }

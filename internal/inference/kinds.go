@@ -7,9 +7,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"net/http"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -120,42 +122,135 @@ var imageTypes = map[string]bool{"image/png": true, "image/jpeg": true, "image/w
 // would bill a second read of it.
 const repairImageNote = "[An image was attached here. It is not sent again with this retry.]"
 
+// The refusals complete() gives about its messages and images. The host page
+// checks the same rules before anything leaves the device and gives the same
+// words (web/gallery/complete-payload.js); the shared corpus in
+// testdata/imagemeta holds both to them.
+var (
+	msgPayloadShape   = "complete() takes { messages, system?, schema?, maxTokens? }."
+	msgMessageShape   = "Each message is { role, content }."
+	msgPromptAndMsgs  = "Pass either prompt or messages, not both."
+	msgMessageCount   = fmt.Sprintf("complete() needs between 1 and %d messages.", MaxCompleteMessages)
+	msgRole           = "Each message's role must be \"user\" or \"assistant\"."
+	msgLastUser       = "The last message must be from the user."
+	msgEmptyText      = "A message's content must be non-empty text."
+	msgContentShape   = "A message's content must be text, or a list of { type: 'text', text } and { type: 'image', mimeType, data } parts."
+	msgPartCount      = fmt.Sprintf("A message's content list needs between 1 and %d parts.", MaxContentParts)
+	msgTextPart       = "A text part is { type: 'text', text } with non-empty text."
+	msgImageRole      = "Only user messages may carry images."
+	msgImagePart      = "An image part is { type: 'image', mimeType, data } with base64 data."
+	msgPartType       = "A content part's type must be \"text\" or \"image\"."
+	msgImageCount     = fmt.Sprintf("complete() takes at most %d images.", MaxCompleteImages)
+	msgImageTotal     = fmt.Sprintf("complete() images are limited to %d MB in total. Downscale them in a canvas before sending.", MaxImageTotalBytes>>20)
+	msgDataURL        = "An image's data must be base64, or a base64 data: URL."
+	msgDataURLType    = "An image's mimeType does not match its data: URL."
+	msgImageType      = "Images must be PNG, JPEG or WebP (mimeType image/png, image/jpeg or image/webp)."
+	msgImageSize      = fmt.Sprintf("Each image is limited to %d MB. Downscale it in a canvas before sending.", MaxImageBytes>>20)
+	msgImageBase64    = "An image's data must be non-empty base64."
+	msgImageAnimated  = "Animated images are not supported. Send a still image."
+	msgImageMislabel  = func(mimeType string) string { return "An image's data is not the " + mimeType + " its mimeType says." }
+	msgImageMalformed = func(mimeType string) string { return "An image's data is not a well-formed " + mimeType + " file." }
+)
+
+// objectFields reads one JSON object whose keys are all among names, each
+// at most once and spelled exactly. encoding/json alone matches keys without
+// regard to case, so "Messages" or "DATA" would be read as the field while
+// the host page, which reads keys as written, never saw an image there to
+// strip (Exh-v81w). A missing key is simply absent from the map.
+func objectFields(raw json.RawMessage, names ...string) (map[string]json.RawMessage, bool) {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	if tok, err := dec.Token(); err != nil || tok != json.Delim('{') {
+		return nil, false
+	}
+	fields := map[string]json.RawMessage{}
+	for dec.More() {
+		tok, err := dec.Token()
+		key, _ := tok.(string)
+		if _, seen := fields[key]; err != nil || seen || !slices.Contains(names, key) {
+			return nil, false
+		}
+		var value json.RawMessage
+		if dec.Decode(&value) != nil {
+			return nil, false
+		}
+		fields[key] = value
+	}
+	if _, err := dec.Token(); err != nil { // the closing brace
+		return nil, false
+	}
+	if _, err := dec.Token(); err != io.EOF {
+		return nil, false
+	}
+	return fields, true
+}
+
+// decodeFields decodes each present field into its target; an absent one
+// leaves the target as it was.
+func decodeFields(fields map[string]json.RawMessage, targets map[string]any) bool {
+	for name, target := range targets {
+		if raw, ok := fields[name]; ok && json.Unmarshal(raw, target) != nil {
+			return false
+		}
+	}
+	return true
+}
+
+// asciiLower lowercases A–Z only, as the host page does: a Unicode fold
+// would accept "İMAGE/PNG" here and nowhere else.
+func asciiLower(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r >= 'A' && r <= 'Z' {
+			return r + 'a' - 'A'
+		}
+		return r
+	}, s)
+}
+
 func prepareComplete(payload json.RawMessage) (*prepared, error) {
 	type wireMessage struct {
-		Role    string          `json:"role"`
-		Content json.RawMessage `json:"content"`
+		Role    string
+		Content json.RawMessage
 	}
-	var in struct {
-		Messages  []wireMessage   `json:"messages"`
-		Prompt    *string         `json:"prompt"`
-		System    string          `json:"system"`
-		Schema    json.RawMessage `json:"schema"`
-		MaxTokens *int            `json:"maxTokens"`
+	var (
+		rawMessages []json.RawMessage
+		prompt      *string
+		system      string
+		maxTokens   *int
+	)
+	top, ok := objectFields(payload, "messages", "prompt", "system", "schema", "maxTokens")
+	if !ok || !decodeFields(top, map[string]any{"messages": &rawMessages, "prompt": &prompt, "system": &system, "maxTokens": &maxTokens}) {
+		return nil, invalid(msgPayloadShape)
 	}
-	dec := json.NewDecoder(bytes.NewReader(payload))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&in); err != nil {
-		return nil, invalid("complete() takes { messages, system?, schema?, maxTokens? }.")
-	}
-	if in.Prompt != nil {
-		if len(in.Messages) > 0 {
-			return nil, invalid("Pass either prompt or messages, not both.")
+	schemaRaw := top["schema"]
+	messages := make([]wireMessage, 0, len(rawMessages))
+	for _, raw := range rawMessages {
+		var m wireMessage
+		fields, ok := objectFields(raw, "role", "content")
+		if !ok || !decodeFields(fields, map[string]any{"role": &m.Role}) {
+			return nil, invalid(msgMessageShape)
 		}
-		content, _ := json.Marshal(*in.Prompt)
-		in.Messages = []wireMessage{{Role: "user", Content: content}}
+		m.Content = fields["content"]
+		messages = append(messages, m)
 	}
-	if len(in.Messages) == 0 || len(in.Messages) > MaxCompleteMessages {
-		return nil, invalid(fmt.Sprintf("complete() needs between 1 and %d messages.", MaxCompleteMessages))
+	if prompt != nil {
+		if len(messages) > 0 {
+			return nil, invalid(msgPromptAndMsgs)
+		}
+		content, _ := json.Marshal(*prompt)
+		messages = []wireMessage{{Role: "user", Content: content}}
 	}
-	req := &completeRequest{System: in.System, MaxTokens: DefaultMaxTokens}
-	size := len(in.System)
+	if len(messages) == 0 || len(messages) > MaxCompleteMessages {
+		return nil, invalid(msgMessageCount)
+	}
+	req := &completeRequest{System: system, MaxTokens: DefaultMaxTokens}
+	size := len(system)
 	budget := &imageBudget{}
-	for i, m := range in.Messages {
+	for i, m := range messages {
 		if m.Role != "user" && m.Role != "assistant" {
-			return nil, invalid("Each message's role must be \"user\" or \"assistant\".")
+			return nil, invalid(msgRole)
 		}
-		if i == len(in.Messages)-1 && m.Role != "user" {
-			return nil, invalid("The last message must be from the user.")
+		if i == len(messages)-1 && m.Role != "user" {
+			return nil, invalid(msgLastUser)
 		}
 		parts, err := parseContent(m.Role, m.Content, budget)
 		if err != nil {
@@ -172,18 +267,18 @@ func prepareComplete(payload json.RawMessage) (*prepared, error) {
 		return nil, invalid(fmt.Sprintf("complete() input is limited to %d KB of text.", MaxCompleteTextBytes>>10))
 	}
 	req.images = budget.count
-	if in.MaxTokens != nil {
-		if *in.MaxTokens < 1 {
+	if maxTokens != nil {
+		if *maxTokens < 1 {
 			return nil, invalid("maxTokens must be a positive integer.")
 		}
-		req.MaxTokens = min(*in.MaxTokens, MaxMaxTokens)
+		req.MaxTokens = min(*maxTokens, MaxMaxTokens)
 	}
-	if len(in.Schema) > 0 && string(in.Schema) != "null" {
-		if len(in.Schema) > MaxSchemaBytes {
+	if len(schemaRaw) > 0 && string(schemaRaw) != "null" {
+		if len(schemaRaw) > MaxSchemaBytes {
 			return nil, invalid(fmt.Sprintf("A schema is limited to %d KB.", MaxSchemaBytes>>10))
 		}
 		var schema map[string]any
-		if json.Unmarshal(in.Schema, &schema) != nil {
+		if json.Unmarshal(schemaRaw, &schema) != nil {
 			return nil, invalid("schema must be a JSON Schema object.")
 		}
 		if err := checkSchema(schema, 0); err != nil {
@@ -201,14 +296,14 @@ type imageBudget struct{ count, bytes int }
 
 func (b *imageBudget) admit() error {
 	if b.count++; b.count > MaxCompleteImages {
-		return invalid(fmt.Sprintf("complete() takes at most %d images.", MaxCompleteImages))
+		return invalid(msgImageCount)
 	}
 	return nil
 }
 
 func (b *imageBudget) spend(size int) error {
 	if b.bytes += size; b.bytes > MaxImageTotalBytes {
-		return invalid(fmt.Sprintf("complete() images are limited to %d MB in total. Downscale them in a canvas before sending.", MaxImageTotalBytes>>20))
+		return invalid(msgImageTotal)
 	}
 	return nil
 }
@@ -219,56 +314,56 @@ func parseContent(role string, raw json.RawMessage, budget *imageBudget) ([]cont
 	var text string
 	if json.Unmarshal(raw, &text) == nil {
 		if strings.TrimSpace(text) == "" {
-			return nil, invalid("A message's content must be non-empty text.")
+			return nil, invalid(msgEmptyText)
 		}
 		return []contentPart{{Text: text}}, nil
 	}
 	type wirePart struct {
-		Type     string  `json:"type"`
-		Text     *string `json:"text"`
-		MimeType string  `json:"mimeType"`
-		Data     *string `json:"data"`
+		Type, MimeType string
+		Text, Data     *string
 	}
-	shape := invalid("A message's content must be text, or a list of { type: 'text', text } and { type: 'image', mimeType, data } parts.")
-	count := invalid(fmt.Sprintf("A message's content list needs between 1 and %d parts.", MaxContentParts))
 	// Parts are read one at a time, so a list far over the bound is refused
 	// at its first extra part, never decoded whole.
 	dec := json.NewDecoder(bytes.NewReader(raw))
-	dec.DisallowUnknownFields()
 	if tok, err := dec.Token(); err != nil || tok != json.Delim('[') {
-		return nil, shape
+		return nil, invalid(msgContentShape)
 	}
 	var wire []wirePart
 	for dec.More() {
 		if len(wire) == MaxContentParts {
-			return nil, count
+			return nil, invalid(msgPartCount)
+		}
+		var rawPart json.RawMessage
+		if dec.Decode(&rawPart) != nil {
+			return nil, invalid(msgContentShape)
 		}
 		var w wirePart
-		if dec.Decode(&w) != nil {
-			return nil, shape
+		fields, ok := objectFields(rawPart, "type", "text", "mimeType", "data")
+		if !ok || !decodeFields(fields, map[string]any{"type": &w.Type, "text": &w.Text, "mimeType": &w.MimeType, "data": &w.Data}) {
+			return nil, invalid(msgContentShape)
 		}
 		wire = append(wire, w)
 	}
 	if _, err := dec.Token(); err != nil {
-		return nil, shape
+		return nil, invalid(msgContentShape)
 	}
 	if len(wire) == 0 {
-		return nil, count
+		return nil, invalid(msgPartCount)
 	}
 	parts := make([]contentPart, 0, len(wire))
 	for _, w := range wire {
 		switch w.Type {
 		case "text":
 			if w.Text == nil || strings.TrimSpace(*w.Text) == "" || w.Data != nil || w.MimeType != "" {
-				return nil, invalid("A text part is { type: 'text', text } with non-empty text.")
+				return nil, invalid(msgTextPart)
 			}
 			parts = append(parts, contentPart{Text: *w.Text})
 		case "image":
 			if role != "user" {
-				return nil, invalid("Only user messages may carry images.")
+				return nil, invalid(msgImageRole)
 			}
 			if w.Text != nil || w.Data == nil {
-				return nil, invalid("An image part is { type: 'image', mimeType, data } with base64 data.")
+				return nil, invalid(msgImagePart)
 			}
 			if err := budget.admit(); err != nil {
 				return nil, err
@@ -282,7 +377,7 @@ func parseContent(role string, raw json.RawMessage, budget *imageBudget) ([]cont
 			}
 			parts = append(parts, contentPart{Image: img})
 		default:
-			return nil, invalid("A content part's type must be \"text\" or \"image\".")
+			return nil, invalid(msgPartType)
 		}
 	}
 	return parts, nil
@@ -294,44 +389,46 @@ func parseContent(role string, raw json.RawMessage, budget *imageBudget) ([]cont
 // canvas.toDataURL() returns, of the same type. Messages never quote the
 // data.
 func parseImage(mimeType, data string) (*imagePart, error) {
-	mimeType = strings.ToLower(strings.TrimSpace(mimeType))
+	mimeType = asciiLower(strings.TrimSpace(mimeType))
 	if rest, ok := strings.CutPrefix(data, "data:"); ok {
 		header, encoded, ok := strings.Cut(rest, ",")
-		urlType, isBase64 := strings.CutSuffix(strings.ToLower(header), ";base64")
+		urlType, isBase64 := strings.CutSuffix(asciiLower(header), ";base64")
 		if !ok || !isBase64 {
-			return nil, invalid("An image's data must be base64, or a base64 data: URL.")
+			return nil, invalid(msgDataURL)
 		}
 		if mimeType == "" {
 			mimeType = urlType
 		} else if urlType != mimeType {
-			return nil, invalid("An image's mimeType does not match its data: URL.")
+			return nil, invalid(msgDataURLType)
 		}
 		data = encoded
 	}
 	if !imageTypes[mimeType] {
-		return nil, invalid("Images must be PNG, JPEG or WebP (mimeType image/png, image/jpeg or image/webp).")
+		return nil, invalid(msgImageType)
 	}
-	limit := fmt.Sprintf("Each image is limited to %d MB. Downscale it in a canvas before sending.", MaxImageBytes>>20)
 	// The decoder skips line breaks, so they do not count toward the size.
 	data = strings.NewReplacer("\r", "", "\n", "").Replace(data)
 	if base64.StdEncoding.DecodedLen(len(data)) > MaxImageBytes+2 {
-		return nil, invalid(limit)
+		return nil, invalid(msgImageSize)
 	}
 	raw, err := base64.StdEncoding.DecodeString(data)
 	if err != nil || len(raw) == 0 {
-		return nil, invalid("An image's data must be non-empty base64.")
+		return nil, invalid(msgImageBase64)
 	}
 	if len(raw) > MaxImageBytes {
-		return nil, invalid(limit)
+		return nil, invalid(msgImageSize)
 	}
 	if http.DetectContentType(raw) != mimeType {
-		return nil, invalid("An image's data is not the " + mimeType + " its mimeType says.")
+		return nil, invalid(msgImageMislabel(mimeType))
 	}
 	// The bounds above count the bytes as received, and so does size:
 	// stripping only ever makes an image smaller.
 	stripped, err := stripImageMetadata(mimeType, raw)
-	if err != nil {
-		return nil, invalid("An image's data is not a well-formed " + mimeType + " file.")
+	switch {
+	case errors.Is(err, errAnimatedImage):
+		return nil, invalid(msgImageAnimated)
+	case err != nil:
+		return nil, invalid(msgImageMalformed(mimeType))
 	}
 	return &imagePart{MimeType: mimeType, Data: base64.StdEncoding.EncodeToString(stripped), size: len(raw)}, nil
 }
